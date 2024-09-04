@@ -3,6 +3,19 @@
 ### Every python script supports "-h". If you want to know details, please use it:
 ### example: python submit_track_data_selection.py -h
 
+###################################################
+### Step 0: Find track candidates - No need to run several times
+### -p: path to input directories
+### -o: output file name (in csv format)
+### -i: how many iteration
+### -s: random sampling fraction, 20 means 20% of full dataset
+### -m: minimum number of track cut
+### You can keep other options
+
+#python finding_good_track_candidates.py -p <path> -o <output name> -i 5 -s 20 -m 500 --trigID 0 --refID 3 --dutID 1 --ignoreID 2 --four_board
+
+###################################################
+
 
 ###################################################
 ### Step 1: Separate data by the given track
