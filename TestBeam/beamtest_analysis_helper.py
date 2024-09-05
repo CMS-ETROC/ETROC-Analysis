@@ -2010,6 +2010,7 @@ def plot_1d_TDC_histograms(
         input_hist: dict,
         board_name: str,
         tb_loc: str,
+        extra_cms_title: str = 'ETL ETROC Test Beam',
         fig_tag: str | None = None,
         slide_friendly: bool = False,
         do_logy: bool = False,
@@ -2049,7 +2050,7 @@ def plot_1d_TDC_histograms(
             try:
                 fig, ax = plt.subplots(figsize=(11, 10))
                 ax.set_title(plot_title, loc="right", size=16)
-                hep.cms.text(loc=0, ax=ax, text="ETL ETROC Test Beam", fontsize=18)
+                hep.cms.text(loc=0, ax=ax, text=extra_cms_title, fontsize=18)
                 input_hist[board_name].project(ival)[:].plot1d(ax=ax, lw=2)
                 ax.xaxis.label.set_fontsize(25)
                 ax.yaxis.label.set_fontsize(25)
@@ -2076,7 +2077,7 @@ def plot_1d_TDC_histograms(
         ax.set_title(plot_title, loc="right", size=16)
         ax.xaxis.label.set_fontsize(25)
         ax.yaxis.label.set_fontsize(25)
-        hep.cms.text(loc=0, ax=ax, text="ETL ETROC Test Beam", fontsize=18)
+        hep.cms.text(loc=0, ax=ax, text=extra_cms_title, fontsize=18)
         hep.hist2dplot(input_hist[board_name].project("TOA","TOT")[::2j,::2j], ax=ax)
 
         if fig_tag is not None:
@@ -2094,7 +2095,7 @@ def plot_1d_TDC_histograms(
         if event_hist is not None:
             fig, ax = plt.subplots(figsize=(11, 10))
             ax.set_title(plot_title, loc="right", size=16)
-            hep.cms.text(loc=0, ax=ax, text="ETL ETROC Test Beam", fontsize=18)
+            hep.cms.text(loc=0, ax=ax, text=extra_cms_title, fontsize=18)
             event_hist.project("HA")[:].plot1d(ax=ax, lw=2)
             ax.xaxis.label.set_fontsize(25)
             ax.yaxis.label.set_fontsize(25)
@@ -2120,7 +2121,7 @@ def plot_1d_TDC_histograms(
 
         for i, plot_info in enumerate(gs):
             ax = fig.add_subplot(plot_info)
-            hep.cms.text(loc=0, ax=ax, text="ETL ETROC Test Beam", fontsize=18)
+            hep.cms.text(loc=0, ax=ax, text=extra_cms_title, fontsize=18)
             if i == 0:
                 ax.set_title(plot_title, loc="right", size=16)
                 input_hist[board_name].project("CAL")[:].plot1d(ax=ax, lw=2)
