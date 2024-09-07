@@ -64,6 +64,14 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    '--file_pattern',
+    metavar = 'glob-pattern',
+    help = "Put the file pattern for glob, if you want to process part of dataset. Example: 'run*_loop_[0-9].pickle run*_loop_1[0-9].pickle run*_loop_2[0-4].pickle'",
+    default = 'run*_loop*.pickle',
+    dest = 'file_pattern',
+)
+
+parser.add_argument(
     '--distance_factor',
     metavar = 'NUM',
     type = float,
@@ -197,7 +205,13 @@ def convert_to_time_df(input_file):
 
     return data_dict, data_in_time
 
-files = natsorted(list(Path(args.dirname).glob('run*pickle')))
+
+print(f'Will process based on the pattern: {args.file_pattern}\n')
+
+files = []
+patterns = args.file_pattern.split()
+for pattern in patterns:
+    files += natsorted(list(Path(args.dirname).glob(pattern)))
 
 if len(files) == 0:
     print('No input files')
@@ -244,15 +258,18 @@ print('====== Merging is finished ======\n')
 print('====== Saving data by track ======')
 
 def save_data(ikey, merged_data, merged_data_in_time, track_dir, time_dir):
-    board_ids = merged_data[ikey].columns.get_level_values('board').unique().tolist()
-    row_cols = {
-        board_id: (merged_data[ikey]['row'][board_id].unique()[0], merged_data[ikey]['col'][board_id].unique()[0])
-        for board_id in board_ids
-    }
-    outname = f"track_{ikey}" + ''.join([f"_R{row}C{col}" for board_id, (row, col) in row_cols.items()])
+    if not merged_data[ikey].empty:
+        board_ids = merged_data[ikey].columns.get_level_values('board').unique().tolist()
+        row_cols = {
+            board_id: (merged_data[ikey]['row'][board_id].unique()[0], merged_data[ikey]['col'][board_id].unique()[0])
+            for board_id in board_ids
+        }
+        outname = f"track_{ikey}" + ''.join([f"_R{row}C{col}" for board_id, (row, col) in row_cols.items()])
 
-    merged_data[ikey].to_pickle(track_dir / f'{outname}.pkl')
-    merged_data_in_time[ikey].to_pickle(time_dir / f'{outname}.pkl')
+        merged_data[ikey].to_pickle(track_dir / f'{outname}.pkl')
+        merged_data_in_time[ikey].to_pickle(time_dir / f'{outname}.pkl')
+    else:
+        print('Empty dataframe found, skip')
 
 with ThreadPoolExecutor(max_workers=6) as executor:
     list(tqdm(executor.map(lambda ikey: save_data(ikey, merged_data, merged_data_in_time, track_dir, time_dir), merged_data.keys()), total=len(merged_data)))

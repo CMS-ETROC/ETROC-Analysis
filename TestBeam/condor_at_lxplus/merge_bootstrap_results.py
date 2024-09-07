@@ -36,6 +36,24 @@ parser.add_argument(
     dest = 'outname',
 )
 
+parser.add_argument(
+    '--minimum',
+    metavar = 'VALUE',
+    type = int,
+    help = 'minimum number of bootstrap results to do a fit',
+    dest = 'minimum',
+    default = 50,
+)
+
+parser.add_argument(
+    '--hist_bins',
+    metavar = 'VALUE',
+    type = int,
+    help = 'Set a histogram bins',
+    dest = 'hist_bins',
+    default = 35,
+)
+
 args = parser.parse_args()
 
 final_dict = defaultdict(list)
@@ -55,9 +73,9 @@ for ifile in tqdm(files):
     df = pd.read_pickle(ifile)
     columns = df.columns
 
-    if df.shape[0] < 50:
-        print('Bootstrap result is not correct. Do not process!')
-        print(df.shape[0])
+    if df.shape[0] < args.minimum:
+        # print('Bootstrap result is not correct. Do not process!')
+        # print(df.shape[0])
         continue
 
     if not 0 in columns:
@@ -69,7 +87,7 @@ for ifile in tqdm(files):
         x_min = df[val].min()-5
         x_max = df[val].max()+5
 
-        h_temp = hist.Hist(hist.axis.Regular(35, x_min, x_max, name="time_resolution", label=r'Time Resolution [ps]'))
+        h_temp = hist.Hist(hist.axis.Regular(args.hist_bins, x_min, x_max, name="time_resolution", label=r'Time Resolution [ps]'))
         h_temp.fill(df[val])
         centers = h_temp.axes[0].centers
 

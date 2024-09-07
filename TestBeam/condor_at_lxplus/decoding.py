@@ -632,10 +632,9 @@ if __name__ == "__main__":
     )
     df, _, _, filler_df = decoder.decode_files()
 
-    if df.empty:
-        print('No data has been observed after converting')
-        sys.exit()
-
     name = str(binary_dir).split('/')[-1]
-    df.to_feather(f'{name}.feather')
-    filler_df.to_feather(f'filler_{name}.feather')
+    if not df.empty:
+        df.to_feather(f'{name}.feather')
+
+    if not filler_df.empty:
+        filler_df.to_feather(f'filler_{name}.feather')
