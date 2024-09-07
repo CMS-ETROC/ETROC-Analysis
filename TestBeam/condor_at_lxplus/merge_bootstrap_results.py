@@ -82,7 +82,7 @@ for ifile in tqdm(files):
         final_dict[f'row0'].append(matches[0][0])
         final_dict[f'col0'].append(matches[0][1])
 
-    for val in columns:
+    for idx, val in enumerate(columns):
 
         x_min = df[val].min()-5
         x_max = df[val].max()+5
@@ -93,8 +93,8 @@ for ifile in tqdm(files):
 
         fit_constrain = (centers > df[val].astype(int).mode()[0]-7) & (centers < df[val].astype(int).mode()[0]+7)
 
-        final_dict[f'row{val}'].append(matches[val][0])
-        final_dict[f'col{val}'].append(matches[val][1])
+        final_dict[f'row{val}'].append(matches[idx][0])
+        final_dict[f'col{val}'].append(matches[idx][1])
 
         try:
             pars = mod.guess(h_temp.values()[fit_constrain], x=centers[fit_constrain])
