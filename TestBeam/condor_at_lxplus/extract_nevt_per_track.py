@@ -32,6 +32,15 @@ parser.add_argument(
     dest = 'outputdir',
 )
 
+parser.add_argument(
+    "--ids",
+    type=int,
+    nargs='+',
+    default=[0, 1, 2, 3],
+    help="A list of board IDs (default: [0, 1, 2, 3]). How to use: --ids 0 1 2",
+    dest = 'ids'
+)
+
 args = parser.parse_args()
 
 input_dir = Path(args.inputdir)
@@ -46,10 +55,17 @@ def process_file(ifile):
     # Find all occurrences of the pattern in the string
     matches = re.findall(pattern, str(ifile))
 
+    if len(args.ids) != len(matches):
+        print('Please check given inputs')
+        print(f'Given board IDs: {args.ids}')
+        print(f'Matches: {matches}')
+        import sys
+        sys.exit()
+
     file_dict = defaultdict(list)
-    for idx in range(len(matches)):
-        file_dict[f'row{idx}'].append(matches[idx][0])
-        file_dict[f'col{idx}'].append(matches[idx][1])
+    for id, pixel in zip(args.ids, matches):
+        file_dict[f'row{id}'].append(pixel[0])
+        file_dict[f'col{id}'].append(pixel[1])
 
     tmp_df = pd.read_pickle(ifile)
     file_dict['nevt'].append(tmp_df.shape[0])
