@@ -2821,9 +2821,8 @@ def plot_resolution_with_pulls(
 def plot_resolution_table(
         input_df: pd.DataFrame,
         board_ids: list[int],
-        board_names: list[str],
         tb_loc: str,
-        fig_tag: str = '',
+        fig_config: dict,
         min_resolution: float = 25.0,
         max_resolution: float = 75.0,
         missing_pixel_info: dict | None = None,
@@ -2891,7 +2890,8 @@ def plot_resolution_table(
             ticks = range(0, 16)
             ax.set_xticks(ticks)
             ax.set_yticks(ticks)
-            ax.set_title(f"{plot_title} | {fig_tag[idx]}", loc="right", size=18)
+            sup_title = fig_config[idx]['title']
+            ax.set_title(f"{plot_title} | {sup_title}", loc="right", size=18)
             ax.tick_params(axis='x', which='both', length=5, labelsize=18)
             ax.tick_params(axis='y', which='both', length=5, labelsize=18)
             ax.invert_xaxis()
@@ -2942,7 +2942,8 @@ def plot_resolution_table(
             ticks = range(0, 16)
             ax.set_xticks(ticks)
             ax.set_yticks(ticks)
-            ax.set_title(f"{plot_title} | {fig_tag[idx]}", loc="right", size=16)
+            sup_title = fig_config[idx]['title']
+            ax.set_title(f"{plot_title} | {sup_title}", loc="right", size=16)
             ax.tick_params(axis='x', which='both', length=5, labelsize=18)
             ax.tick_params(axis='y', which='both', length=5, labelsize=18)
             ax.invert_xaxis()
@@ -2953,8 +2954,8 @@ def plot_resolution_table(
             if save_mother_dir is not None:
                 save_dir = save_mother_dir / 'time_resolution_results'
                 save_dir.mkdir(exist_ok=True)
-                fig.savefig(save_dir / f"resolution_map_{board_names[idx]}.png")
-                fig.savefig(save_dir / f"resolution_map_{board_names[idx]}.pdf")
+                fig.savefig(save_dir / f"resolution_map_{fig_config[idx]['short']}.png")
+                fig.savefig(save_dir / f"resolution_map_{fig_config[idx]['short']}.pdf")
                 plt.close(fig)
 
         del tables
