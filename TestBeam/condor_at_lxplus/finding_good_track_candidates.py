@@ -123,21 +123,16 @@ def making_clean_track_df(
         return pd.DataFrame()
 
     ### CAL code filtering
-    df['identifier'] = df.groupby(['evt', 'board']).cumcount().astype(np.uint8)
     cal_table = df.pivot_table(index=["row", "col"], columns=["board"], values=["cal"], aggfunc=lambda x: x.mode().iat[0])
-
     cal_table = cal_table.reset_index().set_index([('row', ''), ('col', '')]).stack().reset_index()
     cal_table.columns = ['row', 'col', 'board', 'cal_mode']
 
-    merged_df = pd.merge(df, cal_table, on=['board', 'row', 'col'])
-    del df, cal_table
+    merged_df = pd.merge(df[['board', 'row', 'col', 'cal']], cal_table, on=['board', 'row', 'col'])
+    merged_df['board'] = merged_df['board'].astype('uint8')
     cal_condition = abs(merged_df['cal'] - merged_df['cal_mode']) <= 3
-    merged_df = merged_df[cal_condition].drop(columns=['cal_mode'])
-    merged_df = merged_df.sort_values(['evt', 'board', 'identifier']).reset_index(drop=True)
-    cal_filtered_df = merged_df.reset_index(drop=True)
-    cal_filtered_df['board'] = cal_filtered_df['board'].astype(np.uint8)
-    cal_filtered_df.drop(columns=['identifier'], inplace=True)
-    del merged_df, cal_condition
+    del cal_table, merged_df
+    cal_filtered_df = df[cal_condition].reset_index(drop=True)
+    del df, cal_condition
 
     ## A wide TDC cuts
     tdc_cuts = {}
