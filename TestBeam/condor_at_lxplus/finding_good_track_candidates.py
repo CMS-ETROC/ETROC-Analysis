@@ -129,6 +129,7 @@ def making_clean_track_df(
 
     merged_df = pd.merge(df[['board', 'row', 'col', 'cal']], cal_table, on=['board', 'row', 'col'])
     merged_df['board'] = merged_df['board'].astype('uint8')
+    merged_df['cal_mode'] = merged_df['cal_mode'].astype('int16')
     cal_condition = abs(merged_df['cal'] - merged_df['cal_mode']) <= 3
     del cal_table, merged_df
     cal_filtered_df = df[cal_condition].reset_index(drop=True)
