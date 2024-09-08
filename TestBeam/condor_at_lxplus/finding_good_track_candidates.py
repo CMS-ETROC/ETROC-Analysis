@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import random
+import yaml
 from tqdm import tqdm
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -79,34 +80,45 @@ def making_pivot(
 def making_clean_track_df(
         input_file: Path,
         columns_to_read: list[str],
+        mask_config_file: Path,
         trig_id: int = 0,
         dut_id: int = 1,
         ref_id: int = 3,
-        red_2nd_id: int = -1,
+        red_2nd_id: int = 2,
         four_board_track: bool = False,
     ):
+
     df = pd.read_feather(input_file, columns=columns_to_read)
 
-    noisy_pixels = {
-        2: [(0, 15)],
-    }
+    if mask_config_file is not None:
+        with open(mask_config_file, 'r') as file:
+            config_info = yaml.safe_load(file)
 
-    for board in noisy_pixels:
-        for pixel in noisy_pixels[board]:
-            df = df.loc[~((df['board'] == board) & (df['col'] == pixel[1]) & (df['row'] == pixel[0]))]
+            for key, val in dict(config_info["board_ids"]).items():
+                ## There is no noisy pixel, so list is empty
+                if len(val['pixels']) == 0:
+                    continue
+                else:
+                    for ipixel in val['pixels']:
+                        df = df.loc[~((df['board'] == key) & (df['row'] == ipixel[0]) & (df['col'] == ipixel[1]))]
+
+    # noisy_pixels = {
+    #     2: [(0, 15)],
+    # }
+
+    # for board in noisy_pixels:
+    #     for pixel in noisy_pixels[board]:
+    #         df = df.loc[~((df['board'] == board) & (df['col'] == pixel[1]) & (df['row'] == pixel[0]))]
 
     if df.empty:
-        num_failed_files += 1
         print('file is empty. Move on to the next file')
         return pd.DataFrame()
 
     if (four_board_track) and (df['board'].unique().size != 4):
-        num_failed_files += 1
         print('This file does not have a full data including all four boards. Move on to the next file')
         return pd.DataFrame()
 
     if (~four_board_track) and (df['board'].unique().size < 3):
-        num_failed_files += 1
         print('This file does not have data including at least three boards. Move on to the next file')
         return pd.DataFrame()
 
@@ -129,7 +141,7 @@ def making_clean_track_df(
 
     ## A wide TDC cuts
     tdc_cuts = {}
-    if red_2nd_id == -1:
+    if not four_board_track:
         ids_to_loop = sorted([trig_id, dut_id, ref_id])
     else:
         ids_to_loop = [0, 1, 2, 3]
@@ -147,13 +159,12 @@ def making_clean_track_df(
     del cal_filtered_df
 
     if filtered_df.empty:
-        num_failed_files += 1
         return pd.DataFrame()
 
     event_board_counts = filtered_df.groupby(['evt', 'board']).size().unstack(fill_value=0)
     event_selection_col = None
 
-    if red_2nd_id == -1:
+    if not four_board_track:
         trig_selection = (event_board_counts[trig_id] == 1)
         ref_selection = (event_board_counts[ref_id] == 1)
         dut_selection = (event_board_counts[dut_id] == 1)
@@ -291,6 +302,14 @@ if __name__ == "__main__":
         dest = 'four_board',
     )
 
+    parser.add_argument(
+        '--mask_config',
+        type = Path,
+        help = 'The YAML config file for masking noisy pixels',
+        default = None,
+        dest = 'mask_config_file',
+    )
+
     args = parser.parse_args()
 
     input_files = list(Path(f'{args.path}').glob('loop*feather'))
@@ -351,7 +370,8 @@ if __name__ == "__main__":
             with ProcessPoolExecutor() as process_executor:
                 # Each input results in multiple threading jobs being created:
                 futures = [
-                    process_executor.submit(making_clean_track_df, ifile, columns_to_read, args.trigID, args.dutID, args.refID, args.ignoreID, args.four_board)
+                    process_executor.submit(making_clean_track_df, ifile, columns_to_read, args.mask_config_file,
+                                            args.trigID, args.dutID, args.refID, args.ignoreID, args.four_board)
                         for ifile in files
                 ]
                 for future in as_completed(futures):
@@ -369,7 +389,7 @@ if __name__ == "__main__":
         df.reset_index(inplace=True, drop=True)
         del results, dfs
 
-        if args.ignoreID == -1:
+        if not args.four_board:
             ignore_board_ids = list(set([0, 1, 2, 3]) - set([args.trigID, args.dutID, args.refID]))
         else:
             ignore_board_ids = None
@@ -385,7 +405,7 @@ if __name__ == "__main__":
         track_df.reset_index(inplace=True)
         del pivot_data_df, combinations_df
 
-        if args.ignoreID == -1:
+        if not args.four_board:
             row_delta_TR = np.abs(track_df[f'row_{args.trigID}'] - track_df[f'row_{args.refID}']) <= args.max_diff_pixel
             row_delta_TD = np.abs(track_df[f'row_{args.trigID}'] - track_df[f'row_{args.dutID}']) <= args.max_diff_pixel
             col_delta_TR = np.abs(track_df[f'col_{args.trigID}'] - track_df[f'col_{args.refID}']) <= args.max_diff_pixel
