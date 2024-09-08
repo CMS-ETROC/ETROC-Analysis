@@ -4,6 +4,6 @@ board_ids:
   1:
     pixels: []
   2:
-    pixels: [(0, 15)]
+    pixels: [[0, 15]]
   3:
     pixels: []
