@@ -87,6 +87,14 @@ def making_clean_track_df(
     ):
     df = pd.read_feather(input_file, columns=columns_to_read)
 
+    noisy_pixels = {
+        2: [(0, 15)],
+    }
+
+    for board in noisy_pixels:
+        for pixel in noisy_pixels[board]:
+            df = df.loc[~((df['board'] == board) & (df['col'] == pixel[1]) & (df['row'] == pixel[0]))]
+
     if df.empty:
         num_failed_files += 1
         print('file is empty. Move on to the next file')
