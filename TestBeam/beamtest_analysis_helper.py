@@ -2590,9 +2590,8 @@ def plot_TWC(
 def plot_resolution_with_pulls(
         input_df: pd.DataFrame,
         board_ids: list[int],
-        board_names: list[str],
         tb_loc: str,
-        fig_tag: list[str],
+        fig_config: dict,
         hist_range: list[int] = [20, 95],
         hist_bins: int = 15,
         slides_friendly: bool = False,
@@ -2608,12 +2607,10 @@ def plot_resolution_with_pulls(
         Pandas dataframe includes bootstrap results.
     board_ids: list[int]
         A list of board IDs to make plots.
-    board_names: list[str]
-        A list of board names.
     tb_loc: str,
         Test Beam location for the title. Available argument: desy, cern, fnal.
-    fig_tag: list[str]
-        Additional information to show in the plot as legend title.
+    fig_config: dict,
+        Dictionary with board ID as a dict key. It contains a figure title.
     hist_range: list[int], optional
         Set the histogram range. Default value is [20, 95].
     hist_bins: int, optional
@@ -2679,9 +2676,10 @@ def plot_resolution_with_pulls(
                 sub_ax.set_axis_off()
                 continue
 
+            sup_title = fig_config[idx]['title']
             centers = hists[i].axes[0].centers
             hep.cms.text(loc=0, ax=main_ax, text="ETL ETROC Test Beam", fontsize=20)
-            main_ax.set_title(f'{plot_title} {fig_tag[i]}', loc="right", size=18)
+            main_ax.set_title(f'{plot_title} {sup_title}', loc="right", size=18)
 
             main_ax.errorbar(centers, hists[i].values(), np.sqrt(hists[i].variances()),
                             ecolor="steelblue", mfc="steelblue", mec="steelblue", fmt="o",
@@ -2720,7 +2718,7 @@ def plot_resolution_with_pulls(
                 alpha=0.2,
                 label='Fit Uncertainty'
             )
-            main_ax.legend(fontsize=18, loc='best', title=fig_tag[i], title_fontsize=18)
+            main_ax.legend(fontsize=18, loc='best', title=fig_config[idx]['title'], title_fontsize=18)
 
             width = (x_max - x_min) / len(pulls_dict[i])
             sub_ax.axhline(1, c='black', lw=0.75)
@@ -2733,7 +2731,7 @@ def plot_resolution_with_pulls(
             sub_ax.tick_params(axis='x', which='both', labelsize=20)
             sub_ax.set_ylabel('Pulls', fontsize=20, loc='center')
 
-        plt.tight_layout()
+        fig.tight_layout()
 
         if save_mother_dir is not None:
             save_dir = save_mother_dir / 'time_resolution_results'
@@ -2795,7 +2793,7 @@ def plot_resolution_with_pulls(
                 alpha=0.2,
                 label='Fit Uncertainty'
             )
-            main_ax.legend(fontsize=18, loc='best', title=fig_tag[idx], title_fontsize=18)
+            main_ax.legend(fontsize=18, loc='best', title=fig_config[idx]['title'], title_fontsize=18)
 
             width = (x_max - x_min) / len(pulls_dict[idx])
             sub_ax.axhline(1, c='black', lw=0.75)
@@ -2808,13 +2806,13 @@ def plot_resolution_with_pulls(
             sub_ax.tick_params(axis='x', which='both', labelsize=20)
             sub_ax.set_ylabel('Pulls', fontsize=20, loc='center')
 
-            plt.tight_layout()
+            fig.tight_layout()
 
             if save_mother_dir is not None:
                 save_dir = save_mother_dir / 'time_resolution_results'
                 save_dir.mkdir(exist_ok=True)
-                fig.savefig(save_dir / f"board_res_{board_names[idx]}.png")
-                fig.savefig(save_dir / f"board_res_{board_names[idx]}.pdf")
+                fig.savefig(save_dir / f"board_res_{fig_config[idx]['short']}.png")
+                fig.savefig(save_dir / f"board_res_{fig_config[idx]['short']}.pdf")
                 plt.close(fig)
 
         del hists, fit_params, pulls_dict, mod
