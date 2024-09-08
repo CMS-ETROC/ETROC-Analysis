@@ -285,7 +285,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    input_files = list(Path(f'{args.path}').glob('*/loop*feather'))
+    input_files = list(Path(f'{args.path}').glob('loop*feather'))
     columns_to_read = ['evt', 'board', 'row', 'col', 'toa', 'tot', 'cal']
 
     if len(input_files) == 0:
