@@ -102,14 +102,6 @@ def making_clean_track_df(
                     for ipixel in val['pixels']:
                         df = df.loc[~((df['board'] == key) & (df['row'] == ipixel[0]) & (df['col'] == ipixel[1]))]
 
-    # noisy_pixels = {
-    #     2: [(0, 15)],
-    # }
-
-    # for board in noisy_pixels:
-    #     for pixel in noisy_pixels[board]:
-    #         df = df.loc[~((df['board'] == board) & (df['col'] == pixel[1]) & (df['row'] == pixel[0]))]
-
     if df.empty:
         print('file is empty. Move on to the next file')
         return pd.DataFrame()
@@ -121,6 +113,9 @@ def making_clean_track_df(
     if (~four_board_track) and (df['board'].unique().size < 3):
         print('This file does not have data including at least three boards. Move on to the next file')
         return pd.DataFrame()
+
+    ### Reset df index before start analysis
+    df.reset_index(drop=True, inplace=True)
 
     ### CAL code filtering
     cal_table = df.pivot_table(index=["row", "col"], columns=["board"], values=["cal"], aggfunc=lambda x: x.mode().iat[0])
