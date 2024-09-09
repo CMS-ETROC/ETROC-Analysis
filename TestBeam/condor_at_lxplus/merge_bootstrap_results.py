@@ -83,6 +83,8 @@ for ifile in tqdm(files):
         # print(df.shape[0])
         continue
 
+    # Reset index before start fit
+    df.reset_index(drop=True, inplace=True)
     if len(matches) == 4:
         final_dict['row0'].append(matches[0][0])
         final_dict['col0'].append(matches[0][1])
