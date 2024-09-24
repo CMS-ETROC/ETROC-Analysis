@@ -2141,6 +2141,7 @@ def plot_1d_TDC_histograms(
                     ax.set_yscale('log')
             elif i == 2:
                 ax.set_title(plot_title, loc="right", size=16)
+                ax.grid(which='both')
                 input_hist[board_name].project("TOT")[:].plot1d(ax=ax, lw=2, yerr=no_errorbar)
                 if do_logy:
                     ax.set_yscale('log')
