@@ -2133,23 +2133,23 @@ def plot_1d_TDC_histograms(
             ax = fig.add_subplot(plot_info)
             hep.cms.text(loc=0, ax=ax, text=extra_cms_title, fontsize=18)
             if i == 0:
-                ax.set_title(plot_title, loc="right", size=16)
+                ax.set_title(f"{plot_title} | {fig_tag}", loc="right", size=16)
                 input_hist[board_name].project("CAL")[:].plot1d(ax=ax, lw=2, yerr=no_errorbar)
                 if do_logy:
                     ax.set_yscale('log')
             elif i == 1:
-                ax.set_title(plot_title, loc="right", size=16)
+                ax.set_title(f"{plot_title} | {fig_tag}", loc="right", size=16)
                 input_hist[board_name].project("TOA")[:].plot1d(ax=ax, lw=2, yerr=no_errorbar)
                 if do_logy:
                     ax.set_yscale('log')
             elif i == 2:
-                ax.set_title(plot_title, loc="right", size=16)
+                ax.set_title(f"{plot_title} | {fig_tag}", loc="right", size=16)
                 input_hist[board_name].project("TOT")[:].plot1d(ax=ax, lw=2, yerr=no_errorbar)
                 if do_logy:
                     ax.set_yscale('log')
             elif i == 3:
                 if event_hist is None:
-                    ax.set_title(plot_title, loc="right", size=16)
+                    ax.set_title(f"{plot_title} | {fig_tag}", loc="right", size=16)
                     input_hist[board_name].project("TOA","TOT")[::2j,::2j].plot2d(ax=ax)
                     if do_logy:
                         #pcm = plt.pcolor(self._data, norm = colors.LogNorm())
