@@ -1757,6 +1757,7 @@ def plot_occupany_map(
         board_ids: list[int],
         board_names: list[str],
         tb_loc: str,
+        extra_cms_title: str = 'ETL ETROC Test Beam',
         fname_tag: str = '',
         exclude_noise: bool = False,
         save_mother_dir: Path | None = None,
@@ -1773,6 +1774,8 @@ def plot_occupany_map(
         A list of board name that will use for the file name.
     tb_loc: str,
         Test Beam location for the title. Available argument: desy, cern, fnal.
+    extra_cms_title: str,
+        Default is "ETL ETROC Test Beam". Please change it based on test source.
     fname_tag: str, optional
         Draw boundary cut in the plot.
     exclude_noise: bool, optional
@@ -1834,7 +1837,7 @@ def plot_occupany_map(
                 text = str("{:.0f}".format(value))
                 plt.text(j, i, text, va='center', ha='center', color=text_color, fontsize=12)
 
-        hep.cms.text(loc=0, ax=ax, text="ETL ETROC Test Beam", fontsize=18)
+        hep.cms.text(loc=0, ax=ax, text=extra_cms_title, fontsize=18)
         ax.set_xlabel('Column', fontsize=25)
         ax.set_ylabel('Row', fontsize=25)
         ticks = range(0, 16)
