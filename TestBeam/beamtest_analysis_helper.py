@@ -249,6 +249,7 @@ class DecodeBinary:
         self.firmware_filler_pattern = 0x5555
         self.firmware_filler_pattern_new = 0x556
         self.check_link_filler_pattern = 0x559
+        self.check_link_filler_pattern_2 = 0x553
         self.previous_event          = -1
         self.event_counter           = 0
         self.board_ids               = board_id
@@ -787,9 +788,12 @@ class DecodeBinary:
                             self.write_to_nem(f"FW Filler: 0b{word & 0xfffff:020b}\n")
 
                     # Check link filler
-                    elif (word >> 20) == self.check_link_filler_pattern:
+                    elif (word >> 20) == self.check_link_filler_pattern or (word >> 20) == self.check_link_filler_pattern_2:
                         self.filler_data['idx'].append(self.filler_40_idx)
-                        self.filler_data['type'].append("40")
+                        if (word >> 20) == self.check_link_filler_pattern:
+                            self.filler_data['type'].append("40")
+                        elif (word >> 20) == self.check_link_filler_pattern_2:
+                            self.filler_data['type'].append("40_2")
                         self.filler_data['events'].append(self.event_in_filler_40_counter)
                         self.filler_data['prev_event'].append(self.filler_40_prev_event)
                         self.filler_data['last_event'].append(self.event_counter)
