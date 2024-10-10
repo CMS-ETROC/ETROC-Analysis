@@ -249,6 +249,7 @@ class DecodeBinary:
         self.firmware_filler_pattern = 0x5555
         self.firmware_filler_pattern_new = 0x556
         self.check_link_filler_pattern = 0x559
+        self.check_link_filler_pattern_2 = 0x553
         self.previous_event          = -1
         self.event_counter           = 0
         self.board_ids               = board_id
@@ -787,9 +788,12 @@ class DecodeBinary:
                             self.write_to_nem(f"FW Filler: 0b{word & 0xfffff:020b}\n")
 
                     # Check link filler
-                    elif (word >> 20) == self.check_link_filler_pattern:
+                    elif (word >> 20) == self.check_link_filler_pattern or (word >> 20) == self.check_link_filler_pattern_2:
                         self.filler_data['idx'].append(self.filler_40_idx)
-                        self.filler_data['type'].append("40")
+                        if (word >> 20) == self.check_link_filler_pattern:
+                            self.filler_data['type'].append("40")
+                        elif (word >> 20) == self.check_link_filler_pattern_2:
+                            self.filler_data['type'].append("40_2")
                         self.filler_data['events'].append(self.event_in_filler_40_counter)
                         self.filler_data['prev_event'].append(self.filler_40_prev_event)
                         self.filler_data['last_event'].append(self.event_counter)
@@ -1414,7 +1418,9 @@ def load_fig_title(
     if tb_loc == 'desy':
         plot_title = r'4 GeV $e^{-}$ at DESY TB'
     elif tb_loc == 'cern':
-        plot_title = r'120 GeV (1/3 p; 2/3 $\pi^{+}$) at CERN SPS'
+        plot_title = r'120 GeV (1/3 p; 2/3 $\pi^{+}$) at CERN SPS H6'
+    elif tb_loc == 'cern_h8':
+        plot_title = r'180 GeV ($\pi^{+}$) at CERN SPS H8'
     elif tb_loc == 'fnal':
         plot_title = r'120 GeV p at Fermilab TB'
     elif tb_loc == 'northwestern':
@@ -1755,6 +1761,7 @@ def plot_occupany_map(
         board_ids: list[int],
         board_names: list[str],
         tb_loc: str,
+        extra_cms_title: str = 'ETL ETROC Test Beam',
         fname_tag: str = '',
         exclude_noise: bool = False,
         save_mother_dir: Path | None = None,
@@ -1771,6 +1778,8 @@ def plot_occupany_map(
         A list of board name that will use for the file name.
     tb_loc: str,
         Test Beam location for the title. Available argument: desy, cern, fnal.
+    extra_cms_title: str,
+        Default is "ETL ETROC Test Beam". Please change it based on test source.
     fname_tag: str, optional
         Draw boundary cut in the plot.
     exclude_noise: bool, optional
@@ -1832,7 +1841,7 @@ def plot_occupany_map(
                 text = str("{:.0f}".format(value))
                 plt.text(j, i, text, va='center', ha='center', color=text_color, fontsize=12)
 
-        hep.cms.text(loc=0, ax=ax, text="ETL ETROC Test Beam", fontsize=18)
+        hep.cms.text(loc=0, ax=ax, text=extra_cms_title, fontsize=18)
         ax.set_xlabel('Column', fontsize=25)
         ax.set_ylabel('Row', fontsize=25)
         ticks = range(0, 16)
@@ -2010,11 +2019,13 @@ def plot_1d_TDC_histograms(
         input_hist: dict,
         board_name: str,
         tb_loc: str,
+        extra_cms_title: str = 'ETL ETROC Test Beam',
         fig_tag: str | None = None,
         slide_friendly: bool = False,
         do_logy: bool = False,
         event_hist: hist.Hist | None = None,
         save_mother_dir: Path | None = None,
+        no_errorbar: bool | None = None,
         tag: str = '',
     ):
     """Make plots of 1D TDC histograms.
@@ -2027,6 +2038,8 @@ def plot_1d_TDC_histograms(
         Board name.
     tb_loc: str,
         Test Beam location for the title. Available argument: desy, cern, fnal.
+    extra_cms_title: str,
+        Default is "ETL ETROC Test Beam". Please change it based on test source.
     fig_tag: str, optional
         Additional board information to show in the plot.
     slide_friendly: bool, optional
@@ -2037,6 +2050,8 @@ def plot_1d_TDC_histograms(
         A dictionary of TDC histograms, which returns from return_event_hist
     save_mother_dir: Path, optional
         Plot will be saved at save_mother_dir/'1d_tdc_hists'.
+    no_errorbar: bool, optional.
+        no_errorbar=False will omit errorbar when plotting.
     tag: str, optional (recommend),
         Additional tag for the file name.
     """
@@ -2049,8 +2064,8 @@ def plot_1d_TDC_histograms(
             try:
                 fig, ax = plt.subplots(figsize=(11, 10))
                 ax.set_title(plot_title, loc="right", size=16)
-                hep.cms.text(loc=0, ax=ax, text="ETL ETROC Test Beam", fontsize=18)
-                input_hist[board_name].project(ival)[:].plot1d(ax=ax, lw=2)
+                hep.cms.text(loc=0, ax=ax, text=extra_cms_title, fontsize=18)
+                input_hist[board_name].project(ival)[:].plot1d(ax=ax, lw=2, yerr=no_errorbar)
                 ax.xaxis.label.set_fontsize(25)
                 ax.yaxis.label.set_fontsize(25)
 
@@ -2076,7 +2091,7 @@ def plot_1d_TDC_histograms(
         ax.set_title(plot_title, loc="right", size=16)
         ax.xaxis.label.set_fontsize(25)
         ax.yaxis.label.set_fontsize(25)
-        hep.cms.text(loc=0, ax=ax, text="ETL ETROC Test Beam", fontsize=18)
+        hep.cms.text(loc=0, ax=ax, text=extra_cms_title, fontsize=18)
         hep.hist2dplot(input_hist[board_name].project("TOA","TOT")[::2j,::2j], ax=ax)
 
         if fig_tag is not None:
@@ -2094,8 +2109,8 @@ def plot_1d_TDC_histograms(
         if event_hist is not None:
             fig, ax = plt.subplots(figsize=(11, 10))
             ax.set_title(plot_title, loc="right", size=16)
-            hep.cms.text(loc=0, ax=ax, text="ETL ETROC Test Beam", fontsize=18)
-            event_hist.project("HA")[:].plot1d(ax=ax, lw=2)
+            hep.cms.text(loc=0, ax=ax, text=extra_cms_title, fontsize=18)
+            event_hist.project("HA")[:].plot1d(ax=ax, lw=2, yerr=no_errorbar)
             ax.xaxis.label.set_fontsize(25)
             ax.yaxis.label.set_fontsize(25)
 
@@ -2120,25 +2135,25 @@ def plot_1d_TDC_histograms(
 
         for i, plot_info in enumerate(gs):
             ax = fig.add_subplot(plot_info)
-            hep.cms.text(loc=0, ax=ax, text="ETL ETROC Test Beam", fontsize=18)
+            hep.cms.text(loc=0, ax=ax, text=extra_cms_title, fontsize=18)
             if i == 0:
-                ax.set_title(plot_title, loc="right", size=16)
-                input_hist[board_name].project("CAL")[:].plot1d(ax=ax, lw=2)
+                ax.set_title(f"{plot_title} | {fig_tag}", loc="right", size=16)
+                input_hist[board_name].project("CAL")[:].plot1d(ax=ax, lw=2, yerr=no_errorbar)
                 if do_logy:
                     ax.set_yscale('log')
             elif i == 1:
-                ax.set_title(plot_title, loc="right", size=16)
-                input_hist[board_name].project("TOA")[:].plot1d(ax=ax, lw=2)
+                ax.set_title(f"{plot_title} | {fig_tag}", loc="right", size=16)
+                input_hist[board_name].project("TOA")[:].plot1d(ax=ax, lw=2, yerr=no_errorbar)
                 if do_logy:
                     ax.set_yscale('log')
             elif i == 2:
-                ax.set_title(plot_title, loc="right", size=16)
-                input_hist[board_name].project("TOT")[:].plot1d(ax=ax, lw=2)
+                ax.set_title(f"{plot_title} | {fig_tag}", loc="right", size=16)
+                input_hist[board_name].project("TOT")[:].plot1d(ax=ax, lw=2, yerr=no_errorbar)
                 if do_logy:
                     ax.set_yscale('log')
             elif i == 3:
                 if event_hist is None:
-                    ax.set_title(plot_title, loc="right", size=16)
+                    ax.set_title(f"{plot_title} | {fig_tag}", loc="right", size=16)
                     input_hist[board_name].project("TOA","TOT")[::2j,::2j].plot2d(ax=ax)
                     if do_logy:
                         #pcm = plt.pcolor(self._data, norm = colors.LogNorm())
@@ -2146,7 +2161,7 @@ def plot_1d_TDC_histograms(
                         pass
                 else:
                     ax.set_title(plot_title, loc="right", size=16)
-                    event_hist.project("HA")[:].plot1d(ax=ax, lw=2)
+                    event_hist.project("HA")[:].plot1d(ax=ax, lw=2, yerr=no_errorbar)
                     if do_logy:
                         ax.set_yscale('log')
 
@@ -2582,9 +2597,8 @@ def plot_TWC(
 def plot_resolution_with_pulls(
         input_df: pd.DataFrame,
         board_ids: list[int],
-        board_names: list[str],
         tb_loc: str,
-        fig_tag: list[str],
+        fig_config: dict,
         hist_range: list[int] = [20, 95],
         hist_bins: int = 15,
         slides_friendly: bool = False,
@@ -2600,12 +2614,10 @@ def plot_resolution_with_pulls(
         Pandas dataframe includes bootstrap results.
     board_ids: list[int]
         A list of board IDs to make plots.
-    board_names: list[str]
-        A list of board names.
     tb_loc: str,
         Test Beam location for the title. Available argument: desy, cern, fnal.
-    fig_tag: list[str]
-        Additional information to show in the plot as legend title.
+    fig_config: dict,
+        Dictionary with board ID as a dict key. It contains a figure title.
     hist_range: list[int], optional
         Set the histogram range. Default value is [20, 95].
     hist_bins: int, optional
@@ -2671,9 +2683,10 @@ def plot_resolution_with_pulls(
                 sub_ax.set_axis_off()
                 continue
 
+            sup_title = fig_config[idx]['title']
             centers = hists[i].axes[0].centers
             hep.cms.text(loc=0, ax=main_ax, text="ETL ETROC Test Beam", fontsize=20)
-            main_ax.set_title(f'{plot_title} {fig_tag[i]}', loc="right", size=18)
+            main_ax.set_title(f'{plot_title} {sup_title}', loc="right", size=18)
 
             main_ax.errorbar(centers, hists[i].values(), np.sqrt(hists[i].variances()),
                             ecolor="steelblue", mfc="steelblue", mec="steelblue", fmt="o",
@@ -2712,7 +2725,7 @@ def plot_resolution_with_pulls(
                 alpha=0.2,
                 label='Fit Uncertainty'
             )
-            main_ax.legend(fontsize=18, loc='best', title=fig_tag[i], title_fontsize=18)
+            main_ax.legend(fontsize=18, loc='best', title=fig_config[idx]['title'], title_fontsize=18)
 
             width = (x_max - x_min) / len(pulls_dict[i])
             sub_ax.axhline(1, c='black', lw=0.75)
@@ -2725,7 +2738,7 @@ def plot_resolution_with_pulls(
             sub_ax.tick_params(axis='x', which='both', labelsize=20)
             sub_ax.set_ylabel('Pulls', fontsize=20, loc='center')
 
-        plt.tight_layout()
+        fig.tight_layout()
 
         if save_mother_dir is not None:
             save_dir = save_mother_dir / 'time_resolution_results'
@@ -2787,7 +2800,7 @@ def plot_resolution_with_pulls(
                 alpha=0.2,
                 label='Fit Uncertainty'
             )
-            main_ax.legend(fontsize=18, loc='best', title=fig_tag[idx], title_fontsize=18)
+            main_ax.legend(fontsize=18, loc='best', title=fig_config[idx]['title'], title_fontsize=18)
 
             width = (x_max - x_min) / len(pulls_dict[idx])
             sub_ax.axhline(1, c='black', lw=0.75)
@@ -2800,13 +2813,13 @@ def plot_resolution_with_pulls(
             sub_ax.tick_params(axis='x', which='both', labelsize=20)
             sub_ax.set_ylabel('Pulls', fontsize=20, loc='center')
 
-            plt.tight_layout()
+            fig.tight_layout()
 
             if save_mother_dir is not None:
                 save_dir = save_mother_dir / 'time_resolution_results'
                 save_dir.mkdir(exist_ok=True)
-                fig.savefig(save_dir / f"board_res_{board_names[idx]}.png")
-                fig.savefig(save_dir / f"board_res_{board_names[idx]}.pdf")
+                fig.savefig(save_dir / f"board_res_{fig_config[idx]['short']}.png")
+                fig.savefig(save_dir / f"board_res_{fig_config[idx]['short']}.pdf")
                 plt.close(fig)
 
         del hists, fit_params, pulls_dict, mod
@@ -2815,9 +2828,8 @@ def plot_resolution_with_pulls(
 def plot_resolution_table(
         input_df: pd.DataFrame,
         board_ids: list[int],
-        board_names: list[str],
         tb_loc: str,
-        fig_tag: str = '',
+        fig_config: dict,
         min_resolution: float = 25.0,
         max_resolution: float = 75.0,
         missing_pixel_info: dict | None = None,
@@ -2885,7 +2897,8 @@ def plot_resolution_table(
             ticks = range(0, 16)
             ax.set_xticks(ticks)
             ax.set_yticks(ticks)
-            ax.set_title(f"{plot_title} | {fig_tag[idx]}", loc="right", size=18)
+            sup_title = fig_config[idx]['title']
+            ax.set_title(f"{plot_title} | {sup_title}", loc="right", size=18)
             ax.tick_params(axis='x', which='both', length=5, labelsize=18)
             ax.tick_params(axis='y', which='both', length=5, labelsize=18)
             ax.invert_xaxis()
@@ -2936,7 +2949,8 @@ def plot_resolution_table(
             ticks = range(0, 16)
             ax.set_xticks(ticks)
             ax.set_yticks(ticks)
-            ax.set_title(f"{plot_title} | {fig_tag[idx]}", loc="right", size=16)
+            sup_title = fig_config[idx]['title']
+            ax.set_title(f"{plot_title} | {sup_title}", loc="right", size=16)
             ax.tick_params(axis='x', which='both', length=5, labelsize=18)
             ax.tick_params(axis='y', which='both', length=5, labelsize=18)
             ax.invert_xaxis()
@@ -2947,8 +2961,8 @@ def plot_resolution_table(
             if save_mother_dir is not None:
                 save_dir = save_mother_dir / 'time_resolution_results'
                 save_dir.mkdir(exist_ok=True)
-                fig.savefig(save_dir / f"resolution_map_{board_names[idx]}.png")
-                fig.savefig(save_dir / f"resolution_map_{board_names[idx]}.pdf")
+                fig.savefig(save_dir / f"resolution_map_{fig_config[idx]['short']}.png")
+                fig.savefig(save_dir / f"resolution_map_{fig_config[idx]['short']}.pdf")
                 plt.close(fig)
 
         del tables

@@ -30,13 +30,13 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    '-i',
-    '--iteration',
-    metavar = 'ITERATION',
+    '-n',
+    '--num_bootstrap_output',
+    metavar = 'NUM',
     type = int,
-    help = 'Number of bootstrapping',
+    help = 'Number of outputs after bootstrap',
     default = 100,
-    dest = 'iteration',
+    dest = 'num_bootstrap_output',
 )
 
 parser.add_argument(
@@ -65,6 +65,15 @@ parser.add_argument(
     help = 'Minimum number of events for bootstrap',
     default = 1000,
     dest = 'minimum_nevt',
+)
+
+parser.add_argument(
+    '--iteration_limit',
+    metavar = 'NUM',
+    type = int,
+    help = 'Maximum iteration of sampling',
+    default = 7500,
+    dest = 'iteration_limit',
 )
 
 parser.add_argument(
@@ -147,8 +156,8 @@ outdir = current_dir / f'resolution_{args.outputdir}'
 outdir.mkdir(exist_ok = False)
 
 #### Make python command
-bash_command = "python bootstrap.py -f {{ filename }} -i {{ iteration }} -s {{ sampling }} \
---board_id_for_TOA_cut {{ board_id_for_TOA_cut }} --minimum_nevt {{ minimum_nevt }} \
+bash_command = "python bootstrap.py -f {{ filename }} -n {{ num_bootstrap_output }} -s {{ sampling }} \
+--board_id_for_TOA_cut {{ board_id_for_TOA_cut }} --minimum_nevt {{ minimum_nevt }} --iteration_limit {{ iteration_limit }} \
 --trigTOALower {{ trigTOALower }} --trigTOAUpper {{ trigTOAUpper }} --board_ids {{ board_ids }}"
 
 conditional_args = {
@@ -186,10 +195,11 @@ echo "{0}"
 # Prepare the data for the template
 options = {
     'filename': '${1}.pkl',
-    'iteration': args.iteration,
+    'num_bootstrap_output': args.num_bootstrap_output,
     'sampling': args.sampling,
     'board_id_for_TOA_cut': args.board_id_for_TOA_cut,
     'minimum_nevt': args.minimum_nevt,
+    'iteration_limit': args.iteration_limit,
     'trigTOALower': args.trigTOALower,
     'trigTOAUpper': args.trigTOAUpper,
     'board_ids': ' '.join(map(str, args.board_ids))
@@ -201,7 +211,8 @@ bash_script = Template(bash_template).render(options)
 print('\n========= Run option =========')
 print(f'Input dataset: {args.dirname}')
 print(f'Output direcotry: resolution_{args.outputdir}')
-print(f'Bootstrap iteration: {args.iteration}')
+print(f'Bootstrap iteration limit: {args.iteration_limit}')
+print(f'Number of bootstrap outputs: {args.num_bootstrap_output}')
 print(f'{args.sampling}% of random sampling')
 print(f'Consider board IDs: {args.board_ids}')
 print(f"TOA cut for a 'NEW' trigger is {args.trigTOALower}-{args.trigTOAUpper} on board ID={args.board_id_for_TOA_cut}")

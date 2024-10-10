@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import random
+import yaml
 from tqdm import tqdm
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -79,49 +80,59 @@ def making_pivot(
 def making_clean_track_df(
         input_file: Path,
         columns_to_read: list[str],
+        mask_config_file: Path,
         trig_id: int = 0,
         dut_id: int = 1,
         ref_id: int = 3,
-        red_2nd_id: int = -1,
+        red_2nd_id: int = 2,
         four_board_track: bool = False,
     ):
+
     df = pd.read_feather(input_file, columns=columns_to_read)
 
+    if mask_config_file is not None:
+        with open(mask_config_file, 'r') as file:
+            config_info = yaml.safe_load(file)
+
+            for key, val in dict(config_info["board_ids"]).items():
+                ## There is no noisy pixel, so list is empty
+                if len(val['pixels']) == 0:
+                    continue
+                else:
+                    for ipixel in val['pixels']:
+                        df = df.loc[~((df['board'] == key) & (df['row'] == ipixel[0]) & (df['col'] == ipixel[1]))]
+
     if df.empty:
-        num_failed_files += 1
         print('file is empty. Move on to the next file')
         return pd.DataFrame()
 
     if (four_board_track) and (df['board'].unique().size != 4):
-        num_failed_files += 1
         print('This file does not have a full data including all four boards. Move on to the next file')
         return pd.DataFrame()
 
     if (~four_board_track) and (df['board'].unique().size < 3):
-        num_failed_files += 1
         print('This file does not have data including at least three boards. Move on to the next file')
         return pd.DataFrame()
 
-    ### CAL code filtering
-    df['identifier'] = df.groupby(['evt', 'board']).cumcount().astype(np.uint8)
-    cal_table = df.pivot_table(index=["row", "col"], columns=["board"], values=["cal"], aggfunc=lambda x: x.mode().iat[0])
+    ### Reset df index before start analysis
+    df.reset_index(drop=True, inplace=True)
 
+    ### CAL code filtering
+    cal_table = df.pivot_table(index=["row", "col"], columns=["board"], values=["cal"], aggfunc=lambda x: x.mode().iat[0])
     cal_table = cal_table.reset_index().set_index([('row', ''), ('col', '')]).stack().reset_index()
     cal_table.columns = ['row', 'col', 'board', 'cal_mode']
 
-    merged_df = pd.merge(df, cal_table, on=['board', 'row', 'col'])
-    del df, cal_table
+    merged_df = pd.merge(df[['board', 'row', 'col', 'cal']], cal_table, on=['board', 'row', 'col'])
+    merged_df['board'] = merged_df['board'].astype('uint8')
+    merged_df['cal_mode'] = merged_df['cal_mode'].astype('int16')
     cal_condition = abs(merged_df['cal'] - merged_df['cal_mode']) <= 3
-    merged_df = merged_df[cal_condition].drop(columns=['cal_mode'])
-    merged_df = merged_df.sort_values(['evt', 'board', 'identifier']).reset_index(drop=True)
-    cal_filtered_df = merged_df.reset_index(drop=True)
-    cal_filtered_df['board'] = cal_filtered_df['board'].astype(np.uint8)
-    cal_filtered_df.drop(columns=['identifier'], inplace=True)
-    del merged_df, cal_condition
+    del cal_table, merged_df
+    cal_filtered_df = df[cal_condition].reset_index(drop=True)
+    del df, cal_condition
 
     ## A wide TDC cuts
     tdc_cuts = {}
-    if red_2nd_id == -1:
+    if not four_board_track:
         ids_to_loop = sorted([trig_id, dut_id, ref_id])
     else:
         ids_to_loop = [0, 1, 2, 3]
@@ -139,13 +150,12 @@ def making_clean_track_df(
     del cal_filtered_df
 
     if filtered_df.empty:
-        num_failed_files += 1
         return pd.DataFrame()
 
     event_board_counts = filtered_df.groupby(['evt', 'board']).size().unstack(fill_value=0)
     event_selection_col = None
 
-    if red_2nd_id == -1:
+    if not four_board_track:
         trig_selection = (event_board_counts[trig_id] == 1)
         ref_selection = (event_board_counts[ref_id] == 1)
         dut_selection = (event_board_counts[dut_id] == 1)
@@ -232,6 +242,15 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        '--max_diff_pixel',
+        metavar = 'NUM',
+        type = int,
+        help = 'Maximum difference to allow track construction by pixel positions',
+        default = 1,
+        dest = 'max_diff_pixel',
+    )
+
+    parser.add_argument(
         '--trigID',
         metavar = 'ID',
         type = int,
@@ -274,9 +293,17 @@ if __name__ == "__main__":
         dest = 'four_board',
     )
 
+    parser.add_argument(
+        '--mask_config',
+        type = Path,
+        help = 'The YAML config file for masking noisy pixels',
+        default = None,
+        dest = 'mask_config_file',
+    )
+
     args = parser.parse_args()
 
-    input_files = list(Path(f'{args.path}').glob('*/loop*feather'))
+    input_files = list(Path(f'{args.path}').glob('loop*feather'))
     columns_to_read = ['evt', 'board', 'row', 'col', 'toa', 'tot', 'cal']
 
     if len(input_files) == 0:
@@ -334,7 +361,8 @@ if __name__ == "__main__":
             with ProcessPoolExecutor() as process_executor:
                 # Each input results in multiple threading jobs being created:
                 futures = [
-                    process_executor.submit(making_clean_track_df, ifile, columns_to_read, args.trigID, args.dutID, args.refID, args.ignoreID, args.four_board)
+                    process_executor.submit(making_clean_track_df, ifile, columns_to_read, args.mask_config_file,
+                                            args.trigID, args.dutID, args.refID, args.ignoreID, args.four_board)
                         for ifile in files
                 ]
                 for future in as_completed(futures):
@@ -352,7 +380,7 @@ if __name__ == "__main__":
         df.reset_index(inplace=True, drop=True)
         del results, dfs
 
-        if args.ignoreID == -1:
+        if not args.four_board:
             ignore_board_ids = list(set([0, 1, 2, 3]) - set([args.trigID, args.dutID, args.refID]))
         else:
             ignore_board_ids = None
@@ -368,20 +396,20 @@ if __name__ == "__main__":
         track_df.reset_index(inplace=True)
         del pivot_data_df, combinations_df
 
-        if args.ignoreID == -1:
-            row_delta_TR = np.abs(track_df[f'row_{args.trigID}'] - track_df[f'row_{args.refID}']) <= 1
-            row_delta_TD = np.abs(track_df[f'row_{args.trigID}'] - track_df[f'row_{args.dutID}']) <= 1
-            col_delta_TR = np.abs(track_df[f'col_{args.trigID}'] - track_df[f'col_{args.refID}']) <= 1
-            col_delta_TD = np.abs(track_df[f'col_{args.trigID}'] - track_df[f'col_{args.dutID}']) <= 1
+        if not args.four_board:
+            row_delta_TR = np.abs(track_df[f'row_{args.trigID}'] - track_df[f'row_{args.refID}']) <= args.max_diff_pixel
+            row_delta_TD = np.abs(track_df[f'row_{args.trigID}'] - track_df[f'row_{args.dutID}']) <= args.max_diff_pixel
+            col_delta_TR = np.abs(track_df[f'col_{args.trigID}'] - track_df[f'col_{args.refID}']) <= args.max_diff_pixel
+            col_delta_TD = np.abs(track_df[f'col_{args.trigID}'] - track_df[f'col_{args.dutID}']) <= args.max_diff_pixel
             track_condition = (row_delta_TR) & (col_delta_TR) & (row_delta_TD) & (col_delta_TD)
 
         else:
-            row_delta_TR  = np.abs(track_df[f'row_{args.trigID}'] - track_df[f'row_{args.refID}']) <= 1
-            row_delta_TR2 = np.abs(track_df[f'row_{args.trigID}'] - track_df[f'row_{args.ignoreID}']) <= 1
-            row_delta_TD  = np.abs(track_df[f'row_{args.trigID}'] - track_df[f'row_{args.dutID}']) <= 1
-            col_delta_TR  = np.abs(track_df[f'col_{args.trigID}'] - track_df[f'col_{args.refID}']) <= 1
-            col_delta_TR2 = np.abs(track_df[f'col_{args.trigID}'] - track_df[f'col_{args.ignoreID}']) <= 1
-            col_delta_TD  = np.abs(track_df[f'col_{args.trigID}'] - track_df[f'col_{args.dutID}']) <= 1
+            row_delta_TR  = np.abs(track_df[f'row_{args.trigID}'] - track_df[f'row_{args.refID}']) <= args.max_diff_pixel
+            row_delta_TR2 = np.abs(track_df[f'row_{args.trigID}'] - track_df[f'row_{args.ignoreID}']) <= args.max_diff_pixel
+            row_delta_TD  = np.abs(track_df[f'row_{args.trigID}'] - track_df[f'row_{args.dutID}']) <= args.max_diff_pixel
+            col_delta_TR  = np.abs(track_df[f'col_{args.trigID}'] - track_df[f'col_{args.refID}']) <= args.max_diff_pixel
+            col_delta_TR2 = np.abs(track_df[f'col_{args.trigID}'] - track_df[f'col_{args.ignoreID}']) <= args.max_diff_pixel
+            col_delta_TD  = np.abs(track_df[f'col_{args.trigID}'] - track_df[f'col_{args.dutID}']) <= args.max_diff_pixel
             track_condition = (row_delta_TR) & (col_delta_TR) & (row_delta_TD) & (col_delta_TD) & (row_delta_TR2) & (col_delta_TR2)
 
         track_df = track_df[track_condition]

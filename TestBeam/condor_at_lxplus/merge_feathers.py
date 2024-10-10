@@ -67,3 +67,18 @@ for idx, igroup in enumerate(tqdm(groups)):
 
     final_df = pd.concat(dfs).reset_index(drop=True)
     final_df.to_feather(outdir / f'loop_{idx}.feather')
+
+print('=================================')
+print('Now remove 30s loop files')
+
+for jfile in files:
+    jfile.unlink(missing_ok=True)
+
+print('Now move merged files')
+new_files = outdir.glob('loop*feather')
+for kfile in new_files:
+    kfile.rename(f'{args.input_dir}/{kfile.name}')
+print('=================================')
+
+## Remove temp output directory
+outdir.rmdir()

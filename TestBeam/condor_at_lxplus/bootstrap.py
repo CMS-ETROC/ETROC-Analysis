@@ -216,7 +216,8 @@ def return_resolution_four_board_fromFWHM(
 def bootstrap(
         input_df: pd.DataFrame,
         board_to_analyze: list[int],
-        iteration: int = 100,
+        limit: int = 7500,
+        nouts: int = 100,
         sampling_fraction: int = 75,
         minimum_nevt_cut: int = 1000,
         do_reproducible: bool = False,
@@ -230,8 +231,8 @@ def bootstrap(
 
     while True:
 
-        if counter > 10000:
-            print("Loop is over maximum. Escaping bootstrap loop")
+        if counter > limit:
+            print("Loop reaches the limit. Escaping bootstrap loop")
             break
 
         tdc_filtered_df = input_df
@@ -317,7 +318,7 @@ def bootstrap(
 
         break_flag = False
         for key, val in resolution_from_bootstrap.items():
-            if len(val) > iteration:
+            if len(val) > nouts:
                 break_flag = True
                 break
 
@@ -338,7 +339,8 @@ def bootstrap(
 def time_df_bootstrap(
         input_df: pd.DataFrame,
         board_to_analyze: list[int],
-        iteration: int = 100,
+        limit: int = 7500,
+        nouts: int = 100,
         sampling_fraction: int = 75,
         minimum_nevt_cut: int = 1000,
         do_reproducible: bool = False,
@@ -351,8 +353,8 @@ def time_df_bootstrap(
 
     while True:
 
-        if counter > 10000:
-            print("Loop is over maximum. Escaping bootstrap loop")
+        if counter > limit:
+            print("Loop reaches the limit. Escaping bootstrap loop")
             break
 
         if do_reproducible:
@@ -427,7 +429,7 @@ def time_df_bootstrap(
 
         break_flag = False
         for key, val in resolution_from_bootstrap.items():
-            if len(val) > iteration:
+            if len(val) > nouts:
                 break_flag = True
                 break
 
@@ -464,13 +466,13 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        '-i',
-        '--iteration',
-        metavar = 'ITERATION',
+        '-n',
+        '--num_bootstrap_output',
+        metavar = 'NUM',
         type = int,
-        help = 'Number of bootstrapping',
+        help = 'Number of outputs after bootstrap',
         default = 100,
-        dest = 'iteration',
+        dest = 'num_bootstrap_output',
     )
 
     parser.add_argument(
@@ -481,6 +483,15 @@ if __name__ == "__main__":
         help = 'Random sampling fraction',
         default = 75,
         dest = 'sampling',
+    )
+
+    parser.add_argument(
+        '--iteration_limit',
+        metavar = 'NUM',
+        type = int,
+        help = 'Maximum iteration of sampling',
+        default = 7500,
+        dest = 'iteration_limit',
     )
 
     parser.add_argument(
@@ -598,11 +609,11 @@ if __name__ == "__main__":
         interest_df = tdc_event_selection_pivot(df, tdc_cuts_dict=tdc_cuts)
         print('Size of dataframe after TDC cut:', interest_df.shape[0])
 
-        resolution_df = bootstrap(input_df=interest_df, board_to_analyze=board_ids, iteration=args.iteration,
+        resolution_df = bootstrap(input_df=interest_df, board_to_analyze=board_ids, limit=args.iteration_limit, nouts=args.num_bootstrap_output,
                                 sampling_fraction=args.sampling, minimum_nevt_cut=args.minimum_nevt, do_reproducible=args.reproducible)
     else:
         df = df.reset_index(names='evt')
-        resolution_df = time_df_bootstrap(input_df=df, board_to_analyze=board_ids, iteration=args.iteration,
+        resolution_df = time_df_bootstrap(input_df=df, board_to_analyze=board_ids, limit=args.iteration_limit, nouts=args.num_bootstrap_output,
                                           sampling_fraction=args.sampling, minimum_nevt_cut=args.minimum_nevt, do_reproducible=args.reproducible)
 
 

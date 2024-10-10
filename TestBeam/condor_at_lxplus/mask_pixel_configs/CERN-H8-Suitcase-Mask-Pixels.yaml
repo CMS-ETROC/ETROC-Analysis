@@ -1,0 +1,9 @@
+board_ids:
+  0:
+    pixels: []
+  1:
+    pixels: []
+  2:
+    pixels: [[0, 15]]
+  3:
+    pixels: []

@@ -31,6 +31,16 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    '-o',
+    '--outdir',
+    metavar = 'DIRNAME',
+    type = str,
+    help = 'output directory name',
+    default = 'dataSelection_outputs',
+    dest = 'outname',
+)
+
+parser.add_argument(
     '--trigID',
     metavar = 'ID',
     type = int,
@@ -118,6 +128,18 @@ with open(listfile, 'a') as listfile:
             save_string = f"run{matches[0]}, {fname}, {loop_name}, {ifile}"
             listfile.write(save_string + '\n')
 
+log_dir = current_dir / 'condor_logs'
+log_dir.mkdir(exist_ok=True)
+
+if log_dir.exists():
+    os.system('rm condor_logs/*trackSelection*log')
+    os.system('rm condor_logs/*trackSelection*stdout')
+    os.system('rm condor_logs/*trackSelection*stderr')
+    os.system('ls condor_logs/*trackSelection*log | wc -l')
+
+out_dir = current_dir / args.outname
+out_dir.mkdir(exist_ok=False)
+
 if args.load_from_eos:
     bash_template = """#!/bin/bash
 
@@ -204,6 +226,7 @@ bash_script = Template(bash_template).render(options)
 print('\n========= Run option =========')
 print(f'Input dataset: {args.dirname}')
 print(f'Track csv file: {args.track}')
+print(f'Output will be stored {args.outname}')
 print(f'Trigger board ID: {args.trigID}')
 print(f'DUT board ID: {args.dutID}')
 print(f'Reference board ID: {args.refID}')
@@ -218,18 +241,6 @@ print('========= Run option =========\n')
 
 with open('run_track_data_selection.sh','w') as bashfile:
     bashfile.write(bash_script)
-
-log_dir = current_dir / 'condor_logs'
-log_dir.mkdir(exist_ok=True)
-
-if log_dir.exists():
-    os.system('rm condor_logs/*trackSelection*log')
-    os.system('rm condor_logs/*trackSelection*stdout')
-    os.system('rm condor_logs/*trackSelection*stderr')
-    os.system('ls condor_logs/*trackSelection*log | wc -l')
-
-out_dir = current_dir / 'dataSelection_outputs'
-out_dir.mkdir(exist_ok=False)
 
 if args.load_from_eos:
     jdl = """universe              = vanilla
