@@ -635,6 +635,10 @@ if __name__ == "__main__":
     name = str(binary_dir).split('/')[-1]
     if not df.empty:
         df.to_feather(f'{name}.feather')
+    else:
+        print('No data is recorded!')
 
     if not filler_df.empty:
         filler_df.to_feather(f'filler_{name}.feather')
+    else:
+        print('No filler information is recorded!')
