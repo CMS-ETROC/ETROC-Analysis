@@ -1942,20 +1942,43 @@ def plot_3d_occupany_map(
 ## --------------------------------------
 def plot_TDC_summary_table(
         input_df: pd.DataFrame,
-        chipLabels: list[int],
-        var: str
+        board_ids: list[int],
+        varname: str,
+        avg_min_bound: float = 0.0,
+        avg_max_bound: float = 1024.0,
+        std_min_bound: float = 0.0,
+        std_max_bound: float = 10.0,
     ):
+    """Make plots of TDC variable mean and std table per pixel in 2D map.
+
+    Parameters
+    ----------
+    input_df: pd.DataFrame,
+        Pandas dataframe of data.
+    board_ids: list[int],
+        Board IDs in integer.
+    varname: str,
+        TDC variable name. Must be all lower case: 'toa', 'tot', or 'cal'.
+    avg_min_bound: float,
+        A number to set minimum boundary for mean table plot.
+    avg_max_bound: float,
+        A number to set maximum boundary for mean table plot.
+    std_min_bound: float,
+        A number to set minimum boundary for std table plot.
+    std_max_bound: float,
+        A number to set maximum boundary for std table plot.
+    """
 
     from matplotlib import colormaps
     cmap = colormaps['viridis']
     cmap.set_under(color='lightgrey')
 
-    for id in chipLabels:
+    for id in board_ids:
 
         if input_df[input_df['board'] == id].empty:
             continue
 
-        sum_group = input_df[input_df['board'] == id].groupby(["col", "row"]).agg({var:['mean','std']})
+        sum_group = input_df[input_df['board'] == id].groupby(["col", "row"]).agg({varname:['mean','std']})
         sum_group.columns = sum_group.columns.droplevel()
         sum_group.reset_index(inplace=True)
 
@@ -1978,14 +2001,14 @@ def plot_TDC_summary_table(
 
         fig, axes = plt.subplots(1, 2, figsize=(20, 20))
 
-        im1 = axes[0].imshow(table_mean, cmap=cmap, vmin=0)
-        im2 = axes[1].imshow(table_std, cmap=cmap, vmin=0)
+        im1 = axes[0].imshow(table_mean, cmap=cmap, vmin=avg_min_bound, vmax=avg_max_bound)
+        im2 = axes[1].imshow(table_std, cmap=cmap, vmin=std_min_bound, vmax=std_max_bound)
 
         hep.cms.text(loc=0, ax=axes[0], text="ETL ETROC Test Beam", fontsize=25)
         hep.cms.text(loc=0, ax=axes[1], text="ETL ETROC Test Beam", fontsize=25)
 
-        axes[0].set_title(f'{var.upper()} Mean', loc="right")
-        axes[1].set_title(f'{var.upper()} Std', loc="right")
+        axes[0].set_title(f'{varname.upper()} Mean', loc="right")
+        axes[1].set_title(f'{varname.upper()} Std', loc="right")
 
         axes[0].set_xticks(np.arange(0,16))
         axes[0].set_yticks(np.arange(0,16))
