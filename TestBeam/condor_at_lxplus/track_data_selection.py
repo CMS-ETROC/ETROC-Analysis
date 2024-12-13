@@ -84,6 +84,7 @@ def tdc_event_selection(
 ## --------------------------------------
 def data_3board_selection_by_track(
         input_df: pd.DataFrame,
+        cal_mode_table: pd.DataFrame,
         pix_dict: dict,
         trig_id: int,
         ref_id: int,
@@ -101,15 +102,13 @@ def data_3board_selection_by_track(
     tdc_cuts = {}
     for idx in board_to_analyze:
         # board ID: [CAL LB, CAL UB, TOA LB, TOA UB, TOT LB, TOT UB]
+        cal_mode = cal_mode_table.loc[(cal_mode_table['board'] == idx) & (cal_mode_table['row'] == pix_dict[idx][0]) & (cal_mode_table['col'] == pix_dict[idx][1])]['cal_mode'].values[0]
         if idx == trig_id:
-            tdc_cuts[idx] = [track_tmp_df.loc[track_tmp_df['board'] == idx]['cal'].mode()[0]-3, track_tmp_df.loc[track_tmp_df['board'] == idx]['cal'].mode()[0]+3,
-                    0, 1100, tot_cuts[0], tot_cuts[1]]
+            tdc_cuts[idx] = [cal_mode-3, cal_mode+3, 0, 1100, tot_cuts[0], tot_cuts[1]]
         elif idx == ref_id:
-            tdc_cuts[idx] = [track_tmp_df.loc[track_tmp_df['board'] == idx]['cal'].mode()[0]-3, track_tmp_df.loc[track_tmp_df['board'] == idx]['cal'].mode()[0]+3,
-                    0, 1100, 0, 600]
+            tdc_cuts[idx] = [cal_mode-3, cal_mode+3, 0, 1100, 0, 600]
         else:
-            tdc_cuts[idx] = [track_tmp_df.loc[track_tmp_df['board'] == idx]['cal'].mode()[0]-3, track_tmp_df.loc[track_tmp_df['board'] == idx]['cal'].mode()[0]+3,
-                    0, 1100, 0, 600]
+            tdc_cuts[idx] = [cal_mode-3, cal_mode+3, 0, 1100, 0, 600]
 
     track_tmp_df = tdc_event_selection(track_tmp_df, tdc_cuts_dict=tdc_cuts)
 
@@ -132,6 +131,7 @@ def data_3board_selection_by_track(
 ## --------------------------------------
 def data_4board_selection_by_track(
         input_df: pd.DataFrame,
+        cal_mode_table: pd.DataFrame,
         pix_dict: dict,
         trig_id: int,
         ref_id: int,
@@ -149,15 +149,13 @@ def data_4board_selection_by_track(
     tdc_cuts = {}
     for idx in board_to_analyze:
         # board ID: [CAL LB, CAL UB, TOA LB, TOA UB, TOT LB, TOT UB]
+        cal_mode = cal_mode_table.loc[(cal_mode_table['board'] == idx) & (cal_mode_table['row'] == pix_dict[idx][0]) & (cal_mode_table['col'] == pix_dict[idx][1])]['cal_mode'].values[0]
         if idx == trig_id:
-            tdc_cuts[idx] = [track_tmp_df.loc[track_tmp_df['board'] == idx]['cal'].mode()[0]-3, track_tmp_df.loc[track_tmp_df['board'] == idx]['cal'].mode()[0]+3,
-                    0, 1100, tot_cuts[0], tot_cuts[1]]
+            tdc_cuts[idx] = [cal_mode-3, cal_mode+3, 0, 1100, tot_cuts[0], tot_cuts[1]]
         elif idx == ref_id:
-            tdc_cuts[idx] = [track_tmp_df.loc[track_tmp_df['board'] == idx]['cal'].mode()[0]-3, track_tmp_df.loc[track_tmp_df['board'] == idx]['cal'].mode()[0]+3,
-                    0, 1100, 0, 600]
+            tdc_cuts[idx] = [cal_mode-3, cal_mode+3, 0, 1100, 0, 600]
         else:
-            tdc_cuts[idx] = [track_tmp_df.loc[track_tmp_df['board'] == idx]['cal'].mode()[0]-3, track_tmp_df.loc[track_tmp_df['board'] == idx]['cal'].mode()[0]+3,
-                    0, 1100, 0, 600]
+            tdc_cuts[idx] = [cal_mode-3, cal_mode+3, 0, 1100, 0, 600]
 
     track_tmp_df = tdc_event_selection(track_tmp_df, tdc_cuts_dict=tdc_cuts)
 
@@ -214,6 +212,15 @@ if __name__ == "__main__":
         help = 'csv file including track candidates',
         required = True,
         dest = 'track',
+    )
+
+    parser.add_argument(
+        '--cal_table',
+        metavar = 'NAME',
+        type = str,
+        help = 'csv file including CAL mode values per board, per pixel',
+        required = True,
+        dest = 'cal_table',
     )
 
     parser.add_argument(
@@ -292,6 +299,7 @@ if __name__ == "__main__":
         print('Dataframe does not have at least 3 boards information')
         exit(0)
 
+    cal_table = pd.read_csv(args.cal_table)
     track_df = pd.read_csv(args.track)
     track_pivots = defaultdict(pd.DataFrame)
 
@@ -303,7 +311,7 @@ if __name__ == "__main__":
             for idx in board_to_analyze:
                 pix_dict[idx] = [track_df.iloc[itrack][f'row_{idx}'], track_df.iloc[itrack][f'col_{idx}']]
 
-            table = data_4board_selection_by_track(input_df=run_df, pix_dict=pix_dict, trig_id=trig_id, ref_id=ref_id,
+            table = data_4board_selection_by_track(input_df=run_df, cal_mode_table=cal_table, pix_dict=pix_dict, trig_id=trig_id, ref_id=ref_id,
                                                    board_to_analyze=board_to_analyze, tot_cuts=tot_cuts)
             track_pivots[itrack] = table
     else:
@@ -315,7 +323,7 @@ if __name__ == "__main__":
             for idx in board_to_analyze:
                 pix_dict[idx] = [track_df.iloc[itrack][f'row_{idx}'], track_df.iloc[itrack][f'col_{idx}']]
 
-            table = data_3board_selection_by_track(input_df=reduced_run_df, pix_dict=pix_dict, trig_id=trig_id, ref_id=ref_id,
+            table = data_3board_selection_by_track(input_df=reduced_run_df, cal_mode_table=cal_table, pix_dict=pix_dict, trig_id=trig_id, ref_id=ref_id,
                                                 board_to_analyze=board_to_analyze, tot_cuts=tot_cuts)
             track_pivots[itrack] = table
 
