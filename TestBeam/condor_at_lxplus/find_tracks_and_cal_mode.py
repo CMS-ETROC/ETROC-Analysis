@@ -189,6 +189,13 @@ if __name__ == "__main__":
         dest = 'mask_config_file',
     )
 
+    parser.add_argument(
+        '--cal_table',
+        action = 'store_true',
+        help = 'If argument is on, code only does making CAL code table for a given dataset',
+        dest = 'cal_table',
+    )
+
     args = parser.parse_args()
 
     input_files = list(Path(f'{args.path}').glob('loop*feather'))
@@ -211,19 +218,6 @@ if __name__ == "__main__":
     dfs = []
     for ifile in tqdm(input_files):
         tmp_df = pd.read_feather(ifile, columns=columns_to_read)
-
-        if args.mask_config_file is not None:
-            with open(args.mask_config_file, 'r') as file:
-                config_info = yaml.safe_load(file)
-
-                for key, val in dict(config_info["board_ids"]).items():
-                    ## There is no noisy pixel, so list is empty
-                    if len(val['pixels']) == 0:
-                        continue
-                    else:
-                        for ipixel in val['pixels']:
-                            tmp_df = tmp_df.loc[~((tmp_df['board'] == key) & (tmp_df['row'] == ipixel[0]) & (tmp_df['col'] == ipixel[1]))]
-
         n = int(portion*tmp_df.shape[0])
         indices = np.random.choice(tmp_df['evt'].unique(), n, replace=False)
         tmp_df = tmp_df.loc[tmp_df['evt'].isin(indices)]
@@ -231,6 +225,20 @@ if __name__ == "__main__":
         del tmp_df
 
     final_input_df = pd.concat(dfs)
+
+    ### Remove noisy pixels
+    if args.mask_config_file is not None:
+        with open(args.mask_config_file, 'r') as file:
+            config_info = yaml.safe_load(file)
+
+            for key, val in dict(config_info["board_ids"]).items():
+                ## There is no noisy pixel, so list is empty
+                if len(val['pixels']) == 0:
+                    continue
+                else:
+                    for ipixel in val['pixels']:
+                        final_input_df = final_input_df.loc[~((final_input_df['board'] == key) & (final_input_df['row'] == ipixel[0]) & (final_input_df['col'] == ipixel[1]))]
+
     final_input_df.reset_index(drop=True, inplace=True)
     del dfs
 
@@ -241,104 +249,107 @@ if __name__ == "__main__":
     cal_table.columns = ['row', 'col', 'board', 'cal_mode']
     cal_table.to_csv(f'{args.outfilename}_cal_table.csv', index=False)
 
-    merged_df = pd.merge(final_input_df[['board', 'row', 'col', 'cal']], cal_table, on=['board', 'row', 'col'])
-    merged_df['board'] = merged_df['board'].astype('uint8')
-    merged_df['cal_mode'] = merged_df['cal_mode'].astype('int16')
-    cal_condition = abs(merged_df['cal'] - merged_df['cal_mode']) <= 3
-    del cal_table, merged_df
-    cal_filtered_df = final_input_df.loc[cal_condition].reset_index(drop=True)
-    del final_input_df, cal_condition
+    if not args.cal_table:
+        print('Find track combinations')
 
-    ### Re-define Evt numbers
-    # Identify where a new event starts
-    is_new_event = cal_filtered_df['evt'] != cal_filtered_df['evt'].shift()
+        merged_df = pd.merge(final_input_df[['board', 'row', 'col', 'cal']], cal_table, on=['board', 'row', 'col'])
+        merged_df['board'] = merged_df['board'].astype('uint8')
+        merged_df['cal_mode'] = merged_df['cal_mode'].astype('int16')
+        cal_condition = abs(merged_df['cal'] - merged_df['cal_mode']) <= 3
+        del cal_table, merged_df
+        cal_filtered_df = final_input_df.loc[cal_condition].reset_index(drop=True)
+        del final_input_df, cal_condition
 
-    # Assign a unique sequential number to each event
-    cal_filtered_df['evt'] = is_new_event.cumsum() - 1
+        ### Re-define Evt numbers
+        # Identify where a new event starts
+        is_new_event = cal_filtered_df['evt'] != cal_filtered_df['evt'].shift()
 
-    ## A wide TDC cuts
-    tdc_cuts = {}
-    if not args.four_board:
-        ids_to_loop = sorted([args.trigID, args.dutID, args.refID])
-    else:
-        ids_to_loop = [0, 1, 2, 3]
+        # Assign a unique sequential number to each event
+        cal_filtered_df['evt'] = is_new_event.cumsum() - 1
 
-    for idx in ids_to_loop:
-        # board ID: [CAL LB, CAL UB, TOA LB, TOA UB, TOT LB, TOT UB]
-        if idx == args.trigID:
-            tdc_cuts[idx] = [0, 1100,  100, 500, 50, 250]
-        elif idx == args.refID:
-            tdc_cuts[idx] = [0, 1100,  0, 1100, 50, 250]
+        ## A wide TDC cuts
+        tdc_cuts = {}
+        if not args.four_board:
+            ids_to_loop = sorted([args.trigID, args.dutID, args.refID])
         else:
-            tdc_cuts[idx] = [0, 1100,  0, 1100, 0, 600]
+            ids_to_loop = [0, 1, 2, 3]
 
-    filtered_df = tdc_event_selection(cal_filtered_df, tdc_cuts_dict=tdc_cuts)
-    del cal_filtered_df
+        for idx in ids_to_loop:
+            # board ID: [CAL LB, CAL UB, TOA LB, TOA UB, TOT LB, TOT UB]
+            if idx == args.trigID:
+                tdc_cuts[idx] = [0, 1100,  100, 500, 50, 250]
+            elif idx == args.refID:
+                tdc_cuts[idx] = [0, 1100,  0, 1100, 50, 250]
+            else:
+                tdc_cuts[idx] = [0, 1100,  0, 1100, 0, 600]
 
-    event_board_counts = filtered_df.groupby(['evt', 'board']).size().unstack(fill_value=0)
-    event_selection_col = None
+        filtered_df = tdc_event_selection(cal_filtered_df, tdc_cuts_dict=tdc_cuts)
+        del cal_filtered_df
 
-    if not args.four_board:
-        trig_selection = (event_board_counts[args.trigID] == 1)
-        ref_selection = (event_board_counts[args.refID] == 1)
-        dut_selection = (event_board_counts[args.dutID] == 1)
-        event_selection_col = trig_selection & ref_selection & dut_selection
-    else:
-        trig_selection = (event_board_counts[args.trigID] == 1)
-        ref_selection = (event_board_counts[args.refID] == 1)
-        ref_2nd_selection = (event_board_counts[args.ignoreID] == 1)
-        dut_selection = (event_board_counts[args.dutID] == 1)
-        event_selection_col = trig_selection & ref_selection & ref_2nd_selection & dut_selection
+        event_board_counts = filtered_df.groupby(['evt', 'board']).size().unstack(fill_value=0)
+        event_selection_col = None
 
-    selected_event_numbers = event_board_counts[event_selection_col].index
-    selected_subset_df = filtered_df.loc[filtered_df['evt'].isin(selected_event_numbers)]
-    selected_subset_df.reset_index(inplace=True, drop=True)
-    del filtered_df
+        if not args.four_board:
+            trig_selection = (event_board_counts[args.trigID] == 1)
+            ref_selection = (event_board_counts[args.refID] == 1)
+            dut_selection = (event_board_counts[args.dutID] == 1)
+            event_selection_col = trig_selection & ref_selection & dut_selection
+        else:
+            trig_selection = (event_board_counts[args.trigID] == 1)
+            ref_selection = (event_board_counts[args.refID] == 1)
+            ref_2nd_selection = (event_board_counts[args.ignoreID] == 1)
+            dut_selection = (event_board_counts[args.dutID] == 1)
+            event_selection_col = trig_selection & ref_selection & ref_2nd_selection & dut_selection
 
-    if not args.four_board:
-        ignore_board_ids = list(set([0, 1, 2, 3]) - set([args.trigID, args.dutID, args.refID]))
-        list_of_ignore_boards = [args.ignoreID]
-        columns_want_to_drop = [f'toa_{i}' for i in set([0, 1, 2, 3])-set(list_of_ignore_boards)]
+        selected_event_numbers = event_board_counts[event_selection_col].index
+        selected_subset_df = filtered_df.loc[filtered_df['evt'].isin(selected_event_numbers)]
+        selected_subset_df.reset_index(inplace=True, drop=True)
+        del filtered_df
 
-        columns_want_to_group = []
-        for i in set([0, 1, 2, 3])-set(list_of_ignore_boards):
-            columns_want_to_group.append(f'row_{i}')
-            columns_want_to_group.append(f'col_{i}')
-    else:
-        ignore_board_ids = None
-        columns_want_to_drop = [f'toa_{i}' for i in [0,1,2,3]]
+        if not args.four_board:
+            ignore_board_ids = list(set([0, 1, 2, 3]) - set([args.trigID, args.dutID, args.refID]))
+            list_of_ignore_boards = [args.ignoreID]
+            columns_want_to_drop = [f'toa_{i}' for i in set([0, 1, 2, 3])-set(list_of_ignore_boards)]
 
-        columns_want_to_group = []
-        for i in [0, 1, 2, 3]:
-            columns_want_to_group.append(f'row_{i}')
-            columns_want_to_group.append(f'col_{i}')
+            columns_want_to_group = []
+            for i in set([0, 1, 2, 3])-set(list_of_ignore_boards):
+                columns_want_to_group.append(f'row_{i}')
+                columns_want_to_group.append(f'col_{i}')
+        else:
+            ignore_board_ids = None
+            columns_want_to_drop = [f'toa_{i}' for i in [0,1,2,3]]
 
-    pivot_data_df = making_pivot(selected_subset_df, 'evt', 'board', set({'board', 'evt', 'cal', 'tot'}), ignore_boards=ignore_board_ids)
+            columns_want_to_group = []
+            for i in [0, 1, 2, 3]:
+                columns_want_to_group.append(f'row_{i}')
+                columns_want_to_group.append(f'col_{i}')
 
-    combinations_df = pivot_data_df.groupby(columns_want_to_group).count()
-    combinations_df['count'] = combinations_df[f'toa_{args.trigID}']
-    combinations_df.drop(columns_want_to_drop, axis=1, inplace=True)
-    track_df = combinations_df.loc[combinations_df['count'] > args.ntracks]
-    track_df.reset_index(inplace=True)
-    del pivot_data_df, combinations_df
+        pivot_data_df = making_pivot(selected_subset_df, 'evt', 'board', set({'board', 'evt', 'cal', 'tot'}), ignore_boards=ignore_board_ids)
 
-    if not args.four_board:
-        row_delta_TR = np.abs(track_df[f'row_{args.trigID}'] - track_df[f'row_{args.refID}']) <= args.max_diff_pixel
-        row_delta_TD = np.abs(track_df[f'row_{args.trigID}'] - track_df[f'row_{args.dutID}']) <= args.max_diff_pixel
-        col_delta_TR = np.abs(track_df[f'col_{args.trigID}'] - track_df[f'col_{args.refID}']) <= args.max_diff_pixel
-        col_delta_TD = np.abs(track_df[f'col_{args.trigID}'] - track_df[f'col_{args.dutID}']) <= args.max_diff_pixel
-        track_condition = (row_delta_TR) & (col_delta_TR) & (row_delta_TD) & (col_delta_TD)
+        combinations_df = pivot_data_df.groupby(columns_want_to_group).count()
+        combinations_df['count'] = combinations_df[f'toa_{args.trigID}']
+        combinations_df.drop(columns_want_to_drop, axis=1, inplace=True)
+        track_df = combinations_df.loc[combinations_df['count'] > args.ntracks]
+        track_df.reset_index(inplace=True)
+        del pivot_data_df, combinations_df
 
-    else:
-        row_delta_TR  = np.abs(track_df[f'row_{args.trigID}'] - track_df[f'row_{args.refID}']) <= args.max_diff_pixel
-        row_delta_TR2 = np.abs(track_df[f'row_{args.trigID}'] - track_df[f'row_{args.ignoreID}']) <= args.max_diff_pixel
-        row_delta_TD  = np.abs(track_df[f'row_{args.trigID}'] - track_df[f'row_{args.dutID}']) <= args.max_diff_pixel
-        col_delta_TR  = np.abs(track_df[f'col_{args.trigID}'] - track_df[f'col_{args.refID}']) <= args.max_diff_pixel
-        col_delta_TR2 = np.abs(track_df[f'col_{args.trigID}'] - track_df[f'col_{args.ignoreID}']) <= args.max_diff_pixel
-        col_delta_TD  = np.abs(track_df[f'col_{args.trigID}'] - track_df[f'col_{args.dutID}']) <= args.max_diff_pixel
-        track_condition = (row_delta_TR) & (col_delta_TR) & (row_delta_TD) & (col_delta_TD) & (row_delta_TR2) & (col_delta_TR2)
+        if not args.four_board:
+            row_delta_TR = np.abs(track_df[f'row_{args.trigID}'] - track_df[f'row_{args.refID}']) <= args.max_diff_pixel
+            row_delta_TD = np.abs(track_df[f'row_{args.trigID}'] - track_df[f'row_{args.dutID}']) <= args.max_diff_pixel
+            col_delta_TR = np.abs(track_df[f'col_{args.trigID}'] - track_df[f'col_{args.refID}']) <= args.max_diff_pixel
+            col_delta_TD = np.abs(track_df[f'col_{args.trigID}'] - track_df[f'col_{args.dutID}']) <= args.max_diff_pixel
+            track_condition = (row_delta_TR) & (col_delta_TR) & (row_delta_TD) & (col_delta_TD)
 
-    track_df = track_df.loc[track_condition]
-    track_df.drop(columns=['count'], inplace=True)
-    track_df = track_df.drop_duplicates(subset=columns_want_to_group, keep='first')
-    track_df.to_csv(f'{args.outfilename}.csv', index=False)
+        else:
+            row_delta_TR  = np.abs(track_df[f'row_{args.trigID}'] - track_df[f'row_{args.refID}']) <= args.max_diff_pixel
+            row_delta_TR2 = np.abs(track_df[f'row_{args.trigID}'] - track_df[f'row_{args.ignoreID}']) <= args.max_diff_pixel
+            row_delta_TD  = np.abs(track_df[f'row_{args.trigID}'] - track_df[f'row_{args.dutID}']) <= args.max_diff_pixel
+            col_delta_TR  = np.abs(track_df[f'col_{args.trigID}'] - track_df[f'col_{args.refID}']) <= args.max_diff_pixel
+            col_delta_TR2 = np.abs(track_df[f'col_{args.trigID}'] - track_df[f'col_{args.ignoreID}']) <= args.max_diff_pixel
+            col_delta_TD  = np.abs(track_df[f'col_{args.trigID}'] - track_df[f'col_{args.dutID}']) <= args.max_diff_pixel
+            track_condition = (row_delta_TR) & (col_delta_TR) & (row_delta_TD) & (col_delta_TD) & (row_delta_TR2) & (col_delta_TR2)
+
+        track_df = track_df.loc[track_condition]
+        track_df.drop(columns=['count'], inplace=True)
+        track_df = track_df.drop_duplicates(subset=columns_want_to_group, keep='first')
+        track_df.to_csv(f'{args.outfilename}.csv', index=False)
