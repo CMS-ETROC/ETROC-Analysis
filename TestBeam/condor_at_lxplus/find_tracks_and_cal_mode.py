@@ -222,7 +222,7 @@ if __name__ == "__main__":
                         continue
                     else:
                         for ipixel in val['pixels']:
-                            df = df.loc[~((df['board'] == key) & (df['row'] == ipixel[0]) & (df['col'] == ipixel[1]))]
+                            tmp_df = tmp_df.loc[~((tmp_df['board'] == key) & (tmp_df['row'] == ipixel[0]) & (tmp_df['col'] == ipixel[1]))]
 
         n = int(portion*tmp_df.shape[0])
         indices = np.random.choice(tmp_df['evt'].unique(), n, replace=False)
