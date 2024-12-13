@@ -31,6 +31,15 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    '--cal_table',
+    metavar = 'NAME',
+    type = str,
+    help = 'csv file including CAL mode values per board, per pixel',
+    required = True,
+    dest = 'cal_table',
+)
+
+parser.add_argument(
     '-o',
     '--outdir',
     metavar = 'DIRNAME',
@@ -155,8 +164,8 @@ xrdcp -r root://eosuser.cern.ch/{{ path }} ./
 
 echo "Will process input file from {{ runname }} {{ filename }}"
 
-echo "python track_data_selection.py -f {{ filename }} -r {{ runname }} -t {{ track }} --trigID {{ trigID }} --refID {{ refID }} --dutID {{ dutID }} --ignoreID {{ ignoreID }} --trigTOTLower {{ trigTOTLower }} --trigTOTUpper {{ trigTOTUpper }}"
-python track_data_selection.py -f {{ filename }} -r {{ runname }} -t {{ track }} --trigID {{ trigID }} --refID {{ refID }} --dutID {{ dutID }} --ignoreID {{ ignoreID }} --trigTOTLower {{ trigTOTLower }} --trigTOTUpper {{ trigTOTUpper }}
+echo "python track_data_selection.py -f {{ filename }} -r {{ runname }} -t {{ track }} --trigID {{ trigID }} --refID {{ refID }} --dutID {{ dutID }} --ignoreID {{ ignoreID }} --trigTOTLower {{ trigTOTLower }} --trigTOTUpper {{ trigTOTUpper }} --cal_table {{ cal_table }}"
+python track_data_selection.py -f {{ filename }} -r {{ runname }} -t {{ track }} --trigID {{ trigID }} --refID {{ refID }} --dutID {{ dutID }} --ignoreID {{ ignoreID }} --trigTOTLower {{ trigTOTLower }} --trigTOTUpper {{ trigTOTUpper }} --cal_table {{ cal_table }}
 
 ls -ltrh
 echo ""
@@ -174,6 +183,7 @@ echo ""
         'runname': '${2}',
         'path': '${3}',
         'track': args.track,
+        'cal_table': args.cal_table.split('/')[-1],
         'trigID': args.trigID,
         'refID': args.refID,
         'dutID': args.dutID,
@@ -194,8 +204,8 @@ source /cvmfs/sft.cern.ch/lcg/views/LCG_104a/x86_64-el9-gcc13-opt/setup.sh
 
 echo "Will process input file from {{ runname }} {{ filename }}"
 
-echo "python track_data_selection.py -f {{ filename }} -r {{ runname }} -t {{ track }} --trigID {{ trigID }} --refID {{ refID }} --dutID {{ dutID }} --ignoreID {{ ignoreID }} --trigTOTLower {{ trigTOTLower }} --trigTOTUpper {{ trigTOTUpper }}"
-python track_data_selection.py -f {{ filename }} -r {{ runname }} -t {{ track }} --trigID {{ trigID }} --refID {{ refID }} --dutID {{ dutID }} --ignoreID {{ ignoreID }} --trigTOTLower {{ trigTOTLower }} --trigTOTUpper {{ trigTOTUpper }}
+echo "python track_data_selection.py -f {{ filename }} -r {{ runname }} -t {{ track }} --trigID {{ trigID }} --refID {{ refID }} --dutID {{ dutID }} --ignoreID {{ ignoreID }} --trigTOTLower {{ trigTOTLower }} --trigTOTUpper {{ trigTOTUpper }} --cal_table {{ cal_table }}"
+python track_data_selection.py -f {{ filename }} -r {{ runname }} -t {{ track }} --trigID {{ trigID }} --refID {{ refID }} --dutID {{ dutID }} --ignoreID {{ ignoreID }} --trigTOTLower {{ trigTOTLower }} --trigTOTUpper {{ trigTOTUpper }} --cal_table {{ cal_table }}
 
 ls -ltrh
 echo ""
@@ -212,6 +222,7 @@ echo ""
         'filename': '${1}',
         'runname': '${2}',
         'track': args.track,
+        'cal_table': args.cal_table.split('/')[-1],
         'trigID': args.trigID,
         'refID': args.refID,
         'dutID': args.dutID,
@@ -226,6 +237,7 @@ bash_script = Template(bash_template).render(options)
 print('\n========= Run option =========')
 print(f'Input dataset: {args.dirname}')
 print(f'Track csv file: {args.track}')
+print(f'Cal code mode table: {args.cal_table}')
 print(f'Output will be stored {args.outname}')
 print(f'Trigger board ID: {args.trigID}')
 print(f'DUT board ID: {args.dutID}')
@@ -238,7 +250,6 @@ else:
     print('Feather files will be load from local area')
 print('========= Run option =========\n')
 
-
 with open('run_track_data_selection.sh','w') as bashfile:
     bashfile.write(bash_script)
 
@@ -248,15 +259,15 @@ executable            = run_track_data_selection.sh
 should_Transfer_Files = YES
 whenToTransferOutput  = ON_EXIT
 arguments             = $(fname) $(run) $(path)
-transfer_Input_Files  = track_data_selection.py,{1}
-TransferOutputRemaps = "$(run)_$(loop).pickle={2}/$(run)_$(loop).pickle"
+transfer_Input_Files  = track_data_selection.py,{1},{2}
+TransferOutputRemaps = "$(run)_$(loop).pickle={3}/$(run)_$(loop).pickle"
 output                = {0}/$(ClusterId).$(ProcId).trackSelection.stdout
 error                 = {0}/$(ClusterId).$(ProcId).trackSelection.stderr
 log                   = {0}/$(ClusterId).$(ProcId).trackSelection.log
 MY.WantOS             = "el9"
 +JobFlavour           = "microcentury"
 Queue run,fname,loop,path from input_list_for_dataSelection.txt
-""".format(str(log_dir), args.track, str(out_dir))
+""".format(str(log_dir), args.track, args.cal_table, str(out_dir))
 
 else:
     jdl = """universe              = vanilla
@@ -264,15 +275,15 @@ executable            = run_track_data_selection.sh
 should_Transfer_Files = YES
 whenToTransferOutput  = ON_EXIT
 arguments             = $(fname) $(run)
-transfer_Input_Files  = track_data_selection.py,{1},$(path)
-TransferOutputRemaps = "$(run)_$(loop).pickle={2}/$(run)_$(loop).pickle"
+transfer_Input_Files  = track_data_selection.py,{1},$(path),{2}
+TransferOutputRemaps = "$(run)_$(loop).pickle={3}/$(run)_$(loop).pickle"
 output                = {0}/$(ClusterId).$(ProcId).trackSelection.stdout
 error                 = {0}/$(ClusterId).$(ProcId).trackSelection.stderr
 log                   = {0}/$(ClusterId).$(ProcId).trackSelection.log
 MY.WantOS             = "el9"
 +JobFlavour           = "microcentury"
 Queue run,fname,loop,path from input_list_for_dataSelection.txt
-""".format(str(log_dir), args.track, str(out_dir))
+""".format(str(log_dir), args.track, args.cal_table, str(out_dir))
 
 
 with open(f'condor_track_data_selection.jdl','w') as jdlfile:
