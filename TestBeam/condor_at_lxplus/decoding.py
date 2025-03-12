@@ -617,6 +617,15 @@ if __name__ == "__main__":
         dest = 'input_dir',
     )
 
+    parser.add_argument(
+        '-o',
+        '--output_name',
+        metavar = 'NAME',
+        help = 'Name for output file',
+        default = None,
+        dest = 'output_name',
+    )
+
     args = parser.parse_args()
 
     binary_dir = Path(args.input_dir)
@@ -633,6 +642,9 @@ if __name__ == "__main__":
     df, _, _, filler_df = decoder.decode_files()
 
     name = str(binary_dir).split('/')[-1]
+    if args.output_name is not None:
+        name = args.output_name
+
     if not df.empty:
         df.to_feather(f'{name}.feather')
     else:
