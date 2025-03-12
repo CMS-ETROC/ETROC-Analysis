@@ -55,9 +55,13 @@ if listfile.is_file():
     listfile.unlink()
 
 with open(listfile, 'a') as listfile:
-    for idx, num in enumerate(range(0, len(file_list), args.files_per_job)):
+
+    point1 = int(file_list[0].name.split('.')[0].split('_')[1])
+    point2 = int(file_list[-1].name.split('.')[0].split('_')[1])
+
+    for idx, num in enumerate(range(point1, point2, args.files_per_job)):
         start = num
-        end = min(num + args.files_per_job - 1, len(file_list) - 1)
+        end = min(num + args.files_per_job - 1, point2 - 1)
         save_string = f"{start}, {end}, {idx}"
         listfile.write(save_string + '\n')
 
