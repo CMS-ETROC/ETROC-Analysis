@@ -58,7 +58,7 @@ with open(listfile, 'a') as listfile:
     for idx, num in enumerate(range(0, len(file_list), args.files_per_job)):
         start = num
         end = min(num + args.files_per_job - 1, len(file_list) - 1)
-        save_string = "{}/file_{{{}..{}}}.bin, {}".format(args.input_dir, start, end, idx)
+        save_string = f"{start}, {end}, {idx}"
         listfile.write(save_string + '\n')
 
 outdir = current_dir / f'{args.run_name}_feather'
@@ -75,10 +75,12 @@ echo ""
 source /cvmfs/sft.cern.ch/lcg/views/LCG_104a/x86_64-el9-gcc13-opt/setup.sh
 
 # Make temporary directory to save files
-mkdir -p ./job_{{ ClusterID }}_{{ ProcID }}
+mkdir -p ./job_{{ ClusterID }}_{{ idx }}
 
 # Copy input data from EOS to local work node
-xrdcp -r root://eosuser.cern.ch/{{ input_files }} ./job_{{ ClusterID }}_{{ ProcID }}
+for num in $(seq {{ start }} {{ end }}); do
+    xrdcp -r root://eosuser.cern.ch/{{ eos_path }}/f ./job_{{ ClusterID }}_{{ idx }}
+done
 
 # Untar python environment
 tar -xf python_lib.tar
@@ -91,16 +93,20 @@ export PYTHONPATH=${PWD}/local/lib/python3.9/site-packages:$PYTHONPATH
 echo "${PYTHONPATH}"
 echo ""
 
-echo "python decoding.py -d job_{{ ClusterID }}_{{ ProcID }} -o loop_{{ idx }}"
-python decoding.py -d job_{{ ClusterID }}_{{ ProcID }} -o loop_{{ idx }}
+echo "python decoding.py -d job_{{ ClusterID }}_{{ idx }} -o loop_{{ idx }}"
+python decoding.py -d job_{{ ClusterID }}_{{ idx }} -o loop_{{ idx }}
+
+# Remove temporary directory
+rm -r job_{{ ClusterID }}_{{ idx }}
 """
 
 # Prepare the data for the template
 options = {
-    'input_files': '${1}',
-    'idx': '${2}',
-    'ClusterID': '${3}',
-    'ProcID': '${4}',
+    'eos_path': args.input_dir,
+    'start': '${1}',
+    'end': '${2}',
+    'idx': '${3}',
+    'ClusterID': '${4}',
 }
 
 # Render the template with the data
@@ -122,7 +128,7 @@ jdl = """universe              = vanilla
 executable            = run_decode.sh
 should_Transfer_Files = YES
 whenToTransferOutput  = ON_EXIT
-arguments             = $(files) $(index) $(ClusterId) $(ProcId)
+arguments             = $(start) $(end) $(index) $(ClusterId)
 transfer_Input_Files  = decoding.py, python_lib.tar
 TransferOutputRemaps = "loop_$(index).feather={1}/loop_$(index).feather;filler_loop_$(index).feather={1}/filler_loop_$(index).feather"
 output                = {0}/$(ClusterId).$(ProcId).decoding.stdout
@@ -130,7 +136,7 @@ error                 = {0}/$(ClusterId).$(ProcId).decoding.stderr
 log                   = {0}/$(ClusterId).$(ProcId).decoding.log
 MY.WantOS             = "el9"
 +JobFlavour           = "longlunch"
-Queue files, index from input_list_for_decoding.txt
+Queue start, end, index from input_list_for_decoding.txt
 """.format(str(log_dir), str(outdir))
 
 with open(f'condor_decoding.jdl','w') as jdlfile:
