@@ -21,6 +21,15 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    '--run_name',
+    metavar = 'NAME',
+    type = str,
+    help = 'extra run information for output directory name. Example: Run_X. X can be any number.',
+    required = True,
+    dest = 'run_name',
+)
+
+parser.add_argument(
     '--files_per_job',
     metavar = 'NUM',
     type = int,
