@@ -153,5 +153,4 @@ if args.dryrun:
     print('=========== Bash file ===========')
     os.system('cat run_decode.sh')
 else:
-    pass
-    # os.system(f'condor_submit condor_decoding.jdl')
+    os.system(f'condor_submit condor_decoding.jdl')
