@@ -600,7 +600,6 @@ class DecodeBinary:
 if __name__ == "__main__":
     import argparse
     from natsort import natsorted
-    import sys
 
     parser = argparse.ArgumentParser(
                 prog='convert',
@@ -629,7 +628,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     binary_dir = Path(args.input_dir)
+
     files = natsorted(list(binary_dir.glob('TDC*bin')))
+    if len(files) == 0:
+        files = natsorted(list(binary_dir.glob('file*bin')))
+
     decoder = DecodeBinary(
         firmware_key = 0b0001,
         board_id = [0x17f0f, 0x17f0f, 0x17f0f, 0x17f0f],
