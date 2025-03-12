@@ -79,7 +79,7 @@ mkdir -p ./job_{{ ClusterID }}_{{ idx }}
 
 # Copy input data from EOS to local work node
 for num in $(seq {{ start }} {{ end }}); do
-    xrdcp -r root://eosuser.cern.ch/{{ eos_path }}/f ./job_{{ ClusterID }}_{{ idx }}
+    xrdcp -s root://eosuser.cern.ch/{{ eos_path }}/file_$(num).bin ./job_{{ ClusterID }}_{{ idx }}
 done
 
 # Untar python environment
