@@ -58,7 +58,7 @@ with open(listfile, 'a') as listfile:
     for idx, num in enumerate(range(0, len(file_list), args.files_per_job)):
         start = num
         end = min(num + args.files_per_job - 1, len(file_list) - 1)
-        save_string = "file_{{{}..{}}}.bin, {}".format(start, end, idx)
+        save_string = "{}/file_{{{}..{}}}.bin, {}".format(args.input_dir, start, end, idx)
         listfile.write(save_string + '\n')
 
 outdir = current_dir / f'{args.run_name}_feather'
