@@ -147,7 +147,8 @@ if log_dir.exists():
     os.system('ls condor_logs/*trackSelection*log | wc -l')
 
 out_dir = current_dir / args.outname
-out_dir.mkdir(exist_ok=False)
+if not args.dryrun:
+    out_dir.mkdir(exist_ok=False)
 
 if args.load_from_eos:
     bash_template = """#!/bin/bash
