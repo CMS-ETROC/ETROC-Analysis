@@ -44,10 +44,8 @@ file_list = natsorted(Path(args.input_dir).glob('loop*.feather'))
 outname = f'{args.output}.sqlite'
 
 for ifile in tqdm(file_list):
-    num = ifile.name.split('.')[0].split('_')[-1]
+    num = ifile.name.split('.')[0]
     tmp_df = pd.read_feather(ifile)
-
-    tmp_df = tmp_df.loc[(tmp_df['board'] == 0) & (tmp_df['row'] == 8)].reset_index(drop=True)
 
     cal_table = (
         tmp_df.pivot_table(index=["row", "col"], columns="board", values="cal", aggfunc=lambda x: x.mode().iat[0] if not x.mode().empty else None)
