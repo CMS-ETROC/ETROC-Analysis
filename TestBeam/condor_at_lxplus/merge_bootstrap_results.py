@@ -41,6 +41,15 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    '--trigID',
+    metavar = 'NUM',
+    type = int,
+    help = 'Trigger board ID',
+    required = True,
+    dest = 'trigID',
+)
+
+parser.add_argument(
     '--minimum',
     metavar = 'VALUE',
     type = int,
@@ -86,8 +95,8 @@ for ifile in tqdm(files):
     # Reset index before start fit
     df.reset_index(drop=True, inplace=True)
     if len(matches) == 4:
-        final_dict['row0'].append(matches[0][0])
-        final_dict['col0'].append(matches[0][1])
+        final_dict[f'row{args.trigID}'].append(matches[args.trigID][0])
+        final_dict[f'col{args.trigID}'].append(matches[args.trigID][1])
 
         for val in columns:
 

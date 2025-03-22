@@ -301,9 +301,11 @@ if __name__ == "__main__":
 
     cal_table = pd.read_csv(args.cal_table)
     track_df = pd.read_csv(args.track)
+    track_df = track_df.drop(columns=['count'])
     track_pivots = defaultdict(pd.DataFrame)
 
     if track_df.shape[1] == 8:
+        print('Track separation with 4 boards combination')
         board_to_analyze = board_ids
 
         for itrack in tqdm(range(track_df.shape[0])):
@@ -315,6 +317,7 @@ if __name__ == "__main__":
                                                    board_to_analyze=board_to_analyze, tot_cuts=tot_cuts)
             track_pivots[itrack] = table
     else:
+        print('Track separation with 3 boards combination')
         board_to_analyze = list(set(board_ids) - set(ignore_boards))
         reduced_run_df = run_df.loc[~(run_df['board']==args.ignoreID)]
 

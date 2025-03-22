@@ -77,9 +77,6 @@ def making_pivot(
         return pivot_data_df
 
 
-
-
-
 ## --------------------------------------
 if __name__ == "__main__":
     import argparse
@@ -196,7 +193,23 @@ if __name__ == "__main__":
         dest = 'cal_table',
     )
 
+    parser.add_argument(
+        '--post_process_track_cnt',
+        action = 'store_true',
+        help = 'If argument is on, open the output file and drop the tracks where occurance is less than the given cut',
+        dest = 'post_process_track_cnt',
+    )
+
+
     args = parser.parse_args()
+
+    if args.post_process_track_cnt:
+        track_output_df = pd.read_csv(f'{args.outfilename}_tracks.csv')
+        track_output_df = track_output_df.loc[track_output_df['count'] > args.ntracks]
+        track_output_df.reset_index(drop=True, inplace=True)
+        track_output_df.to_csv(f'{args.outfilename}_tracks.csv', index=False)
+        import sys
+        sys.exit()
 
     input_files = list(Path(f'{args.path}').glob('loop*feather'))
     columns_to_read = ['evt', 'board', 'row', 'col', 'toa', 'tot', 'cal']
@@ -225,6 +238,14 @@ if __name__ == "__main__":
         del tmp_df
 
     final_input_df = pd.concat(dfs)
+
+    ### Re-define Evt numbers
+    # Identify where a new event starts
+    is_new_event = final_input_df['evt'] != final_input_df['evt'].shift()
+
+    # Assign a unique sequential number to each event
+    final_input_df['evt'] = is_new_event.cumsum() - 1
+    del is_new_event
 
     ### Remove noisy pixels
     if args.mask_config_file is not None:
@@ -304,6 +325,8 @@ if __name__ == "__main__":
         selected_event_numbers = event_board_counts[event_selection_col].index
         selected_subset_df = filtered_df.loc[filtered_df['evt'].isin(selected_event_numbers)]
         selected_subset_df.reset_index(inplace=True, drop=True)
+        selected_subset_df['row'] = selected_subset_df['row'].astype('int8')
+        selected_subset_df['col'] = selected_subset_df['col'].astype('int8')
         del filtered_df
 
         if not args.four_board:
@@ -329,8 +352,10 @@ if __name__ == "__main__":
         combinations_df = pivot_data_df.groupby(columns_want_to_group).count()
         combinations_df['count'] = combinations_df[f'toa_{args.trigID}']
         combinations_df.drop(columns_want_to_drop, axis=1, inplace=True)
+
         track_df = combinations_df.loc[combinations_df['count'] > args.ntracks]
         track_df.reset_index(inplace=True)
+
         del pivot_data_df, combinations_df
 
         if not args.four_board:
@@ -350,6 +375,5 @@ if __name__ == "__main__":
             track_condition = (row_delta_TR) & (col_delta_TR) & (row_delta_TD) & (col_delta_TD) & (row_delta_TR2) & (col_delta_TR2)
 
         track_df = track_df.loc[track_condition]
-        track_df.drop(columns=['count'], inplace=True)
         track_df = track_df.drop_duplicates(subset=columns_want_to_group, keep='first')
-        track_df.to_csv(f'{args.outfilename}.csv', index=False)
+        track_df.to_csv(f'{args.outfilename}_tracks.csv', index=False)

@@ -61,12 +61,13 @@ with open(listfile, 'a') as listfile:
 
     for idx, num in enumerate(range(point1, point2, args.files_per_job)):
         start = num
-        end = min(num + args.files_per_job - 1, point2 - 1)
+        end = min(num + args.files_per_job - 1, point2)
         save_string = f"{start}, {end}, {idx}"
         listfile.write(save_string + '\n')
 
 outdir = current_dir / f'{args.run_name}_feather'
-outdir.mkdir(exist_ok = False)
+if not args.dryrun:
+    outdir.mkdir(exist_ok = False)
 
 # Define the bash script template
 bash_template = """#!/bin/bash
@@ -152,5 +153,6 @@ if args.dryrun:
     print()
     print('=========== Bash file ===========')
     os.system('cat run_decode.sh')
+    print()
 else:
     os.system(f'condor_submit condor_decoding.jdl')
