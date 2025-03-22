@@ -117,7 +117,7 @@ track_dir.mkdir(exist_ok=False)
 time_dir = outputdir / 'time'
 time_dir.mkdir(exist_ok=False)
 
-board_ids = [args.setTrigBoardID, args.setDUTBoardID, args.setRefBoardID]
+board_ids = sorted([args.setTrigBoardID, args.setDUTBoardID, args.setRefBoardID])
 
 ## --------------------------------------
 def tdc_event_selection_pivot(

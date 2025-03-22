@@ -573,7 +573,7 @@ if __name__ == "__main__":
     output_name = args.file.split('.')[0]
     df = pd.read_pickle(args.file)
 
-    board_ids = args.board_ids
+    board_ids = sorted(args.board_ids)
     if len(board_ids) != 3:
         print('Please double check inputs. It should be e.g. 0 1 2 or 1 2 3')
         sys.exit()
