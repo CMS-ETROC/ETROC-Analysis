@@ -205,9 +205,11 @@ if __name__ == "__main__":
 
     if args.post_process_track_cnt:
         track_output_df = pd.read_csv(f'{args.outfilename}_tracks.csv')
+        previous_num = track_output_df.shape[0]
         track_output_df = track_output_df.loc[track_output_df['count'] > args.ntracks]
         track_output_df.reset_index(drop=True, inplace=True)
         track_output_df.to_csv(f'{args.outfilename}_tracks.csv', index=False)
+        print(f'Number of track combinations has been decreased from {previous_num} to {track_output_df.shape[0]}')
         import sys
         sys.exit()
 
