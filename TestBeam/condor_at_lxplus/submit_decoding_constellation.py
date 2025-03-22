@@ -120,14 +120,14 @@ bash_script = Template(bash_template).render(options)
 with open('run_decode.sh','w') as bashfile:
     bashfile.write(bash_script)
 
-log_dir = current_dir / 'condor_logs'
-log_dir.mkdir(exist_ok=True)
+log_dir = current_dir / 'condor_logs' / 'decoding'
+log_dir.mkdir(exist_ok=True, parents=True)
 
 if log_dir.exists():
-    os.system('rm condor_logs/*decoding*log')
-    os.system('rm condor_logs/*decoding*stdout')
-    os.system('rm condor_logs/*decoding*stderr')
-    os.system('ls condor_logs/*decoding*log | wc -l')
+    os.system('rm condor_logs/decoding/*decoding*log')
+    os.system('rm condor_logs/decoding/*decoding*stdout')
+    os.system('rm condor_logs/decoding/*decoding*stderr')
+    os.system('ls condor_logs/decoding/*decoding*log | wc -l')
 
 jdl = """universe              = vanilla
 executable            = run_decode.sh

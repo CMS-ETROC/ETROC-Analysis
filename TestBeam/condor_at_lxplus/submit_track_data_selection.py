@@ -137,14 +137,14 @@ with open(listfile, 'a') as listfile:
             save_string = f"run{matches[0]}, {fname}, {loop_name}, {ifile}"
             listfile.write(save_string + '\n')
 
-log_dir = current_dir / 'condor_logs'
-log_dir.mkdir(exist_ok=True)
+log_dir = current_dir / 'condor_logs' / 'track_data_selection'
+log_dir.mkdir(exist_ok=True, parents=True)
 
 if log_dir.exists():
-    os.system('rm condor_logs/*trackSelection*log')
-    os.system('rm condor_logs/*trackSelection*stdout')
-    os.system('rm condor_logs/*trackSelection*stderr')
-    os.system('ls condor_logs/*trackSelection*log | wc -l')
+    os.system('rm condor_logs/track_data_selection/*trackSelection*log')
+    os.system('rm condor_logs/track_data_selection/*trackSelection*stdout')
+    os.system('rm condor_logs/track_data_selection/*trackSelection*stderr')
+    os.system('ls condor_logs/track_data_selection/*trackSelection*log | wc -l')
 
 out_dir = current_dir / args.outname
 if not args.dryrun:
@@ -296,5 +296,6 @@ if args.dryrun:
     print()
     print('=========== Bash file ===========')
     os.system('cat run_track_data_selection.sh')
+    print()
 else:
     os.system(f'condor_submit condor_track_data_selection.jdl')

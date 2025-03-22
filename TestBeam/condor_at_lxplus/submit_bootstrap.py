@@ -152,8 +152,9 @@ with open(listfile, 'a') as listfile:
         save_string = f"{name}, {ifile}"
         listfile.write(save_string + '\n')
 
-outdir = current_dir / f'resolution_{args.outputdir}'
-outdir.mkdir(exist_ok = False)
+outdir = current_dir / f'bootstrap_{args.outputdir}'
+if not args.dryrun:
+    outdir.mkdir(exist_ok = False)
 
 #### Make python command
 bash_command = "python bootstrap.py -f {{ filename }} -n {{ num_bootstrap_output }} -s {{ sampling }} \
@@ -226,14 +227,14 @@ print('========= Run option =========\n')
 with open('run_bootstrap.sh','w') as bashfile:
     bashfile.write(bash_script)
 
-log_dir = current_dir / 'condor_logs'
-log_dir.mkdir(exist_ok=True)
+log_dir = current_dir / 'condor_logs' / 'bootstrap'
+log_dir.mkdir(exist_ok=True, parents=True)
 
 if log_dir.exists():
-    os.system('rm condor_logs/*bootstrap*log')
-    os.system('rm condor_logs/*bootstrap*stdout')
-    os.system('rm condor_logs/*bootstrap*stderr')
-    os.system('ls condor_logs/*bootstrap*log | wc -l')
+    os.system('rm condor_logs/bootstrap/*bootstrap*log')
+    os.system('rm condor_logs/bootstrap/*bootstrap*stdout')
+    os.system('rm condor_logs/bootstrap/*bootstrap*stderr')
+    os.system('ls condor_logs/bootstrap/*bootstrap*log | wc -l')
 
 jdl = """universe              = vanilla
 executable            = run_bootstrap.sh
