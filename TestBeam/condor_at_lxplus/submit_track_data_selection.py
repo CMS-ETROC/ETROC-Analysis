@@ -3,6 +3,7 @@ from pathlib import Path
 import argparse
 from glob import glob
 from jinja2 import Template
+from natsort import natsorted
 
 parser = argparse.ArgumentParser(
             prog='PlaceHolder',
@@ -128,7 +129,7 @@ if listfile.is_file():
 
 with open(listfile, 'a') as listfile:
     for idir in dirs:
-        files = glob(f'{idir}/loop*feather')
+        files = natsorted(glob(f'{idir}/loop*feather'))
         for ifile in files:
             pattern = r'Run_(\d+)'
             fname = ifile.split('/')[-1]

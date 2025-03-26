@@ -3,6 +3,7 @@ from pathlib import Path
 import argparse
 from glob import glob
 from jinja2 import Template
+from natsort import natsorted
 
 parser = argparse.ArgumentParser(
             prog='PlaceHolder',
@@ -141,7 +142,7 @@ parser.add_argument(
 args = parser.parse_args()
 current_dir = Path('./')
 
-files = glob(f'{args.dirname}/*pkl')
+files = natsorted(glob(f'{args.dirname}/*pkl'))
 listfile = current_dir / 'input_list_for_bootstrap.txt'
 if listfile.is_file():
     listfile.unlink()
