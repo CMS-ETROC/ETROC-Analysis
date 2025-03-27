@@ -30,15 +30,6 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    '--files_per_job',
-    metavar = 'NUM',
-    type = int,
-    help = 'Number of files per job. A number between 30-40 is equivalent for 5 mins running.',
-    default = 30,
-    dest = 'files_per_job',
-)
-
-parser.add_argument(
     '--dryrun',
     action = 'store_true',
     help = 'If set, condor submission will not happen',
@@ -54,14 +45,18 @@ listfile = current_dir / 'input_list_for_decoding.txt'
 if listfile.is_file():
     listfile.unlink()
 
+files_per_job, remain = max(((v, len(file_list) % v) for v in range(35, 46)), key=lambda x: x[1])
+print('\nNumber of files per job:', files_per_job)
+print(f'Last job will have {remain} files.\n')
+
 with open(listfile, 'a') as listfile:
 
     point1 = int(file_list[0].name.split('.')[0].split('_')[1])
     point2 = int(file_list[-1].name.split('.')[0].split('_')[1])
 
-    for idx, num in enumerate(range(point1, point2, args.files_per_job)):
+    for idx, num in enumerate(range(point1, point2, files_per_job)):
         start = num
-        end = min(num + args.files_per_job - 1, point2)
+        end = min(num + files_per_job - 1, point2)
         save_string = f"{start}, {end}, {idx}"
         listfile.write(save_string + '\n')
 
@@ -148,8 +143,8 @@ with open(f'condor_decoding.jdl','w') as jdlfile:
     jdlfile.write(jdl)
 
 if args.dryrun:
-    print('=========== Input text file ===========')
-    os.system('cat input_list_for_decoding.txt')
+    print('\n=========== Input text file ===========')
+    os.system('cat input_list_for_decoding.txt | tail -n 10')
     print()
     print('=========== Bash file ===========')
     os.system('cat run_decode.sh')
