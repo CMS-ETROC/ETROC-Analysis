@@ -110,9 +110,9 @@ if __name__ == "__main__":
         '-s',
         '--sampling',
         metavar = 'SAMPLING',
-        type = int,
+        type = float,
         help = 'Random sampling fraction',
-        default = 5,
+        default = 3,
         dest = 'sampling',
     )
 
@@ -230,12 +230,40 @@ if __name__ == "__main__":
     print(f'Sampling fraction is: {args.sampling*0.01}')
     portion = args.sampling*0.01
 
+    ### Estimate memory usage as another safety check
+    print('Memory Safety Check, using randomly selected 3 files')
+    import random
+    random_files = random.sample(input_files, 3)
+    sum_use = 0
+    for jfile in tqdm(random_files):
+        check_df = pd.read_feather(jfile, columns=columns_to_read)
+        n = int(portion*check_df.shape[0])
+        indices = np.random.choice(check_df['evt'].unique(), n, replace=False)
+        check_df = check_df.loc[check_df['evt'].isin(indices)]
+        sum_use += check_df.memory_usage(deep=True).sum() / (1024**2) ## memory usage in MB
+
+    avg_use = round(sum_use/3.)
+    total_use = round(avg_use) * len(input_files)
+
+    print(f'Average dataframe memory usage: {avg_use} MB')
+    print(f'Estimated total memory usage: {total_use} MB')
+    if (avg_use > 20) or (total_use > 2560):
+        print('\nMemory Safety Check Fail, Memory usages are over limit.')
+        print('Recommend: Single dataframe < 20 MB or Total dataframe < 2560 MB')
+        import sys
+        sys.exit()
+
+    del check_df, n, indices, sum_use, total_use, random_files
+    print('Memory Safety Check Pass\n')
+
     dfs = []
     for ifile in tqdm(input_files):
         tmp_df = pd.read_feather(ifile, columns=columns_to_read)
         n = int(portion*tmp_df.shape[0])
         indices = np.random.choice(tmp_df['evt'].unique(), n, replace=False)
         tmp_df = tmp_df.loc[tmp_df['evt'].isin(indices)]
+
+
         dfs.append(tmp_df)
         del tmp_df
 
