@@ -30,6 +30,16 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    '--range',
+    metavar='N',
+    type=int,
+    nargs='+',
+    help='Range to decide how much files will be processed per job',
+    default = [35, 46],
+    dest = 'range',
+)
+
+parser.add_argument(
     '--dryrun',
     action = 'store_true',
     help = 'If set, condor submission will not happen',
@@ -45,7 +55,7 @@ listfile = current_dir / 'input_list_for_decoding.txt'
 if listfile.is_file():
     listfile.unlink()
 
-files_per_job, remain = max(((v, len(file_list) % v) for v in range(35, 46)), key=lambda x: x[1])
+files_per_job, remain = max(((v, len(file_list) % v) for v in range(args.range[0], args.range[1])), key=lambda x: x[1])
 print('\nNumber of files per job:', files_per_job)
 print(f'Last job will have {remain} files.\n')
 
