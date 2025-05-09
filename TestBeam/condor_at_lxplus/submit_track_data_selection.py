@@ -225,5 +225,8 @@ if args.dryrun:
     print('=========== Bash file ===========')
     os.system('cat run_track_data_selection.sh')
     print()
+    print('=========== Condor Job Description file ===========')
+    os.system('cat condor_track_data_selection.jdl')
+    print()
 else:
     os.system(f'condor_submit condor_track_data_selection.jdl')
