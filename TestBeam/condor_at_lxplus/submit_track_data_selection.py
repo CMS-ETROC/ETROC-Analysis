@@ -173,7 +173,7 @@ with open(listfile, 'a') as listfile:
             save_string = f"run{matches[0]}, {fname}, {loop_name}, {ifile}"
             listfile.write(save_string + '\n')
 
-log_dir = Path(eos_base_dir) / 'condor_logs' / 'track_data_selection'
+log_dir = Path('./') / 'condor_logs' / 'track_data_selection'
 log_dir.mkdir(exist_ok=True, parents=True)
 
 if log_dir.exists():
