@@ -105,53 +105,27 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    '--load_from_eos',
-    action = 'store_true',
-    help = 'If set, bash script and condor jdl will include EOS command',
-    dest = 'load_from_eos',
-)
-
-parser.add_argument(
     '--dryrun',
     action = 'store_true',
     help = 'If set, condor submission will not happen',
     dest = 'dryrun',
 )
 
-args = parser.parse_args()
-current_dir = Path('./')
+def load_bash_template(args):
+    options = {
+        'filename': '${1}',
+        'runname': '${2}',
+        'path': '${3}',
+        'track': args.track,
+        'cal_table': args.cal_table.split('/')[-1],
+        'trigID': args.trigID,
+        'refID': args.refID,
+        'dutID': args.dutID,
+        'ignoreID': args.ignoreID,
+        'trigTOTLower': args.trigTOTLower,
+        'trigTOTUpper': args.trigTOTUpper,
+    }
 
-dirs = args.dirname
-
-listfile = current_dir / 'input_list_for_dataSelection.txt'
-if listfile.is_file():
-    listfile.unlink()
-
-with open(listfile, 'a') as listfile:
-    for idir in dirs:
-        files = natsorted(glob(f'{idir}/loop*feather'))
-        for ifile in files:
-            pattern = r'Run_(\d+)'
-            fname = ifile.split('/')[-1]
-            loop_name = fname.split('.')[0]
-            matches = re.findall(pattern, ifile)
-            save_string = f"run{matches[0]}, {fname}, {loop_name}, {ifile}"
-            listfile.write(save_string + '\n')
-
-log_dir = current_dir / 'condor_logs' / 'track_data_selection'
-log_dir.mkdir(exist_ok=True, parents=True)
-
-if log_dir.exists():
-    os.system('rm condor_logs/track_data_selection/*trackSelection*log')
-    os.system('rm condor_logs/track_data_selection/*trackSelection*stdout')
-    os.system('rm condor_logs/track_data_selection/*trackSelection*stderr')
-    os.system('ls condor_logs/track_data_selection/*trackSelection*log | wc -l')
-
-out_dir = current_dir / args.outname
-if not args.dryrun:
-    out_dir.mkdir(exist_ok=False)
-
-if args.load_from_eos:
     bash_template = """#!/bin/bash
 
 ls -ltrh
@@ -179,114 +153,67 @@ ls -ltrh
 echo ""
 """
 
-    # Prepare the data for the template
-    options = {
-        'filename': '${1}',
-        'runname': '${2}',
-        'path': '${3}',
-        'track': args.track,
-        'cal_table': args.cal_table.split('/')[-1],
-        'trigID': args.trigID,
-        'refID': args.refID,
-        'dutID': args.dutID,
-        'ignoreID': args.ignoreID,
-        'trigTOTLower': args.trigTOTLower,
-        'trigTOTUpper': args.trigTOTUpper,
-    }
+    return Template(bash_template).render(options)
 
-else:
-    bash_template = """#!/bin/bash
+args = parser.parse_args()
+eos_base_dir = f'/eos/user/{os.getlogin()[0]}/{os.getlogin()}/'
 
-ls -ltrh
-echo ""
-pwd
+listfile = Path('./') / 'input_list_for_dataSelection.txt'
+if listfile.is_file():
+    listfile.unlink()
 
-# Load python environment from work node
-source /cvmfs/sft.cern.ch/lcg/views/LCG_104a/x86_64-el9-gcc13-opt/setup.sh
+with open(listfile, 'a') as listfile:
+    for idir in args.dirname:
+        files = natsorted(glob(f'{idir}/loop*feather'))
+        for ifile in files:
+            pattern = r'Run_(\d+)'
+            fname = ifile.split('/')[-1]
+            loop_name = fname.split('.')[0]
+            matches = re.findall(pattern, ifile)
+            save_string = f"run{matches[0]}, {fname}, {loop_name}, {ifile}"
+            listfile.write(save_string + '\n')
 
-echo "Will process input file from {{ runname }} {{ filename }}"
+log_dir = Path(eos_base_dir) / 'condor_logs' / 'track_data_selection'
+log_dir.mkdir(exist_ok=True, parents=True)
 
-echo "python track_data_selection.py -f {{ filename }} -r {{ runname }} -t {{ track }} --trigID {{ trigID }} --refID {{ refID }} --dutID {{ dutID }} --ignoreID {{ ignoreID }} --trigTOTLower {{ trigTOTLower }} --trigTOTUpper {{ trigTOTUpper }} --cal_table {{ cal_table }}"
-python track_data_selection.py -f {{ filename }} -r {{ runname }} -t {{ track }} --trigID {{ trigID }} --refID {{ refID }} --dutID {{ dutID }} --ignoreID {{ ignoreID }} --trigTOTLower {{ trigTOTLower }} --trigTOTUpper {{ trigTOTUpper }} --cal_table {{ cal_table }}
-
-ls -ltrh
-echo ""
-
-# Delete input file so condor will not return
-rm {{ filename }}
-
-ls -ltrh
-echo ""
-"""
-
-    # Prepare the data for the template
-    options = {
-        'filename': '${1}',
-        'runname': '${2}',
-        'track': args.track,
-        'cal_table': args.cal_table.split('/')[-1],
-        'trigID': args.trigID,
-        'refID': args.refID,
-        'dutID': args.dutID,
-        'ignoreID': args.ignoreID,
-        'trigTOTLower': args.trigTOTLower,
-        'trigTOTUpper': args.trigTOTUpper,
-    }
-
-# Render the template with the data
-bash_script = Template(bash_template).render(options)
+if log_dir.exists():
+    os.system(f'rm {log_dir}/*trackSelection*log')
+    os.system(f'rm {log_dir}/*trackSelection*stdout')
+    os.system(f'rm {log_dir}/*trackSelection*stderr')
+    os.system(f'ls {log_dir}/*trackSelection*log | wc -l')
 
 print('\n========= Run option =========')
 print(f'Input dataset: {args.dirname}')
 print(f'Track csv file: {args.track}')
 print(f'Cal code mode table: {args.cal_table}')
-print(f'Output will be stored {args.outname}')
+print(f'Output will be stored {eos_base_dir}/{args.outname}')
 print(f'Trigger board ID: {args.trigID}')
 print(f'DUT board ID: {args.dutID}')
 print(f'Reference board ID: {args.refID}')
 print(f'Second reference (or will be ignored) board ID: {args.ignoreID}')
 print(f"TOT cut is {args.trigTOTLower}-{args.trigTOTUpper} on board ID={args.trigID}")
-if args.load_from_eos:
-    print('Feather files will be load from EOS')
-else:
-    print('Feather files will be load from local area')
 print('========= Run option =========\n')
 
+# Render the template with the data
+bash_script = load_bash_template(args)
 with open('run_track_data_selection.sh','w') as bashfile:
     bashfile.write(bash_script)
 
-if args.load_from_eos:
-    jdl = """universe              = vanilla
+jdl = """universe              = vanilla
 executable            = run_track_data_selection.sh
 should_Transfer_Files = YES
 whenToTransferOutput  = ON_EXIT
 arguments             = $(fname) $(run) $(path)
 transfer_Input_Files  = track_data_selection.py,{1},{2}
-TransferOutputRemaps = "$(run)_$(loop).pickle={3}/$(run)_$(loop).pickle"
 output                = {0}/$(ClusterId).$(ProcId).trackSelection.stdout
 error                 = {0}/$(ClusterId).$(ProcId).trackSelection.stderr
 log                   = {0}/$(ClusterId).$(ProcId).trackSelection.log
 MY.WantOS             = "el9"
+MY.XRDCP_CREATE_DIR   = True
+output_destination    = root://eosuser.cern.ch/{3}/{4}
 +JobFlavour           = "microcentury"
 Queue run,fname,loop,path from input_list_for_dataSelection.txt
-""".format(str(log_dir), args.track, args.cal_table, str(out_dir))
-
-else:
-    jdl = """universe              = vanilla
-executable            = run_track_data_selection.sh
-should_Transfer_Files = YES
-whenToTransferOutput  = ON_EXIT
-arguments             = $(fname) $(run)
-transfer_Input_Files  = track_data_selection.py,{1},$(path),{2}
-TransferOutputRemaps = "$(run)_$(loop).pickle={3}/$(run)_$(loop).pickle"
-output                = {0}/$(ClusterId).$(ProcId).trackSelection.stdout
-error                 = {0}/$(ClusterId).$(ProcId).trackSelection.stderr
-log                   = {0}/$(ClusterId).$(ProcId).trackSelection.log
-MY.WantOS             = "el9"
-+JobFlavour           = "microcentury"
-Queue run,fname,loop,path from input_list_for_dataSelection.txt
-""".format(str(log_dir), args.track, args.cal_table, str(out_dir))
-
+""".format(str(log_dir), args.track, args.cal_table, eos_base_dir, args.outname)
 
 with open(f'condor_track_data_selection.jdl','w') as jdlfile:
     jdlfile.write(jdl)
