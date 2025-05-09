@@ -156,7 +156,7 @@ echo ""
     return Template(bash_template).render(options)
 
 args = parser.parse_args()
-eos_base_dir = f'/eos/user/{os.getlogin()[0]}/{os.getlogin()}/'
+eos_base_dir = f'/eos/user/{os.getlogin()[0]}/{os.getlogin()}'
 
 listfile = Path('./') / 'input_list_for_dataSelection.txt'
 if listfile.is_file():
