@@ -1,0 +1,152 @@
+defaults:
+  BAR_4: &BAR_4
+    name: Barcelona 4
+    short: BAR_4
+    offset: 20
+    HV: 260
+  BAR_12: &BAR_12
+    name: Barcelona 12
+    short: BAR_12
+    offset: 20
+    HV: 120
+  PT_NH2: &PT_NH2
+    name: ET2.01 PacTech New HPK-2
+    short: PT_NH2
+    offset: 20
+    HV: 250
+  IME_5: &IME_5
+    name: IME-5
+    short: IME-5
+    offset: 20
+    HV: 170
+  PT_NH8: &PT_NH8
+    name: ET2.01 PacTech New HPK-8
+    short: PT_NH8
+    offset: 20
+    HV: 250
+
+run15:
+  0: *BAR_4
+  1: *BAR_12
+  2: *PT_NH2
+  3: *IME_5
+run16:
+  0: *BAR_4
+  1: *BAR_12
+  2: { <<: *PT_NH2, HV: 190 }
+  3: *IME_5
+run20:
+  0: *BAR_4
+  1: *BAR_12
+  2: { <<: *PT_NH2, HV: 230 }
+  3: *IME_5
+run23:
+  0: *BAR_4
+  1: *BAR_12
+  2: { <<: *PT_NH2, HV: 170 }
+  3: *IME_5
+run24:
+  0: *BAR_4
+  1: *BAR_12
+  2: { <<: *PT_NH2, HV: 210 }
+  3: *IME_5
+run26:
+  0: *BAR_4
+  1: *BAR_12
+  2: { <<: *PT_NH2, HV: 220 }
+  3: *IME_5
+run27:
+  0: *BAR_4
+  1: *BAR_12
+  2: { <<: *PT_NH2, HV: 240 }
+  3: *IME_5
+run28:
+  0: *BAR_4
+  1: *BAR_12
+  2: { <<: *PT_NH2, offset: 10, HV: 190 }
+  3: *IME_5
+run29:
+  0: *BAR_4
+  1: *BAR_12
+  2: { <<: *PT_NH2, offset: 10, HV: 170 }
+  3: *IME_5
+run30:
+  0: *BAR_4
+  1: *BAR_12
+  2: { <<: *PT_NH2, HV: 230 }
+  3: { <<: *IME_5, HV: 160 }
+run31:
+  0: *BAR_4
+  1: *BAR_12
+  2: { <<: *PT_NH2, HV: 230 }
+  3: { <<: *IME_5, HV: 100 }
+run32:
+  0: *BAR_4
+  1: *BAR_12
+  2: { <<: *PT_NH2, HV: 230 }
+  3: { <<: *IME_5, HV: 140 }
+run33:
+  0: *BAR_4
+  1: *BAR_12
+  2: { <<: *PT_NH2, HV: 230 }
+  3: { <<: *IME_5, HV: 120 }
+run34:
+  0: *BAR_4
+  1: *BAR_12
+  2: { <<: *PT_NH2, HV: 230 }
+  3: { <<: *IME_5, HV: 150 }
+run35:
+  0: *BAR_4
+  1: *BAR_12
+  2: { <<: *PT_NH2, HV: 230 }
+  3: { <<: *IME_5, HV: 130 }
+run36:
+  0: *BAR_4
+  1: *BAR_12
+  2: { <<: *PT_NH2, HV: 230 }
+  3: { <<: *IME_5, HV: 110 }
+run37:
+  0: *BAR_4
+  1: *BAR_12
+  2: { <<: *PT_NH2, HV: 230 }
+  3: { <<: *IME_5, offset: 10, HV: 120 }
+run38:
+  0: *BAR_4
+  1: *BAR_12
+  2: { <<: *PT_NH2, HV: 230 }
+  3: { <<: *IME_5, offset: 10, HV: 110 }
+run39:
+  0: *BAR_4
+  1: *BAR_12
+  2: { <<: *PT_NH2, HV: 230 }
+  3: { <<: *IME_5, offset: 10, HV: 100 }
+run48:
+  0: *BAR_4
+  1: *BAR_12
+  2: { <<: *PT_NH8, HV: 240 }
+  3: *IME_5
+run49:
+  0: *BAR_4
+  1: *BAR_12
+  2: { <<: *PT_NH8, HV: 210 }
+  3: *IME_5
+run50:
+  0: *BAR_4
+  1: *BAR_12
+  2: { <<: *PT_NH8, HV: 190 }
+  3: *IME_5
+run51:
+  0: *BAR_4
+  1: *BAR_12
+  2: { <<: *PT_NH8, HV: 230 }
+  3: *IME_5
+run52:
+  0: *BAR_4
+  1: *BAR_12
+  2: { <<: *PT_NH8, HV: 250 }
+  3: *IME_5
+run53:
+  0: *BAR_4
+  1: *BAR_12
+  2: { <<: *PT_NH8, HV: 170 }
+  3: *IME_5

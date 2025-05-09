@@ -1,0 +1,104 @@
+defaults: &defaults
+  1: &IME3 { name: IME-3, short: IME-3, offset: 20, HV: 150 }
+  2: &IME4 { name: IME-4, short: IME-4, offset: 20, HV: 150 }
+  3: &IME1 { name: IME-1, short: IME-1, offset: 20, HV: 150 }
+
+run15:
+  0: { name: IME-2 (-15C), short: IME-2, offset: 20, HV: 125 }
+  <<: *defaults
+run17:
+  0: { name: IME-2 (-15C), short: IME-2, offset: 20, HV: 105 }
+  <<: *defaults
+run20:
+  0: { name: IME-2 (-15C), short: IME-2, offset: 20, HV: 115 }
+  <<: *defaults
+run21:
+  0: { name: IME-2 (-15C), short: IME-2, offset: 20, HV: 95 }
+  <<: *defaults
+run23:
+  0: { name: IME-2 (-15C), short: IME-2, offset: 20, HV: 120 }
+  <<: *defaults
+run26:
+  0: { name: IME-2 (-15C), short: IME-2, offset: 20, HV: 85 }
+  <<: *defaults
+run27:
+  0: { name: IME-2 (-15C), short: IME-2, offset: 20, HV: 90 }
+  <<: *defaults
+run28:
+  0: { name: IME-2 (-15C), short: IME-2, offset: 20, HV: 100 }
+  <<: *defaults
+run29:
+  0: { name: IME-2 (-15C), short: IME-2, offset: 20, HV: 110 }
+  <<: *defaults
+run30:
+  0: { name: IME-2 (+18C), short: IME-2, offset: 20, HV: 125 }
+  <<: *defaults
+run31:
+  0: { name: IME-2 (+18C), short: IME-2, offset: 20, HV: 160 }
+  <<: *defaults
+run32:
+  0: { name: IME-2 (+18C), short: IME-2, offset: 20, HV: 115 }
+  <<: *defaults
+run33:
+  0: { name: IME-2 (+18C), short: IME-2, offset: 20, HV: 150 }
+  <<: *defaults
+run34:
+  0: { name: IME-2 (+18C), short: IME-2, offset: 20, HV: 105 }
+  <<: *defaults
+run35:
+  0: { name: IME-2 (+18C), short: IME-2, offset: 20, HV: 140 }
+  <<: *defaults
+run36:
+  0: { name: IME-2 (+18C), short: IME-2, offset: 20, HV: 170 }
+  <<: *defaults
+run37:
+  0: { name: IME-2 (+18C), short: IME-2, offset: 20, HV: 130 }
+  <<: *defaults
+run38:
+  0: { name: IME-2 (+18C), short: IME-2, offset: 20, HV: 120 }
+  <<: *defaults
+run39:
+  0: { name: IME-2 (+18C), short: IME-2, offset: 10, HV: 115 }
+  <<: *defaults
+run40:
+  0: { name: IME-2 (+18C), short: IME-2, offset: 10, HV: 105 }
+  <<: *defaults
+run41:
+  0: { name: IME-2 (+23C), short: IME-2, offset: 20, HV: 125 }
+  <<: *defaults
+run42:
+  0: { name: IME-2 (+23C), short: IME-2, offset: 20, HV: 140 }
+  <<: *defaults
+run43:
+  0: { name: IME-2 (+23C), short: IME-2, offset: 20, HV: 150 }
+  <<: *defaults
+run44:
+  0: { name: IME-2 (+23C), short: IME-2, offset: 20, HV: 160 }
+  <<: *defaults
+run45:
+  0: { name: IME-2 (+23C), short: IME-2, offset: 20, HV: 115 }
+  <<: *defaults
+run46:
+  0: { name: ET2.01 PacTech New HPK-2 (-24.5C), short: PT-NH2, offset: 20, HV: 200 }
+  <<: *defaults
+run47:
+  0: { name: ET2.01 PacTech New HPK-2 (-24.5C), short: PT-NH2, offset: 20, HV: 170 }
+  <<: *defaults
+run48:
+  0: { name: ET2.01 PacTech New HPK-2 (-24.5C), short: PT-NH2, offset: 20, HV: 140 }
+  <<: *defaults
+run49:
+  0: { name: ET2.01 PacTech New HPK-2 (-24.5C), short: PT-NH2, offset: 20, HV: 180 }
+  <<: *defaults
+run50:
+  0: { name: ET2.01 PacTech New HPK-2 (-24.5C), short: PT-NH2, offset: 20, HV: 160 }
+  <<: *defaults
+run51:
+  0: { name: ET2.01 PacTech New HPK-2 (-24.5C), short: PT-NH2, offset: 20, HV: 120 }
+  <<: *defaults
+run52:
+  0: { name: ET2.01 PacTech New HPK-2 (-24.5C), short: PT-NH2, offset: 20, HV: 100 }
+  <<: *defaults
+run53:
+  0: { name: ET2.01 PacTech New HPK-2 (-24.5C), short: PT-NH2, offset: 20, HV: 150 }
+  <<: *defaults
