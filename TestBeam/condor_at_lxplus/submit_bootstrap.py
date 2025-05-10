@@ -187,12 +187,14 @@ ls -ltrh
 echo ""
 pwd
 
+xrdcp root://eosuser.cern.ch/{1} ./
+
 # Load python environment from work node
 source /cvmfs/sft.cern.ch/lcg/views/LCG_104a/x86_64-el9-gcc13-opt/setup.sh
 
 echo "{0}"
 {0}
-""".format(bash_command)
+""".format(bash_command, '${2}')
 
 # Prepare the data for the template
 options = {
@@ -241,8 +243,8 @@ jdl = """universe              = vanilla
 executable            = run_bootstrap.sh
 should_Transfer_Files = YES
 whenToTransferOutput  = ON_EXIT
-arguments             = $(ifile)
-transfer_Input_Files  = bootstrap.py,$(path)
+arguments             = $(ifile) $(path)
+transfer_Input_Files  = bootstrap.py
 TransferOutputRemaps = "$(ifile)_resolution.pkl={1}/$(ifile)_resolution.pkl"
 output                = {0}/$(ClusterId).$(ProcId).bootstrap.stdout
 error                 = {0}/$(ClusterId).$(ProcId).bootstrap.stderr
