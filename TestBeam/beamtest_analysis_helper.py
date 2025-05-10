@@ -953,6 +953,7 @@ def toSingleDataFrame_newEventModel(
     if do_blockMix:
         files = files[1:]
 
+    in_event = False
     for ifile in files:
         file_d = json.loads(json.dumps(d))
         with open(ifile, 'r') as infile:
@@ -962,7 +963,7 @@ def toSingleDataFrame_newEventModel(
                     if previous_evt != tmp_evt:
                         evt += 1
                         previous_evt = tmp_evt
-                        pass
+                    in_event = True
                 elif line.split(' ')[0] == 'H':
                     bcid = int(line.split(' ')[-1])
                     l1a_counter = int(line.split(' ')[2])
@@ -974,19 +975,21 @@ def toSingleDataFrame_newEventModel(
                     toa = int(line.split(' ')[-3])
                     tot = int(line.split(' ')[-2])
                     cal = int(line.split(' ')[-1])
-                    file_d['evt'].append(evt)
-                    file_d['bcid'].append(bcid)
-                    file_d['l1a_counter'].append(l1a_counter)
-                    file_d['board'].append(id)
-                    file_d['ea'].append(ea)
-                    file_d['row'].append(row)
-                    file_d['col'].append(col)
-                    file_d['toa'].append(toa)
-                    file_d['tot'].append(tot)
-                    file_d['cal'].append(cal)
+                    if in_event:
+                        file_d['evt'].append(evt)
+                        file_d['bcid'].append(bcid)
+                        file_d['l1a_counter'].append(l1a_counter)
+                        file_d['board'].append(id)
+                        file_d['ea'].append(ea)
+                        file_d['row'].append(row)
+                        file_d['col'].append(col)
+                        file_d['toa'].append(toa)
+                        file_d['tot'].append(tot)
+                        file_d['cal'].append(cal)
                 elif line.split(' ')[0] == 'T':
                     pass
                 elif line.split(' ')[0] == 'ET':
+                    in_event = False
                     pass
         if len(file_d['evt']) > 0:
             file_df = pd.DataFrame(file_d)
