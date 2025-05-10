@@ -4,11 +4,11 @@ import argparse
 from glob import glob
 from natsort import natsorted
 from math import ceil
-from beamtest_analysis_helper import toSingleDataFrame_newEventModel
+from beamtest_analysis_helper import toSingleDataFrame_secondEventModel
 import tqdm
 
 parser = argparse.ArgumentParser(
-            prog='Nem to feather',
+            prog='Sem to feather',
             description='convert nem runs to feather format',
         )
 
@@ -46,7 +46,7 @@ args = parser.parse_args()
 outdir = Path(f'{args.output_dir}_feather')
 outdir.mkdir(exist_ok = False)
 
-file_list = natsorted(Path(args.input_dir).glob('file*.nem'))
+file_list = natsorted(Path(args.input_dir).glob('file*.sem'))
 
 num_feather_files = ceil(len(file_list)/args.group)
 
@@ -55,6 +55,6 @@ for feather_idx in tqdm.tqdm(range(num_feather_files)):
     max_file = min(len(file_list), (feather_idx+1)*args.group)
     current_files = file_list[min_file:max_file+1]
 
-    df = toSingleDataFrame_newEventModel(files=current_files)
+    df = toSingleDataFrame_secondEventModel(files=current_files)
 
     df.to_feather(outdir / f'loop_{feather_idx}.feather')
