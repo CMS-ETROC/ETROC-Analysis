@@ -78,12 +78,12 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    '--ignoreID',
+    '--extraID',
     metavar = 'ID',
     type = int,
     help = 'board ID be ignored',
     default = 2,
-    dest = 'ignoreID',
+    dest = 'extraID',
 )
 
 parser.add_argument(
@@ -121,7 +121,7 @@ def load_bash_template(args):
         'trigID': args.trigID,
         'refID': args.refID,
         'dutID': args.dutID,
-        'ignoreID': args.ignoreID,
+        'extraID': args.extraID,
         'trigTOTLower': args.trigTOTLower,
         'trigTOTUpper': args.trigTOTUpper,
     }
@@ -140,8 +140,8 @@ xrdcp -r root://eosuser.cern.ch/{{ path }} ./
 
 echo "Will process input file from {{ runname }} {{ filename }}"
 
-echo "python track_data_selection.py -f {{ filename }} -r {{ runname }} -t {{ track }} --trigID {{ trigID }} --refID {{ refID }} --dutID {{ dutID }} --ignoreID {{ ignoreID }} --trigTOTLower {{ trigTOTLower }} --trigTOTUpper {{ trigTOTUpper }} --cal_table {{ cal_table }}"
-python track_data_selection.py -f {{ filename }} -r {{ runname }} -t {{ track }} --trigID {{ trigID }} --refID {{ refID }} --dutID {{ dutID }} --ignoreID {{ ignoreID }} --trigTOTLower {{ trigTOTLower }} --trigTOTUpper {{ trigTOTUpper }} --cal_table {{ cal_table }}
+echo "python track_data_selection.py -f {{ filename }} -r {{ runname }} -t {{ track }} --trigID {{ trigID }} --refID {{ refID }} --dutID {{ dutID }} --extraID {{ extraID }} --trigTOTLower {{ trigTOTLower }} --trigTOTUpper {{ trigTOTUpper }} --cal_table {{ cal_table }}"
+python track_data_selection.py -f {{ filename }} -r {{ runname }} -t {{ track }} --trigID {{ trigID }} --refID {{ refID }} --dutID {{ dutID }} --extraID {{ extraID }} --trigTOTLower {{ trigTOTLower }} --trigTOTUpper {{ trigTOTUpper }} --cal_table {{ cal_table }}
 
 ls -ltrh
 echo ""
@@ -195,7 +195,7 @@ print(f'Output will be stored {eos_base_dir}/{args.outname}')
 print(f'Trigger board ID: {args.trigID}')
 print(f'DUT board ID: {args.dutID}')
 print(f'Reference board ID: {args.refID}')
-print(f'Second reference (or will be ignored) board ID: {args.ignoreID}')
+print(f'Second reference (or will be ignored) board ID: {args.extraID}')
 print(f"TOT cut is {args.trigTOTLower}-{args.trigTOTUpper} on board ID={args.trigID}")
 print('========= Run option =========\n')
 

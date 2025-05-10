@@ -251,12 +251,12 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        '--ignoreID',
+        '--extraID',
         metavar = 'ID',
         type = int,
         help = 'board ID be ignored',
         required = True,
-        dest = 'ignoreID',
+        dest = 'extraID',
     )
 
     parser.add_argument(
@@ -280,7 +280,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     board_ids = [0,1,2,3]
-    ignore_boards = [args.ignoreID]
+    ignore_boards = [args.extraID]
     tot_cuts = [args.trigTOTLower, args.trigTOTUpper]
 
     trig_id = args.trigID
@@ -319,7 +319,7 @@ if __name__ == "__main__":
     else:
         print('Track separation with 3 boards combination')
         board_to_analyze = list(set(board_ids) - set(ignore_boards))
-        reduced_run_df = run_df.loc[~(run_df['board']==args.ignoreID)]
+        reduced_run_df = run_df.loc[~(run_df['board']==args.extraID)]
 
         for itrack in tqdm(range(track_df.shape[0])):
             pix_dict = {}
