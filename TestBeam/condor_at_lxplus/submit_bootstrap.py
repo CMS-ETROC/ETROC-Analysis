@@ -269,7 +269,7 @@ with open(f'condor_bootstrap.jdl','w') as jdlfile:
     jdlfile.write(jdl)
 
 if args.dryrun:
-    print('=========== Input text file ===========')
+    print('\n=========== Input text file ===========')
     subprocess.run("head -n 10 input_list_for_bootstrap.txt", shell=True)
     subprocess.run("tail -n 10 input_list_for_bootstrap.txt", shell=True)
     print()
