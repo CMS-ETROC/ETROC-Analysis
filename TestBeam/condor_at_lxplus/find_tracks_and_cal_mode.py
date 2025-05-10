@@ -233,7 +233,7 @@ if __name__ == "__main__":
     ### Estimate memory usage as another safety check
     print('Memory Safety Check, using randomly selected 3 files')
     import random
-    random_files = random.sample(input_files, 3)
+    random_files = random.sample(input_files, 10)
     sum_use = 0
     for jfile in tqdm(random_files):
         check_df = pd.read_feather(jfile, columns=columns_to_read)
@@ -242,7 +242,7 @@ if __name__ == "__main__":
         check_df = check_df.loc[check_df['evt'].isin(indices)]
         sum_use += check_df.memory_usage(deep=True).sum() / (1024**2) ## memory usage in MB
 
-    avg_use = round(sum_use/3.)
+    avg_use = round(sum_use/10.)
     total_use = round(avg_use) * len(input_files)
 
     print(f'Average dataframe memory usage: {avg_use} MB')
