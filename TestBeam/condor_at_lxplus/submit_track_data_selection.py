@@ -159,7 +159,7 @@ args = parser.parse_args()
 username = getpass.getuser()
 eos_base_dir = f'/eos/user/{username[0]}/{username}'
 
-listfile = Path('./') / 'input_list_for_dataSelection.txt'
+listfile = Path('./') / 'input_list_for_trackDataSelection.txt'
 if listfile.is_file():
     listfile.unlink()
 
