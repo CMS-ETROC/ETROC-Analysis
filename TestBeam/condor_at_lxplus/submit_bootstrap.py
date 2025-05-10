@@ -270,5 +270,10 @@ if args.dryrun:
     print()
     print('=========== Bash file ===========')
     os.system('cat run_bootstrap.sh')
+    print()
+    print('=========== Condor Job Description file ===========')
+    os.system('cat condor_bootstrap.jdl')
+    print()
+
 else:
     os.system(f'condor_submit condor_bootstrap.jdl')
