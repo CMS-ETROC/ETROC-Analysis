@@ -184,7 +184,7 @@ if log_dir.exists():
     subprocess.run(f'rm {log_dir}/*trackSelection*stderr', shell=True)
 
     # Count files
-    result = subprocess.run('ls {log_dir}/*trackSelection*log | wc -l', shell=True, capture_output=True, text=True)
+    result = subprocess.run(f'ls {log_dir}/*trackSelection*log | wc -l', shell=True, capture_output=True, text=True)
     print("Log file count:", result.stdout.strip())
 
 print('\n========= Run option =========')
@@ -217,7 +217,7 @@ MY.WantOS             = "el9"
 MY.XRDCP_CREATE_DIR   = True
 output_destination    = root://eosuser.cern.ch/{3}/{4}
 +JobFlavour           = "microcentury"
-Queue run,fname,path from input_list_for_dataSelection.txt
+Queue run,fname,path from input_list_for_trackDataSelection.txt
 """.format(str(log_dir), args.track, args.cal_table, eos_base_dir, args.outname)
 
 with open(f'condor_track_data_selection.jdl','w') as jdlfile:
@@ -225,8 +225,8 @@ with open(f'condor_track_data_selection.jdl','w') as jdlfile:
 
 if args.dryrun:
     print('=========== Input text file ===========')
-    subprocess.run("head -n 10 input_list_for_dataSelection.txt", shell=True)
-    subprocess.run("tail -n 10 input_list_for_dataSelection.txt", shell=True)
+    subprocess.run("head -n 10 input_list_for_trackDataSelection.txt", shell=True)
+    subprocess.run("tail -n 10 input_list_for_trackDataSelection.txt", shell=True)
     print()
     print('=========== Bash file ===========')
     with open("run_track_data_selection.sh") as f:
