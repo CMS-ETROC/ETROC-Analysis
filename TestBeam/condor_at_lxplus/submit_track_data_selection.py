@@ -168,9 +168,9 @@ with open(listfile, 'a') as listfile:
         for ifile in files:
             pattern = r'Run_(\d+)'
             fname = ifile.split('/')[-1]
-            loop_name = fname.split('.')[0]
+            # loop_name = fname.split('.')[0]
             matches = re.findall(pattern, ifile)
-            save_string = f"run{matches[0]}, {fname}, {loop_name}, {ifile}"
+            save_string = f"run{matches[0]}, {fname}, {ifile}"
             listfile.write(save_string + '\n')
 
 log_dir = Path('./') / 'condor_logs' / 'track_data_selection'
@@ -212,7 +212,7 @@ MY.WantOS             = "el9"
 MY.XRDCP_CREATE_DIR   = True
 output_destination    = root://eosuser.cern.ch/{3}/{4}
 +JobFlavour           = "microcentury"
-Queue run,fname,loop,path from input_list_for_dataSelection.txt
+Queue run,fname,path from input_list_for_dataSelection.txt
 """.format(str(log_dir), args.track, args.cal_table, eos_base_dir, args.outname)
 
 with open(f'condor_track_data_selection.jdl','w') as jdlfile:
