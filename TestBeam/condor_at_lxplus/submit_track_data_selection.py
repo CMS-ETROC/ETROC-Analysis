@@ -164,14 +164,11 @@ if listfile.is_file():
     listfile.unlink()
 
 with open(listfile, 'a') as listfile:
-    for idir in args.dirname:
+    for idir in args.dirname: # dirname="......../physics_run_N_feather"
         files = natsorted(glob(f'{idir}/loop*feather'))
         for ifile in files:
-            pattern = r'Run_(\d+)'
             fname = ifile.split('/')[-1]
-            # loop_name = fname.split('.')[0]
-            matches = re.findall(pattern, ifile)
-            save_string = f"run{matches[0]}, {fname}, {ifile}"
+            save_string = f"{Path(idir).name}, {fname}, {ifile}"
             listfile.write(save_string + '\n')
 
 log_dir = Path('./') / 'condor_logs' / 'track_data_selection'
