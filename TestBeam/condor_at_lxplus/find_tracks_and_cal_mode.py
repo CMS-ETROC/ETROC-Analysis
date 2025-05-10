@@ -240,7 +240,7 @@ if __name__ == "__main__":
     sum_use = 0
     for jfile in tqdm(random_files):
         check_df = pd.read_feather(jfile, columns=columns_to_read)
-        n = int(portion*check_df.shape[0])
+        n = int(portion*check_df['evt'].nunique())
         indices = np.random.choice(check_df['evt'].unique(), n, replace=False)
         check_df = check_df.loc[check_df['evt'].isin(indices)]
         sum_use += check_df.memory_usage(deep=True).sum() / (1024**2) ## memory usage in MB
@@ -262,7 +262,7 @@ if __name__ == "__main__":
     dfs = []
     for ifile in tqdm(input_files):
         tmp_df = pd.read_feather(ifile, columns=columns_to_read)
-        n = int(portion*tmp_df.shape[0])
+        n = int(portion*tmp_df['evt'].nunique())
         indices = np.random.choice(tmp_df['evt'].unique(), n, replace=False)
         tmp_df = tmp_df.loc[tmp_df['evt'].isin(indices)]
 
