@@ -201,24 +201,7 @@ if __name__ == "__main__":
         dest = 'cal_table_only',
     )
 
-    parser.add_argument(
-        '--post_process_track_cnt',
-        action = 'store_true',
-        help = 'If argument is on, open the output file and drop the tracks where occurance is less than the given cut',
-        dest = 'post_process_track_cnt',
-    )
-
     args = parser.parse_args()
-
-    if args.post_process_track_cnt:
-        track_output_df = pd.read_csv(f'{args.outfilename}_tracks.csv')
-        previous_num = track_output_df.shape[0]
-        track_output_df = track_output_df.loc[track_output_df['count'] > args.ntracks]
-        track_output_df.reset_index(drop=True, inplace=True)
-        track_output_df.to_csv(f'{args.outfilename}_tracks.csv', index=False)
-        print(f'Number of track combinations has been decreased from {previous_num} to {track_output_df.shape[0]}')
-        import sys
-        sys.exit()
 
     input_files = list(Path(f'{args.path}').glob('loop*feather'))
     columns_to_read = ['evt', 'board', 'row', 'col', 'toa', 'tot', 'cal']
