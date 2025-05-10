@@ -1,4 +1,4 @@
-import os
+import getpass, subprocess
 from pathlib import Path
 import argparse
 from glob import glob
@@ -48,10 +48,13 @@ parser.add_argument(
 
 args = parser.parse_args()
 
-current_dir = Path('./')
+username = getpass.getuser()
+eos_base_dir = f'/eos/user/{username[0]}/{username}'
+outdir = f'{args.run_name}_feather'
+
 file_list = natsorted(Path(args.input_dir).glob('file*bin'))
 
-listfile = current_dir / 'input_list_for_decoding.txt'
+listfile = Path('./') / 'input_list_for_decoding.txt'
 if listfile.is_file():
     listfile.unlink()
 
@@ -69,10 +72,6 @@ with open(listfile, 'a') as listfile:
         end = min(num + files_per_job - 1, point2)
         save_string = f"{start}, {end}, {idx}"
         listfile.write(save_string + '\n')
-
-outdir = current_dir / f'{args.run_name}_feather'
-if not args.dryrun:
-    outdir.mkdir(exist_ok = False)
 
 # Define the bash script template
 bash_template = """#!/bin/bash
@@ -125,14 +124,18 @@ bash_script = Template(bash_template).render(options)
 with open('run_decode.sh','w') as bashfile:
     bashfile.write(bash_script)
 
-log_dir = current_dir / 'condor_logs' / 'decoding'
+log_dir = Path('./') / 'condor_logs' / 'decoding'
 log_dir.mkdir(exist_ok=True, parents=True)
 
 if log_dir.exists():
-    os.system('rm condor_logs/decoding/*decoding*log')
-    os.system('rm condor_logs/decoding/*decoding*stdout')
-    os.system('rm condor_logs/decoding/*decoding*stderr')
-    os.system('ls condor_logs/decoding/*decoding*log | wc -l')
+    # Remove files
+    subprocess.run(f'rm {log_dir}/*decoding*log', shell=True)
+    subprocess.run(f'rm {log_dir}/*decoding*stdout', shell=True)
+    subprocess.run(f'rm {log_dir}/*decoding*stderr', shell=True)
+
+    # Count files
+    result = subprocess.run(f'ls {log_dir}/*decoding*log | wc -l', shell=True, capture_output=True, text=True)
+    print("Log file count:", result.stdout.strip())
 
 jdl = """universe              = vanilla
 executable            = run_decode.sh
@@ -140,24 +143,30 @@ should_Transfer_Files = YES
 whenToTransferOutput  = ON_EXIT
 arguments             = $(start) $(end) $(index) $(ClusterId)
 transfer_Input_Files  = decoding.py, python_lib.tar
-TransferOutputRemaps = "loop_$(index).feather={1}/loop_$(index).feather;filler_loop_$(index).feather={1}/filler_loop_$(index).feather"
 output                = {0}/$(ClusterId).$(ProcId).decoding.stdout
 error                 = {0}/$(ClusterId).$(ProcId).decoding.stderr
 log                   = {0}/$(ClusterId).$(ProcId).decoding.log
+output_destination    = root://eosuser.cern.ch/{1}/{2}
+MY.XRDCP_CREATE_DIR   = True
 MY.WantOS             = "el9"
 +JobFlavour           = "longlunch"
 Queue start, end, index from input_list_for_decoding.txt
-""".format(str(log_dir), str(outdir))
+""".format(log_dir, eos_base_dir, outdir)
 
 with open(f'condor_decoding.jdl','w') as jdlfile:
     jdlfile.write(jdl)
 
 if args.dryrun:
     print('\n=========== Input text file ===========')
-    os.system('cat input_list_for_decoding.txt | tail -n 10')
+    subprocess.run("head -n 10 input_list_for_decoding.txt", shell=True)
+    subprocess.run("tail -n 10 input_list_for_decoding.txt", shell=True)
     print()
     print('=========== Bash file ===========')
-    os.system('cat run_decode.sh')
+    with open("run_decode.sh") as f:
+        print(f.read(), '\n')
+    print('=========== Condor Job Description file ===========')
+    with open('condor_decoding.jdl') as f:
+        print(f.read(), '\n')
     print()
 else:
-    os.system(f'condor_submit condor_decoding.jdl')
+    subprocess.run(['condor_submit', '-spool', 'condor_decoding.jdl'])
