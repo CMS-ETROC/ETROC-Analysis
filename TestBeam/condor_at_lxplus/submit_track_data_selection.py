@@ -1,4 +1,4 @@
-import os, re
+import getpass, re, subprocess
 from pathlib import Path
 import argparse
 from glob import glob
@@ -156,7 +156,8 @@ echo ""
     return Template(bash_template).render(options)
 
 args = parser.parse_args()
-eos_base_dir = f'/eos/user/{os.getlogin()[0]}/{os.getlogin()}'
+username = getpass.getuser()
+eos_base_dir = f'/eos/user/{username[0]}/{username}'
 
 listfile = Path('./') / 'input_list_for_dataSelection.txt'
 if listfile.is_file():
@@ -177,10 +178,14 @@ log_dir = Path('./') / 'condor_logs' / 'track_data_selection'
 log_dir.mkdir(exist_ok=True, parents=True)
 
 if log_dir.exists():
-    os.system(f'rm {log_dir}/*trackSelection*log')
-    os.system(f'rm {log_dir}/*trackSelection*stdout')
-    os.system(f'rm {log_dir}/*trackSelection*stderr')
-    os.system(f'ls {log_dir}/*trackSelection*log | wc -l')
+    # Remove files
+    subprocess.run(f'rm {log_dir}/*trackSelection*log', shell=True)
+    subprocess.run(f'rm {log_dir}/*trackSelection*stdout', shell=True)
+    subprocess.run(f'rm {log_dir}/*trackSelection*stderr', shell=True)
+
+    # Count files
+    result = subprocess.run('ls {log_dir}/*trackSelection*log | wc -l', shell=True, capture_output=True, text=True)
+    print("Log file count:", result.stdout.strip())
 
 print('\n========= Run option =========')
 print(f'Input dataset: {args.dirname}')
@@ -220,13 +225,17 @@ with open(f'condor_track_data_selection.jdl','w') as jdlfile:
 
 if args.dryrun:
     print('=========== Input text file ===========')
-    os.system('cat input_list_for_dataSelection.txt')
+    subprocess.run("head -n 10 input_list_for_dataSelection.txt", shell=True)
+    subprocess.run("tail -n 10 input_list_for_dataSelection.txt", shell=True)
     print()
     print('=========== Bash file ===========')
-    os.system('cat run_track_data_selection.sh')
+    with open("run_track_data_selection.sh") as f:
+        print(f.read(), '\n')
     print()
     print('=========== Condor Job Description file ===========')
-    os.system('cat condor_track_data_selection.jdl')
+    with open("condor_track_data_selection.jdl") as f:
+        print(f.read(), '\n')
+    print()
     print()
 else:
-    os.system(f'condor_submit condor_track_data_selection.jdl')
+    subprocess.run(['condor_submit', '-spool', 'condor_track_data_selection.jdl'])

@@ -248,7 +248,7 @@ if log_dir.exists():
 
     # Count files
     result = subprocess.run('ls condor_logs/bootstrap/*bootstrap*log | wc -l', shell=True, capture_output=True, text=True)
-    print("File count:", result.stdout.strip())
+    print("Log file count:", result.stdout.strip())
 
 jdl = """universe              = vanilla
 executable            = run_bootstrap.sh
