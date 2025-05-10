@@ -1,4 +1,4 @@
-import os
+import subprocess
 from pathlib import Path
 import argparse
 from glob import glob
@@ -241,10 +241,14 @@ log_dir = current_dir / 'condor_logs' / 'bootstrap'
 log_dir.mkdir(exist_ok=True, parents=True)
 
 if log_dir.exists():
-    os.system('rm condor_logs/bootstrap/*bootstrap*log')
-    os.system('rm condor_logs/bootstrap/*bootstrap*stdout')
-    os.system('rm condor_logs/bootstrap/*bootstrap*stderr')
-    os.system('ls condor_logs/bootstrap/*bootstrap*log | wc -l')
+    # Remove files
+    subprocess.run('rm condor_logs/bootstrap/*bootstrap*log', shell=True)
+    subprocess.run('rm condor_logs/bootstrap/*bootstrap*stdout', shell=True)
+    subprocess.run('rm condor_logs/bootstrap/*bootstrap*stderr', shell=True)
+
+    # Count files
+    result = subprocess.run('ls condor_logs/bootstrap/*bootstrap*log | wc -l', shell=True, capture_output=True, text=True)
+    print("File count:", result.stdout.strip())
 
 jdl = """universe              = vanilla
 executable            = run_bootstrap.sh
@@ -266,14 +270,16 @@ with open(f'condor_bootstrap.jdl','w') as jdlfile:
 
 if args.dryrun:
     print('=========== Input text file ===========')
-    os.system('cat input_list_for_bootstrap.txt')
+    subprocess.run("head -n 10 input_list_for_bootstrap.txt", shell=True)
+    subprocess.run("tail -n 10 input_list_for_bootstrap.txt", shell=True)
     print()
     print('=========== Bash file ===========')
-    os.system('cat run_bootstrap.sh')
-    print()
+    with open("run_bootstrap.sh") as f:
+        print(f.read(), '\n')
     print('=========== Condor Job Description file ===========')
-    os.system('cat condor_bootstrap.jdl')
+    with open('condor_bootstrap.jdl') as f:
+        print(f.read(), '\n')
     print()
 
 else:
-    os.system(f'condor_submit condor_bootstrap.jdl')
+    subprocess.run(['condor_submit', 'condor_bootstrap.jdl'])
