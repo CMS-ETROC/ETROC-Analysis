@@ -194,7 +194,14 @@ source /cvmfs/sft.cern.ch/lcg/views/LCG_104a/x86_64-el9-gcc13-opt/setup.sh
 
 echo "{0}"
 {0}
-""".format(bash_command, '${2}')
+
+# Delete input file so condor will not return
+rm {2}
+
+ls -ltrh
+echo ""
+
+""".format(bash_command, '${2}', '${1}.pkl')
 
 # Prepare the data for the template
 options = {
