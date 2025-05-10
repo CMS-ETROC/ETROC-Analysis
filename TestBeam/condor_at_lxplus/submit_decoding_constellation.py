@@ -21,12 +21,13 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    '--run_name',
+    '-o',
+    '--output',
     metavar = 'NAME',
     type = str,
-    help = 'extra run information for output directory name. Example: Run_X. X can be any number.',
+    help = 'Output directory including path',
     required = True,
-    dest = 'run_name',
+    dest = 'output',
 )
 
 parser.add_argument(
@@ -50,7 +51,7 @@ args = parser.parse_args()
 
 username = getpass.getuser()
 eos_base_dir = f'/eos/user/{username[0]}/{username}'
-outdir = f'{args.run_name}_feather'
+outdir = f'{args.output}_feather'
 
 file_list = natsorted(Path(args.input_dir).glob('file*bin'))
 
@@ -169,4 +170,4 @@ if args.dryrun:
         print(f.read(), '\n')
     print()
 else:
-    subprocess.run(['condor_submit', '-spool', 'condor_decoding.jdl'])
+    subprocess.run(['condor_submit', 'condor_decoding.jdl'])

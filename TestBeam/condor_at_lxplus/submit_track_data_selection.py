@@ -238,4 +238,4 @@ if args.dryrun:
     print()
     print()
 else:
-    subprocess.run(['condor_submit', '-spool', 'condor_track_data_selection.jdl'])
+    subprocess.run(['condor_submit', 'condor_track_data_selection.jdl'])
