@@ -927,11 +927,38 @@ def toSingleDataFrame_newEventModel_moneyplot(
     return df
 
 ## --------------------------------------
+def toSingleDataFrame_secondEventModel(
+        files: list,
+        do_blockMix: bool = False,
+        do_savedf: bool = False,
+    ):
+    return toSingleDataFrame_eventModel_underlyingFunction(
+        files,
+        do_blockMix,
+        do_savedf,
+        event_number_col = 1,
+    )
+
 def toSingleDataFrame_newEventModel(
         files: list,
         do_blockMix: bool = False,
         do_savedf: bool = False,
     ):
+    return toSingleDataFrame_eventModel_underlyingFunction(
+        files,
+        do_blockMix,
+        do_savedf,
+        event_number_col = 2,
+    )
+
+def toSingleDataFrame_eventModel_underlyingFunction(
+        files: list,
+        do_blockMix: bool = False,
+        do_savedf: bool = False,
+        event_number_col: int = 0
+    ):
+    if event_number_col <= 0:
+      raise RuntimeError("You need to define stuff correctly for the translation to work")
     evt = -1
     previous_evt = -1
     d = {
@@ -959,7 +986,7 @@ def toSingleDataFrame_newEventModel(
         with open(ifile, 'r') as infile:
             for line in infile:
                 if line.split(' ')[0] == 'EH':
-                    tmp_evt = int(line.split(' ')[2])
+                    tmp_evt = int(line.split(' ')[event_number_col])
                     if previous_evt != tmp_evt:
                         evt += 1
                         previous_evt = tmp_evt
