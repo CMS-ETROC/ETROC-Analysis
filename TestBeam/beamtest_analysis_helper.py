@@ -1450,6 +1450,8 @@ def load_fig_title(
         plot_title = r'4 GeV $e^{-}$ at DESY TB'
     elif tb_loc == 'cern':
         plot_title = r'120 GeV (1/3 p; 2/3 $\pi^{+}$) at CERN SPS H6'
+    elif tb_loc == 'cern_mu':
+        plot_title = r'$\mu^{\pm}$ at CERN SPS H6'
     elif tb_loc == 'cern_h8':
         plot_title = r'180 GeV ($\pi^{+}$) at CERN SPS H8'
     elif tb_loc == 'fnal':
