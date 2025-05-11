@@ -12,7 +12,6 @@ parser = argparse.ArgumentParser(
 parser.add_argument(
     '-d',
     '--inputdir',
-    nargs='+',
     metavar = 'DIRNAME',
     type = str,
     help = 'input directory name',
