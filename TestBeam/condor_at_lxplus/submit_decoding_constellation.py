@@ -178,7 +178,7 @@ if args.dryrun:
     subprocess.run(f"tail -n 10 input_list_for_decoding{runAppend}.txt", shell=True)
     print()
     print('=========== Bash file ===========')
-    with open(f"run_decode{run_append}.sh") as f:
+    with open(f"run_decode{runAppend}.sh") as f:
         print(f.read(), '\n')
     print('=========== Condor Job Description file ===========')
     with open(f'condor_decoding{runAppend}.jdl') as f:
