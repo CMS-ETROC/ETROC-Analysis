@@ -83,7 +83,7 @@ with open(listfile, 'a') as listfile:
     point1 = int(file_list[0].name.split('.')[0].split('_')[1])
     point2 = int(file_list[-1].name.split('.')[0].split('_')[1])
 
-    for idx, num in enumerate(range(point1, point2, files_per_job)):
+    for idx, num in enumerate(range(point1, point2+1, files_per_job)):
         start = num
         end = min(num + files_per_job - 1, point2)
         save_string = f"{start}, {end}, {idx}"
