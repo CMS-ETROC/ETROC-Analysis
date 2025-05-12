@@ -1,7 +1,6 @@
-import getpass, re, subprocess
-from pathlib import Path
+import getpass, subprocess
 import argparse
-from glob import glob
+from pathlib import Path
 from jinja2 import Template
 from natsort import natsorted
 
@@ -13,7 +12,6 @@ parser = argparse.ArgumentParser(
 parser.add_argument(
     '-d',
     '--inputdir',
-    nargs='+',
     metavar = 'DIRNAME',
     type = str,
     help = 'input directory name',
@@ -164,12 +162,12 @@ if listfile.is_file():
     listfile.unlink()
 
 with open(listfile, 'a') as listfile:
-    for idir in args.dirname: # dirname="......../physics_run_N_feather"
-        files = natsorted(glob(f'{idir}/loop*feather'))
-        for ifile in files:
-            fname = ifile.split('/')[-1]
-            save_string = f"{Path(idir).name}, {fname}, {ifile}"
-            listfile.write(save_string + '\n')
+    # dirname="......../physics_run_N_feather" or ......./<any name>_feather
+    files = natsorted(Path(args.dirname).glob('loop*feather'))
+    for ifile in files:
+        fname = ifile.name
+        save_string = f"{Path(args.dirname).name.split('_feather')[0]}, {fname}, {ifile}"
+        listfile.write(save_string + '\n')
 
 log_dir = Path('./') / 'condor_logs' / 'track_data_selection'
 log_dir.mkdir(exist_ok=True, parents=True)
@@ -215,7 +213,7 @@ MY.XRDCP_CREATE_DIR   = True
 output_destination    = root://eosuser.cern.ch/{3}/{4}
 +JobFlavour           = "microcentury"
 Queue run,fname,path from input_list_for_trackDataSelection.txt
-""".format(str(log_dir), args.track, args.cal_table, eos_base_dir, args.outname)
+""".format(log_dir, args.track, args.cal_table, eos_base_dir, args.outname)
 
 with open(f'condor_track_data_selection.jdl','w') as jdlfile:
     jdlfile.write(jdl)
