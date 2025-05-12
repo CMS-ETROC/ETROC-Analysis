@@ -41,6 +41,15 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    '-r',
+    '--runName',
+    metavar = 'NAME',
+    type = str,
+    help = 'Name of the run to process. If given, the run name will be used to avoid file collisions',
+    dest = 'runName',
+)
+
+parser.add_argument(
     '--dryrun',
     action = 'store_true',
     help = 'If set, condor submission will not happen',
@@ -53,9 +62,15 @@ username = getpass.getuser()
 eos_base_dir = f'/eos/user/{username[0]}/{username}'
 outdir = f'{args.output}_feather'
 
+runName = args.runName
+if runName is None:
+  runAppend = ""
+else:
+  runAppend = "_" + runName
+
 file_list = natsorted(Path(args.input_dir).glob('file*bin'))
 
-listfile = Path('./') / 'input_list_for_decoding.txt'
+listfile = Path('./') / f'input_list_for_decoding{runAppend}.txt'
 if listfile.is_file():
     listfile.unlink()
 
@@ -122,7 +137,7 @@ options = {
 # Render the template with the data
 bash_script = Template(bash_template).render(options)
 
-with open('run_decode.sh','w') as bashfile:
+with open(f'run_decode{runAppend}.sh','w') as bashfile:
     bashfile.write(bash_script)
 
 log_dir = Path('./') / 'condor_logs' / 'decoding'
@@ -139,7 +154,7 @@ if log_dir.exists():
     print("Log file count:", result.stdout.strip())
 
 jdl = """universe              = vanilla
-executable            = run_decode.sh
+executable            = run_decode{3}.sh
 should_Transfer_Files = YES
 whenToTransferOutput  = ON_EXIT
 arguments             = $(start) $(end) $(index) $(ClusterId)
@@ -151,23 +166,23 @@ output_destination    = root://eosuser.cern.ch/{1}/{2}
 MY.XRDCP_CREATE_DIR   = True
 MY.WantOS             = "el9"
 +JobFlavour           = "longlunch"
-Queue start, end, index from input_list_for_decoding.txt
-""".format(log_dir, eos_base_dir, outdir)
+Queue start, end, index from input_list_for_decoding{3}.txt
+""".format(log_dir, eos_base_dir, outdir, runAppend)
 
-with open(f'condor_decoding.jdl','w') as jdlfile:
+with open(f'condor_decoding{runAppend}.jdl','w') as jdlfile:
     jdlfile.write(jdl)
 
 if args.dryrun:
     print('\n=========== Input text file ===========')
-    subprocess.run("head -n 10 input_list_for_decoding.txt", shell=True)
-    subprocess.run("tail -n 10 input_list_for_decoding.txt", shell=True)
+    subprocess.run(f"head -n 10 input_list_for_decoding{runAppend}.txt", shell=True)
+    subprocess.run(f"tail -n 10 input_list_for_decoding{runAppend}.txt", shell=True)
     print()
     print('=========== Bash file ===========')
-    with open("run_decode.sh") as f:
+    with open(f"run_decode{run_append}.sh") as f:
         print(f.read(), '\n')
     print('=========== Condor Job Description file ===========')
-    with open('condor_decoding.jdl') as f:
+    with open(f'condor_decoding{runAppend}.jdl') as f:
         print(f.read(), '\n')
     print()
 else:
-    subprocess.run(['condor_submit', 'condor_decoding.jdl'])
+    subprocess.run(['condor_submit', f'condor_decoding{runAppend}.jdl'])
