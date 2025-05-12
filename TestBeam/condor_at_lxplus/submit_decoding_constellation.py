@@ -140,17 +140,17 @@ bash_script = Template(bash_template).render(options)
 with open(f'run_decode{runAppend}.sh','w') as bashfile:
     bashfile.write(bash_script)
 
-log_dir = Path('./') / 'condor_logs' / 'decoding'
+log_dir = Path('./') / 'condor_logs' / f'decoding{runAppend}'
 log_dir.mkdir(exist_ok=True, parents=True)
 
 if log_dir.exists():
     # Remove files
-    subprocess.run(f'rm {log_dir}/*decoding*log', shell=True)
-    subprocess.run(f'rm {log_dir}/*decoding*stdout', shell=True)
-    subprocess.run(f'rm {log_dir}/*decoding*stderr', shell=True)
+    subprocess.run(f'rm {log_dir}/*decoding{runAppend}*log', shell=True)
+    subprocess.run(f'rm {log_dir}/*decoding{runAppend}*stdout', shell=True)
+    subprocess.run(f'rm {log_dir}/*decoding{runAppend}*stderr', shell=True)
 
     # Count files
-    result = subprocess.run(f'ls {log_dir}/*decoding*log | wc -l', shell=True, capture_output=True, text=True)
+    result = subprocess.run(f'ls {log_dir}/*decoding{runAppend}*log | wc -l', shell=True, capture_output=True, text=True)
     print("Log file count:", result.stdout.strip())
 
 jdl = """universe              = vanilla
