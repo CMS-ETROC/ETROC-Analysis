@@ -85,4 +85,5 @@ with tqdm(files) as pbar:
             final_dict[key].extend(value)
 
 track_nevt_df = pd.DataFrame(data=final_dict)
+track_nevt_df.sort_values(by=['nevt'], ascending=False, inplace=True)
 track_nevt_df.to_csv(f'{args.outputdir}_nevt_per_track.csv', index=False)
