@@ -72,7 +72,7 @@ for line in fileinput.input():
       current_process = None
       current_toe = {}
 
-print(job_list)
+#print(job_list)
 print(
   tabulate(
     [[x, job_list[x]['exit_code'], job_list[x]['who'], job_list[x]['how'], job_list[x]['when']] for x in natsorted(job_list.keys())],
