@@ -242,7 +242,7 @@ if args.dryrun:
     subprocess.run(f"tail -n 10 {listfile}", shell=True)
     print()
     print('=========== Bash file ===========')
-    with open(condor_scripts_dir / f"run_track_data_selection.sh{runAppend}") as f:
+    with open(condor_scripts_dir / f"run_track_data_selection{runAppend}.sh") as f:
         print(f.read(), '\n')
     print()
     print('=========== Condor Job Description file ===========')
