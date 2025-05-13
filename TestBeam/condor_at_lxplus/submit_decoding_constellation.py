@@ -68,7 +68,7 @@ if runName is None:
 else:
   runAppend = "_" + runName
 
-condor_scripts_dir = Path('./') / 'condor_scripts' / f'job{runAppend}'
+condor_scripts_dir = Path('./') / 'condor_scripts' / f'decoding_job{runAppend}'
 condor_scripts_dir.mkdir(exist_ok=True, parents=True)
 file_list = natsorted(Path(args.input_dir).glob('file*bin'))
 
@@ -141,7 +141,7 @@ bash_script = Template(bash_template).render(options)
 with open(condor_scripts_dir / f'run_decode{runAppend}.sh','w') as bashfile:
     bashfile.write(bash_script)
 
-log_dir = Path('./') / 'condor_logs' / 'decoding' / f'job{runAppend}'
+log_dir = Path('./') / 'condor_logs' / 'decoding' / f'decoding_job{runAppend}'
 log_dir.mkdir(exist_ok=True, parents=True)
 
 #if log_dir.exists():
