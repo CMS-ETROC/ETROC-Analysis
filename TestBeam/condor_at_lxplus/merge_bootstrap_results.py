@@ -1,157 +1,97 @@
 from collections import defaultdict
 from natsort import natsorted
 from tqdm import tqdm
-from lmfit.models import GaussianModel
-from glob import glob
-
-import mplhep as hep
-hep.style.use('CMS')
-import matplotlib.pyplot as plt
+from pathlib import Path
+from scipy.stats import norm
 import argparse
 import pandas as pd
 import re
-import hist
 import numpy as np
 import warnings
 warnings.filterwarnings("ignore")
 
-parser = argparse.ArgumentParser(
-            prog='PlaceHolder',
-            description='merge individual bootstrap results',
-        )
-
-parser.add_argument(
-    '-d',
-    '--inputdir',
-    metavar = 'DIRNAME',
-    type = str,
-    help = 'input directory name',
-    required = True,
-    dest = 'dirname',
-)
-
-parser.add_argument(
-    '-o',
-    '--outputname',
-    metavar = 'OUTNAME',
-    type = str,
-    help = 'output file name',
-    required = True,
-    dest = 'outname',
-)
-
-parser.add_argument(
-    '--trigID',
-    metavar = 'NUM',
-    type = int,
-    help = 'Trigger board ID',
-    required = True,
-    dest = 'trigID',
-)
-
-parser.add_argument(
-    '--minimum',
-    metavar = 'VALUE',
-    type = int,
-    help = 'minimum number of bootstrap results to do a fit',
-    dest = 'minimum',
-    default = 50,
-)
-
-parser.add_argument(
-    '--hist_bins',
-    metavar = 'VALUE',
-    type = int,
-    help = 'Set a histogram bins',
-    dest = 'hist_bins',
-    default = 35,
-)
-
+parser = argparse.ArgumentParser(description='merge individual bootstrap results')
+parser.add_argument('-d', '--inputdir', required=True, type=str, dest='inputdir')
+parser.add_argument('-o', '--output', required=True, type=str, dest='output')
+parser.add_argument('--trigID', required=True, type=int, help='original Trigger board ID', dest='trigID')
+parser.add_argument('--minimum', type=int, default=50, help='Minimum number of bootstrap results to perform a fit', dest='minimum')
+parser.add_argument('--hist_bins', type=int, default=35, help='Number of bins for binned fit', dest='hist_bins')
 args = parser.parse_args()
-files = natsorted(glob(args.dirname+'/*pkl'))
 
+files = natsorted(Path(args.inputdir).glob('*pkl'))
 final_dict = defaultdict(list)
-mod = GaussianModel(nan_policy='omit')
+
+def fit_unbinned(data):
+    try:
+        mu, sigma = norm.fit(data)
+
+        ### Future development: Set threshold for unbinned fit
+        # Calculate the MSE between data and fitted PDF
+        # pdf_values = norm.pdf(data, mu, sigma)
+        # mse = np.mean((data - pdf_values)**2)
+
+        # Log-Likelihood
+        # log_likelihood = np.sum(np.log(pdf_values))
+
+        #print(f" {mu}, {sigma}")
+        #print(f"   MSE: {mse}, Log-Likelihood: {log_likelihood}")
+
+        return mu, sigma, True
+
+    except Exception as e:
+        print(e)
+        return np.mean(data), np.std(data), False
+
+def fit_binned(data):
+    try:
+        import hist
+        x_min = data.min()-5
+        x_max = data.max()+5
+        h_temp = hist.Hist(hist.axis.Regular(args.hist_bins, x_min, x_max))
+        h_temp.fill(data)
+        centers = h_temp.axes[0].centers
+        values = h_temp.values()
+        lower_bound = np.percentile(data, 17) # left percentile for 1.5 sigma
+        upper_bound = np.percentile(data, 83) # right percentile for 1.5 sigma
+        fit_mask = (centers > lower_bound) & (centers < upper_bound)
+
+        from lmfit.models import GaussianModel
+        mod = GaussianModel(nan_policy='omit')
+        pars = mod.guess(values[fit_mask], x=centers[fit_mask])
+        out = mod.fit(values[fit_mask], pars, x=centers[fit_mask], weights=1/np.sqrt(values[fit_mask]))
+
+        if out.success:
+            return out.params['center'].value, abs(out.params['sigma'].value), True
+
+    except Exception as e:
+        print(f"Error: {e}")
+        return np.mean(data), np.std(data), False
 
 for ifile in tqdm(files):
-
-    # Define the pattern to match "RxCx" part
     pattern = r'R(\d+)C(\d+)'
-
-    # Find all occurrences of the pattern in the string
-    matches = re.findall(pattern, ifile)
-
+    match_dict = {i: val for i, val in enumerate(re.findall(pattern, str(ifile)))}
     df = pd.read_pickle(ifile)
-    columns = df.columns
-
-    # There is a bug in bootstrap code. Time resolution result is 0, should be dropped.
     df = df.loc[(df != 0).all(axis=1)]
 
     if df.shape[0] < args.minimum:
-        # print('Bootstrap result is not correct. Do not process!')
-        # print(df.shape[0])
         continue
 
-    # Reset index before start fit
     df.reset_index(drop=True, inplace=True)
-    if len(matches) == 4:
-        final_dict[f'row{args.trigID}'].append(matches[args.trigID][0])
-        final_dict[f'col{args.trigID}'].append(matches[args.trigID][1])
+    columns = df.columns
 
-        for val in columns:
+    if len(match_dict.keys()) == 4:
+        final_dict[f'row{args.trigID}'].append(match_dict[args.trigID][0])
+        final_dict[f'col{args.trigID}'].append(match_dict[args.trigID][1])
 
-            x_min = df[val].min()-5
-            x_max = df[val].max()+5
+    for val in columns:
+        final_dict[f'row{val}'].append(match_dict[val][0])
+        final_dict[f'col{val}'].append(match_dict[val][1])
 
-            h_temp = hist.Hist(hist.axis.Regular(args.hist_bins, x_min, x_max, name="time_resolution", label=r'Time Resolution [ps]'))
-            h_temp.fill(df[val])
-            centers = h_temp.axes[0].centers
+        mu, sigma, unbinned_check = fit_unbinned(df[val])
+        if not unbinned_check:
+            mu, sigma, _ = fit_binned(df[val])
 
-            fit_constrain = (centers > df[val].astype(int).mode()[0]-7) & (centers < df[val].astype(int).mode()[0]+7)
+        final_dict[f'res{val}'].append(mu)
+        final_dict[f'err{val}'].append(sigma)
 
-            final_dict[f'row{val}'].append(matches[val][0])
-            final_dict[f'col{val}'].append(matches[val][1])
-
-            try:
-                pars = mod.guess(h_temp.values()[fit_constrain], x=centers[fit_constrain])
-                out = mod.fit(h_temp.values()[fit_constrain], pars, x=centers[fit_constrain], weights=1/np.sqrt(h_temp.values()[fit_constrain]))
-
-                if out.success:
-                    final_dict[f'res{val}'].append(out.params['center'].value)
-                    final_dict[f'err{val}'].append(abs(out.params['sigma'].value))
-                else:
-                    final_dict[f'res{val}'].append(np.mean(df[val]))
-                    final_dict[f'err{val}'].append(np.std(df[val]))
-            except Exception as inst:
-                print(inst)
-
-    else:
-        for idx, val in enumerate(columns):
-
-            x_min = df[val].min()-5
-            x_max = df[val].max()+5
-
-            h_temp = hist.Hist(hist.axis.Regular(args.hist_bins, x_min, x_max, name="time_resolution", label=r'Time Resolution [ps]'))
-            h_temp.fill(df[val])
-            centers = h_temp.axes[0].centers
-
-            fit_constrain = (centers > df[val].astype(int).mode()[0]-7) & (centers < df[val].astype(int).mode()[0]+7)
-
-            final_dict[f'row{val}'].append(matches[idx][0])
-            final_dict[f'col{val}'].append(matches[idx][1])
-
-            try:
-                pars = mod.guess(h_temp.values()[fit_constrain], x=centers[fit_constrain])
-                out = mod.fit(h_temp.values()[fit_constrain], pars, x=centers[fit_constrain], weights=1/np.sqrt(h_temp.values()[fit_constrain]))
-
-                if out.success:
-                    final_dict[f'res{val}'].append(out.params['center'].value)
-                    final_dict[f'err{val}'].append(abs(out.params['sigma'].value))
-                else:
-                    final_dict[f'res{val}'].append(np.mean(df[val]))
-                    final_dict[f'err{val}'].append(np.std(df[val]))
-            except Exception as inst:
-                print(inst)
-
-final_df = pd.DataFrame(final_dict)
-final_df.to_csv(args.outname+'.csv', index=False)
+pd.DataFrame(final_dict).to_csv('resolution_' + args.output + '.csv', index=False)
