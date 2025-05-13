@@ -30,6 +30,15 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    '-r',
+    '--runName',
+    metavar = 'NAME',
+    type = str,
+    help = 'Name of the run to process. If given, the run name will be used to avoid file collisions',
+    dest = 'runName',
+)
+
+parser.add_argument(
     '--cal_table',
     metavar = 'NAME',
     type = str,
@@ -157,30 +166,39 @@ args = parser.parse_args()
 username = getpass.getuser()
 eos_base_dir = f'/eos/user/{username[0]}/{username}'
 
-listfile = Path('./') / 'input_list_for_trackDataSelection.txt'
+runName = args.runName
+if runName is None:
+    runAppend = ""
+else:
+    runAppend = "_" + runName
+
+condor_scripts_dir = Path('./') / 'condor_scripts' / f'trackDataSelect_job{runAppend}'
+condor_scripts_dir.mkdir(exist_ok=True, parents=True)
+
+listfile = condor_scripts_dir / f'input_list_for_trackDataSelection{runAppend}.txt'
 if listfile.is_file():
     listfile.unlink()
 
-with open(listfile, 'a') as listfile:
+with open(listfile, 'a') as base_txt:
     # dirname="......../physics_run_N_feather" or ......./<any name>_feather
     files = natsorted(Path(args.dirname).glob('loop*feather'))
     for ifile in files:
         fname = ifile.name
         save_string = f"{Path(args.dirname).name.split('_feather')[0]}, {fname}, {ifile}"
-        listfile.write(save_string + '\n')
+        base_txt.write(save_string + '\n')
 
-log_dir = Path('./') / 'condor_logs' / 'track_data_selection'
+log_dir = Path('./') / 'condor_logs' / 'track_data_selection' / f'trackDataSelect_job{runAppend}'
 log_dir.mkdir(exist_ok=True, parents=True)
 
-if log_dir.exists():
-    # Remove files
-    subprocess.run(f'rm {log_dir}/*trackSelection*log', shell=True)
-    subprocess.run(f'rm {log_dir}/*trackSelection*stdout', shell=True)
-    subprocess.run(f'rm {log_dir}/*trackSelection*stderr', shell=True)
+# if log_dir.exists():
+#     # Remove files
+#     subprocess.run(f'rm {log_dir}/*trackSelection*log', shell=True)
+#     subprocess.run(f'rm {log_dir}/*trackSelection*stdout', shell=True)
+#     subprocess.run(f'rm {log_dir}/*trackSelection*stderr', shell=True)
 
-    # Count files
-    result = subprocess.run(f'ls {log_dir}/*trackSelection*log | wc -l', shell=True, capture_output=True, text=True)
-    print("Log file count:", result.stdout.strip())
+#     # Count files
+#     result = subprocess.run(f'ls {log_dir}/*trackSelection*log | wc -l', shell=True, capture_output=True, text=True)
+#     print("Log file count:", result.stdout.strip())
 
 print('\n========= Run option =========')
 print(f'Input dataset: {args.dirname}')
@@ -196,11 +214,11 @@ print('========= Run option =========\n')
 
 # Render the template with the data
 bash_script = load_bash_template(args)
-with open('run_track_data_selection.sh','w') as bashfile:
+with open(condor_scripts_dir / f'run_track_data_selection{runAppend}.sh','w') as bashfile:
     bashfile.write(bash_script)
 
 jdl = """universe              = vanilla
-executable            = run_track_data_selection.sh
+executable            = {5}/run_track_data_selection.sh
 should_Transfer_Files = YES
 whenToTransferOutput  = ON_EXIT
 arguments             = $(fname) $(run) $(path)
@@ -212,25 +230,25 @@ MY.WantOS             = "el9"
 MY.XRDCP_CREATE_DIR   = True
 output_destination    = root://eosuser.cern.ch/{3}/{4}
 +JobFlavour           = "microcentury"
-Queue run,fname,path from input_list_for_trackDataSelection.txt
-""".format(log_dir, args.track, args.cal_table, eos_base_dir, args.outname)
+Queue run,fname,path from {5}/input_list_for_trackDataSelection.txt
+""".format(log_dir, args.track, args.cal_table, eos_base_dir, args.outname, condor_scripts_dir)
 
-with open(f'condor_track_data_selection.jdl','w') as jdlfile:
+with open(condor_scripts_dir / f'condor_track_data_selection{runAppend}.jdl','w') as jdlfile:
     jdlfile.write(jdl)
 
 if args.dryrun:
     print('=========== Input text file ===========')
-    subprocess.run("head -n 10 input_list_for_trackDataSelection.txt", shell=True)
-    subprocess.run("tail -n 10 input_list_for_trackDataSelection.txt", shell=True)
+    subprocess.run(f"head -n 10 {listfile}", shell=True)
+    subprocess.run(f"tail -n 10 {listfile}", shell=True)
     print()
     print('=========== Bash file ===========')
-    with open("run_track_data_selection.sh") as f:
+    with open(condor_scripts_dir / f"run_track_data_selection.sh{runAppend}") as f:
         print(f.read(), '\n')
     print()
     print('=========== Condor Job Description file ===========')
-    with open("condor_track_data_selection.jdl") as f:
+    with open(condor_scripts_dir / f"condor_track_data_selection{runAppend}.jdl") as f:
         print(f.read(), '\n')
     print()
     print()
 else:
-    subprocess.run(['condor_submit', 'condor_track_data_selection.jdl'])
+    subprocess.run(['condor_submit', f'{condor_scripts_dir}/condor_track_data_selection{runAppend}.jdl'])
