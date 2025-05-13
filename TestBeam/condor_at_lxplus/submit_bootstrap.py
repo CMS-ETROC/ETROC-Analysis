@@ -251,7 +251,7 @@ if args.reproducible:
     print('Random seed will be set by counter. The final output will have seed information together')
 print('========= Run option =========\n')
 
-with open(condor_scripts_dir / f'run_bootstrap.sh{runAppend}','w') as bashfile:
+with open(condor_scripts_dir / f'run_bootstrap{runAppend}.sh','w') as bashfile:
     bashfile.write(bash_script)
 
 log_dir = Path('./') / 'condor_logs' / 'bootstrap' / f'bootstrap_job{runAppend}'
