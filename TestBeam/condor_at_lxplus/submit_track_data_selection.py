@@ -218,7 +218,7 @@ with open(condor_scripts_dir / f'run_track_data_selection{runAppend}.sh','w') as
     bashfile.write(bash_script)
 
 jdl = """universe              = vanilla
-executable            = {5}/run_track_data_selection.sh
+executable            = {5}/run_track_data_selection{6}.sh
 should_Transfer_Files = YES
 whenToTransferOutput  = ON_EXIT
 arguments             = $(fname) $(run) $(path)
@@ -230,8 +230,8 @@ MY.WantOS             = "el9"
 MY.XRDCP_CREATE_DIR   = True
 output_destination    = root://eosuser.cern.ch/{3}/{4}
 +JobFlavour           = "microcentury"
-Queue run,fname,path from {5}/input_list_for_trackDataSelection.txt
-""".format(log_dir, args.track, args.cal_table, eos_base_dir, args.outname, condor_scripts_dir)
+Queue run,fname,path from {5}/input_list_for_trackDataSelection{6}.txt
+""".format(log_dir, args.track, args.cal_table, eos_base_dir, args.outname, condor_scripts_dir, runAppend)
 
 with open(condor_scripts_dir / f'condor_track_data_selection{runAppend}.jdl','w') as jdlfile:
     jdlfile.write(jdl)
