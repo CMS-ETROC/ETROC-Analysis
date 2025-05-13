@@ -1,7 +1,6 @@
 import subprocess
 from pathlib import Path
 import argparse
-from glob import glob
 from jinja2 import Template
 from natsort import natsorted
 
@@ -48,6 +47,15 @@ parser.add_argument(
     help = 'Random sampling fraction',
     default = 75,
     dest = 'sampling',
+)
+
+parser.add_argument(
+    '-r',
+    '--runName',
+    metavar = 'NAME',
+    type = str,
+    help = 'Name of the run to process. If given, the run name will be used to avoid file collisions',
+    dest = 'runName',
 )
 
 parser.add_argument(
@@ -142,16 +150,25 @@ parser.add_argument(
 args = parser.parse_args()
 current_dir = Path('./')
 
-files = natsorted(glob(f'{args.dirname}/*pkl'))
-listfile = current_dir / 'input_list_for_bootstrap.txt'
+runName = args.runName
+if runName is None:
+    runAppend = ""
+else:
+    runAppend = "_" + runName
+
+condor_scripts_dir = Path('./') / 'condor_scripts' / f'bootstrap_job{runAppend}'
+condor_scripts_dir.mkdir(exist_ok=True, parents=True)
+
+files = natsorted(Path(args.dirname).glob('*.pkl'))
+listfile = condor_scripts_dir / f'input_list_for_bootstrap{runAppend}.txt'
 if listfile.is_file():
     listfile.unlink()
 
-with open(listfile, 'a') as listfile:
+with open(listfile, 'a') as base_txt:
     for ifile in files:
-        name = ifile.split('/')[-1].split('.')[0]
+        name = ifile.name.split('.')[0]
         save_string = f"{name}, {ifile}"
-        listfile.write(save_string + '\n')
+        base_txt.write(save_string + '\n')
 
 outdir = current_dir / f'bootstrap_{args.outputdir}'
 if not args.dryrun:
@@ -234,24 +251,24 @@ if args.reproducible:
     print('Random seed will be set by counter. The final output will have seed information together')
 print('========= Run option =========\n')
 
-with open('run_bootstrap.sh','w') as bashfile:
+with open(condor_scripts_dir / f'run_bootstrap.sh{runAppend}','w') as bashfile:
     bashfile.write(bash_script)
 
-log_dir = current_dir / 'condor_logs' / 'bootstrap'
+log_dir = Path('./') / 'condor_logs' / 'bootstrap' / f'bootstrap_job{runAppend}'
 log_dir.mkdir(exist_ok=True, parents=True)
 
-if log_dir.exists():
-    # Remove files
-    subprocess.run('rm condor_logs/bootstrap/*bootstrap*log', shell=True)
-    subprocess.run('rm condor_logs/bootstrap/*bootstrap*stdout', shell=True)
-    subprocess.run('rm condor_logs/bootstrap/*bootstrap*stderr', shell=True)
+# if log_dir.exists():
+#     # Remove files
+#     subprocess.run('rm condor_logs/bootstrap/*bootstrap*log', shell=True)
+#     subprocess.run('rm condor_logs/bootstrap/*bootstrap*stdout', shell=True)
+#     subprocess.run('rm condor_logs/bootstrap/*bootstrap*stderr', shell=True)
 
-    # Count files
-    result = subprocess.run('ls condor_logs/bootstrap/*bootstrap*log | wc -l', shell=True, capture_output=True, text=True)
-    print("Log file count:", result.stdout.strip())
+#     # Count files
+#     result = subprocess.run('ls condor_logs/bootstrap/*bootstrap*log | wc -l', shell=True, capture_output=True, text=True)
+#     print("Log file count:", result.stdout.strip())
 
 jdl = """universe              = vanilla
-executable            = run_bootstrap.sh
+executable            = {2}/run_bootstrap{3}.sh
 should_Transfer_Files = YES
 whenToTransferOutput  = ON_EXIT
 arguments             = $(ifile) $(path)
@@ -262,24 +279,24 @@ error                 = {0}/$(ClusterId).$(ProcId).bootstrap.stderr
 log                   = {0}/$(ClusterId).$(ProcId).bootstrap.log
 MY.WantOS             = "el9"
 +JobFlavour           = "microcentury"
-Queue ifile,path from input_list_for_bootstrap.txt
-""".format(str(log_dir), str(outdir))
+Queue ifile,path from {2}/input_list_for_bootstrap{3}.txt
+""".format(log_dir, outdir, condor_scripts_dir, runAppend)
 
-with open(f'condor_bootstrap.jdl','w') as jdlfile:
+with open(condor_scripts_dir / f'condor_bootstrap{runAppend}.jdl','w') as jdlfile:
     jdlfile.write(jdl)
 
 if args.dryrun:
     print('\n=========== Input text file ===========')
-    subprocess.run("head -n 10 input_list_for_bootstrap.txt", shell=True)
-    subprocess.run("tail -n 10 input_list_for_bootstrap.txt", shell=True)
+    subprocess.run(f"head -n 10 {listfile}", shell=True)
+    subprocess.run(f"tail -n 10 {listfile}", shell=True)
     print()
     print('=========== Bash file ===========')
-    with open("run_bootstrap.sh") as f:
+    with open(condor_scripts_dir / f"run_bootstrap{runAppend}.sh") as f:
         print(f.read(), '\n')
     print('=========== Condor Job Description file ===========')
-    with open('condor_bootstrap.jdl') as f:
+    with open(condor_scripts_dir / f'condor_bootstrap{runAppend}.jdl') as f:
         print(f.read(), '\n')
     print()
 
 else:
-    subprocess.run(['condor_submit', 'condor_bootstrap.jdl'])
+    subprocess.run(['condor_submit', f'{condor_scripts_dir}/condor_bootstrap{runAppend}.jdl'])
