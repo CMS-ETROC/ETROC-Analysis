@@ -68,9 +68,11 @@ if runName is None:
 else:
   runAppend = "_" + runName
 
+condor_scripts_dir = Path('./') / 'condor_scripts' / f'job{runAppend}'
+condor_scripts_dir.mkdir(exist_ok=True, parents=True)
 file_list = natsorted(Path(args.input_dir).glob('file*bin'))
 
-listfile = Path('./') / f'input_list_for_decoding{runAppend}.txt'
+listfile = condor_scripts_dir / f'input_list_for_decoding{runAppend}.txt'
 if listfile.is_file():
     listfile.unlink()
 
@@ -78,8 +80,7 @@ files_per_job, remain = max(((v, len(file_list) % v) for v in range(args.range[0
 print('\nNumber of files per job:', files_per_job)
 print(f'Last job will have {remain} files.\n')
 
-with open(listfile, 'a') as listfile:
-
+with open(listfile, 'a') as base_txt:
     point1 = int(file_list[0].name.split('.')[0].split('_')[1])
     point2 = int(file_list[-1].name.split('.')[0].split('_')[1])
 
@@ -87,7 +88,7 @@ with open(listfile, 'a') as listfile:
         start = num
         end = min(num + files_per_job - 1, point2)
         save_string = f"{start}, {end}, {idx}"
-        listfile.write(save_string + '\n')
+        base_txt.write(save_string + '\n')
 
 # Define the bash script template
 bash_template = """#!/bin/bash
@@ -137,24 +138,24 @@ options = {
 # Render the template with the data
 bash_script = Template(bash_template).render(options)
 
-with open(f'run_decode{runAppend}.sh','w') as bashfile:
+with open(condor_scripts_dir / f'run_decode{runAppend}.sh','w') as bashfile:
     bashfile.write(bash_script)
 
-log_dir = Path('./') / 'condor_logs' / f'decoding{runAppend}'
+log_dir = Path('./') / 'condor_logs' / 'decoding' / f'job{runAppend}'
 log_dir.mkdir(exist_ok=True, parents=True)
 
-if log_dir.exists():
-    # Remove files
-    subprocess.run(f'rm {log_dir}/*decoding{runAppend}*log', shell=True)
-    subprocess.run(f'rm {log_dir}/*decoding{runAppend}*stdout', shell=True)
-    subprocess.run(f'rm {log_dir}/*decoding{runAppend}*stderr', shell=True)
-
-    # Count files
-    result = subprocess.run(f'ls {log_dir}/*decoding{runAppend}*log | wc -l', shell=True, capture_output=True, text=True)
-    print("Log file count:", result.stdout.strip())
+#if log_dir.exists():
+#    # Remove files
+#    subprocess.run(f'rm {log_dir}/*decoding{runAppend}*log', shell=True)
+#    subprocess.run(f'rm {log_dir}/*decoding{runAppend}*stdout', shell=True)
+#    subprocess.run(f'rm {log_dir}/*decoding{runAppend}*stderr', shell=True)
+#
+#    # Count files
+#    result = subprocess.run(f'ls {log_dir}/*decoding{runAppend}*log | wc -l', shell=True, capture_output=True, text=True)
+#    print("Log file count:", result.stdout.strip())
 
 jdl = """universe              = vanilla
-executable            = run_decode{3}.sh
+executable            = {4}/run_decode{3}.sh
 should_Transfer_Files = YES
 whenToTransferOutput  = ON_EXIT
 arguments             = $(start) $(end) $(index) $(ClusterId)
@@ -166,23 +167,23 @@ output_destination    = root://eosuser.cern.ch/{1}/{2}
 MY.XRDCP_CREATE_DIR   = True
 MY.WantOS             = "el9"
 +JobFlavour           = "longlunch"
-Queue start, end, index from input_list_for_decoding{3}.txt
-""".format(log_dir, eos_base_dir, outdir, runAppend)
+Queue start, end, index from {4}/input_list_for_decoding{3}.txt
+""".format(log_dir, eos_base_dir, outdir, runAppend, condor_scripts_dir)
 
-with open(f'condor_decoding{runAppend}.jdl','w') as jdlfile:
+with open(condor_scripts_dir / f'condor_decoding{runAppend}.jdl','w') as jdlfile:
     jdlfile.write(jdl)
 
 if args.dryrun:
     print('\n=========== Input text file ===========')
-    subprocess.run(f"head -n 10 input_list_for_decoding{runAppend}.txt", shell=True)
-    subprocess.run(f"tail -n 10 input_list_for_decoding{runAppend}.txt", shell=True)
+    subprocess.run(f"head -n 10 {listfile}", shell=True)
+    subprocess.run(f"tail -n 10 {listfile}", shell=True)
     print()
     print('=========== Bash file ===========')
-    with open(f"run_decode{runAppend}.sh") as f:
+    with open(condor_scripts_dir / f"run_decode{runAppend}.sh") as f:
         print(f.read(), '\n')
     print('=========== Condor Job Description file ===========')
-    with open(f'condor_decoding{runAppend}.jdl') as f:
+    with open(condor_scripts_dir / f'condor_decoding{runAppend}.jdl') as f:
         print(f.read(), '\n')
     print()
 else:
-    subprocess.run(['condor_submit', f'condor_decoding{runAppend}.jdl'])
+    subprocess.run(['condor_submit', f'{condor_scripts_dir}/condor_decoding{runAppend}.jdl'])
