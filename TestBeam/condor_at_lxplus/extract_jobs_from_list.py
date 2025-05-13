@@ -5,6 +5,7 @@ import pickle
 import re
 from tabulate import tabulate
 from datetime import datetime
+from natsort import natsorted
 
 first_line = ""
 found_first_line = False
@@ -59,7 +60,7 @@ for line in fileinput.input():
 if user_mismatch:
   print("There are multiple users in the list of jobs. Please double check how the list was created. Printing the job list anyway")
 
-print(tabulate([[x, len(job_list[x]), min([job_list[x][y]['submit'] for y in job_list[x]])] for x in job_list], headers=['Cluster ID', 'Number of Jobs', 'First Submission']))
+print(tabulate([[x, len(job_list[x]), min([job_list[x][y]['submit'] for y in job_list[x]])] for x in natsorted(job_list.keys())], headers=['Cluster ID', 'Number of Jobs', 'First Submission']))
 
 with open('my_job_list.pickle', 'wb') as f:
     pickle.dump(job_list, f, pickle.HIGHEST_PROTOCOL)
