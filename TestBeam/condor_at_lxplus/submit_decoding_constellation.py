@@ -216,7 +216,7 @@ if __name__ == "__main__":
         with open(input_txt_path, 'w') as f:
             for line in filtered_lines:
                 fields = line.split()
-                if len(fields) >= 13:
+                if len(fields) == 13:
                     old_condor_job_id = fields[0].split('.')[0]
                     last_three = fields[-4:-1]  # Extract 4th to last, 3rd to last, 2nd to last
                     sentence = ' '.join(last_three)
