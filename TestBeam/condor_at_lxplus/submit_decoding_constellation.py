@@ -35,8 +35,8 @@ parser.add_argument(
     metavar='N',
     type=int,
     nargs='+',
-    help='Range to decide how much files will be processed per job',
-    default = [35, 46],
+    help='Range to decide the number of jobs with the smallest remainder',
+    default = [65, 85],
     dest = 'range',
 )
 
@@ -64,31 +64,37 @@ outdir = f'{args.output}_feather'
 
 runName = args.runName
 if runName is None:
-  runAppend = ""
+    runAppend = ""
 else:
-  runAppend = "_" + runName
+    runAppend = "_" + runName
 
 condor_scripts_dir = Path('./') / 'condor_scripts' / f'decoding_job{runAppend}'
 condor_scripts_dir.mkdir(exist_ok=True, parents=True)
 file_list = natsorted(Path(args.input_dir).glob('file*bin'))
+print(f'\nFirst file: {file_list[0].name}')
+print(f'Last file: {file_list[-1].name}')
 
 listfile = condor_scripts_dir / f'input_list_for_decoding{runAppend}.txt'
 if listfile.is_file():
     listfile.unlink()
 
-files_per_job, remain = max(((v, len(file_list) % v) for v in range(args.range[0], args.range[1])), key=lambda x: x[1])
-print('\nNumber of files per job:', files_per_job)
-print(f'Last job will have {remain} files.\n')
+num_jobs, remain = min(((v, len(file_list) % v) for v in range(args.range[0], args.range[1]+1)), key=lambda x: x[1])
+base_files_per_job = len(file_list) // num_jobs
 
+print(f"\nNumber of jobs: {num_jobs}")
+print(f"Each job gets {base_files_per_job} files, with {remain} jobs getting 1 extra file.\n")
+
+idx = 0
 with open(listfile, 'a') as base_txt:
-    point1 = int(file_list[0].name.split('.')[0].split('_')[1])
-    point2 = int(file_list[-1].name.split('.')[0].split('_')[1])
-
-    for idx, num in enumerate(range(point1, point2+1, files_per_job)):
-        start = num
-        end = min(num + files_per_job - 1, point2)
-        save_string = f"{start}, {end}, {idx}"
+    for job_id in range(num_jobs):
+        # Distribute the remainder among the first `remainder` jobs
+        job_size = base_files_per_job + (1 if job_id < remain else 0)
+        chunk = file_list[idx:idx + job_size]
+        start = int(chunk[0].name.split('.')[0].split('_')[1])
+        end = int(chunk[-1].name.split('.')[0].split('_')[1])
+        save_string = f"{start}, {end}, {job_id}"
         base_txt.write(save_string + '\n')
+        idx += job_size
 
 # Define the bash script template
 bash_template = """#!/bin/bash
