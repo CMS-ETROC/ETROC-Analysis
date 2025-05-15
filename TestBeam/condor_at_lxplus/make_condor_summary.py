@@ -13,11 +13,11 @@ cluster_re = re.compile(r"^ClusterID\s+=\s+(\d+)")
 process_re = re.compile(r"^ProcID\s+=\s+(\d+)")
 toe_re = re.compile(r"^ToE\s+=\s+\[(.+)\]")
 
-exit_re = re.compile(r"ExitBySignal\s+=\s+([a-zA-Z]+);")
-how_code_re = re.compile(r"HowCode\s+=\s+(\d+);")
-when_re = re.compile(r"When\s+=\s+(\d+);")
-who_re = re.compile(r'Who\s+=\s+\"?([a-zA-Z]+)\"?;')
-exit_code_re = re.compile(r"ExitCode\s+=\s+(\d+);")
+exit_re = re.compile(r"ExitBySignal\s+=\s+([a-zA-Z]+)")
+how_code_re = re.compile(r"HowCode\s+=\s+(\d+)")
+when_re = re.compile(r"When\s+=\s+(\d+)")
+who_re = re.compile(r'Who\s+=\s+\"?([a-zA-Z]+)\"?')
+exit_code_re = re.compile(r"ExitCode\s+=\s+(\d+)")
 how_re = re.compile(r'How\s+=\s+\"?([a-zA-Z_]+)\"?')
 
 current_cluster = None
