@@ -82,11 +82,19 @@ def make_jobs(args, log_dir, condor_scripts_dir, runAppend):
     print(f'\nFirst file: {file_list[0].name}')
     print(f'Last file: {file_list[-1].name}')
 
-    num_jobs, remain = min(((v, len(file_list) % v) for v in range(args.range[0], args.range[1]+1)), key=lambda x: x[1])
-    base_files_per_job = len(file_list) // num_jobs
+    if len(file_list) < args.range[0]:
+        print(f'Number of input files: {len(file_list)} which is smaller than the given argument: {args.range[0]}')
+        files_per_job = 1
+        num_jobs = len(file_list) // files_per_job
+        remainder = len(file_list) % files_per_job
+        print(f"\nNumber of jobs: {num_jobs}")
+        print(f"Each job gets 1 file.\n")
+    else:
+        files_per_job, remainder = min(((v, len(file_list) % v) for v in range(args.range[0], args.range[1]+1)), key=lambda x: x[1])
+        num_jobs = len(file_list) // files_per_job
 
-    print(f"\nNumber of jobs: {num_jobs}")
-    print(f"Each job gets {base_files_per_job} files, with {remain} jobs getting 1 extra file.\n")
+        print(f"\nNumber of jobs: {num_jobs}")
+        print(f"Each job gets {files_per_job} files, with some jobs getting 1 extra file.\n")
 
     listfile = condor_scripts_dir / f'input_list_for_decoding{runAppend}.txt'
     if listfile.is_file():
@@ -96,7 +104,7 @@ def make_jobs(args, log_dir, condor_scripts_dir, runAppend):
     with open(listfile, 'a') as base_txt:
         for job_id in range(num_jobs):
             # Distribute the remainder among the first `remainder` jobs
-            job_size = base_files_per_job + (1 if job_id < remain else 0)
+            job_size = files_per_job + (1 if job_id < remainder else 0)
             chunk = file_list[idx:idx + job_size]
             start = int(chunk[0].name.split('.')[0].split('_')[1])
             end = int(chunk[-1].name.split('.')[0].split('_')[1])
@@ -149,8 +157,8 @@ if __name__ == "__main__":
         metavar='N',
         type=int,
         nargs='+',
-        help='Range to decide the number of jobs with the smallest remainder',
-        default = [65, 85],
+        help='Range to decide the number of files per job with the smallest remainder',
+        default = [5, 10],
         dest = 'range',
     )
 
@@ -196,7 +204,9 @@ if __name__ == "__main__":
     if args.dryrun:
         input_txt_path = condor_scripts_dir / f"input_list_for_decoding{runAppend}.txt"
         print('\n=========== Input text file ===========')
+        print('First 10 lines:')
         subprocess.run(f"head -n 10 {input_txt_path}", shell=True)
+        print('Last 10 lines:')
         subprocess.run(f"tail -n 10 {input_txt_path}", shell=True)
         print()
         print('=========== Bash file ===========')
