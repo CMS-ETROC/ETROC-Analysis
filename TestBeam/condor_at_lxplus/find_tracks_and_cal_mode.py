@@ -12,8 +12,9 @@ warnings.filterwarnings("ignore")
 ## --------------------------------------
 def check_empty_df(input_df: pd.DataFrame, extraStr=""):
     import sys
-    print(f"Warning: DataFrame is empty after {extraStr}")
-    sys.exit(1)
+    if input_df.empty:
+        print(f"Warning: DataFrame is empty after {extraStr}")
+        sys.exit(1)
 
 ## --------------------------------------
 def tdc_event_selection(
