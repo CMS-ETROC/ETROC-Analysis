@@ -1,0 +1,31 @@
+defaults: &defaults
+  1: &PT-NH15
+    name: ET2.01 PacTech New HPK-15
+    short: PT-NH15
+    offset: 20
+    HV: 230
+  2: &PT-NH17
+    name: ET2.01 PacTech New HPK-17
+    short: PT-NH17
+    offset: 20
+    HV: 230
+  3: &PT-NH18
+    name: ET2.01 PacTech New HPK-18
+    short: PT-NH18
+    offset: 20
+    HV: 230
+
+PT_NH14: &PT_NH14
+  name: ET2.01 PacTech New HPK-14
+  short: PT_NH14
+  offset: 20
+  HV: 230
+
+
+physics_run_0:
+  0: *PT_NH14
+  <<: *defaults
+
+physics_run_1:
+  0: *PT_NH14
+  <<: *defaults
