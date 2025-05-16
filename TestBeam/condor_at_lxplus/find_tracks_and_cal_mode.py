@@ -8,6 +8,13 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 import warnings
 warnings.filterwarnings("ignore")
 
+
+## --------------------------------------
+def check_empty_df(input_df: pd.DataFrame, extraStr=""):
+    import sys
+    print(f"Warning: DataFrame is empty after {extraStr}")
+    sys.exit(1)
+
 ## --------------------------------------
 def tdc_event_selection(
         input_df: pd.DataFrame,
@@ -308,6 +315,7 @@ if __name__ == "__main__":
 
         # Assign a unique sequential number to each event
         cal_filtered_df['evt'] = is_new_event.cumsum() - 1
+        check_empty_df(cal_filtered_df, "CAL filtering.")
 
         ## A wide TDC cuts
         tdc_cuts = {}
@@ -327,6 +335,7 @@ if __name__ == "__main__":
 
         filtered_df = tdc_event_selection(cal_filtered_df, tdc_cuts_dict=tdc_cuts)
         del cal_filtered_df
+        check_empty_df(filtered_df, "TDC filtering.")
 
         event_board_counts = filtered_df.groupby(['evt', 'board']).size().unstack(fill_value=0)
         event_selection_col = None
@@ -349,6 +358,7 @@ if __name__ == "__main__":
         selected_subset_df['row'] = selected_subset_df['row'].astype('int8')
         selected_subset_df['col'] = selected_subset_df['col'].astype('int8')
         del filtered_df
+        check_empty_df(selected_subset_df, "Single hit event filtering.")
 
         if args.three_board:
             ignore_board_ids = list(set([0, 1, 2, 3]) - set([args.trigID, args.dutID, args.refID]))
