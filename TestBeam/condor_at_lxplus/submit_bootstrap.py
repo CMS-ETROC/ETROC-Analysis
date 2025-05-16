@@ -322,6 +322,8 @@ if __name__ == "__main__":
             for line in filtered_lines:
                 fields = line.split()
                 if len(fields) == 11:
+                    if fields[5] == 'X':
+                        continue
                     old_condor_job_id = fields[0].split('.')[0]
                     last_three = fields[-2:]
                     sentence = ' '.join(last_three)
