@@ -267,6 +267,8 @@ if __name__ == "__main__":
         del tmp_df
 
     final_input_df = pd.concat(dfs)
+    total_use = final_input_df.memory_usage(deep=True).sum() / (1024**2)
+    print(f'Real total memory usage: {total_use} MB')
 
     ### Re-define Evt numbers
     # Identify where a new event starts
@@ -409,3 +411,5 @@ if __name__ == "__main__":
         track_df = track_df.loc[track_condition]
         track_df = track_df.drop_duplicates(subset=columns_want_to_group, keep='first')
         track_df.to_csv(f'{args.out_trackname}_tracks.csv', index=False)
+
+        print('Done: find track combinations\n')
