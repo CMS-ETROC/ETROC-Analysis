@@ -267,7 +267,7 @@ if __name__ == "__main__":
         del tmp_df
 
     final_input_df = pd.concat(dfs)
-    total_use = final_input_df.memory_usage(deep=True).sum() / (1024**2)
+    total_use = round(final_input_df.memory_usage(deep=True).sum() / (1024**2))
     print(f'Real total memory usage: {total_use} MB')
 
     ### Re-define Evt numbers
