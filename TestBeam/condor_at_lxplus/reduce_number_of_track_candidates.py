@@ -29,7 +29,7 @@ parser.add_argument(
 parser.add_argument(
     '--ntrk_table',
     action = 'store_true',
-    help = 'If set, ',
+    help = 'If set, print the cut table based on the given cut, range is fixed from 40 to 400 w/ step = 40',
     dest = 'ntrk_table',
 )
 
@@ -56,10 +56,11 @@ if args.ntrk_table:
         ntrk_survived.append(tmp_df.shape[0])
     del tmp_df
 
-    table_data = [cut_name, ntrk_survived]
+    table_data = list(zip(cut_name, ntrk_survived))
+    print('\n================================================================\n')
     print(tabulate(table_data, headers=['nTrk Cut', 'Number of survived track candidates']))
+    print('\n================================================================')
     sys.exit(1)
-
 
 track_output_df = track_output_df.loc[track_output_df['count'] > args.minimum_ntracks]
 track_output_df.reset_index(drop=True, inplace=True)
