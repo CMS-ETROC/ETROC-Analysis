@@ -165,7 +165,8 @@ def convert_to_time_df(input_file):
             ### Apply TDC cut
             tot_cuts = {
                 idx: (
-                    [data_dict[key]['tot'][idx].quantile(0.04), data_dict[key]['tot'][idx].quantile(0.91)]
+                    [data_dict[key]['tot'][idx].quantile(0.04 if idx == args.setDUTBoardID else 0.01),
+                    data_dict[key]['tot'][idx].quantile(0.91 if idx == args.setDUTBoardID else 0.96)]
                     if args.autoTOTcuts else [0, 600]
                 ) for idx in board_ids
             }
