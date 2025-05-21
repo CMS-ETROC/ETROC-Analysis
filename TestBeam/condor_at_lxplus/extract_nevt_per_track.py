@@ -46,6 +46,11 @@ args = parser.parse_args()
 input_dir = Path(args.inputdir)
 files = natsorted(list(input_dir.glob('track*pkl')))
 
+if len(files) == 0:
+    import sys
+    print('No input file')
+    sys.exit(1)
+
 final_dict = defaultdict(list)
 
 def process_file(ifile):
