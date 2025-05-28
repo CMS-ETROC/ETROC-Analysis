@@ -6,6 +6,7 @@ from pathlib import Path
 from natsort import natsorted
 from collections import defaultdict
 from tqdm import tqdm
+from tabulate import tabulate
 
 parser = argparse.ArgumentParser(
             prog='PlaceHolder',
@@ -92,3 +93,17 @@ with tqdm(files) as pbar:
 track_nevt_df = pd.DataFrame(data=final_dict)
 track_nevt_df.sort_values(by=['nevt'], ascending=False, inplace=True)
 track_nevt_df.to_csv(f'{args.outputdir}_nevt_per_track.csv', index=False)
+
+cuts = range(100, 1600, 100)
+ntrk_survived = []
+cut_name = [f'ntrk > {jcut}' for jcut in cuts]
+
+for icut in cuts:
+    tmp_df = track_nevt_df.loc[track_nevt_df['nevt'] > icut]
+    ntrk_survived.append(tmp_df.shape[0])
+del tmp_df
+
+table_data = list(zip(cut_name, ntrk_survived))
+print('\n================================================================\n')
+print(tabulate(table_data, headers=['nTrk Cut', 'Number of survived track candidates for bootstrap']))
+print('\n================================================================')
