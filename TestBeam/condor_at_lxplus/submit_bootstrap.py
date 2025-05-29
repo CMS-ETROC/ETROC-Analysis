@@ -7,26 +7,15 @@ def load_bash_script(args):
 
     #### Make python command
     bash_command = "python bootstrap.py -f {{ filename }} -n {{ num_bootstrap_output }} -s {{ sampling }} \
-    --board_id_for_TOA_cut {{ board_id_for_TOA_cut }} --minimum_nevt {{ minimum_nevt }} --iteration_limit {{ iteration_limit }} \
-    --trigTOALower {{ trigTOALower }} --trigTOAUpper {{ trigTOAUpper }} --board_ids {{ board_ids }}"
+    --minimum_nevt {{ minimum_nevt }} --iteration_limit {{ iteration_limit }} --board_ids {{ board_ids }}"
 
     conditional_args = {
-        'autoTOTcuts': args.autoTOTcuts,
         'reproducible': args.reproducible,
-        'time_df_input': args.time_df_input,
     }
 
     for arg, value in conditional_args.items():
         if value:
             bash_command += f" --{arg}"  # Add the argument if value is True
-
-    conditional_input_args = {
-        'board_id_rfsel0': args.board_id_rfsel0,
-    }
-
-    for arg, value in conditional_input_args.items():
-        if value:
-            bash_command += f" --{arg} {value}"  # Add the argument if value is True
 
     # Define the bash script template
     bash_template = """#!/bin/bash
@@ -56,11 +45,8 @@ echo ""
         'filename': '${1}.pkl',
         'num_bootstrap_output': args.num_bootstrap_output,
         'sampling': args.sampling,
-        'board_id_for_TOA_cut': args.board_id_for_TOA_cut,
         'minimum_nevt': args.minimum_nevt,
         'iteration_limit': args.iteration_limit,
-        'trigTOALower': args.trigTOALower,
-        'trigTOAUpper': args.trigTOAUpper,
         'board_ids': ' '.join(map(str, args.board_ids))
     }
 
@@ -168,15 +154,6 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        '--board_id_for_TOA_cut',
-        metavar = 'NUM',
-        type = int,
-        help = 'TOA range cut will be applied to a given board ID',
-        default = 1,
-        dest = 'board_id_for_TOA_cut',
-    )
-
-    parser.add_argument(
         '--minimum_nevt',
         metavar = 'NUM',
         type = int,
@@ -203,50 +180,10 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        '--trigTOALower',
-        metavar = 'NUM',
-        type = int,
-        help = 'Lower TOA selection boundary for the trigger board',
-        default = 100,
-        dest = 'trigTOALower',
-    )
-
-    parser.add_argument(
-        '--trigTOAUpper',
-        metavar = 'NUM',
-        type = int,
-        help = 'Upper TOA selection boundary for the trigger board',
-        default = 500,
-        dest = 'trigTOAUpper',
-    )
-
-    parser.add_argument(
-        '--board_id_rfsel0',
-        metavar = 'NUM',
-        type = int,
-        help = 'board ID that set to RfSel = 0',
-        dest = 'board_id_rfsel0',
-    )
-
-    parser.add_argument(
-        '--autoTOTcuts',
-        action = 'store_true',
-        help = 'If set, select 80 percent of data around TOT median value of each board',
-        dest = 'autoTOTcuts',
-    )
-
-    parser.add_argument(
         '--reproducible',
         action = 'store_true',
         help = 'If set, random seed will be set by counter and save random seed in the final output',
         dest = 'reproducible',
-    )
-
-    parser.add_argument(
-        '--time_df_input',
-        action = 'store_true',
-        help = 'If set, time_df_bootstrap function will be used',
-        dest = 'time_df_input',
     )
 
     parser.add_argument(
@@ -288,12 +225,9 @@ if __name__ == "__main__":
     print(f'Number of bootstrap outputs: {args.num_bootstrap_output}')
     print(f'{args.sampling}% of random sampling')
     print(f'Consider board IDs: {args.board_ids}')
-    print(f"TOA cut for a 'NEW' trigger is {args.trigTOALower}-{args.trigTOAUpper} on board ID={args.board_id_for_TOA_cut}")
     print(f'Number of events larger than {args.minimum_nevt} will be considered')
-    if args.autoTOTcuts:
-        print(f'Automatic TOT cuts will be applied')
     if args.reproducible:
-        print('Random seed will be set by counter. The final output will have seed information together')
+        print('Random seed will be set by counter. The final output will have a seed information together')
     print('========= Run option =========\n')
 
     make_jobs(args=args, log_dir=log_dir, condor_scripts_dir=condor_scripts_dir, outdir=outdir, runAppend=runAppend)
