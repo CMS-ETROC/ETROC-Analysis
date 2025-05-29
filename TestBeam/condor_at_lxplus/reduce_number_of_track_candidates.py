@@ -26,6 +26,13 @@ parser.add_argument(
     dest = 'minimum_ntracks',
 )
 
+parser.add_argument(
+    '--ntrk_table',
+    action = 'store_true',
+    help = 'If set, print the cut table based on the given cut, range is fixed from 40 to 400 w/ step = 40',
+    dest = 'ntrk_table',
+)
+
 args = parser.parse_args()
 
 track_output_df = pd.read_csv(f'{args.file}')
@@ -34,6 +41,25 @@ previous_num = track_output_df.shape[0]
 if previous_num < 1000:
     print(f'Number of track combinations: {previous_num}')
     print('This script is only recommended if you have too many track combinations (e.g., over 2000).')
+    sys.exit(1)
+
+if args.ntrk_table:
+    from tabulate import tabulate
+    import sys
+
+    cuts = range(40, 440, 40)
+    ntrk_survived = []
+    cut_name = [f'ntrk > {jcut}' for jcut in cuts]
+
+    for icut in cuts:
+        tmp_df = track_output_df.loc[track_output_df['count'] > icut]
+        ntrk_survived.append(tmp_df.shape[0])
+    del tmp_df
+
+    table_data = list(zip(cut_name, ntrk_survived))
+    print('\n================================================================\n')
+    print(tabulate(table_data, headers=['nTrk Cut', 'Number of survived track candidates']))
+    print('\n================================================================')
     sys.exit(1)
 
 track_output_df = track_output_df.loc[track_output_df['count'] > args.minimum_ntracks]

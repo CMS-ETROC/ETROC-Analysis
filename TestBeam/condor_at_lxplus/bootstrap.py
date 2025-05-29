@@ -212,128 +212,128 @@ def return_resolution_four_board_fromFWHM(
 
     return results
 
-## --------------------------------------
-def bootstrap(
-        input_df: pd.DataFrame,
-        board_to_analyze: list[int],
-        limit: int = 7500,
-        nouts: int = 100,
-        sampling_fraction: int = 75,
-        minimum_nevt_cut: int = 1000,
-        do_reproducible: bool = False,
-    ):
+# ## --------------------------------------
+# def bootstrap(
+#         input_df: pd.DataFrame,
+#         board_to_analyze: list[int],
+#         limit: int = 7500,
+#         nouts: int = 100,
+#         sampling_fraction: int = 75,
+#         minimum_nevt_cut: int = 1000,
+#         do_reproducible: bool = False,
+#     ):
 
-    resolution_from_bootstrap = defaultdict(list)
-    random_sampling_fraction = sampling_fraction*0.01
+#     resolution_from_bootstrap = defaultdict(list)
+#     random_sampling_fraction = sampling_fraction*0.01
 
-    counter = 0
-    resample_counter = 0
+#     counter = 0
+#     resample_counter = 0
 
-    while True:
+#     while True:
 
-        if counter > limit:
-            print("Loop reaches the limit. Escaping bootstrap loop")
-            break
+#         if counter > limit:
+#             print("Loop reaches the limit. Escaping bootstrap loop")
+#             break
 
-        tdc_filtered_df = input_df
+#         tdc_filtered_df = input_df
 
-        if do_reproducible:
-            np.random.seed(counter)
+#         if do_reproducible:
+#             np.random.seed(counter)
 
-        n = int(random_sampling_fraction*tdc_filtered_df.shape[0])
-        indices = np.random.choice(tdc_filtered_df['evt'].unique(), n, replace=False)
-        tdc_filtered_df = tdc_filtered_df.loc[tdc_filtered_df['evt'].isin(indices)]
+#         n = int(random_sampling_fraction*tdc_filtered_df.shape[0])
+#         indices = np.random.choice(tdc_filtered_df['evt'].unique(), n, replace=False)
+#         tdc_filtered_df = tdc_filtered_df.loc[tdc_filtered_df['evt'].isin(indices)]
 
-        if tdc_filtered_df.shape[0] < minimum_nevt_cut:
-            print(f'Number of events in random sample is {tdc_filtered_df.shape[0]}')
-            print('Warning!! Sampling size is too small. Skipping this track')
-            break
+#         if tdc_filtered_df.shape[0] < minimum_nevt_cut:
+#             print(f'Number of events in random sample is {tdc_filtered_df.shape[0]}')
+#             print('Warning!! Sampling size is too small. Skipping this track')
+#             break
 
-        df_in_time = pd.DataFrame()
+#         df_in_time = pd.DataFrame()
 
-        for idx in board_to_analyze:
-            bins = 3.125/tdc_filtered_df['cal'][idx].mean()
-            df_in_time[f'toa_b{str(idx)}'] = (12.5 - tdc_filtered_df['toa'][idx] * bins)*1e3
-            df_in_time[f'tot_b{str(idx)}'] = ((2*tdc_filtered_df['tot'][idx] - np.floor(tdc_filtered_df['tot'][idx]/32)) * bins)*1e3
+#         for idx in board_to_analyze:
+#             bins = 3.125/tdc_filtered_df['cal'][idx].mean()
+#             df_in_time[f'toa_b{str(idx)}'] = (12.5 - tdc_filtered_df['toa'][idx] * bins)*1e3
+#             df_in_time[f'tot_b{str(idx)}'] = ((2*tdc_filtered_df['tot'][idx] - np.floor(tdc_filtered_df['tot'][idx]/32)) * bins)*1e3
 
-        del tdc_filtered_df
+#         del tdc_filtered_df
 
-        if(len(board_to_analyze)==3):
-            corr_toas = three_board_iterative_timewalk_correction(df_in_time, 2, 2, board_list=board_to_analyze)
-        elif(len(board_to_analyze)==4):
-            corr_toas = four_board_iterative_timewalk_correction(df_in_time, 2, 2)
-        else:
-            print("You have less than 3 boards to analyze")
-            break
+#         if(len(board_to_analyze)==3):
+#             corr_toas = three_board_iterative_timewalk_correction(df_in_time, 2, 2, board_list=board_to_analyze)
+#         elif(len(board_to_analyze)==4):
+#             corr_toas = four_board_iterative_timewalk_correction(df_in_time, 2, 2)
+#         else:
+#             print("You have less than 3 boards to analyze")
+#             break
 
-        diffs = {}
-        for board_a in board_to_analyze:
-            for board_b in board_to_analyze:
-                if board_b <= board_a:
-                    continue
-                name = f"{board_a}{board_b}"
-                diffs[name] = np.asarray(corr_toas[f'toa_b{board_a}'] - corr_toas[f'toa_b{board_b}'])
+#         diffs = {}
+#         for board_a in board_to_analyze:
+#             for board_b in board_to_analyze:
+#                 if board_b <= board_a:
+#                     continue
+#                 name = f"{board_a}{board_b}"
+#                 diffs[name] = np.asarray(corr_toas[f'toa_b{board_a}'] - corr_toas[f'toa_b{board_b}'])
 
-        keys = list(diffs.keys())
-        try:
-            fit_params = {}
-            scores = []
-            for ikey in diffs.keys():
-                params, eval_scores = fwhm_based_on_gaussian_mixture_model(diffs[ikey], n_components=3, plotting=False, plotting_each_component=False)
-                fit_params[ikey] = float(params[0]/2.355)
-                scores.append(eval_scores)
+#         keys = list(diffs.keys())
+#         try:
+#             fit_params = {}
+#             scores = []
+#             for ikey in diffs.keys():
+#                 params, eval_scores = fwhm_based_on_gaussian_mixture_model(diffs[ikey], n_components=3, plotting=False, plotting_each_component=False)
+#                 fit_params[ikey] = float(params[0]/2.355)
+#                 scores.append(eval_scores)
 
-            if np.any(np.asarray(scores)[:,0] > 0.6) or np.any(np.asarray(scores)[:,1] > 0.075) :
-                print('Redo the sampling')
-                counter += 1
-                resample_counter += 1
-                continue
+#             if np.any(np.asarray(scores)[:,0] > 0.6) or np.any(np.asarray(scores)[:,1] > 0.075) :
+#                 print('Redo the sampling')
+#                 counter += 1
+#                 resample_counter += 1
+#                 continue
 
-            if(len(board_to_analyze)==3):
-                resolutions = return_resolution_three_board_fromFWHM(fit_params, var=keys, board_list=board_to_analyze)
-            elif(len(board_to_analyze)==4):
-                resolutions = return_resolution_four_board_fromFWHM(fit_params)
-            else:
-                print("You have less than 3 boards to analyze")
-                break
+#             if(len(board_to_analyze)==3):
+#                 resolutions = return_resolution_three_board_fromFWHM(fit_params, var=keys, board_list=board_to_analyze)
+#             elif(len(board_to_analyze)==4):
+#                 resolutions = return_resolution_four_board_fromFWHM(fit_params)
+#             else:
+#                 print("You have less than 3 boards to analyze")
+#                 break
 
-            if any(np.isnan(val) for key, val in resolutions.items()):
-                print('At least one of time resolution values is NaN. Skipping this iteration')
-                counter += 1
-                resample_counter += 1
-                continue
+#             if any(np.isnan(val) for key, val in resolutions.items()):
+#                 print('At least one of time resolution values is NaN. Skipping this iteration')
+#                 counter += 1
+#                 resample_counter += 1
+#                 continue
 
-            if do_reproducible:
-                resolution_from_bootstrap['RandomSeed'].append(counter)
+#             if do_reproducible:
+#                 resolution_from_bootstrap['RandomSeed'].append(counter)
 
-            for key in resolutions.keys():
-                resolution_from_bootstrap[key].append(resolutions[key])
+#             for key in resolutions.keys():
+#                 resolution_from_bootstrap[key].append(resolutions[key])
 
-            counter += 1
+#             counter += 1
 
-        except Exception as inst:
-            print(inst)
-            counter += 1
-            del diffs, corr_toas
+#         except Exception as inst:
+#             print(inst)
+#             counter += 1
+#             del diffs, corr_toas
 
-        break_flag = False
-        for key, val in resolution_from_bootstrap.items():
-            if len(val) > nouts:
-                break_flag = True
-                break
+#         break_flag = False
+#         for key, val in resolution_from_bootstrap.items():
+#             if len(val) > nouts:
+#                 break_flag = True
+#                 break
 
-        if break_flag:
-            print('Escaping bootstrap loop')
-            break
+#         if break_flag:
+#             print('Escaping bootstrap loop')
+#             break
 
-    print('How many times do resample?', resample_counter)
+#     print('How many times do resample?', resample_counter)
 
-    ### Empty dictionary case
-    if not resolution_from_bootstrap:
-        return pd.DataFrame()
-    else:
-        resolution_from_bootstrap_df = pd.DataFrame(resolution_from_bootstrap)
-        return resolution_from_bootstrap_df
+#     ### Empty dictionary case
+#     if not resolution_from_bootstrap:
+#         return pd.DataFrame()
+#     else:
+#         resolution_from_bootstrap_df = pd.DataFrame(resolution_from_bootstrap)
+#         return resolution_from_bootstrap_df
 
 ## --------------------------------------
 def time_df_bootstrap(
@@ -495,23 +495,6 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        '--board_ids',
-        metavar='N',
-        type=int,
-        nargs='+',
-        help='board IDs to analyze'
-    )
-
-    parser.add_argument(
-        '--board_id_for_TOA_cut',
-        metavar = 'NUM',
-        type = int,
-        help = 'TOA range cut will be applied to a given board ID',
-        default = 1,
-        dest = 'board_id_for_TOA_cut',
-    )
-
-    parser.add_argument(
         '--minimum_nevt',
         metavar = 'NUM',
         type = int,
@@ -521,37 +504,11 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        '--trigTOALower',
-        metavar = 'NUM',
-        type = int,
-        help = 'Lower TOA selection boundary for the trigger board',
-        default = 100,
-        dest = 'trigTOALower',
-    )
-
-    parser.add_argument(
-        '--trigTOAUpper',
-        metavar = 'NUM',
-        type = int,
-        help = 'Upper TOA selection boundary for the trigger board',
-        default = 500,
-        dest = 'trigTOAUpper',
-    )
-
-    parser.add_argument(
-        '--board_id_rfsel0',
-        metavar = 'NUM',
-        type = int,
-        help = 'board ID that set to RfSel = 0',
-        default = -1,
-        dest = 'board_id_rfsel0',
-    )
-
-    parser.add_argument(
-        '--autoTOTcuts',
-        action = 'store_true',
-        help = 'If set, select 80 percent of data around TOT median value of each board',
-        dest = 'autoTOTcuts',
+        '--board_ids',
+        metavar='N',
+        type=int,
+        nargs='+',
+        help='board IDs to analyze'
     )
 
     parser.add_argument(
@@ -561,61 +518,14 @@ if __name__ == "__main__":
         dest = 'reproducible',
     )
 
-    parser.add_argument(
-        '--time_df_input',
-        action = 'store_true',
-        help = 'If set, time_df_bootstrap function will be used',
-        dest = 'time_df_input',
-    )
-
     args = parser.parse_args()
 
     output_name = args.file.split('.')[0]
+    board_ids = args.board_ids
     df = pd.read_pickle(args.file)
-
-    board_ids = sorted(args.board_ids)
-    if len(board_ids) != 3:
-        print('Please double check inputs. It should be e.g. 0 1 2 or 1 2 3')
-        sys.exit()
-
-    if not args.time_df_input:
-        df = df.reset_index(names='evt')
-        tot_cuts = {}
-        for idx in board_ids:
-            if args.autoTOTcuts:
-                lower_bound = df['tot'][idx].quantile(0.01)
-                upper_bound = df['tot'][idx].quantile(0.96)
-                tot_cuts[idx] = [round(lower_bound), round(upper_bound)]
-
-                if idx == args.board_id_rfsel0:
-                    condition = df['tot'][idx] < 470
-                    lower_bound = df['tot'][idx][condition].quantile(0.07)
-                    upper_bound = df['tot'][idx][condition].quantile(0.98)
-                    tot_cuts[idx] = [round(lower_bound), round(upper_bound)]
-
-            else:
-                tot_cuts[idx] = [0, 600]
-
-        print(f'TOT cuts: {tot_cuts}')
-
-        ## Selecting good hits with TDC cuts
-        tdc_cuts = {}
-        for idx in board_ids:
-            if idx == args.board_id_for_TOA_cut:
-                tdc_cuts[idx] = [0, 1100, args.trigTOALower, args.trigTOAUpper, tot_cuts[idx][0], tot_cuts[idx][1]]
-            else:
-                tdc_cuts[idx] = [0, 1100, 0, 1100, tot_cuts[idx][0], tot_cuts[idx][1]]
-
-        interest_df = tdc_event_selection_pivot(df, tdc_cuts_dict=tdc_cuts)
-        print('Size of dataframe after TDC cut:', interest_df.shape[0])
-
-        resolution_df = bootstrap(input_df=interest_df, board_to_analyze=board_ids, limit=args.iteration_limit, nouts=args.num_bootstrap_output,
-                                sampling_fraction=args.sampling, minimum_nevt_cut=args.minimum_nevt, do_reproducible=args.reproducible)
-    else:
-        df = df.reset_index(names='evt')
-        resolution_df = time_df_bootstrap(input_df=df, board_to_analyze=board_ids, limit=args.iteration_limit, nouts=args.num_bootstrap_output,
-                                          sampling_fraction=args.sampling, minimum_nevt_cut=args.minimum_nevt, do_reproducible=args.reproducible)
-
+    df = df.reset_index(names='evt')
+    resolution_df = time_df_bootstrap(input_df=df, board_to_analyze=board_ids, limit=args.iteration_limit, nouts=args.num_bootstrap_output,
+                                        sampling_fraction=args.sampling, minimum_nevt_cut=args.minimum_nevt, do_reproducible=args.reproducible)
 
     if not resolution_df.empty:
         resolution_df.to_pickle(f'{output_name}_resolution.pkl')
