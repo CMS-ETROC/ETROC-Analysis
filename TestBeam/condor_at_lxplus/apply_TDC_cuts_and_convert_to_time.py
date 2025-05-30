@@ -284,7 +284,7 @@ if __name__ == "__main__":
 
     if not args.reprocess:
 
-        outputdir = args.outdir
+        outputdir = Path(args.outdir)
         outputdir.mkdir(exist_ok=True, parents=True)
 
         track_dir = outputdir / 'tracks'
@@ -293,7 +293,8 @@ if __name__ == "__main__":
         time_dir = outputdir / 'time'
         time_dir.mkdir(exist_ok=False)
 
-        print(f'Input path is: {args.dirname}')
+        print(f'\nInput path is: {args.dirname}')
+        print(f'Output path is: {args.outdir}')
         print(f'Will process the files based on the pattern: {args.file_pattern}\n')
 
         files = []
