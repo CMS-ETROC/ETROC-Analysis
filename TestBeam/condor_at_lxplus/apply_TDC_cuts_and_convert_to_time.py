@@ -348,8 +348,8 @@ if __name__ == "__main__":
         new_dutTOTlower = args.dutTOTlower * 0.01
         new_dutTOTupper = args.dutTOTupper * 0.01
 
-        track_dir = args.outdir / 'tracks'
-        time_dir = args.outdir / 'reprocessed_time'
+        track_dir = Path(args.outdir) / 'tracks'
+        time_dir = Path(args.outdir) / 'reprocessed_time'
         time_dir.mkdir(exist_ok=True)
 
         print(f'Reprocess track pkl file at {track_dir}')
