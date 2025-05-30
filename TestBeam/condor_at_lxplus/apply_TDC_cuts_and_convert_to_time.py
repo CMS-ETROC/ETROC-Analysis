@@ -345,8 +345,8 @@ if __name__ == "__main__":
             list(tqdm(executor.map(lambda ikey: save_data(ikey, merged_data, merged_data_in_time, track_dir, time_dir), merged_data.keys()), total=len(merged_data)))
 
     else:
-        new_dutTOTlower = args.dutTOTlower * 0.01
-        new_dutTOTupper = args.dutTOTupper * 0.01
+        new_dutTOTlower = round(args.dutTOTlower * 0.01, 2)
+        new_dutTOTupper = round(args.dutTOTupper * 0.01, 2)
 
         track_dir = Path(args.outdir) / 'tracks'
         time_dir = Path(args.outdir) / 'reprocessed_time'
