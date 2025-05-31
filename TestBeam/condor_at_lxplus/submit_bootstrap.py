@@ -2,7 +2,6 @@ from pathlib import Path
 from jinja2 import Template
 from natsort import natsorted
 
-
 def load_bash_script(args):
 
     #### Make python command
@@ -252,6 +251,12 @@ if __name__ == "__main__":
 
         # Filter lines containing the target script
         filtered_lines = [line for line in condor_output.stdout.splitlines() if f'run_bootstrap{runAppend}.sh' in line]
+
+        if len(filtered_lines) == 0:
+            print('No condor job found.')
+            import sys
+            sys.exit(1)
+
         with open(input_txt_path, 'w') as f:
             for line in filtered_lines:
                 fields = line.split()
