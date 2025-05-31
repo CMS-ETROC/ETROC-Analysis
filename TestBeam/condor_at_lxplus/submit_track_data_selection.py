@@ -279,18 +279,20 @@ if __name__ == "__main__":
                 fields = line.split()
                 if len(fields) == 12:
                     if fields[5] == 'X':
+                        old_condor_job_id = -1
                         continue
                     old_condor_job_id = fields[0].split('.')[0]
                     last_three = fields[-3:]
                     sentence = ' '.join(last_three)
                     f.write(sentence + '\n')
 
-        ## Kill old jobs before submit new one
-        subprocess.run(['condor_rm', f'{old_condor_job_id}'])
+        if not old_condor_job_id == -1:
+            ## Kill old jobs before submit new one
+            subprocess.run(['condor_rm', f'{old_condor_job_id}'])
 
-        if input_txt_path.stat().st_size > 0:
-            subprocess.run(['condor_submit', f'{condor_scripts_dir}/condor_track_data_selection{runAppend}.jdl'])
-        else:
-            print("No jobs to submit — input list is empty.")
+            if input_txt_path.stat().st_size > 0:
+                subprocess.run(['condor_submit', f'{condor_scripts_dir}/condor_track_data_selection{runAppend}.jdl'])
+            else:
+                print("No jobs to submit — input list is empty.")
     else:
         subprocess.run(['condor_submit', f'{condor_scripts_dir}/condor_track_data_selection{runAppend}.jdl'])
