@@ -4,26 +4,31 @@ defaults:
     short: BAR_4
     offset: 20
     HV: 260
+    role: ref
   BAR_12: &BAR_12
     name: Barcelona 12
     short: BAR_12
     offset: 20
     HV: 120
+    role: trig
   PT_NH2: &PT_NH2
     name: ET2.01 PacTech New HPK-2
     short: PT_NH2
     offset: 20
     HV: 250
+    role: dut
   IME_5: &IME_5
     name: IME-5
     short: IME-5
     offset: 20
     HV: 170
+    role: extra
   PT_NH8: &PT_NH8
     name: ET2.01 PacTech New HPK-8
     short: PT_NH8
     offset: 20
     HV: 250
+    role: dut
 
 run15:
   0: *BAR_4
