@@ -1,5 +1,5 @@
 import pandas as pd
-import argparse, sys, re
+import argparse, sys
 
 parser = argparse.ArgumentParser(
             prog='Reduce number of track candidates',
@@ -66,16 +66,8 @@ track_output_df = track_output_df.loc[track_output_df['count'] > args.minimum_nt
 track_output_df.reset_index(drop=True, inplace=True)
 
 prefix = args.file.split('_tracks')[0] ## prefix will not be changed
-
-# Check if input already has a reduced_<N>_time pattern
-match = re.match(r"(.+)_reduced_(\d+)_time$", args.file.split('.')[0])
-
-if match:
-    count = int(match.group(2)) + 1
-    suffix = f"_tracks_reduced_{count}_time"
-else:
-    suffix = f"_tracks_reduced_1_time"
-
+suffix = '_tracks_reduced'
 track_output_df.to_csv(f'{prefix}{suffix}.csv', index=False)
+
 print(f'New file {prefix}{suffix}.csv is created')
 print(f'Number of track combinations has been decreased from {previous_num} to {track_output_df.shape[0]}')
