@@ -6,6 +6,7 @@ from collections import defaultdict
 
 import pandas as pd
 import numpy as np
+import yaml
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -55,8 +56,8 @@ def convert_to_time_df(input_file):
             ### Apply TDC cut
             tot_cuts = {
                 idx: (
-                    [data_dict[key]['tot'][idx].quantile(0.04 if idx == args.setDUTBoardID else 0.01),
-                    data_dict[key]['tot'][idx].quantile(0.91 if idx == args.setDUTBoardID else 0.96)]
+                    [data_dict[key]['tot'][idx].quantile(0.04 if idx == roles['dut'] else 0.01),
+                    data_dict[key]['tot'][idx].quantile(0.91 if idx == roles['dut'] else 0.96)]
                     if args.autoTOTcuts else [0, 600]
                 ) for idx in board_ids
             }
@@ -64,8 +65,8 @@ def convert_to_time_df(input_file):
             tdc_cuts = {
                 idx: [
                     0, 1100,
-                    args.trigTOALower if idx == args.setTrigBoardID else 0,
-                    args.trigTOAUpper if idx == args.setTrigBoardID else 1100,
+                    args.trigTOALower if idx == roles['ref'] else 0,
+                    args.trigTOAUpper if idx == roles['ref'] else 1100,
                     *tot_cuts[idx]
                 ] for idx in board_ids
             }
@@ -118,16 +119,16 @@ def reprocess_code_to_time_df(input_file, newDUTtotLower, newDUTtotUpper):
     ### Apply TDC cut
     tot_cuts = {
         idx: (
-            [track_df['tot'][idx].quantile(newDUTtotLower if idx == args.setDUTBoardID else 0.01),
-            track_df['tot'][idx].quantile(newDUTtotUpper if idx == args.setDUTBoardID else 0.96)]
+            [track_df['tot'][idx].quantile(newDUTtotLower if idx == roles['dut'] else 0.01),
+            track_df['tot'][idx].quantile(newDUTtotUpper if idx == roles['dut'] else 0.96)]
         ) for idx in board_ids
     }
 
     tdc_cuts = {
         idx: [
             0, 1100,
-            args.trigTOALower if idx == args.setTrigBoardID else 0,
-            args.trigTOAUpper if idx == args.setTrigBoardID else 1100,
+            args.trigTOALower if idx == roles['ref'] else 0,
+            args.trigTOAUpper if idx == roles['ref'] else 1100,
             *tot_cuts[idx]
         ] for idx in board_ids
     }
@@ -186,30 +187,23 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        '--setTrigBoardID',
-        metavar = 'NUM',
-        type = int,
-        help = 'Set the offline trigger board ID',
+        '-r',
+        '--runName',
+        metavar = 'NAME',
+        type = str,
+        help = 'Name of the run to process. It must be matched with the name defined in YAML.',
         required = True,
-        dest = 'setTrigBoardID',
+        dest = 'runName',
     )
 
     parser.add_argument(
-        '--setDUTBoardID',
-        metavar = 'NUM',
-        type = int,
-        help = 'Set the DUT board ID',
+        '-c',
+        '--config',
+        metavar = 'NAME',
+        type = str,
+        help = 'YAML file including run information.',
         required = True,
-        dest = 'setDUTBoardID',
-    )
-
-    parser.add_argument(
-        '--setRefBoardID',
-        metavar = 'NUM',
-        type = int,
-        help = 'Set the offline reference board ID',
-        required = True,
-        dest = 'setRefBoardID',
+        dest = 'config',
     )
 
     parser.add_argument(
@@ -280,7 +274,18 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    board_ids = sorted([args.setTrigBoardID, args.setDUTBoardID, args.setRefBoardID])
+
+    with open(args.config) as input_yaml:
+        config = yaml.safe_load(input_yaml)
+
+    if args.runName not in config:
+        raise ValueError(f"Run config {args.runName} not found")
+
+    roles = {}
+    for board_id, board_info in config[args.runName].items():
+        roles[board_info.get('role')] = board_id
+
+    board_ids = sorted([roles['ref'], roles['dut'], roles['extra']])
 
     if not args.reprocess:
 
