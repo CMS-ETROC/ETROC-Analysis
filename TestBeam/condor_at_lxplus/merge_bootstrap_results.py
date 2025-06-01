@@ -5,7 +5,7 @@ from pathlib import Path
 from scipy.stats import norm
 import argparse
 import pandas as pd
-import re
+import re, yaml
 import numpy as np
 import warnings
 warnings.filterwarnings("ignore")
@@ -13,10 +13,46 @@ warnings.filterwarnings("ignore")
 parser = argparse.ArgumentParser(description='merge individual bootstrap results')
 parser.add_argument('-d', '--inputdir', required=True, type=str, dest='inputdir')
 parser.add_argument('-o', '--output', required=True, type=str, dest='output')
-parser.add_argument('--trigID', required=True, type=int, help='original Trigger board ID', dest='trigID')
 parser.add_argument('--minimum', type=int, default=50, help='Minimum number of bootstrap results to perform a fit', dest='minimum')
 parser.add_argument('--hist_bins', type=int, default=35, help='Number of bins for binned fit', dest='hist_bins')
+parser.add_argument(
+    '-c',
+    '--config',
+    metavar = 'NAME',
+    type = str,
+    help = 'YAML file including run information.',
+    required = True,
+    dest = 'config',
+)
+parser.add_argument(
+    '-r',
+    '--runName',
+    metavar = 'NAME',
+    type = str,
+    help = 'Name of the run to process. It must be matched with the name defined in YAML.',
+    required = True,
+    dest = 'runName',
+)
+parser.add_argument(
+    '--tag',
+    metavar = 'NAME',
+    type = str,
+    help = 'Tag for the output file name.',
+    default = '',
+    dest = 'tag',
+)
+
 args = parser.parse_args()
+
+with open(args.config) as input_yaml:
+    config = yaml.safe_load(input_yaml)
+
+if args.runName not in config:
+    raise ValueError(f"Run config {args.runName} not found")
+
+roles = {}
+for board_id, board_info in config[args.runName].items():
+    roles[board_info.get('role')] = board_id
 
 files = natsorted(Path(args.inputdir).glob('*pkl'))
 final_dict = defaultdict(list)
@@ -80,8 +116,8 @@ for ifile in tqdm(files):
     columns = df.columns
 
     if len(match_dict.keys()) == 4:
-        final_dict[f'row{args.trigID}'].append(match_dict[args.trigID][0])
-        final_dict[f'col{args.trigID}'].append(match_dict[args.trigID][1])
+        final_dict[f'row{roles['trig']}'].append(match_dict[roles['trig']][0])
+        final_dict[f'col{roles['trig']}'].append(match_dict[roles['trig']][1])
 
     for val in columns:
         final_dict[f'row{val}'].append(match_dict[val][0])
@@ -94,4 +130,4 @@ for ifile in tqdm(files):
         final_dict[f'res{val}'].append(mu)
         final_dict[f'err{val}'].append(sigma)
 
-pd.DataFrame(final_dict).to_csv('resolution_' + args.output + '.csv', index=False)
+pd.DataFrame(final_dict).to_csv('resolution_' + args.output + args.tag + '.csv', index=False)
