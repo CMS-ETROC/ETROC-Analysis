@@ -236,7 +236,7 @@ if __name__ == "__main__":
     print(f'DUT board ID: {roles["dut"]}')
     print(f'Reference board ID: {roles["ref"]}')
     print(f'Second reference (or will be ignored) board ID: {roles["extra"]}')
-    print(f"TOT cut is {args.trigTOTLower}-{args.trigTOTUpper} on board ID={roles["trig"]}")
+    print(f'TOT cut is {args.trigTOTLower}-{args.trigTOTUpper} on board ID={roles["trig"]}')
     print('========= Run option =========\n')
 
     make_jobs(args=args, id_roles=roles, log_dir=log_dir, eos_base_dir=eos_base_dir, condor_scripts_dir=condor_scripts_dir, runAppend=runAppend)
