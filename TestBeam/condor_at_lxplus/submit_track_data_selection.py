@@ -1,18 +1,19 @@
 from pathlib import Path
 from jinja2 import Template
 from natsort import natsorted
+import yaml
 
-def load_bash_template(args):
+def load_bash_template(args, id_roles):
     options = {
         'filename': '${1}',
         'runname': '${2}',
         'path': '${3}',
         'track': args.track,
         'cal_table': args.cal_table.split('/')[-1],
-        'trigID': args.trigID,
-        'refID': args.refID,
-        'dutID': args.dutID,
-        'extraID': args.extraID,
+        'trigID': id_roles['trig'],
+        'refID': id_roles['ref'],
+        'dutID': id_roles['dut'],
+        'extraID': id_roles['extra'],
         'trigTOTLower': args.trigTOTLower,
         'trigTOTUpper': args.trigTOTUpper,
     }
@@ -65,7 +66,7 @@ Queue fname,run,path from {5}/input_list_for_trackDataSelection{6}.txt
 
     return jdl
 
-def make_jobs(args, log_dir, eos_base_dir, condor_scripts_dir, runAppend):
+def make_jobs(args, id_roles, log_dir, eos_base_dir, condor_scripts_dir, runAppend):
 
     listfile = condor_scripts_dir / f'input_list_for_trackDataSelection{runAppend}.txt'
     if listfile.is_file():
@@ -80,7 +81,7 @@ def make_jobs(args, log_dir, eos_base_dir, condor_scripts_dir, runAppend):
             base_txt.write(save_string + '\n')
 
     # Render the template with the data
-    bash_script = load_bash_template(args)
+    bash_script = load_bash_template(args, id_roles)
     with open(condor_scripts_dir / f'run_track_data_selection{runAppend}.sh','w') as bashfile:
         bashfile.write(bash_script)
 
@@ -121,11 +122,22 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        '-c',
+        '--config',
+        metavar = 'NAME',
+        type = str,
+        help = 'YAML file including run information.',
+        required = True,
+        dest = 'config',
+    )
+
+    parser.add_argument(
         '-r',
         '--runName',
         metavar = 'NAME',
         type = str,
-        help = 'Name of the run to process. If given, the run name will be used to avoid file collisions',
+        help = 'Name of the run to process. It must be matched with the name defined in YAML.',
+        required = True,
         dest = 'runName',
     )
 
@@ -149,39 +161,11 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        '--trigID',
-        metavar = 'ID',
-        type = int,
-        help = 'trigger board ID',
-        required = True,
-        dest = 'trigID',
-    )
-
-    parser.add_argument(
-        '--refID',
-        metavar = 'ID',
-        type = int,
-        help = 'reference board ID',
-        default = 3,
-        dest = 'refID',
-    )
-
-    parser.add_argument(
-        '--dutID',
-        metavar = 'ID',
-        type = int,
-        help = 'DUT board ID',
-        default = 1,
-        dest = 'dutID',
-    )
-
-    parser.add_argument(
-        '--extraID',
-        metavar = 'ID',
-        type = int,
-        help = 'board ID be ignored',
-        default = 2,
-        dest = 'extraID',
+        '--condor_tag',
+        metavar = 'NAME',
+        type = str,
+        help = 'Tag of the run to process on condor. If given, the tag will be used to avoid file collisions',
+        dest = 'condor_tag',
     )
 
     parser.add_argument(
@@ -218,11 +202,21 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    runName = args.runName
-    if runName is None:
+    tag_for_condor = args.condor_tag
+    if tag_for_condor is None:
         runAppend = ""
     else:
-        runAppend = "_" + runName
+        runAppend = "_" + tag_for_condor
+
+    with open(args.config) as input_yaml:
+        config = yaml.safe_load(input_yaml)
+
+    if args.runName not in config:
+        raise ValueError(f"Run config {args.runName} not found")
+
+    roles = {}
+    for board_id, board_info in config[args.runName].items():
+        roles[board_info.get('role')] = board_id
 
     condor_scripts_dir = Path('./') / 'condor_scripts' / f'trackDataSelect_job{runAppend}'
     condor_scripts_dir.mkdir(exist_ok=True, parents=True)
@@ -238,14 +232,14 @@ if __name__ == "__main__":
     print(f'Track csv file: {args.track}')
     print(f'Cal code mode table: {args.cal_table}')
     print(f'Output will be stored {eos_base_dir}/{args.outname}')
-    print(f'Trigger board ID: {args.trigID}')
-    print(f'DUT board ID: {args.dutID}')
-    print(f'Reference board ID: {args.refID}')
-    print(f'Second reference (or will be ignored) board ID: {args.extraID}')
-    print(f"TOT cut is {args.trigTOTLower}-{args.trigTOTUpper} on board ID={args.trigID}")
+    print(f'Trigger board ID: {roles['trig']}')
+    print(f'DUT board ID: {roles['dut']}')
+    print(f'Reference board ID: {roles['ref']}')
+    print(f'Second reference (or will be ignored) board ID: {roles['extra']}')
+    print(f"TOT cut is {args.trigTOTLower}-{args.trigTOTUpper} on board ID={roles['trig']}")
     print('========= Run option =========\n')
 
-    make_jobs(args=args, log_dir=log_dir, eos_base_dir=eos_base_dir, condor_scripts_dir=condor_scripts_dir, runAppend=runAppend)
+    make_jobs(args=args, id_roles=roles, log_dir=log_dir, eos_base_dir=eos_base_dir, condor_scripts_dir=condor_scripts_dir, runAppend=runAppend)
 
     if args.dryrun:
         input_txt_path = condor_scripts_dir / f"input_list_for_trackDataSelection{runAppend}.txt"
