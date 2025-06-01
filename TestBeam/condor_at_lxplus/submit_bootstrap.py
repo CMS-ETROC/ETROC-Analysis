@@ -1,8 +1,9 @@
 from pathlib import Path
 from jinja2 import Template
 from natsort import natsorted
+import yaml
 
-def load_bash_script(args):
+def load_bash_script(args, id_roles):
 
     #### Make python command
     bash_command = "python bootstrap.py -f {{ filename }} -n {{ num_bootstrap_output }} -s {{ sampling }} \
@@ -46,7 +47,7 @@ echo ""
         'sampling': args.sampling,
         'minimum_nevt': args.minimum_nevt,
         'iteration_limit': args.iteration_limit,
-        'board_ids': ' '.join(map(str, args.board_ids))
+        'board_ids': ' '.join(map(str, id_roles))
     }
 
     # Render the template with the data
@@ -71,7 +72,7 @@ Queue ifile,path from {2}/input_list_for_bootstrap{3}.txt
 
     return jdl
 
-def make_jobs(args, log_dir, condor_scripts_dir, outdir, runAppend):
+def make_jobs(args, id_roles, log_dir, condor_scripts_dir, outdir, runAppend):
 
     files = natsorted(Path(args.dirname).glob('*.pkl'))
     listfile = condor_scripts_dir / f'input_list_for_bootstrap{runAppend}.txt'
@@ -84,7 +85,7 @@ def make_jobs(args, log_dir, condor_scripts_dir, outdir, runAppend):
             save_string = f"{name}, {ifile}"
             base_txt.write(save_string + '\n')
 
-    bash_template = load_bash_script(args)
+    bash_template = load_bash_script(args, id_roles)
     with open(condor_scripts_dir / f'run_bootstrap{runAppend}.sh','w') as bashfile:
         bashfile.write(bash_template)
 
@@ -124,6 +125,16 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        '-c',
+        '--config',
+        metavar = 'NAME',
+        type = str,
+        help = 'YAML file including run information.',
+        required = True,
+        dest = 'config',
+    )
+
+    parser.add_argument(
         '-n',
         '--num_bootstrap_output',
         metavar = 'NUM',
@@ -148,7 +159,8 @@ if __name__ == "__main__":
         '--runName',
         metavar = 'NAME',
         type = str,
-        help = 'Name of the run to process. If given, the run name will be used to avoid file collisions',
+        help = 'Name of the run to process. It must be matched with the name defined in YAML.',
+        required = True,
         dest = 'runName',
     )
 
@@ -171,11 +183,11 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        '--board_ids',
-        metavar='N',
-        type=int,
-        nargs='+',
-        help='board IDs to analyze'
+        '--condor_tag',
+        metavar = 'NAME',
+        type = str,
+        help = 'Tag of the run to process on condor. If given, the tag will be used to avoid file collisions',
+        dest = 'condor_tag',
     )
 
     parser.add_argument(
@@ -201,11 +213,22 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    runName = args.runName
-    if runName is None:
+    tag_for_condor = args.condor_tag
+    if tag_for_condor is None:
         runAppend = ""
     else:
-        runAppend = "_" + runName
+        runAppend = "_" + tag_for_condor
+
+    with open(args.config) as input_yaml:
+        config = yaml.safe_load(input_yaml)
+
+    if args.runName not in config:
+        raise ValueError(f"Run config {args.runName} not found")
+
+    roles = {}
+    for board_id, board_info in config[args.runName].items():
+        roles[board_info.get('role')] = board_id
+    board_ids = sorted([roles['ref'], roles['dut'], roles['extra']])
 
     condor_scripts_dir = Path('./') / 'condor_scripts' / f'bootstrap_job{runAppend}'
     condor_scripts_dir.mkdir(exist_ok=True, parents=True)
@@ -223,13 +246,13 @@ if __name__ == "__main__":
     print(f'Bootstrap iteration limit: {args.iteration_limit}')
     print(f'Number of bootstrap outputs: {args.num_bootstrap_output}')
     print(f'{args.sampling}% of random sampling')
-    print(f'Consider board IDs: {args.board_ids}')
+    print(f'Consider board IDs: {board_ids}')
     print(f'Number of events larger than {args.minimum_nevt} will be considered')
     if args.reproducible:
         print('Random seed will be set by counter. The final output will have a seed information together')
     print('========= Run option =========\n')
 
-    make_jobs(args=args, log_dir=log_dir, condor_scripts_dir=condor_scripts_dir, outdir=outdir, runAppend=runAppend)
+    make_jobs(args=args, id_roles=board_ids, log_dir=log_dir, condor_scripts_dir=condor_scripts_dir, outdir=outdir, runAppend=runAppend)
 
     if args.dryrun:
         input_txt_path = condor_scripts_dir / f"input_list_for_bootstrap{runAppend}.txt"
