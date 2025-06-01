@@ -367,5 +367,6 @@ if __name__ == "__main__":
                 }
                 for future in as_completed(futures):
                     iresult = future.result()
+                    iresult = iresult.reset_index(drop=True) ## Make dataframe to use RangeIndex for memory efficient
                     iresult.to_pickle(time_dir / futures[future].name)
                     pbar.update(1)
