@@ -169,24 +169,6 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        '--trigTOTLower',
-        metavar = 'NUM',
-        type = int,
-        help = 'Lower TOT selection boundary for the trigger board',
-        default = 100,
-        dest = 'trigTOTLower',
-    )
-
-    parser.add_argument(
-        '--trigTOTUpper',
-        metavar = 'NUM',
-        type = int,
-        help = 'Upper TOT selection boundary for the trigger board',
-        default = 200,
-        dest = 'trigTOTUpper',
-    )
-
-    parser.add_argument(
         '--dryrun',
         action = 'store_true',
         help = 'If set, condor submission will not happen',
@@ -236,7 +218,7 @@ if __name__ == "__main__":
     print(f'DUT board ID: {roles["dut"]}')
     print(f'Reference board ID: {roles["ref"]}')
     print(f'Second reference (or will be ignored) board ID: {roles["extra"]}')
-    print(f'TOT cut is {args.trigTOTLower}-{args.trigTOTUpper} on board ID={roles["trig"]}')
+    # print(f'TOT cut is {args.trigTOTLower}-{args.trigTOTUpper} on board ID={roles["trig"]}')
     print('========= Run option =========\n')
 
     make_jobs(args=args, id_roles=roles, log_dir=log_dir, eos_base_dir=eos_base_dir, condor_scripts_dir=condor_scripts_dir, runAppend=runAppend)
