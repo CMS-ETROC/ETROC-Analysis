@@ -34,6 +34,15 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    '--tag',
+    metavar = 'NAME',
+    type = str,
+    help = 'Tag for the output file name.',
+    default = '',
+    dest = 'tag',
+)
+
+parser.add_argument(
     "--ids",
     type=int,
     nargs='+',
@@ -92,7 +101,7 @@ with tqdm(files) as pbar:
 
 track_nevt_df = pd.DataFrame(data=final_dict)
 track_nevt_df.sort_values(by=['nevt'], ascending=False, inplace=True)
-track_nevt_df.to_csv(f'{args.outputdir}_nevt_per_track.csv', index=False)
+track_nevt_df.to_csv(f'{args.outputdir}_nevt_per_track{args.tag}.csv', index=False)
 
 cuts = range(100, 1600, 100)
 ntrk_survived = []
