@@ -14,8 +14,6 @@ def load_bash_template(args, id_roles):
         'refID': id_roles['ref'],
         'dutID': id_roles['dut'],
         'extraID': id_roles['extra'],
-        'trigTOTLower': args.trigTOTLower,
-        'trigTOTUpper': args.trigTOTUpper,
     }
 
     bash_template = """#!/bin/bash
@@ -32,8 +30,8 @@ xrdcp -r root://eosuser.cern.ch/{{ path }} ./
 
 echo "Will process input file from {{ runname }} {{ filename }}"
 
-echo "python track_data_selection.py -f {{ filename }} -r {{ runname }} -t {{ track }} --trigID {{ trigID }} --refID {{ refID }} --dutID {{ dutID }} --extraID {{ extraID }} --trigTOTLower {{ trigTOTLower }} --trigTOTUpper {{ trigTOTUpper }} --cal_table {{ cal_table }}"
-python track_data_selection.py -f {{ filename }} -r {{ runname }} -t {{ track }} --trigID {{ trigID }} --refID {{ refID }} --dutID {{ dutID }} --extraID {{ extraID }} --trigTOTLower {{ trigTOTLower }} --trigTOTUpper {{ trigTOTUpper }} --cal_table {{ cal_table }}
+echo "python track_data_selection.py -f {{ filename }} -r {{ runname }} -t {{ track }} --trigID {{ trigID }} --refID {{ refID }} --dutID {{ dutID }} --extraID {{ extraID }} --cal_table {{ cal_table }}"
+python track_data_selection.py -f {{ filename }} -r {{ runname }} -t {{ track }} --trigID {{ trigID }} --refID {{ refID }} --dutID {{ dutID }} --extraID {{ extraID }} --cal_table {{ cal_table }}
 
 ls -ltrh
 echo ""
