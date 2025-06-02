@@ -1,0 +1,134 @@
+defaults:
+  PT_NH2: &PT_NH2
+    name: ET2.01 PacTech New HPK-2
+    short: PT_NH2
+    offset: 20
+    HV: 230
+    role: ref
+  PT_NH6: &PT_NH6
+    name: ET2.01 PacTech New HPK-6
+    short: PT_NH6
+    offset: 20
+    HV: 230
+    role: extra
+  PT_NH9: &PT_NH9
+    name: ET2.01 PacTech New HPK-9
+    short: PT_NH9
+    offset: 20
+    HV: 230
+    role: trig
+  PT_NH8: &PT_NH8
+    name: ET2.01 PacTech New HPK-8
+    short: PT_NH8
+    offset: 20
+    HV: 230
+    role: dut
+  HPK_NH5: &HPK_NH5
+    name: ET2.01 HPK New HPK-5
+    short: HPK_NH5
+    offset: 20
+    HV: 230
+    role: dut
+
+run_common: &run_common
+  1: *PT_NH2
+  2: *PT_NH6
+  3: *PT_NH9
+
+run4:
+  <<: *run_common
+  0: { <<: *PT_NH8, name: ET2.01 PacTech New HPK-8 (-25C), HV: 180 }
+
+run5:
+  <<: *run_common
+  0: { <<: *PT_NH8, name: ET2.01 PacTech New HPK-8 (-25C), HV: 170 }
+
+run6: &run6
+  <<: *run_common
+  0: { <<: *PT_NH8, name: ET2.01 PacTech New HPK-8 (-25C), HV: 160 }
+
+run7:
+  <<: *run_common
+  0: { <<: *PT_NH8, name: ET2.01 PacTech New HPK-8 (-25C), HV: 150 }
+
+run8:
+  <<: *run_common
+  0: { <<: *PT_NH8, name: ET2.01 PacTech New HPK-8 (-25C), HV: 140 }
+
+run9:
+  <<: *run_common
+  0: { <<: *PT_NH8, name: ET2.01 PacTech New HPK-8 (-25C), HV: 120 }
+
+run10:
+  <<: *run_common
+  0: { <<: *PT_NH8, name: ET2.01 PacTech New HPK-8 (-25C), HV: 100 }
+
+run11: *run6
+
+run12:
+  <<: *run_common
+  0: { <<: *PT_NH8, name: ET2.01 PacTech New HPK-8 (-25C), HV: 190 }
+
+run15:
+  <<: *run_common
+  0: { <<: *PT_NH8, name: ET2.01 PacTech New HPK-8 (-25C), HV: 195 }
+
+run32:
+  <<: *run_common
+  0: { <<: *HPK_NH5, name: ET2.01 PacTech New HPK-5 (-25C), HV: 150 }
+
+run33:
+  <<: *run_common
+  0: { <<: *HPK_NH5, name: ET2.01 PacTech New HPK-5 (-25C), HV: 170 }
+
+run34:
+  <<: *run_common
+  0: { <<: *HPK_NH5, name: ET2.01 PacTech New HPK-5 (-25C), HV: 120 }
+
+run35:
+  <<: *run_common
+  0: { <<: *HPK_NH5, name: ET2.01 PacTech New HPK-5 (-25C), HV: 180 }
+
+run36:
+  <<: *run_common
+  0: { <<: *HPK_NH5, name: ET2.01 PacTech New HPK-5 (-25C), HV: 100 }
+
+run37:
+  <<: *run_common
+  0: { <<: *HPK_NH5, name: ET2.01 PacTech New HPK-5 (-25C), HV: 190 }
+
+run38:
+  <<: *run_common
+  0: { <<: *HPK_NH5, name: ET2.01 PacTech New HPK-5 (-25C), HV: 200 }
+
+run39:
+  <<: *run_common
+  0: { <<: *HPK_NH5, name: ET2.01 PacTech New HPK-5 (-25C), HV: 205 }
+
+run40:
+  <<: *run_common
+  0: { <<: *HPK_NH5, name: ET2.01 PacTech New HPK-5 (-25C), HV: 140 }
+
+run41:
+  <<: *run_common
+  0: { <<: *HPK_NH5, name: ET2.01 PacTech New HPK-5 (+24C), HV: 170 }
+
+run42:
+  <<: *run_common
+  0: { <<: *HPK_NH5, name: ET2.01 PacTech New HPK-5 (+24C), HV: 230 }
+
+run43:
+  <<: *run_common
+  0: { <<: *HPK_NH5, name: ET2.01 PacTech New HPK-5 (+24C), HV: 190 }
+
+run44:
+  <<: *run_common
+  0: { <<: *HPK_NH5, name: ET2.01 PacTech New HPK-5 (+24C), HV: 210 }
+
+run45:
+  <<: *run_common
+  0: { <<: *HPK_NH5, name: ET2.01 PacTech New HPK-5 (+24C), HV: 220 }
+
+run46:
+  <<: *run_common
+  0: { <<: *HPK_NH5, name: ET2.01 PacTech New HPK-5 (+24C), HV: 240 }
