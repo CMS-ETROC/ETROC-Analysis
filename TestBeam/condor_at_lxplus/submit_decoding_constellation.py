@@ -161,14 +161,12 @@ if __name__ == "__main__":
         default = [5, 10],
         dest = 'range',
     )
-
     parser.add_argument(
-        '-r',
-        '--runName',
+        '--condor_tag',
         metavar = 'NAME',
         type = str,
-        help = 'Name of the run to process. If given, the run name will be used to avoid file collisions',
-        dest = 'runName',
+        help = 'Tag of the run to process on condor. If given, the tag will be used to avoid file collisions',
+        dest = 'condor_tag',
     )
 
     parser.add_argument(
@@ -187,11 +185,11 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    runName = args.runName
-    if runName is None:
+    tag_for_condor = args.condor_tag
+    if tag_for_condor is None:
         runAppend = ""
     else:
-        runAppend = "_" + runName
+        runAppend = "_" + tag_for_condor
 
     log_dir = Path('./') / 'condor_logs' / 'decoding' / f'decoding_job{runAppend}'
     log_dir.mkdir(exist_ok=True, parents=True)
