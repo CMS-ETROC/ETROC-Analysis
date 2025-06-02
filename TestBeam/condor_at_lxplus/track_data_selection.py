@@ -82,6 +82,33 @@ def tdc_event_selection(
         return tdc_filtered_df
 
 ## --------------------------------------
+def determine_tot_cut_range_for_trig(
+        input_df: pd.DataFrame,
+        trig_id: int,
+):
+    from scipy.signal import argrelextrema
+
+    trig_tot = input_df.loc[input_df['board'] == trig_id]['tot'].reset_index(drop=True)
+    counts, bin_centers = np.histogram(trig_tot, bins=128, range=(0, 512))
+
+    first_peak_index = np.argmax(counts)
+    minima_indices = argrelextrema(counts, np.less)[0]
+
+    valley_candidates = minima_indices[minima_indices > first_peak_index]
+    if len(valley_candidates) > 0:
+        valley_index = valley_candidates[0]
+    else:
+        valley_index = None  # fallback
+
+    if valley_index is not None:
+        filtered_tot_trig = trig_tot.loc[trig_tot < bin_centers[valley_index]]
+        tot_range = [filtered_tot_trig.quantile(0.02), filtered_tot_trig.quantile(0.98)]
+    else:
+        tot_range = [trig_tot.quantile(0.03), trig_tot.quantile(0.96)]
+
+    return tot_range
+
+## --------------------------------------
 def data_3board_selection_by_track(
         input_df: pd.DataFrame,
         cal_mode_table: pd.DataFrame,
@@ -134,7 +161,6 @@ def data_4board_selection_by_track(
         cal_mode_table: pd.DataFrame,
         pix_dict: dict,
         trig_id: int,
-        ref_id: int,
         board_to_analyze: list[int],
         tot_cuts: list[int],
     ):
@@ -152,8 +178,6 @@ def data_4board_selection_by_track(
         cal_mode = cal_mode_table.loc[(cal_mode_table['board'] == idx) & (cal_mode_table['row'] == pix_dict[idx][0]) & (cal_mode_table['col'] == pix_dict[idx][1])]['cal_mode'].values[0]
         if idx == trig_id:
             tdc_cuts[idx] = [cal_mode-3, cal_mode+3, 0, 1100, tot_cuts[0], tot_cuts[1]]
-        elif idx == ref_id:
-            tdc_cuts[idx] = [cal_mode-3, cal_mode+3, 0, 1100, 0, 600]
         else:
             tdc_cuts[idx] = [cal_mode-3, cal_mode+3, 0, 1100, 0, 600]
 
@@ -258,30 +282,10 @@ if __name__ == "__main__":
         required = True,
         dest = 'extraID',
     )
-
-    parser.add_argument(
-        '--trigTOTLower',
-        metavar = 'NUM',
-        type = int,
-        help = 'Lower TOT selection boundary for the trigger board',
-        default = 100,
-        dest = 'trigTOTLower',
-    )
-
-    parser.add_argument(
-        '--trigTOTUpper',
-        metavar = 'NUM',
-        type = int,
-        help = 'Upper TOT selection boundary for the trigger board',
-        default = 200,
-        dest = 'trigTOTUpper',
-    )
-
     args = parser.parse_args()
 
     board_ids = [0,1,2,3]
     ignore_boards = [args.extraID]
-    tot_cuts = [args.trigTOTLower, args.trigTOTUpper]
 
     trig_id = args.trigID
     ref_id = args.refID
@@ -290,6 +294,9 @@ if __name__ == "__main__":
     columns_to_read = ['evt', 'board', 'row', 'col', 'toa', 'tot', 'cal']
 
     run_df = pd.read_feather(args.inputfile, columns=columns_to_read)
+    file_num_indicator = int(args.inputfile.split('.')[0].split('_')[1])
+
+    tot_cuts = determine_tot_cut_range_for_trig(run_df, trig_id)
 
     if run_df.empty:
         print('Empty input file!')
@@ -313,8 +320,11 @@ if __name__ == "__main__":
             for idx in board_to_analyze:
                 pix_dict[idx] = [track_df.iloc[itrack][f'row_{idx}'], track_df.iloc[itrack][f'col_{idx}']]
 
-            table = data_4board_selection_by_track(input_df=run_df, cal_mode_table=cal_table, pix_dict=pix_dict, trig_id=trig_id, ref_id=ref_id,
+            table = data_4board_selection_by_track(input_df=run_df, cal_mode_table=cal_table, pix_dict=pix_dict, trig_id=trig_id,
                                                    board_to_analyze=board_to_analyze, tot_cuts=tot_cuts)
+            table['file'] = file_num_indicator
+            table['file'] = table['file'].astype('uint16')
+
             track_pivots[itrack] = table
     else:
         print('Track separation with 3 boards combination')
@@ -328,6 +338,10 @@ if __name__ == "__main__":
 
             table = data_3board_selection_by_track(input_df=reduced_run_df, cal_mode_table=cal_table, pix_dict=pix_dict, trig_id=trig_id, ref_id=ref_id,
                                                 board_to_analyze=board_to_analyze, tot_cuts=tot_cuts)
+
+            table['file'] = file_num_indicator
+            table['file'] = table['file'].astype('uint16')
+
             track_pivots[itrack] = table
 
     fname = args.inputfile.split('.')[0]
