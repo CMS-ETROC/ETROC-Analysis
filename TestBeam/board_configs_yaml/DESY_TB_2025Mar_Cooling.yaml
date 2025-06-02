@@ -1,104 +1,168 @@
-defaults: &defaults
-  1: &IME3 { name: IME-3, short: IME-3, offset: 20, HV: 150 }
-  2: &IME4 { name: IME-4, short: IME-4, offset: 20, HV: 150 }
-  3: &IME1 { name: IME-1, short: IME-1, offset: 20, HV: 150 }
+defaults:
+  PT_NH2: &PT_NH2
+    name: ET2.01 PacTech New HPK-2 (-24.5C)
+    short: PT_NH2
+    offset: 20
+    HV: 230
+    role: dut
+  IME_1: &IME_1
+    name: IME-1
+    short: IME-1
+    offset: 20
+    HV: 150
+    role: ref
+  IME_2: &IME_2
+    name: IME-2
+    short: IME-2
+    offset: 20
+    HV: 150
+    role: dut
+  IME_3: &IME_3
+    name: IME-3
+    short: IME-3
+    offset: 20
+    HV: 150
+    role: extra
+  IME_4: &IME_4
+    name: IME-4
+    short: IME-4
+    offset: 20
+    HV: 150
+    role: trig
+
+run_common: &run_common
+  1: *IME3
+  2: *IME4
+  3: *IME1
 
 run15:
-  0: { name: IME-2 (-15C), short: IME-2, offset: 20, HV: 125 }
-  <<: *defaults
+  <<: *run_common
+  0: { <<: *IME_2, name: IME-2 (-15C), HV: 125 }
+
 run17:
-  0: { name: IME-2 (-15C), short: IME-2, offset: 20, HV: 105 }
-  <<: *defaults
+  <<: *run_common
+  0: { <<: *IME_2, name: IME-2 (-15C), HV: 105 }
+
 run20:
-  0: { name: IME-2 (-15C), short: IME-2, offset: 20, HV: 115 }
-  <<: *defaults
+  <<: *run_common
+  0: { <<: *IME_2, name: IME-2 (-15C), HV: 115 }
+
 run21:
-  0: { name: IME-2 (-15C), short: IME-2, offset: 20, HV: 95 }
-  <<: *defaults
+  <<: *run_common
+  0: { <<: *IME_2, name: IME-2 (-15C), HV: 95 }
+
 run23:
-  0: { name: IME-2 (-15C), short: IME-2, offset: 20, HV: 120 }
-  <<: *defaults
+  <<: *run_common
+  0: { <<: *IME_2, name: IME-2 (-15C), HV: 120 }
+
 run26:
-  0: { name: IME-2 (-15C), short: IME-2, offset: 20, HV: 85 }
-  <<: *defaults
+  <<: *run_common
+  0: { <<: *IME_2, name: IME-2 (-15C), HV: 85 }
+
 run27:
-  0: { name: IME-2 (-15C), short: IME-2, offset: 20, HV: 90 }
-  <<: *defaults
+  <<: *run_common
+  0: { <<: *IME_2, name: IME-2 (-15C), HV: 90 }
+
 run28:
-  0: { name: IME-2 (-15C), short: IME-2, offset: 20, HV: 100 }
-  <<: *defaults
+  <<: *run_common
+  0: { <<: *IME_2, name: IME-2 (-15C), HV: 100 }
+
 run29:
-  0: { name: IME-2 (-15C), short: IME-2, offset: 20, HV: 110 }
-  <<: *defaults
+  <<: *run_common
+  0: { <<: *IME_2, name: IME-2 (-15C), HV: 110 }
+
 run30:
-  0: { name: IME-2 (+18C), short: IME-2, offset: 20, HV: 125 }
-  <<: *defaults
+  <<: *run_common
+  0: { <<: *IME_2, name: IME-2 (+18C), HV: 125 }
+
 run31:
-  0: { name: IME-2 (+18C), short: IME-2, offset: 20, HV: 160 }
-  <<: *defaults
+  <<: *run_common
+  0: { <<: *IME_2, name: IME-2 (+18C), HV: 160 }
+
 run32:
-  0: { name: IME-2 (+18C), short: IME-2, offset: 20, HV: 115 }
-  <<: *defaults
+  <<: *run_common
+  0: { <<: *IME_2, name: IME-2 (+18C), HV: 115 }
+
 run33:
-  0: { name: IME-2 (+18C), short: IME-2, offset: 20, HV: 150 }
-  <<: *defaults
+  <<: *run_common
+  0: { <<: *IME_2, name: IME-2 (+18C), HV: 150 }
+
 run34:
-  0: { name: IME-2 (+18C), short: IME-2, offset: 20, HV: 105 }
-  <<: *defaults
+  <<: *run_common
+  0: { <<: *IME_2, name: IME-2 (+18C), HV: 105 }
+
 run35:
-  0: { name: IME-2 (+18C), short: IME-2, offset: 20, HV: 140 }
-  <<: *defaults
+  <<: *run_common
+  0: { <<: *IME_2, name: IME-2 (+18C), HV: 140 }
+
 run36:
-  0: { name: IME-2 (+18C), short: IME-2, offset: 20, HV: 170 }
-  <<: *defaults
+  <<: *run_common
+  0: { <<: *IME_2, name: IME-2 (+18C), HV: 170 }
+
 run37:
-  0: { name: IME-2 (+18C), short: IME-2, offset: 20, HV: 130 }
-  <<: *defaults
+  <<: *run_common
+  0: { <<: *IME_2, name: IME-2 (+18C), HV: 130 }
+
 run38:
-  0: { name: IME-2 (+18C), short: IME-2, offset: 20, HV: 120 }
-  <<: *defaults
+  <<: *run_common
+  0: { <<: *IME_2, name: IME-2 (+18C), HV: 120 }
+
 run39:
-  0: { name: IME-2 (+18C), short: IME-2, offset: 10, HV: 115 }
-  <<: *defaults
+  <<: *run_common
+  0: { <<: *IME_2, name: IME-2 (+18C), offset: 10, HV: 120 }
+
 run40:
-  0: { name: IME-2 (+18C), short: IME-2, offset: 10, HV: 105 }
-  <<: *defaults
+  <<: *run_common
+  0: { <<: *IME_2, name: IME-2 (+18C), offset: 10, HV: 105 }
+
 run41:
-  0: { name: IME-2 (+23C), short: IME-2, offset: 20, HV: 125 }
-  <<: *defaults
+  <<: *run_common
+  0: { <<: *IME_2, name: IME-2 (+23C), HV: 125 }
+
 run42:
-  0: { name: IME-2 (+23C), short: IME-2, offset: 20, HV: 140 }
-  <<: *defaults
+  <<: *run_common
+  0: { <<: *IME_2, name: IME-2 (+23C), HV: 140 }
+
 run43:
-  0: { name: IME-2 (+23C), short: IME-2, offset: 20, HV: 150 }
-  <<: *defaults
+  <<: *run_common
+  0: { <<: *IME_2, name: IME-2 (+23C), HV: 150 }
+
 run44:
-  0: { name: IME-2 (+23C), short: IME-2, offset: 20, HV: 160 }
-  <<: *defaults
+  <<: *run_common
+  0: { <<: *IME_2, name: IME-2 (+23C), HV: 160 }
+
 run45:
-  0: { name: IME-2 (+23C), short: IME-2, offset: 20, HV: 115 }
-  <<: *defaults
+  <<: *run_common
+  0: { <<: *IME_2, name: IME-2 (+23C), HV: 115 }
+
 run46:
-  0: { name: ET2.01 PacTech New HPK-2 (-24.5C), short: PT-NH2, offset: 20, HV: 200 }
-  <<: *defaults
+  <<: *run_common
+  0: { <<: *PT_NH2, HV: 200 }
+
 run47:
-  0: { name: ET2.01 PacTech New HPK-2 (-24.5C), short: PT-NH2, offset: 20, HV: 170 }
-  <<: *defaults
+  <<: *run_common
+  0: { <<: *PT_NH2, HV: 170 }
+
 run48:
-  0: { name: ET2.01 PacTech New HPK-2 (-24.5C), short: PT-NH2, offset: 20, HV: 140 }
-  <<: *defaults
+  <<: *run_common
+  0: { <<: *PT_NH2, HV: 140 }
+
 run49:
-  0: { name: ET2.01 PacTech New HPK-2 (-24.5C), short: PT-NH2, offset: 20, HV: 180 }
-  <<: *defaults
+  <<: *run_common
+  0: { <<: *PT_NH2, HV: 180 }
+
 run50:
-  0: { name: ET2.01 PacTech New HPK-2 (-24.5C), short: PT-NH2, offset: 20, HV: 160 }
-  <<: *defaults
+  <<: *run_common
+  0: { <<: *PT_NH2, HV: 160 }
+
 run51:
-  0: { name: ET2.01 PacTech New HPK-2 (-24.5C), short: PT-NH2, offset: 20, HV: 120 }
-  <<: *defaults
+  <<: *run_common
+  0: { <<: *PT_NH2, HV: 120 }
+
 run52:
-  0: { name: ET2.01 PacTech New HPK-2 (-24.5C), short: PT-NH2, offset: 20, HV: 100 }
-  <<: *defaults
+  <<: *run_common
+  0: { <<: *PT_NH2, HV: 100 }
+
 run53:
-  0: { name: ET2.01 PacTech New HPK-2 (-24.5C), short: PT-NH2, offset: 20, HV: 150 }
-  <<: *defaults
+  <<: *run_common
+  0: { <<: *PT_NH2, HV: 150 }
