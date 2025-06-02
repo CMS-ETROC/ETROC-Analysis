@@ -116,8 +116,8 @@ for ifile in tqdm(files):
     columns = df.columns
 
     if len(match_dict.keys()) == 4:
-        final_dict[f'row{roles['trig']}'].append(match_dict[roles['trig']][0])
-        final_dict[f'col{roles['trig']}'].append(match_dict[roles['trig']][1])
+        final_dict[f'row{roles["trig"]}'].append(match_dict[roles["trig"]][0])
+        final_dict[f'col{roles["trig"]}'].append(match_dict[roles["trig"]][1])
 
     for val in columns:
         final_dict[f'row{val}'].append(match_dict[val][0])
