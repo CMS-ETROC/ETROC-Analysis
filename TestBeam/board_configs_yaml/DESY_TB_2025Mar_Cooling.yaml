@@ -31,9 +31,9 @@ defaults:
     role: trig
 
 run_common: &run_common
-  1: *IME3
-  2: *IME4
-  3: *IME1
+  1: *IME_3
+  2: *IME_4
+  3: *IME_1
 
 run15:
   <<: *run_common
