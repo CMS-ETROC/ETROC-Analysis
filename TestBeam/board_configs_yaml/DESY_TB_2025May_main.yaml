@@ -39,7 +39,7 @@ run4:
   <<: *run_common
   0: { <<: *PT_NH8, name: ET2.01 PacTech New HPK-8 (-25C), HV: 180 }
 
-run5:
+run5: &run5
   <<: *run_common
   0: { <<: *PT_NH8, name: ET2.01 PacTech New HPK-8 (-25C), HV: 170 }
 
@@ -47,7 +47,7 @@ run6: &run6
   <<: *run_common
   0: { <<: *PT_NH8, name: ET2.01 PacTech New HPK-8 (-25C), HV: 160 }
 
-run7:
+run7: &run7
   <<: *run_common
   0: { <<: *PT_NH8, name: ET2.01 PacTech New HPK-8 (-25C), HV: 150 }
 
@@ -68,6 +68,10 @@ run11: *run6
 run12:
   <<: *run_common
   0: { <<: *PT_NH8, name: ET2.01 PacTech New HPK-8 (-25C), HV: 190 }
+
+run13: *run5
+
+run14: *run7
 
 run15:
   <<: *run_common
