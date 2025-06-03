@@ -152,39 +152,13 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        '--trigID',
-        metavar = 'ID',
-        type = int,
-        help = 'trigger board ID',
-        default = 0,
-        dest = 'trigID',
-    )
-
-    parser.add_argument(
-        '--refID',
-        metavar = 'ID',
-        type = int,
-        help = 'reference board ID',
-        default = 3,
-        dest = 'refID',
-    )
-
-    parser.add_argument(
-        '--dutID',
-        metavar = 'ID',
-        type = int,
-        help = 'DUT board ID',
-        default = 1,
-        dest = 'dutID',
-    )
-
-    parser.add_argument(
-        '--extraID',
-        metavar = 'ID',
-        type = int,
-        help = 'board ID be ignored',
-        default = 2,
-        dest = 'extraID',
+        '-c',
+        '--config',
+        metavar = 'NAME',
+        type = str,
+        help = 'YAML file including run information.',
+        required = True,
+        dest = 'config',
     )
 
     parser.add_argument(
@@ -192,6 +166,16 @@ if __name__ == "__main__":
         action = 'store_true',
         help = 'If this option is turned on, board ID set by extraID argument will not be considered',
         dest = 'three_board',
+    )
+
+    parser.add_argument(
+        '-r',
+        '--runName',
+        metavar = 'NAME',
+        type = str,
+        help = 'Name of the run to process. It must be matched with the name defined in YAML.',
+        required = True,
+        dest = 'runName',
     )
 
     parser.add_argument(
@@ -213,6 +197,16 @@ if __name__ == "__main__":
 
     input_files = list(Path(f'{args.path}').glob('loop*feather'))
     columns_to_read = ['evt', 'board', 'row', 'col', 'toa', 'tot', 'cal']
+
+    with open(args.config) as input_yaml:
+        config = yaml.safe_load(input_yaml)
+
+    if args.runName not in config:
+        raise ValueError(f"Run config {args.runName} not found")
+
+    roles = {}
+    for board_id, board_info in config[args.runName].items():
+        roles[board_info.get('role')] = board_id
 
     if len(input_files) == 0:
         import sys
@@ -323,15 +317,15 @@ if __name__ == "__main__":
         ## A wide TDC cuts
         tdc_cuts = {}
         if args.three_board:
-            ids_to_loop = sorted([args.trigID, args.dutID, args.refID])
+            ids_to_loop = sorted([roles['trig'], roles['dut'], roles['ref']])
         else:
             ids_to_loop = [0, 1, 2, 3]
 
         for idx in ids_to_loop:
             # board ID: [CAL LB, CAL UB, TOA LB, TOA UB, TOT LB, TOT UB]
-            if idx == args.trigID:
+            if idx == roles['trig']:
                 tdc_cuts[idx] = [0, 1100,  100, 500, 50, 250]
-            elif idx == args.refID:
+            elif idx == roles['ref']:
                 tdc_cuts[idx] = [0, 1100,  0, 1100, 50, 250]
             else:
                 tdc_cuts[idx] = [0, 1100,  0, 1100, 0, 600]
@@ -344,15 +338,15 @@ if __name__ == "__main__":
         event_selection_col = None
 
         if args.three_board:
-            trig_selection = (event_board_counts[args.trigID] == 1)
-            ref_selection = (event_board_counts[args.refID] == 1)
-            dut_selection = (event_board_counts[args.dutID] == 1)
+            trig_selection = (event_board_counts[roles['trig']] == 1)
+            ref_selection = (event_board_counts[roles['ref']] == 1)
+            dut_selection = (event_board_counts[roles['dut']] == 1)
             event_selection_col = trig_selection & ref_selection & dut_selection
         else:
-            trig_selection = (event_board_counts[args.trigID] == 1)
-            ref_selection = (event_board_counts[args.refID] == 1)
-            ref_2nd_selection = (event_board_counts[args.extraID] == 1)
-            dut_selection = (event_board_counts[args.dutID] == 1)
+            trig_selection = (event_board_counts[roles['trig']] == 1)
+            ref_selection = (event_board_counts[roles['ref']] == 1)
+            ref_2nd_selection = (event_board_counts[roles['extra']] == 1)
+            dut_selection = (event_board_counts[roles['dut']] == 1)
             event_selection_col = trig_selection & ref_selection & ref_2nd_selection & dut_selection
 
         selected_event_numbers = event_board_counts[event_selection_col].index
@@ -364,8 +358,8 @@ if __name__ == "__main__":
         check_empty_df(selected_subset_df, "Single hit event filtering.")
 
         if args.three_board:
-            ignore_board_ids = list(set([0, 1, 2, 3]) - set([args.trigID, args.dutID, args.refID]))
-            list_of_ignore_boards = [args.extraID]
+            ignore_board_ids = list(set([0, 1, 2, 3]) - set([roles['trig'], roles['dut'], roles['ref']]))
+            list_of_ignore_boards = [roles['extra']]
             columns_want_to_drop = [f'toa_{i}' for i in set([0, 1, 2, 3])-set(list_of_ignore_boards)]
 
             columns_want_to_group = []
@@ -384,7 +378,7 @@ if __name__ == "__main__":
         pivot_data_df = making_pivot(selected_subset_df, 'evt', 'board', set({'board', 'evt', 'cal', 'tot'}), ignore_boards=ignore_board_ids)
 
         combinations_df = pivot_data_df.groupby(columns_want_to_group).count()
-        combinations_df['count'] = combinations_df[f'toa_{args.trigID}']
+        combinations_df['count'] = combinations_df[f'toa_{roles['trig']}']
         combinations_df.drop(columns_want_to_drop, axis=1, inplace=True)
 
         track_df = combinations_df.loc[combinations_df['count'] > args.ntracks]
@@ -393,19 +387,19 @@ if __name__ == "__main__":
         del pivot_data_df, combinations_df
 
         if args.three_board:
-            row_delta_TR = np.abs(track_df[f'row_{args.trigID}'] - track_df[f'row_{args.refID}']) <= args.max_diff_pixel
-            row_delta_TD = np.abs(track_df[f'row_{args.trigID}'] - track_df[f'row_{args.dutID}']) <= args.max_diff_pixel
-            col_delta_TR = np.abs(track_df[f'col_{args.trigID}'] - track_df[f'col_{args.refID}']) <= args.max_diff_pixel
-            col_delta_TD = np.abs(track_df[f'col_{args.trigID}'] - track_df[f'col_{args.dutID}']) <= args.max_diff_pixel
+            row_delta_TR = np.abs(track_df[f'row_{roles['trig']}'] - track_df[f'row_{roles['ref']}']) <= args.max_diff_pixel
+            row_delta_TD = np.abs(track_df[f'row_{roles['trig']}'] - track_df[f'row_{roles['dut']}']) <= args.max_diff_pixel
+            col_delta_TR = np.abs(track_df[f'col_{roles['trig']}'] - track_df[f'col_{roles['ref']}']) <= args.max_diff_pixel
+            col_delta_TD = np.abs(track_df[f'col_{roles['trig']}'] - track_df[f'col_{roles['dut']}']) <= args.max_diff_pixel
             track_condition = (row_delta_TR) & (col_delta_TR) & (row_delta_TD) & (col_delta_TD)
 
         else:
-            row_delta_TR  = np.abs(track_df[f'row_{args.trigID}'] - track_df[f'row_{args.refID}']) <= args.max_diff_pixel
-            row_delta_TR2 = np.abs(track_df[f'row_{args.trigID}'] - track_df[f'row_{args.extraID}']) <= args.max_diff_pixel
-            row_delta_TD  = np.abs(track_df[f'row_{args.trigID}'] - track_df[f'row_{args.dutID}']) <= args.max_diff_pixel
-            col_delta_TR  = np.abs(track_df[f'col_{args.trigID}'] - track_df[f'col_{args.refID}']) <= args.max_diff_pixel
-            col_delta_TR2 = np.abs(track_df[f'col_{args.trigID}'] - track_df[f'col_{args.extraID}']) <= args.max_diff_pixel
-            col_delta_TD  = np.abs(track_df[f'col_{args.trigID}'] - track_df[f'col_{args.dutID}']) <= args.max_diff_pixel
+            row_delta_TR  = np.abs(track_df[f'row_{roles['trig']}'] - track_df[f'row_{roles['ref']}']) <= args.max_diff_pixel
+            row_delta_TR2 = np.abs(track_df[f'row_{roles['trig']}'] - track_df[f'row_{roles['extra']}']) <= args.max_diff_pixel
+            row_delta_TD  = np.abs(track_df[f'row_{roles['trig']}'] - track_df[f'row_{roles['dut']}']) <= args.max_diff_pixel
+            col_delta_TR  = np.abs(track_df[f'col_{roles['trig']}'] - track_df[f'col_{roles['ref']}']) <= args.max_diff_pixel
+            col_delta_TR2 = np.abs(track_df[f'col_{roles['trig']}'] - track_df[f'col_{roles['extra']}']) <= args.max_diff_pixel
+            col_delta_TD  = np.abs(track_df[f'col_{roles['trig']}'] - track_df[f'col_{roles['dut']}']) <= args.max_diff_pixel
             track_condition = (row_delta_TR) & (col_delta_TR) & (row_delta_TD) & (col_delta_TD) & (row_delta_TR2) & (col_delta_TR2)
 
         track_df = track_df.loc[track_condition]
