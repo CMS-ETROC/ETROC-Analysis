@@ -307,8 +307,7 @@ if __name__ == "__main__":
         print('Find track combinations')
 
         merged_df = pd.merge(final_input_df[['board', 'row', 'col', 'cal']], cal_table, on=['board', 'row', 'col'])
-        merged_df['board'] = merged_df['board'].astype('uint8')
-        merged_df['cal_mode'] = merged_df['cal_mode'].astype('int16')
+        merged_df = merged_df.astype({'board': 'uint8', 'cal_mode': 'int16'})
         cal_condition = abs(merged_df['cal'] - merged_df['cal_mode']) <= 3
         del cal_table, merged_df
         cal_filtered_df = final_input_df.loc[cal_condition].reset_index(drop=True)
@@ -323,45 +322,29 @@ if __name__ == "__main__":
         check_empty_df(cal_filtered_df, "CAL filtering.")
 
         ## A wide TDC cuts
-        tdc_cuts = {}
-        if args.three_board:
-            ids_to_loop = sorted([roles['trig'], roles['dut'], roles['ref']])
-        else:
-            ids_to_loop = [0, 1, 2, 3]
-
-        for idx in ids_to_loop:
-            # board ID: [CAL LB, CAL UB, TOA LB, TOA UB, TOT LB, TOT UB]
-            if idx == roles['trig']:
-                tdc_cuts[idx] = [0, 1100,  100, 500, 50, 250]
-            elif idx == roles['ref']:
-                tdc_cuts[idx] = [0, 1100,  0, 1100, 50, 250]
-            else:
-                tdc_cuts[idx] = [0, 1100,  0, 1100, 0, 600]
+        ids_to_loop = sorted([roles[k] for k in ('trig', 'dut', 'ref')]) if args.three_board else [0, 1, 2, 3]
+        tdc_cuts = {
+            idx: ([0, 1100, 100, 500, 50, 250] if idx == roles['trig']
+                else [0, 1100, 0, 1100, 50, 250] if idx == roles['ref']
+                else [0, 1100, 0, 1100, 0, 600])
+            for idx in ids_to_loop
+        }
 
         filtered_df = tdc_event_selection(cal_filtered_df, tdc_cuts_dict=tdc_cuts)
         del cal_filtered_df
         check_empty_df(filtered_df, "TDC filtering.")
 
         event_board_counts = filtered_df.groupby(['evt', 'board']).size().unstack(fill_value=0)
-        event_selection_col = None
-
         if args.three_board:
-            trig_selection = (event_board_counts[roles['trig']] == 1)
-            ref_selection = (event_board_counts[roles['ref']] == 1)
-            dut_selection = (event_board_counts[roles['dut']] == 1)
-            event_selection_col = trig_selection & ref_selection & dut_selection
+            boards_needed = ['trig', 'ref', 'dut']
         else:
-            trig_selection = (event_board_counts[roles['trig']] == 1)
-            ref_selection = (event_board_counts[roles['ref']] == 1)
-            ref_2nd_selection = (event_board_counts[roles['extra']] == 1)
-            dut_selection = (event_board_counts[roles['dut']] == 1)
-            event_selection_col = trig_selection & ref_selection & ref_2nd_selection & dut_selection
+            boards_needed = ['trig', 'ref', 'extra', 'dut']
 
-        selected_event_numbers = event_board_counts[event_selection_col].index
-        selected_subset_df = filtered_df.loc[filtered_df['evt'].isin(selected_event_numbers)]
-        selected_subset_df.reset_index(inplace=True, drop=True)
-        selected_subset_df['row'] = selected_subset_df['row'].astype('int8')
-        selected_subset_df['col'] = selected_subset_df['col'].astype('int8')
+        event_mask = np.logical_and.reduce([event_board_counts[roles[r]] == 1 for r in boards_needed])
+        selected_event_numbers = event_board_counts[event_mask].index
+
+        selected_subset_df = filtered_df.loc[filtered_df['evt'].isin(selected_event_numbers)].reset_index(drop=True)
+        selected_subset_df[['row', 'col']] = selected_subset_df[['row', 'col']].astype('int8')
         del filtered_df
         check_empty_df(selected_subset_df, "Single hit event filtering.")
 
@@ -402,22 +385,6 @@ if __name__ == "__main__":
                           ('col', 'trig', 'ref'), ('col', 'trig', 'dut'), ('col', 'trig', 'extra')]
 
         track_condition = np.logical_and.reduce([delta_within_limit(track_df, roles, axis, r1, r2) for axis, r1, r2 in role_pairs])
-
-        # if args.three_board:
-        #     row_delta_TR = np.abs(track_df[f'row_{roles["trig"]}'] - track_df[f'row_{roles['ref']}']) <= args.max_diff_pixel
-        #     row_delta_TD = np.abs(track_df[f'row_{roles["trig"]}'] - track_df[f'row_{roles['dut']}']) <= args.max_diff_pixel
-        #     col_delta_TR = np.abs(track_df[f'col_{roles["trig"]}'] - track_df[f'col_{roles['ref']}']) <= args.max_diff_pixel
-        #     col_delta_TD = np.abs(track_df[f'col_{roles["trig"]}'] - track_df[f'col_{roles['dut']}']) <= args.max_diff_pixel
-        #     track_condition = (row_delta_TR) & (col_delta_TR) & (row_delta_TD) & (col_delta_TD)
-
-        # else:
-        #     row_delta_TR  = np.abs(track_df[f'row_{roles["trig"]}'] - track_df[f'row_{roles['ref']}']) <= args.max_diff_pixel
-        #     row_delta_TR2 = np.abs(track_df[f'row_{roles["trig"]}'] - track_df[f'row_{roles['extra']}']) <= args.max_diff_pixel
-        #     row_delta_TD  = np.abs(track_df[f'row_{roles["trig"]}'] - track_df[f'row_{roles['dut']}']) <= args.max_diff_pixel
-        #     col_delta_TR  = np.abs(track_df[f'col_{roles["trig"]}'] - track_df[f'col_{roles['ref']}']) <= args.max_diff_pixel
-        #     col_delta_TR2 = np.abs(track_df[f'col_{roles["trig"]}'] - track_df[f'col_{roles['extra']}']) <= args.max_diff_pixel
-        #     col_delta_TD  = np.abs(track_df[f'col_{roles["trig"]}'] - track_df[f'col_{roles['dut']}']) <= args.max_diff_pixel
-        #     track_condition = (row_delta_TR) & (col_delta_TR) & (row_delta_TD) & (col_delta_TD) & (row_delta_TR2) & (col_delta_TR2)
 
         track_df = track_df.loc[track_condition]
         track_df = track_df.drop_duplicates(subset=columns_want_to_group, keep='first')
