@@ -64,9 +64,9 @@ def tdc_event_selection(
         return tdc_filtered_df
 
 ## --------------------------------------
-def delta_within_limit(input_df: pd.DataFrame, axis: str, role1: str, role2: str) -> pd.Series:
+def delta_within_limit(input_df: pd.DataFrame, id_roles: dict, axis: str, role1: str, role2: str) -> pd.Series:
     return (
-        np.abs(input_df[f'{axis}_{roles[role1]}'] - input_df[f'{axis}_{roles[role2]}'])
+        np.abs(input_df[f'{axis}_{id_roles[role1]}'] - input_df[f'{axis}_{id_roles[role2]}'])
         <= args.max_diff_pixel
     )
 
@@ -401,7 +401,7 @@ if __name__ == "__main__":
             role_pairs = [('row', 'trig', 'ref'), ('row', 'trig', 'dut'), ('row', 'trig', 'extra'),
                           ('col', 'trig', 'ref'), ('col', 'trig', 'dut'), ('col', 'trig', 'extra')]
 
-        track_condition = np.logical_and.reduce([delta_within_limit(axis, r1, r2) for axis, r1, r2 in role_pairs])
+        track_condition = np.logical_and.reduce([delta_within_limit(track_df, roles, axis, r1, r2) for axis, r1, r2 in role_pairs])
 
         # if args.three_board:
         #     row_delta_TR = np.abs(track_df[f'row_{roles["trig"]}'] - track_df[f'row_{roles['ref']}']) <= args.max_diff_pixel
