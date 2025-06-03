@@ -1,6 +1,6 @@
 from natsort import natsorted
 from pathlib import Path
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 from collections import defaultdict
 
@@ -41,87 +41,94 @@ def return_TOA_correlation_param(
     return params, distance
 
 ## --------------------------------------
-def convert_to_time_df(input_file):
+def process_single_track(args, track_dfs: dict, board_ids: list[int], board_roles: dict, save_track_dir: Path, save_time_dir: Path):
+    concatenated_track_df = pd.concat(track_dfs, ignore_index=True)
+    time_dfs = []
 
-    data_in_time = {}
-    with open(input_file, 'rb') as f:
-        # data_dict = pickle.load(f)  # Load dictionary from file (assuming files are pickled)
-        data_dict = pd.read_pickle(f)
-        for key in data_dict.keys():
+    for file_id in sorted(concatenated_track_df['file'].unique()):
+        df_file = concatenated_track_df.loc[concatenated_track_df['file'] == file_id]
 
-            if data_dict[key].empty:
-                data_in_time[key] = pd.DataFrame()
-                continue
+        if df_file.empty:
+            continue
 
-            ### Apply TDC cut
-            tot_cuts = {
-                idx: (
-                    [data_dict[key]['tot'][idx].quantile(0.04 if idx == roles['dut'] else 0.01),
-                    data_dict[key]['tot'][idx].quantile(0.91 if idx == roles['dut'] else 0.96)]
-                    if args.autoTOTcuts else [0, 600]
-                ) for idx in board_ids
-            }
-
-            tdc_cuts = {
-                idx: [
-                    0, 1100,
-                    args.trigTOALower if idx == roles['ref'] else 0,
-                    args.trigTOAUpper if idx == roles['ref'] else 1100,
-                    *tot_cuts[idx]
-                ] for idx in board_ids
-            }
-
-            df_in_time = pd.DataFrame()
-            data_in_time[key] = df_in_time ## Put empty dataframe first, in case one of "if" conditions not work
-            interest_df = tdc_event_selection_pivot(data_dict[key], tdc_cuts_dict=tdc_cuts)
-            if not interest_df.empty:
-                 ### Apply TOA correlation cut
-                _, distance1 = return_TOA_correlation_param(interest_df, board_id1=board_ids[0], board_id2=board_ids[1])
-                _, distance2 = return_TOA_correlation_param(interest_df, board_id1=board_ids[0], board_id2=board_ids[2])
-                _, distance3 = return_TOA_correlation_param(interest_df, board_id1=board_ids[1], board_id2=board_ids[2])
-
-                dist_cut = (distance1 < args.distance_factor*np.nanstd(distance1)) \
-                         & (distance2 < args.distance_factor*np.nanstd(distance2)) \
-                         & (distance3 < args.distance_factor*np.nanstd(distance3))
-
-                reduced_interest_df = interest_df.loc[dist_cut]
-                if not reduced_interest_df.empty:
-                    for idx in board_ids:
-                        bins = 3.125/reduced_interest_df['cal'][idx].mean()
-                        df_in_time[f'toa_b{str(idx)}'] = (12.5 - reduced_interest_df['toa'][idx] * bins)*1e3
-                        df_in_time[f'tot_b{str(idx)}'] = ((2*reduced_interest_df['tot'][idx] - np.floor(reduced_interest_df['tot'][idx]/32.)) * bins)*1e3
-                    data_in_time[key] = df_in_time
-
-    return data_dict, data_in_time
-
-## --------------------------------------
-def save_data(ikey, merged_data, merged_data_in_time, track_dir, time_dir):
-    if not merged_data[ikey].empty:
-        board_ids = merged_data[ikey].columns.get_level_values('board').unique().tolist()
-        row_cols = {
-            board_id: (merged_data[ikey]['row'][board_id].unique()[0], merged_data[ikey]['col'][board_id].unique()[0])
-            for board_id in board_ids
+        ### Apply TDC cut
+        tot_cuts = {
+            idx: list(df_file['tot'][idx].quantile(
+                [0.04, 0.91] if idx == board_roles['dut'] else [0.01, 0.96]
+            ).values)
+            for idx in board_ids
         }
-        outname = f"track_{ikey}" + ''.join([f"_R{row}C{col}" for board_id, (row, col) in row_cols.items()])
 
-        merged_data[ikey].to_pickle(track_dir / f'{outname}.pkl')
-        merged_data_in_time[ikey].to_pickle(time_dir / f'{outname}.pkl')
-    else:
-        print('Empty dataframe found, skip')
+        tdc_cuts = {
+            idx: [
+                0, 1100,
+                args.trigTOALower if idx == board_roles['ref'] else 0,
+                args.trigTOAUpper if idx == board_roles['ref'] else 1100,
+                *tot_cuts[idx]
+            ] for idx in board_ids
+        }
+
+        interest_df = tdc_event_selection_pivot(df_file, tdc_cuts_dict=tdc_cuts)
+
+        if interest_df.empty:
+            continue
+
+        # --- Apply TOA correlation cut
+        _, distance1 = return_TOA_correlation_param(interest_df, board_id1=board_ids[0], board_id2=board_ids[1])
+        _, distance2 = return_TOA_correlation_param(interest_df, board_id1=board_ids[0], board_id2=board_ids[2])
+        _, distance3 = return_TOA_correlation_param(interest_df, board_id1=board_ids[1], board_id2=board_ids[2])
+
+        std1 = np.nanstd(distance1)
+        std2 = np.nanstd(distance2)
+        std3 = np.nanstd(distance3)
+
+        dist_cut = (distance1 < args.distance_factor * std1) & \
+                   (distance2 < args.distance_factor * std2) & \
+                   (distance3 < args.distance_factor * std3)
+
+        reduced_df = interest_df.loc[dist_cut]
+        if reduced_df.empty:
+            continue
+
+        ### Convert to time
+        df_in_time = pd.DataFrame()
+        board_bins = {idx: 3.125 / reduced_df['cal'][idx].mean() for idx in board_ids}
+        for idx in board_ids:
+            bins = board_bins[idx]
+            df_in_time[f'toa_b{idx}'] = (12.5 - reduced_df['toa'][idx] * bins) * 1e3
+            df_in_time[f'tot_b{idx}'] = ((2 * reduced_df['tot'][idx] - np.floor(reduced_df['tot'][idx] / 32.)) * bins) * 1e3
+
+        time_dfs.append(df_in_time)
+
+    concatenated_time_df = pd.concat(time_dfs, ignore_index=True)
+
+    ### Save dataframes
+    board_ids_for_naming = [
+        b for b in concatenated_track_df.columns.get_level_values('board').unique()
+        if isinstance(b, int)
+    ]
+
+    row_cols = {
+        idx: (concatenated_track_df['row'][idx].unique()[0], concatenated_track_df['col'][idx].unique()[0])
+        for idx in board_ids_for_naming
+    }
+    outname = f"track" + ''.join([f"_R{row}C{col}" for _, (row, col) in row_cols.items()])
+
+    concatenated_track_df.to_pickle(save_track_dir / f'{outname}.pkl')
+    concatenated_time_df.to_pickle(save_time_dir / f'{outname}.pkl')
 
 
 ## --------------------------------------
 def reprocess_code_to_time_df(input_file, newDUTtotLower, newDUTtotUpper):
 
     track_df = pd.read_pickle(input_file)
-    df_in_time = pd.DataFrame()
 
     ### Apply TDC cut
     tot_cuts = {
-        idx: (
-            [track_df['tot'][idx].quantile(newDUTtotLower if idx == roles['dut'] else 0.01),
-            track_df['tot'][idx].quantile(newDUTtotUpper if idx == roles['dut'] else 0.96)]
-        ) for idx in board_ids
+        idx: list(track_df['tot'][idx].quantile(
+            [newDUTtotLower, newDUTtotUpper] if idx == roles['dut'] else [0.01, 0.96]
+        ).values)
+        for idx in board_ids
     }
 
     tdc_cuts = {
@@ -134,27 +141,32 @@ def reprocess_code_to_time_df(input_file, newDUTtotLower, newDUTtotUpper):
     }
 
     interest_df = tdc_event_selection_pivot(track_df, tdc_cuts_dict=tdc_cuts)
+
     if not interest_df.empty:
         ### Apply TOA correlation cut
         _, distance1 = return_TOA_correlation_param(interest_df, board_id1=board_ids[0], board_id2=board_ids[1])
         _, distance2 = return_TOA_correlation_param(interest_df, board_id1=board_ids[0], board_id2=board_ids[2])
         _, distance3 = return_TOA_correlation_param(interest_df, board_id1=board_ids[1], board_id2=board_ids[2])
 
-        dist_cut = (distance1 < args.distance_factor*np.nanstd(distance1)) \
-                    & (distance2 < args.distance_factor*np.nanstd(distance2)) \
-                    & (distance3 < args.distance_factor*np.nanstd(distance3))
+        std1 = np.nanstd(distance1)
+        std2 = np.nanstd(distance2)
+        std3 = np.nanstd(distance3)
 
-        reduced_interest_df = interest_df.loc[dist_cut]
+        dist_cut = (distance1 < args.distance_factor * std1) & \
+                   (distance2 < args.distance_factor * std2) & \
+                   (distance3 < args.distance_factor * std3)
 
-        if not reduced_interest_df.empty:
+        reduced_df = interest_df.loc[dist_cut]
+
+        if not reduced_df.empty:
+            df_in_time = pd.DataFrame()
+            board_bins = {idx: 3.125 / reduced_df['cal'][idx].mean() for idx in board_ids}
             for idx in board_ids:
-                bins = 3.125/reduced_interest_df['cal'][idx].mean()
-                df_in_time[f'toa_b{str(idx)}'] = (12.5 - reduced_interest_df['toa'][idx] * bins)*1e3
-                df_in_time[f'tot_b{str(idx)}'] = ((2*reduced_interest_df['tot'][idx] - np.floor(reduced_interest_df['tot'][idx]/32.)) * bins)*1e3
+                bins = board_bins[idx]
+                df_in_time[f'toa_b{idx}'] = (12.5 - reduced_df['toa'][idx] * bins) * 1e3
+                df_in_time[f'tot_b{idx}'] = ((2 * reduced_df['tot'][idx] - np.floor(reduced_df['tot'][idx] / 32.)) * bins) * 1e3
 
     return df_in_time
-
-
 
 ## --------------------------------------
 if __name__ == "__main__":
@@ -311,43 +323,24 @@ if __name__ == "__main__":
             print(f'No input files for the given path: {args.dirname}')
             sys.exit()
 
-        print('====== Code to Time Conversion is started ======')
-        results = []
-        with tqdm(files) as pbar:
+        print('====== Categorize data by track ======')
+        track_data = defaultdict(list)
+        for ifile in tqdm(files):
+            data_dict = pd.read_pickle(ifile)
+
+            for track_key, df in data_dict.items():
+                track_data[track_key].append(df)
+
+        print('\n====== Apply TDC cut and save track and time dataframes ======')
+        with tqdm(track_data) as pbar:
             with ProcessPoolExecutor() as process_executor:
                 # Each input results in multiple threading jobs being created:
                 futures = [
-                    process_executor.submit(convert_to_time_df, ifile)
-                        for ifile in files
+                    process_executor.submit(process_single_track, args, itrack, board_ids, roles, track_dir, time_dir)
+                        for _, itrack in track_data.items()
                 ]
                 for future in as_completed(futures):
                     pbar.update(1)
-                    results.append(future.result())
-        print('====== Code to Time Conversion is finished ======\n')
-
-        ## Structure of results array: nested three-level
-        # First [] points output from each file
-        # Second [0] is data in code, [1] is data in time
-        # Third [] access single dataframe of each track
-
-        print('====== Merging is started ======')
-        merged_data = defaultdict(list)
-        merged_data_in_time = defaultdict(list)
-
-        for result in results:
-            for key in result[0].keys():
-                merged_data[key].append(result[0][key])
-                merged_data_in_time[key].append(result[1][key])
-
-        # Now concatenate the lists of DataFrames
-        merged_data = {key: pd.concat(df_list, ignore_index=True) for key, df_list in tqdm(merged_data.items())}
-        merged_data_in_time = {key: pd.concat(df_list, ignore_index=True) for key, df_list in tqdm(merged_data_in_time.items())}
-        del results
-        print('====== Merging is finished ======\n')
-
-        print('====== Saving data by track ======')
-        with ThreadPoolExecutor(max_workers=6) as executor:
-            list(tqdm(executor.map(lambda ikey: save_data(ikey, merged_data, merged_data_in_time, track_dir, time_dir), merged_data.keys()), total=len(merged_data)))
 
     else:
         new_dutTOTlower = round(args.dutTOTlower * 0.01, 2)
@@ -361,8 +354,9 @@ if __name__ == "__main__":
         print(f'New quantile TOT cut for DUT: {new_dutTOTlower} - {new_dutTOTupper}')
 
         files = natsorted(track_dir.glob('track*pkl'))
-        print('\n====== Code to Time Conversion is started ======')
-        results = []
+
+        print('\n====== Apply TDC cut and save track and time dataframes ======')
+
         with tqdm(files) as pbar:
             with ProcessPoolExecutor() as process_executor:
                 # Each input results in multiple threading jobs being created:
