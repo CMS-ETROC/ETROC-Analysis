@@ -64,6 +64,14 @@ def tdc_event_selection(
         return tdc_filtered_df
 
 ## --------------------------------------
+def delta_within_limit(input_df: pd.DataFrame, axis: str, role1: str, role2: str) -> pd.Series:
+    return (
+        np.abs(input_df[f'{axis}_{roles[role1]}'] - input_df[f'{axis}_{roles[role2]}'])
+        <= args.max_diff_pixel
+    )
+
+
+## --------------------------------------
 def making_pivot(
         input_df: pd.DataFrame,
         index: str,
@@ -378,7 +386,7 @@ if __name__ == "__main__":
         pivot_data_df = making_pivot(selected_subset_df, 'evt', 'board', set({'board', 'evt', 'cal', 'tot'}), ignore_boards=ignore_board_ids)
 
         combinations_df = pivot_data_df.groupby(columns_want_to_group).count()
-        combinations_df['count'] = combinations_df[f'toa_{roles['trig']}']
+        combinations_df['count'] = combinations_df[f'toa_{roles["trig"]}']
         combinations_df.drop(columns_want_to_drop, axis=1, inplace=True)
 
         track_df = combinations_df.loc[combinations_df['count'] > args.ntracks]
@@ -387,20 +395,29 @@ if __name__ == "__main__":
         del pivot_data_df, combinations_df
 
         if args.three_board:
-            row_delta_TR = np.abs(track_df[f'row_{roles['trig']}'] - track_df[f'row_{roles['ref']}']) <= args.max_diff_pixel
-            row_delta_TD = np.abs(track_df[f'row_{roles['trig']}'] - track_df[f'row_{roles['dut']}']) <= args.max_diff_pixel
-            col_delta_TR = np.abs(track_df[f'col_{roles['trig']}'] - track_df[f'col_{roles['ref']}']) <= args.max_diff_pixel
-            col_delta_TD = np.abs(track_df[f'col_{roles['trig']}'] - track_df[f'col_{roles['dut']}']) <= args.max_diff_pixel
-            track_condition = (row_delta_TR) & (col_delta_TR) & (row_delta_TD) & (col_delta_TD)
-
+            role_pairs = [('row', 'trig', 'ref'), ('row', 'trig', 'dut'),
+                          ('col', 'trig', 'ref'), ('col', 'trig', 'dut')]
         else:
-            row_delta_TR  = np.abs(track_df[f'row_{roles['trig']}'] - track_df[f'row_{roles['ref']}']) <= args.max_diff_pixel
-            row_delta_TR2 = np.abs(track_df[f'row_{roles['trig']}'] - track_df[f'row_{roles['extra']}']) <= args.max_diff_pixel
-            row_delta_TD  = np.abs(track_df[f'row_{roles['trig']}'] - track_df[f'row_{roles['dut']}']) <= args.max_diff_pixel
-            col_delta_TR  = np.abs(track_df[f'col_{roles['trig']}'] - track_df[f'col_{roles['ref']}']) <= args.max_diff_pixel
-            col_delta_TR2 = np.abs(track_df[f'col_{roles['trig']}'] - track_df[f'col_{roles['extra']}']) <= args.max_diff_pixel
-            col_delta_TD  = np.abs(track_df[f'col_{roles['trig']}'] - track_df[f'col_{roles['dut']}']) <= args.max_diff_pixel
-            track_condition = (row_delta_TR) & (col_delta_TR) & (row_delta_TD) & (col_delta_TD) & (row_delta_TR2) & (col_delta_TR2)
+            role_pairs = [('row', 'trig', 'ref'), ('row', 'trig', 'dut'), ('row', 'trig', 'extra'),
+                          ('col', 'trig', 'ref'), ('col', 'trig', 'dut'), ('col', 'trig', 'extra')]
+
+        track_condition = np.logical_and.reduce([delta_within_limit(axis, r1, r2) for axis, r1, r2 in role_pairs])
+
+        # if args.three_board:
+        #     row_delta_TR = np.abs(track_df[f'row_{roles["trig"]}'] - track_df[f'row_{roles['ref']}']) <= args.max_diff_pixel
+        #     row_delta_TD = np.abs(track_df[f'row_{roles["trig"]}'] - track_df[f'row_{roles['dut']}']) <= args.max_diff_pixel
+        #     col_delta_TR = np.abs(track_df[f'col_{roles["trig"]}'] - track_df[f'col_{roles['ref']}']) <= args.max_diff_pixel
+        #     col_delta_TD = np.abs(track_df[f'col_{roles["trig"]}'] - track_df[f'col_{roles['dut']}']) <= args.max_diff_pixel
+        #     track_condition = (row_delta_TR) & (col_delta_TR) & (row_delta_TD) & (col_delta_TD)
+
+        # else:
+        #     row_delta_TR  = np.abs(track_df[f'row_{roles["trig"]}'] - track_df[f'row_{roles['ref']}']) <= args.max_diff_pixel
+        #     row_delta_TR2 = np.abs(track_df[f'row_{roles["trig"]}'] - track_df[f'row_{roles['extra']}']) <= args.max_diff_pixel
+        #     row_delta_TD  = np.abs(track_df[f'row_{roles["trig"]}'] - track_df[f'row_{roles['dut']}']) <= args.max_diff_pixel
+        #     col_delta_TR  = np.abs(track_df[f'col_{roles["trig"]}'] - track_df[f'col_{roles['ref']}']) <= args.max_diff_pixel
+        #     col_delta_TR2 = np.abs(track_df[f'col_{roles["trig"]}'] - track_df[f'col_{roles['extra']}']) <= args.max_diff_pixel
+        #     col_delta_TD  = np.abs(track_df[f'col_{roles["trig"]}'] - track_df[f'col_{roles['dut']}']) <= args.max_diff_pixel
+        #     track_condition = (row_delta_TR) & (col_delta_TR) & (row_delta_TD) & (col_delta_TD) & (row_delta_TR2) & (col_delta_TR2)
 
         track_df = track_df.loc[track_condition]
         track_df = track_df.drop_duplicates(subset=columns_want_to_group, keep='first')
