@@ -47,7 +47,7 @@ if args.ntrk_table:
     from tabulate import tabulate
     import sys
 
-    cuts = range(40, 440, 40)
+    cuts = range(40, 600, 40)
     ntrk_survived = []
     cut_name = [f'ntrk > {jcut}' for jcut in cuts]
 
