@@ -1,0 +1,102 @@
+defaults:
+  PT_NH18: &PT_NH18
+    name: ET2.01 PacTech New HPK-18
+    short: PT_NH18
+    offset: 20
+    HV: 230
+    role: ref
+  PT_NH17: &PT_NH17
+    name: ET2.01 PacTech New HPK-17
+    short: PT_NH17
+    offset: 20
+    HV: 230
+    role: trig
+  PT_NH15: &PT_NH15
+    name: ET2.01 PacTech New HPK-15
+    short: PT_NH15
+    offset: 20
+    HV: 230
+    role: dut
+  PT_NH14: &PT_NH14
+    name: ET2.01 PacTech New HPK-14
+    short: PT_NH14
+    offset: 20
+    HV: 230
+    role: extra
+
+run_common: &run_common
+  0: *PT_NH18
+  1: *PT_NH17
+  2: *PT_NH15
+  3: *PT_NH14
+
+run115:
+  <<: *run_common
+  0: { <<: *PT_NH18, role: dut }
+  2: { <<: *PT_NH15, role: ref }
+
+run117:
+  <<: *run_common
+  0: { <<: *PT_NH18, role: dut, HV: 220 }
+  2: { <<: *PT_NH15, role: ref }
+
+run118:
+  <<: *run_common
+  0: { <<: *PT_NH18, role: dut, HV: 210 }
+  2: { <<: *PT_NH15, role: ref }
+
+run119:
+  <<: *run_common
+  0: { <<: *PT_NH18, role: dut, HV: 200 }
+  2: { <<: *PT_NH15, role: ref }
+
+run120:
+  <<: *run_common
+  0: { <<: *PT_NH18, role: dut, HV: 190 }
+  2: { <<: *PT_NH15, role: ref }
+
+run121:
+  <<: *run_common
+  0: { <<: *PT_NH18, role: dut, HV: 180 }
+  2: { <<: *PT_NH15, role: ref }
+
+run122:
+  <<: *run_common
+  0: { <<: *PT_NH18, role: dut, HV: 170 }
+  2: { <<: *PT_NH15, role: ref }
+
+run124:
+  <<: *run_common
+  0: { <<: *PT_NH18, role: dut, HV: 240 }
+  2: { <<: *PT_NH15, role: ref }
+
+run165:
+  <<: *run_common
+
+run167:
+  <<: *run_common
+  2: { <<: *PT_NH15, HV: 240 }
+
+run168:
+  <<: *run_common
+  2: { <<: *PT_NH15, HV: 250 }
+
+run169:
+  <<: *run_common
+  2: { <<: *PT_NH15, HV: 220 }
+
+run170:
+  <<: *run_common
+  2: { <<: *PT_NH15, HV: 210 }
+
+run171:
+  <<: *run_common
+  2: { <<: *PT_NH15, HV: 200 }
+
+run172:
+  <<: *run_common
+  2: { <<: *PT_NH15, HV: 190 }
+
+run173:
+  <<: *run_common
+  2: { <<: *PT_NH15, HV: 180 }
