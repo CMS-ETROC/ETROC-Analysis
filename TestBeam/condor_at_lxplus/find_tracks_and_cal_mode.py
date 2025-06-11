@@ -70,7 +70,6 @@ def delta_within_limit(input_df: pd.DataFrame, id_roles: dict, axis: str, role1:
         <= args.max_diff_pixel
     )
 
-
 ## --------------------------------------
 def making_pivot(
         input_df: pd.DataFrame,
