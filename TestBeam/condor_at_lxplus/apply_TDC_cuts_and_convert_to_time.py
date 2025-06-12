@@ -41,37 +41,60 @@ def return_TOA_correlation_param(
     return params, distance
 
 ## --------------------------------------
-def process_single_track(args, track_dfs: dict, board_ids: list[int], board_roles: dict, save_track_dir: Path, save_time_dir: Path):
-    concatenated_track_df = pd.concat(track_dfs, ignore_index=True)
-    time_dfs = []
+def convert_code_to_time(
+        input_df: pd.DataFrame,
+        board_ids: list[int],
+        new_toa: bool = False,
+):
+    tmp_df = pd.DataFrame()
+    board_bins = {idx: 3.125 / input_df['cal'][idx].mean() for idx in board_ids}
 
-    for file_id in sorted(concatenated_track_df['file'].unique()):
-        df_file = concatenated_track_df.loc[concatenated_track_df['file'] == file_id]
+    for idx in board_ids:
+        bins = board_bins[idx]
+        tmp_df[f'tot_b{idx}'] = ((2 * input_df['tot'][idx] - np.floor(input_df['tot'][idx] / 32.)) * bins) * 1e3
 
-        if df_file.empty:
-            continue
+        if not new_toa:
+            tmp_df[f'toa_b{idx}'] = (12.5 - input_df['toa'][idx] * bins) * 1e3
+        else:
+            origin_toa = (input_df['toa'][idx] * bins) * 1e3
+            second_toa = ((input_df['toa'][idx]+input_df['cal'][idx]) * bins) * 1e3
+            tmp_df[f'toa_b{idx}'] = 12500 - (0.5*(origin_toa + second_toa - 3125))
 
-        ### Apply TDC cut
-        tot_cuts = {
-            idx: list(df_file['tot'][idx].quantile(
-                [0.04, 0.91] if idx == board_roles['dut'] else [0.01, 0.96]
-            ).values)
-            for idx in board_ids
-        }
+    return tmp_df
 
-        tdc_cuts = {
-            idx: [
-                0, 1100,
-                args.trigTOALower if idx == board_roles['ref'] else 0,
-                args.trigTOAUpper if idx == board_roles['ref'] else 1100,
-                *tot_cuts[idx]
-            ] for idx in board_ids
-        }
+## --------------------------------------
+def apply_TDC_cuts(
+        args,
+        input_df: pd.DataFrame,
+        board_roles: dict,
+    ):
 
-        interest_df = tdc_event_selection_pivot(df_file, tdc_cuts_dict=tdc_cuts)
+    board_ids = sorted([board_roles['dut'], board_roles['ref'], board_roles['extra']])
+    dut_lowerTOT = args.dutTOTlower * 0.01
+    dut_upperTOT = args.dutTOTupper * 0.01
 
-        if interest_df.empty:
-            continue
+    df_in_time = pd.DataFrame()
+
+    ### Apply TDC cut
+    tot_cuts = {
+        idx: list(input_df['tot'][idx].quantile(
+            [dut_lowerTOT, dut_upperTOT] if idx == board_roles['dut'] else [0.01, 0.96]
+        ).values)
+        for idx in board_ids
+    }
+
+    tdc_cuts = {
+        idx: [
+            0, 1100,
+            args.trigTOALower if idx == board_roles['ref'] else 0,
+            args.trigTOAUpper if idx == board_roles['ref'] else 1100,
+            *tot_cuts[idx]
+        ] for idx in board_ids
+    }
+
+    interest_df = tdc_event_selection_pivot(input_df, tdc_cuts_dict=tdc_cuts)
+
+    if not interest_df.empty:
 
         # --- Apply TOA correlation cut
         _, distance1 = return_TOA_correlation_param(interest_df, board_id1=board_ids[0], board_id2=board_ids[1])
@@ -83,21 +106,29 @@ def process_single_track(args, track_dfs: dict, board_ids: list[int], board_role
         std3 = np.nanstd(distance3)
 
         dist_cut = (distance1 < args.distance_factor * std1) & \
-                   (distance2 < args.distance_factor * std2) & \
-                   (distance3 < args.distance_factor * std3)
+                    (distance2 < args.distance_factor * std2) & \
+                    (distance3 < args.distance_factor * std3)
 
         reduced_df = interest_df.loc[dist_cut]
-        if reduced_df.empty:
+
+        if not reduced_df.empty:
+            df_in_time = convert_code_to_time(reduced_df, board_ids, args.use_new_toa)
+
+    return df_in_time
+
+
+## --------------------------------------
+def process_single_track(args, track_dfs: dict, board_roles: dict, save_track_dir: Path, save_time_dir: Path):
+    concatenated_track_df = pd.concat(track_dfs, ignore_index=True)
+    time_dfs = []
+
+    for file_id in sorted(concatenated_track_df['file'].unique()):
+        df_file = concatenated_track_df.loc[concatenated_track_df['file'] == file_id]
+
+        if df_file.empty:
             continue
 
-        ### Convert to time
-        df_in_time = pd.DataFrame()
-        board_bins = {idx: 3.125 / reduced_df['cal'][idx].mean() for idx in board_ids}
-        for idx in board_ids:
-            bins = board_bins[idx]
-            df_in_time[f'toa_b{idx}'] = (12.5 - reduced_df['toa'][idx] * bins) * 1e3
-            df_in_time[f'tot_b{idx}'] = ((2 * reduced_df['tot'][idx] - np.floor(reduced_df['tot'][idx] / 32.)) * bins) * 1e3
-
+        df_in_time = apply_TDC_cuts(args, df_file, board_roles)
         time_dfs.append(df_in_time)
 
     concatenated_time_df = pd.concat(time_dfs, ignore_index=True)
@@ -119,54 +150,22 @@ def process_single_track(args, track_dfs: dict, board_ids: list[int], board_role
 
 
 ## --------------------------------------
-def reprocess_code_to_time_df(input_file, newDUTtotLower, newDUTtotUpper):
+def reprocess_code_to_time_df(args, input_file, board_roles: dict):
 
     track_df = pd.read_pickle(input_file)
+    time_dfs = []
 
-    ### Apply TDC cut
-    tot_cuts = {
-        idx: list(track_df['tot'][idx].quantile(
-            [newDUTtotLower, newDUTtotUpper] if idx == roles['dut'] else [0.01, 0.96]
-        ).values)
-        for idx in board_ids
-    }
+    for file_id in sorted(track_df['file'].unique()):
+        df_file = track_df.loc[track_df['file'] == file_id]
 
-    tdc_cuts = {
-        idx: [
-            0, 1100,
-            args.trigTOALower if idx == roles['ref'] else 0,
-            args.trigTOAUpper if idx == roles['ref'] else 1100,
-            *tot_cuts[idx]
-        ] for idx in board_ids
-    }
+        if df_file.empty:
+            continue
 
-    interest_df = tdc_event_selection_pivot(track_df, tdc_cuts_dict=tdc_cuts)
+        df_in_time = apply_TDC_cuts(args, df_file, board_roles)
+        time_dfs.append(df_in_time)
 
-    if not interest_df.empty:
-        ### Apply TOA correlation cut
-        _, distance1 = return_TOA_correlation_param(interest_df, board_id1=board_ids[0], board_id2=board_ids[1])
-        _, distance2 = return_TOA_correlation_param(interest_df, board_id1=board_ids[0], board_id2=board_ids[2])
-        _, distance3 = return_TOA_correlation_param(interest_df, board_id1=board_ids[1], board_id2=board_ids[2])
-
-        std1 = np.nanstd(distance1)
-        std2 = np.nanstd(distance2)
-        std3 = np.nanstd(distance3)
-
-        dist_cut = (distance1 < args.distance_factor * std1) & \
-                   (distance2 < args.distance_factor * std2) & \
-                   (distance3 < args.distance_factor * std3)
-
-        reduced_df = interest_df.loc[dist_cut]
-
-        if not reduced_df.empty:
-            df_in_time = pd.DataFrame()
-            board_bins = {idx: 3.125 / reduced_df['cal'][idx].mean() for idx in board_ids}
-            for idx in board_ids:
-                bins = board_bins[idx]
-                df_in_time[f'toa_b{idx}'] = (12.5 - reduced_df['toa'][idx] * bins) * 1e3
-                df_in_time[f'tot_b{idx}'] = ((2 * reduced_df['tot'][idx] - np.floor(reduced_df['tot'][idx] / 32.)) * bins) * 1e3
-
-    return df_in_time
+    concatenated_time_df = pd.concat(time_dfs, ignore_index=True)
+    return concatenated_time_df
 
 ## --------------------------------------
 if __name__ == "__main__":
@@ -254,25 +253,11 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        '--autoTOTcuts',
-        action = 'store_true',
-        help = 'If set, select 80 percent of data around TOT median value of each board',
-        dest = 'autoTOTcuts',
-    )
-
-    parser.add_argument(
-        '--reprocess',
-        action = 'store_true',
-        help = 'If set, reprocess track ',
-        dest = 'reprocess',
-    )
-
-    parser.add_argument(
         '--dutTOTlower',
         metavar = 'NUM',
         type = int,
         help = 'Lower TOT boundary for the DUT board. Only relevant when --reprocess option is on.',
-        default = 1,
+        default = 4,
         dest = 'dutTOTlower',
     )
 
@@ -281,8 +266,22 @@ if __name__ == "__main__":
         metavar = 'NUM',
         type = int,
         help = 'Upper TOT boundary for the DUT board. Only relevant when --reprocess option is on.',
-        default = 96,
+        default = 91,
         dest = 'dutTOTupper',
+    )
+
+    parser.add_argument(
+        '--reprocess',
+        action = 'store_true',
+        help = 'If set, reprocess track',
+        dest = 'reprocess',
+    )
+
+    parser.add_argument(
+        '--use_new_toa',
+        action = 'store_true',
+        help = 'If set, use average of TOA and TOA+CAL as a new toa in time',
+        dest = 'use_new_toa',
     )
 
     args = parser.parse_args()
@@ -296,8 +295,6 @@ if __name__ == "__main__":
     roles = {}
     for board_id, board_info in config[args.runName].items():
         roles[board_info.get('role')] = board_id
-
-    board_ids = sorted([roles['ref'], roles['dut'], roles['extra']])
 
     if not args.reprocess:
 
@@ -336,22 +333,19 @@ if __name__ == "__main__":
             with ProcessPoolExecutor() as process_executor:
                 # Each input results in multiple threading jobs being created:
                 futures = [
-                    process_executor.submit(process_single_track, args, itrack, board_ids, roles, track_dir, time_dir)
+                    process_executor.submit(process_single_track, args, itrack, roles, track_dir, time_dir)
                         for _, itrack in track_data.items()
                 ]
                 for future in as_completed(futures):
                     pbar.update(1)
 
     else:
-        new_dutTOTlower = round(args.dutTOTlower * 0.01, 2)
-        new_dutTOTupper = round(args.dutTOTupper * 0.01, 2)
-
         track_dir = Path(args.outdir) / 'tracks'
         time_dir = Path(args.outdir) / 'reprocessed_time'
         time_dir.mkdir(exist_ok=True)
 
         print(f'Reprocess track pkl file at {track_dir}')
-        print(f'New quantile TOT cut for DUT: {new_dutTOTlower} - {new_dutTOTupper}')
+        print(f'New quantile TOT cut for DUT: {args.dutTOTlower}% - {args.dutTOTupper}%')
 
         files = natsorted(track_dir.glob('track*pkl'))
 
@@ -361,7 +355,7 @@ if __name__ == "__main__":
             with ProcessPoolExecutor() as process_executor:
                 # Each input results in multiple threading jobs being created:
                 futures = {
-                    process_executor.submit(reprocess_code_to_time_df, ifile, new_dutTOTlower, new_dutTOTupper): ifile
+                    process_executor.submit(reprocess_code_to_time_df, args, ifile, roles): ifile
                     for ifile in files
                 }
                 for future in as_completed(futures):
