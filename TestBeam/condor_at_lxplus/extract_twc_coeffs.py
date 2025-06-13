@@ -6,47 +6,37 @@ def return_coefficient_three_board_iterative_TWC(
     input_df: pd.DataFrame,
     iterative_cnt: int,
     poly_order: int,
-    board_list: list,
+    board_roles: dict,
 ):
 
+    board_keys = sorted(board_roles.keys())
+    corr_toas = {key: input_df[f'toa_{key}'].values for key in board_keys}
+
+    ### Calculate delta of avg TOA
+    delta_toas = {}
+    for current_key in board_keys:
+        others_sum = sum(corr_toas[other_key] for other_key in board_keys if other_key != current_key)
+        delta_toas[current_key] = (0.5 * others_sum) - corr_toas[current_key]
+
     coeff_dict = {}
-
-    corr_b0 = input_df[f'toa_b{board_list[0]}'].values
-    corr_b1 = input_df[f'toa_b{board_list[1]}'].values
-    corr_b2 = input_df[f'toa_b{board_list[2]}'].values
-
-    del_toa_b0 = (0.5*(input_df[f'toa_b{board_list[1]}'] + input_df[f'toa_b{board_list[2]}']) - input_df[f'toa_b{board_list[0]}']).values
-    del_toa_b1 = (0.5*(input_df[f'toa_b{board_list[0]}'] + input_df[f'toa_b{board_list[2]}']) - input_df[f'toa_b{board_list[1]}']).values
-    del_toa_b2 = (0.5*(input_df[f'toa_b{board_list[0]}'] + input_df[f'toa_b{board_list[1]}']) - input_df[f'toa_b{board_list[2]}']).values
-
     for i in range(iterative_cnt):
 
-        coeff_dict[f'iter{i+1}'] = {
-            f'board_{board_list[0]}': None,
-            f'board_{board_list[1]}': None,
-            f'board_{board_list[2]}': None,
-        }
+        coeff_dict[f'iter{i+1}'] = {}
+        corrections = {}
 
-        coeff_b0 = np.polyfit(input_df[f'tot_b{board_list[0]}'].values, del_toa_b0, poly_order)
-        poly_func_b0 = np.poly1d(coeff_b0)
+        for key in board_keys:
+            coeff = np.polyfit(input_df[f'tot_{key}'].values, delta_toas[key], poly_order)
+            poly_func = np.poly1d(coeff)
 
-        coeff_b1 = np.polyfit(input_df[f'tot_b{board_list[1]}'].values, del_toa_b1, poly_order)
-        poly_func_b1 = np.poly1d(coeff_b1)
+            coeff_dict[f'iter{i+1}'][key] = coeff.tolist()
+            corrections[key] = poly_func(input_df[f'tot_{key}'].values)
 
-        coeff_b2 = np.polyfit(input_df[f'tot_b{board_list[2]}'].values, del_toa_b2, poly_order)
-        poly_func_b2 = np.poly1d(coeff_b2)
+        for key in board_keys:
+            corr_toas[key] += corrections[key]
 
-        coeff_dict[f'iter{i+1}'][f'board_{board_list[0]}'] = coeff_b0.tolist()
-        coeff_dict[f'iter{i+1}'][f'board_{board_list[1]}'] = coeff_b1.tolist()
-        coeff_dict[f'iter{i+1}'][f'board_{board_list[2]}'] = coeff_b2.tolist()
-
-        corr_b0 = corr_b0 + poly_func_b0(input_df[f'tot_b{board_list[0]}'].values)
-        corr_b1 = corr_b1 + poly_func_b1(input_df[f'tot_b{board_list[1]}'].values)
-        corr_b2 = corr_b2 + poly_func_b2(input_df[f'tot_b{board_list[2]}'].values)
-
-        del_toa_b0 = (0.5*(corr_b1 + corr_b2) - corr_b0)
-        del_toa_b1 = (0.5*(corr_b0 + corr_b2) - corr_b1)
-        del_toa_b2 = (0.5*(corr_b0 + corr_b1) - corr_b2)
+        for current_key in board_keys:
+            others_sum = sum(corr_toas[other_key] for other_key in board_keys if other_key != current_key)
+            delta_toas[current_key] = (0.5 * others_sum) - corr_toas[current_key]
 
     return coeff_dict
 
@@ -92,15 +82,6 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        '--exclude_role',
-        metavar = 'NAME',
-        type = str,
-        help = "Choose the board to exclude for calculating TWC coeffs. Possible option: 'trig', 'dut', 'ref', 'extra'",
-        required = True,
-        dest = 'exclude_role',
-    )
-
-    parser.add_argument(
         '--poly_order',
         metavar = 'NUM',
         type = int,
@@ -114,7 +95,7 @@ if __name__ == "__main__":
         metavar = 'NUM',
         type = int,
         help = 'Maximum iteration of TWC',
-        default = 5,
+        default = 2,
         dest = 'iteration',
     )
 
@@ -127,19 +108,19 @@ if __name__ == "__main__":
     if args.runName not in config:
         raise ValueError(f"Run config {args.runName} not found")
 
-    board_ids = []
+    excluded_role = files[0].name.split('_')[1]
+    roles = {}
     for board_id, board_info in config[args.runName].items():
-        if args.exclude_role == board_info.get('role'):
+        if excluded_role == board_info.get('role'):
             continue
-        board_ids.append(board_id)
-    board_ids = sorted(board_ids)
+        roles[board_info.get('role')] = board_id
 
     output = {}
     for ifile in files:
         track_name = ifile.name.split('.')[0].split('track_')[1]
 
         df = pd.read_pickle(ifile)
-        single_track_twc_coeffs = return_coefficient_three_board_iterative_TWC(df, args.iteration, args.poly_order, board_ids)
+        single_track_twc_coeffs = return_coefficient_three_board_iterative_TWC(df, args.iteration, args.poly_order, roles)
         output[track_name] = single_track_twc_coeffs
 
     output_filename = f"{args.config.split('/')[-1].split('.')[0]}_{args.runName}_TWC_coeffs.pickle"
