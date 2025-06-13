@@ -43,22 +43,22 @@ def return_TOA_correlation_param(
 ## --------------------------------------
 def convert_code_to_time(
         input_df: pd.DataFrame,
-        board_ids: list[int],
+        board_roles: dict,
         new_toa: bool = False,
 ):
     tmp_df = pd.DataFrame()
-    board_bins = {idx: 3.125 / input_df['cal'][idx].mean() for idx in board_ids}
+    board_bins = {idx: 3.125 / input_df['cal'][idx].mean() for _, idx in board_roles.items()}
 
-    for idx in board_ids:
+    for role, idx in board_roles.items():
         bins = board_bins[idx]
-        tmp_df[f'tot_b{idx}'] = ((2 * input_df['tot'][idx] - np.floor(input_df['tot'][idx] / 32.)) * bins) * 1e3
+        tmp_df[f'tot_{role}'] = ((2 * input_df['tot'][idx] - np.floor(input_df['tot'][idx] / 32.)) * bins) * 1e3
 
         if not new_toa:
-            tmp_df[f'toa_b{idx}'] = (12.5 - input_df['toa'][idx] * bins) * 1e3
+            tmp_df[f'toa_{role}'] = (12.5 - input_df['toa'][idx] * bins) * 1e3
         else:
             origin_toa = (input_df['toa'][idx] * bins) * 1e3
             second_toa = ((input_df['toa'][idx]+input_df['cal'][idx]) * bins) * 1e3
-            tmp_df[f'toa_b{idx}'] = 12500 - (0.5*(origin_toa + second_toa - 3125))
+            tmp_df[f'toa_{role}'] = 12500 - (0.5*(origin_toa + second_toa - 3125))
 
     return tmp_df
 
@@ -69,32 +69,37 @@ def apply_TDC_cuts(
         board_roles: dict,
     ):
 
-    board_ids = sorted([board_roles['dut'], board_roles['ref'], board_roles['extra']])
     dut_lowerTOT = args.dutTOTlower * 0.01
     dut_upperTOT = args.dutTOTupper * 0.01
 
     df_in_time = pd.DataFrame()
 
+    dut_id = board_roles.get('dut')
+    trig_id = board_roles.get('trig')
+    if trig_id is None:
+        trig_id = board_roles.get('ref')
+
     ### Apply TDC cut
     tot_cuts = {
         idx: list(input_df['tot'][idx].quantile(
-            [dut_lowerTOT, dut_upperTOT] if idx == board_roles['dut'] else [0.01, 0.96]
+            [dut_lowerTOT, dut_upperTOT] if dut_id is not None and idx == dut_id else [0.01, 0.96]
         ).values)
-        for idx in board_ids
+        for _, idx in board_roles.items()
     }
 
     tdc_cuts = {
         idx: [
             0, 1100,
-            args.trigTOALower if idx == board_roles['ref'] else 0,
-            args.trigTOAUpper if idx == board_roles['ref'] else 1100,
+            args.trigTOALower if trig_id is not None and idx == trig_id else 0,
+            args.trigTOAUpper if trig_id is not None and idx == trig_id else 1100,
             *tot_cuts[idx]
-        ] for idx in board_ids
+        ] for _, idx in board_roles.items()
     }
-
     interest_df = tdc_event_selection_pivot(input_df, tdc_cuts_dict=tdc_cuts)
 
     if not interest_df.empty:
+
+        board_ids = sorted(board_roles.values())
 
         # --- Apply TOA correlation cut
         _, distance1 = return_TOA_correlation_param(interest_df, board_id1=board_ids[0], board_id2=board_ids[1])
@@ -112,7 +117,7 @@ def apply_TDC_cuts(
         reduced_df = interest_df.loc[dist_cut]
 
         if not reduced_df.empty:
-            df_in_time = convert_code_to_time(reduced_df, board_ids, args.use_new_toa)
+            df_in_time = convert_code_to_time(reduced_df, board_roles, args.use_new_toa)
 
     return df_in_time
 
@@ -143,10 +148,12 @@ def process_single_track(args, track_dfs: dict, board_roles: dict, save_track_di
         idx: (concatenated_track_df['row'][idx].unique()[0], concatenated_track_df['col'][idx].unique()[0])
         for idx in board_ids_for_naming
     }
+
+    prefix = f"excluded_{args.exclude_role}_"
     outname = f"track" + ''.join([f"_R{row}C{col}" for _, (row, col) in row_cols.items()])
 
     concatenated_track_df.to_pickle(save_track_dir / f'{outname}.pkl')
-    concatenated_time_df.to_pickle(save_time_dir / f'{outname}.pkl')
+    concatenated_time_df.to_pickle(save_time_dir / f'{prefix}{outname}.pkl')
 
 
 ## --------------------------------------
@@ -271,6 +278,15 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        '--exclude_role',
+        metavar = 'NAME',
+        type = str,
+        help = "Choose the board to exclude for calculating TWC coeffs. Possible option: 'trig', 'dut', 'ref', 'extra'",
+        default = 'trig',
+        dest = 'exclude_role',
+    )
+
+    parser.add_argument(
         '--reprocess',
         action = 'store_true',
         help = 'If set, reprocess track',
@@ -294,6 +310,8 @@ if __name__ == "__main__":
 
     roles = {}
     for board_id, board_info in config[args.runName].items():
+        if args.exclude_role == board_info.get('role'):
+            continue
         roles[board_info.get('role')] = board_id
 
     if not args.reprocess:
@@ -347,6 +365,7 @@ if __name__ == "__main__":
         print(f'Reprocess track pkl file at {track_dir}')
         print(f'New quantile TOT cut for DUT: {args.dutTOTlower}% - {args.dutTOTupper}%')
 
+        prefix = f"excluded_{args.exclude_role}_"
         files = natsorted(track_dir.glob('track*pkl'))
 
         print('\n====== Apply TDC cut and save track and time dataframes ======')
@@ -361,5 +380,5 @@ if __name__ == "__main__":
                 for future in as_completed(futures):
                     iresult = future.result()
                     iresult = iresult.reset_index(drop=True) ## Make dataframe to use RangeIndex for memory efficient
-                    iresult.to_pickle(time_dir / futures[future].name)
+                    iresult.to_pickle(time_dir / f"{prefix}{futures[future].name}")
                     pbar.update(1)
