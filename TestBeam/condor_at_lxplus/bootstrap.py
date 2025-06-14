@@ -1,122 +1,50 @@
 import pandas as pd
 import numpy as np
-import sys
 from collections import defaultdict
 import warnings
 warnings.filterwarnings("ignore")
-
-## --------------------------------------
-def tdc_event_selection_pivot(
-        input_df: pd.DataFrame,
-        tdc_cuts_dict: dict
-    ):
-    # Create boolean masks for each board's filtering criteria
-    masks = {}
-    for board, cuts in tdc_cuts_dict.items():
-        mask = (
-            input_df['cal'][board].between(cuts[0], cuts[1]) &
-            input_df['toa'][board].between(cuts[2], cuts[3]) &
-            input_df['tot'][board].between(cuts[4], cuts[5])
-        )
-        masks[board] = mask
-
-    # Combine the masks using logical AND
-    combined_mask = pd.concat(masks, axis=1).all(axis=1)
-    del masks
-
-    # Apply the combined mask to the DataFrame
-    tdc_filtered_df = input_df[combined_mask].reset_index(drop=True)
-    del combined_mask
-    return tdc_filtered_df
 
 ## --------------------------------------
 def three_board_iterative_timewalk_correction(
     input_df: pd.DataFrame,
     iterative_cnt: int,
     poly_order: int,
-    board_list: list,
+    board_roles: list[str],
+    twc_coeffs: dict,
 ):
 
-    corr_toas = {}
-    corr_b0 = input_df[f'toa_b{board_list[0]}'].values
-    corr_b1 = input_df[f'toa_b{board_list[1]}'].values
-    corr_b2 = input_df[f'toa_b{board_list[2]}'].values
+    if len(board_roles) != 3:
+        raise ValueError(f"This function's logic requires exactly 3 boards, but {len(board_roles)} were provided.")
 
-    del_toa_b0 = (0.5*(input_df[f'toa_b{board_list[1]}'] + input_df[f'toa_b{board_list[2]}']) - input_df[f'toa_b{board_list[0]}']).values
-    del_toa_b1 = (0.5*(input_df[f'toa_b{board_list[0]}'] + input_df[f'toa_b{board_list[2]}']) - input_df[f'toa_b{board_list[1]}']).values
-    del_toa_b2 = (0.5*(input_df[f'toa_b{board_list[0]}'] + input_df[f'toa_b{board_list[1]}']) - input_df[f'toa_b{board_list[2]}']).values
+    tots = {key: input_df[f'tot_{key}'].values for key in board_roles}
+    corr_toas = {key: input_df[f'toa_{key}'].values for key in board_roles}
 
-    for i in range(iterative_cnt):
-        coeff_b0 = np.polyfit(input_df[f'tot_b{board_list[0]}'].values, del_toa_b0, poly_order)
-        poly_func_b0 = np.poly1d(coeff_b0)
+    def _calculate_deltas(current_toas):
+        deltas = {}
+        for current_key in board_roles:
+            others_sum = sum(current_toas[other_key] for other_key in board_roles if other_key != current_key)
+            deltas[current_key] = (0.5 * others_sum) - current_toas[current_key]
+        return deltas
 
-        coeff_b1 = np.polyfit(input_df[f'tot_b{board_list[1]}'].values, del_toa_b1, poly_order)
-        poly_func_b1 = np.poly1d(coeff_b1)
-
-        coeff_b2 = np.polyfit(input_df[f'tot_b{board_list[2]}'].values, del_toa_b2, poly_order)
-        poly_func_b2 = np.poly1d(coeff_b2)
-
-        corr_b0 = corr_b0 + poly_func_b0(input_df[f'tot_b{board_list[0]}'].values)
-        corr_b1 = corr_b1 + poly_func_b1(input_df[f'tot_b{board_list[1]}'].values)
-        corr_b2 = corr_b2 + poly_func_b2(input_df[f'tot_b{board_list[2]}'].values)
-
-        del_toa_b0 = (0.5*(corr_b1 + corr_b2) - corr_b0)
-        del_toa_b1 = (0.5*(corr_b0 + corr_b2) - corr_b1)
-        del_toa_b2 = (0.5*(corr_b0 + corr_b1) - corr_b2)
-
-        if i == iterative_cnt-1:
-            corr_toas[f'toa_b{board_list[0]}'] = corr_b0
-            corr_toas[f'toa_b{board_list[1]}'] = corr_b1
-            corr_toas[f'toa_b{board_list[2]}'] = corr_b2
-
-    return corr_toas
-
-## --------------------------------------
-def four_board_iterative_timewalk_correction(
-    input_df: pd.DataFrame,
-    iterative_cnt: int,
-    poly_order: int,
-    ):
-
-    corr_toas = {}
-    corr_b0 = input_df['toa_b0'].values
-    corr_b1 = input_df['toa_b1'].values
-    corr_b2 = input_df['toa_b2'].values
-    corr_b3 = input_df['toa_b3'].values
-
-    del_toa_b3 = ((1/3)*(input_df['toa_b0'] + input_df['toa_b1'] + input_df['toa_b2']) - input_df['toa_b3']).values
-    del_toa_b2 = ((1/3)*(input_df['toa_b0'] + input_df['toa_b1'] + input_df['toa_b3']) - input_df['toa_b2']).values
-    del_toa_b1 = ((1/3)*(input_df['toa_b0'] + input_df['toa_b3'] + input_df['toa_b2']) - input_df['toa_b1']).values
-    del_toa_b0 = ((1/3)*(input_df['toa_b3'] + input_df['toa_b1'] + input_df['toa_b2']) - input_df['toa_b0']).values
+    delta_toas = _calculate_deltas(corr_toas)
 
     for i in range(iterative_cnt):
-        coeff_b0 = np.polyfit(input_df['tot_b0'].values, del_toa_b0, poly_order)
-        poly_func_b0 = np.poly1d(coeff_b0)
+        corrections = {}
 
-        coeff_b1 = np.polyfit(input_df['tot_b1'].values, del_toa_b1, poly_order)
-        poly_func_b1 = np.poly1d(coeff_b1)
+        for key in board_roles:
 
-        coeff_b2 = np.polyfit(input_df['tot_b2'].values, del_toa_b2, poly_order)
-        poly_func_b2 = np.poly1d(coeff_b2)
+            if twc_coeffs is not None:
+                coeff = twc_coeffs[f'iter{i+1}'][key]
+            else:
+                coeff = np.polyfit(tots[key], delta_toas[key], poly_order)
 
-        coeff_b3 = np.polyfit(input_df['tot_b3'].values, del_toa_b3, poly_order)
-        poly_func_b3 = np.poly1d(coeff_b3)
+            poly_func = np.poly1d(coeff)
+            corrections[key] = poly_func(tots[key])
 
-        corr_b0 = corr_b0 + poly_func_b0(input_df['tot_b0'].values)
-        corr_b1 = corr_b1 + poly_func_b1(input_df['tot_b1'].values)
-        corr_b2 = corr_b2 + poly_func_b2(input_df['tot_b2'].values)
-        corr_b3 = corr_b3 + poly_func_b3(input_df['tot_b3'].values)
+        for key in board_roles:
+            corr_toas[key] += corrections[key]
 
-        del_toa_b3 = ((1/3)*(corr_b0 + corr_b1 + corr_b2) - corr_b3)
-        del_toa_b2 = ((1/3)*(corr_b0 + corr_b1 + corr_b3) - corr_b2)
-        del_toa_b1 = ((1/3)*(corr_b0 + corr_b3 + corr_b2) - corr_b1)
-        del_toa_b0 = ((1/3)*(corr_b3 + corr_b1 + corr_b2) - corr_b0)
-
-        if i == iterative_cnt-1:
-            corr_toas[f'toa_b0'] = corr_b0
-            corr_toas[f'toa_b1'] = corr_b1
-            corr_toas[f'toa_b2'] = corr_b2
-            corr_toas[f'toa_b3'] = corr_b3
+        delta_toas = _calculate_deltas(corr_toas)
 
     return corr_toas
 
@@ -131,7 +59,6 @@ def fwhm_based_on_gaussian_mixture_model(
     from sklearn.mixture import GaussianMixture
     from sklearn.metrics import silhouette_score
     from scipy.spatial import distance
-    import matplotlib.pyplot as plt
 
     x_range = np.linspace(input_data.min(), input_data.max(), 1000).reshape(-1, 1)
     bins, edges = np.histogram(input_data, bins=30, density=True)
@@ -162,7 +89,7 @@ def fwhm_based_on_gaussian_mixture_model(
         pdf_individual = responsibilities * pdf[:, np.newaxis]
 
     if plotting:
-
+        import matplotlib.pyplot as plt
         fig, ax = plt.subplots(figsize=(10,10))
 
         # Plot data histogram
@@ -186,159 +113,42 @@ def fwhm_based_on_gaussian_mixture_model(
 ## --------------------------------------
 def return_resolution_three_board_fromFWHM(
         fit_params: dict,
-        var: list,
-        board_list:list,
+        board_roles: list[str],
     ):
 
-    results = {
-        board_list[0]: np.sqrt(0.5*(fit_params[var[0]]**2 + fit_params[var[1]]**2 - fit_params[var[2]]**2)),
-        board_list[1]: np.sqrt(0.5*(fit_params[var[0]]**2 + fit_params[var[2]]**2 - fit_params[var[1]]**2)),
-        board_list[2]: np.sqrt(0.5*(fit_params[var[1]]**2 + fit_params[var[2]]**2 - fit_params[var[0]]**2)),
-    }
+    if len(board_roles) != 3:
+        raise ValueError(f"This function's logic requires exactly 3 boards, but {len(board_roles)} were provided.")
+
+    def get_param_value(board1: str, board2: str):
+        key1 = f"{board1}-{board2}"
+        key2 = f"{board2}-{board1}"
+        if key1 in fit_params:
+            return fit_params[key1]
+        if key2 in fit_params:
+            return fit_params[key2]
+        raise KeyError(f"Could not find resolution pair for '{board1}' and '{board2}' in fit_params.")
+
+    results = {}
+    for target_board in board_roles:
+        other_boards = [b for b in board_roles if b != target_board]
+
+        term1 = get_param_value(target_board, other_boards[0]) ** 2
+        term2 = get_param_value(target_board, other_boards[1]) ** 2
+        term3 = get_param_value(other_boards[0], other_boards[1]) ** 2
+
+        # Apply the generalized formula
+        # np.sqrt can return a nan if the value is negative, which indicates non-physical results
+        with np.errstate(invalid='warn'): # Will warn if you take sqrt of a negative number
+            resolution_sq = 0.5 * (term1 + term2 - term3)
+            results[target_board] = np.sqrt(resolution_sq) if resolution_sq > 0 else 0
 
     return results
-
-## --------------------------------------
-def return_resolution_four_board_fromFWHM(
-        fit_params: dict,
-    ):
-
-    results = {
-        0: np.sqrt((1/6)*(2*fit_params['01']**2+2*fit_params['02']**2+2*fit_params['03']**2-fit_params['12']**2-fit_params['13']**2-fit_params['23']**2)),
-        1: np.sqrt((1/6)*(2*fit_params['01']**2+2*fit_params['12']**2+2*fit_params['13']**2-fit_params['02']**2-fit_params['03']**2-fit_params['23']**2)),
-        2: np.sqrt((1/6)*(2*fit_params['02']**2+2*fit_params['12']**2+2*fit_params['23']**2-fit_params['01']**2-fit_params['03']**2-fit_params['13']**2)),
-        3: np.sqrt((1/6)*(2*fit_params['03']**2+2*fit_params['13']**2+2*fit_params['23']**2-fit_params['01']**2-fit_params['02']**2-fit_params['12']**2)),
-    }
-
-    return results
-
-# ## --------------------------------------
-# def bootstrap(
-#         input_df: pd.DataFrame,
-#         board_to_analyze: list[int],
-#         limit: int = 7500,
-#         nouts: int = 100,
-#         sampling_fraction: int = 75,
-#         minimum_nevt_cut: int = 1000,
-#         do_reproducible: bool = False,
-#     ):
-
-#     resolution_from_bootstrap = defaultdict(list)
-#     random_sampling_fraction = sampling_fraction*0.01
-
-#     counter = 0
-#     resample_counter = 0
-
-#     while True:
-
-#         if counter > limit:
-#             print("Loop reaches the limit. Escaping bootstrap loop")
-#             break
-
-#         tdc_filtered_df = input_df
-
-#         if do_reproducible:
-#             np.random.seed(counter)
-
-#         n = int(random_sampling_fraction*tdc_filtered_df.shape[0])
-#         indices = np.random.choice(tdc_filtered_df['evt'].unique(), n, replace=False)
-#         tdc_filtered_df = tdc_filtered_df.loc[tdc_filtered_df['evt'].isin(indices)]
-
-#         if tdc_filtered_df.shape[0] < minimum_nevt_cut:
-#             print(f'Number of events in random sample is {tdc_filtered_df.shape[0]}')
-#             print('Warning!! Sampling size is too small. Skipping this track')
-#             break
-
-#         df_in_time = pd.DataFrame()
-
-#         for idx in board_to_analyze:
-#             bins = 3.125/tdc_filtered_df['cal'][idx].mean()
-#             df_in_time[f'toa_b{str(idx)}'] = (12.5 - tdc_filtered_df['toa'][idx] * bins)*1e3
-#             df_in_time[f'tot_b{str(idx)}'] = ((2*tdc_filtered_df['tot'][idx] - np.floor(tdc_filtered_df['tot'][idx]/32)) * bins)*1e3
-
-#         del tdc_filtered_df
-
-#         if(len(board_to_analyze)==3):
-#             corr_toas = three_board_iterative_timewalk_correction(df_in_time, 2, 2, board_list=board_to_analyze)
-#         elif(len(board_to_analyze)==4):
-#             corr_toas = four_board_iterative_timewalk_correction(df_in_time, 2, 2)
-#         else:
-#             print("You have less than 3 boards to analyze")
-#             break
-
-#         diffs = {}
-#         for board_a in board_to_analyze:
-#             for board_b in board_to_analyze:
-#                 if board_b <= board_a:
-#                     continue
-#                 name = f"{board_a}{board_b}"
-#                 diffs[name] = np.asarray(corr_toas[f'toa_b{board_a}'] - corr_toas[f'toa_b{board_b}'])
-
-#         keys = list(diffs.keys())
-#         try:
-#             fit_params = {}
-#             scores = []
-#             for ikey in diffs.keys():
-#                 params, eval_scores = fwhm_based_on_gaussian_mixture_model(diffs[ikey], n_components=3, plotting=False, plotting_each_component=False)
-#                 fit_params[ikey] = float(params[0]/2.355)
-#                 scores.append(eval_scores)
-
-#             if np.any(np.asarray(scores)[:,0] > 0.6) or np.any(np.asarray(scores)[:,1] > 0.075) :
-#                 print('Redo the sampling')
-#                 counter += 1
-#                 resample_counter += 1
-#                 continue
-
-#             if(len(board_to_analyze)==3):
-#                 resolutions = return_resolution_three_board_fromFWHM(fit_params, var=keys, board_list=board_to_analyze)
-#             elif(len(board_to_analyze)==4):
-#                 resolutions = return_resolution_four_board_fromFWHM(fit_params)
-#             else:
-#                 print("You have less than 3 boards to analyze")
-#                 break
-
-#             if any(np.isnan(val) for key, val in resolutions.items()):
-#                 print('At least one of time resolution values is NaN. Skipping this iteration')
-#                 counter += 1
-#                 resample_counter += 1
-#                 continue
-
-#             if do_reproducible:
-#                 resolution_from_bootstrap['RandomSeed'].append(counter)
-
-#             for key in resolutions.keys():
-#                 resolution_from_bootstrap[key].append(resolutions[key])
-
-#             counter += 1
-
-#         except Exception as inst:
-#             print(inst)
-#             counter += 1
-#             del diffs, corr_toas
-
-#         break_flag = False
-#         for key, val in resolution_from_bootstrap.items():
-#             if len(val) > nouts:
-#                 break_flag = True
-#                 break
-
-#         if break_flag:
-#             print('Escaping bootstrap loop')
-#             break
-
-#     print('How many times do resample?', resample_counter)
-
-#     ### Empty dictionary case
-#     if not resolution_from_bootstrap:
-#         return pd.DataFrame()
-#     else:
-#         resolution_from_bootstrap_df = pd.DataFrame(resolution_from_bootstrap)
-#         return resolution_from_bootstrap_df
 
 ## --------------------------------------
 def time_df_bootstrap(
         input_df: pd.DataFrame,
-        board_to_analyze: list[int],
+        board_to_analyze: list[str],
+        twc_coeffs: dict,
         limit: int = 7500,
         nouts: int = 100,
         sampling_fraction: int = 75,
@@ -350,6 +160,7 @@ def time_df_bootstrap(
 
     counter = 0
     resample_counter = 0
+    successful_runs = 0
 
     while True:
 
@@ -366,26 +177,19 @@ def time_df_bootstrap(
 
         if selected_df.shape[0] < minimum_nevt_cut:
             print(f'Number of events in random sample is {selected_df.shape[0]}')
-            print('Warning!! Sampling size is too small. Skipping this track')
+            print('Warning!! Sampling size is too small. Bootstrap will not happen for this track')
             break
 
-        if(len(board_to_analyze)==3):
-            corr_toas = three_board_iterative_timewalk_correction(selected_df, 2, 2, board_list=board_to_analyze)
-        elif(len(board_to_analyze)==4):
-            corr_toas = four_board_iterative_timewalk_correction(selected_df, 2, 2)
-        else:
-            print("You have less than 3 boards to analyze")
-            break
+        corr_toas = three_board_iterative_timewalk_correction(selected_df, 2, 2, board_roles=board_to_analyze, twc_coeffs=twc_coeffs)
 
         diffs = {}
         for board_a in board_to_analyze:
             for board_b in board_to_analyze:
                 if board_b <= board_a:
                     continue
-                name = f"{board_a}{board_b}"
-                diffs[name] = np.asarray(corr_toas[f'toa_b{board_a}'] - corr_toas[f'toa_b{board_b}'])
+                name = f"{board_a}-{board_b}"
+                diffs[name] = corr_toas[board_a] - corr_toas[board_b]
 
-        keys = list(diffs.keys())
         try:
             fit_params = {}
             scores = []
@@ -395,56 +199,45 @@ def time_df_bootstrap(
                 scores.append(eval_scores)
 
             if np.any(np.asarray(scores)[:,0] > 0.6) or np.any(np.asarray(scores)[:,1] > 0.075) :
-                print('Redo the sampling')
+                print('The result does not pass a fit evaluation cut. Redo the sampling')
                 counter += 1
                 resample_counter += 1
                 continue
 
-            if(len(board_to_analyze)==3):
-                resolutions = return_resolution_three_board_fromFWHM(fit_params, var=keys, board_list=board_to_analyze)
-            elif(len(board_to_analyze)==4):
-                resolutions = return_resolution_four_board_fromFWHM(fit_params)
-            else:
-                print("You have less than 3 boards to analyze")
-                break
+            resolutions = return_resolution_three_board_fromFWHM(fit_params, board_roles=board_to_analyze)
 
-            if any(np.isnan(val) for key, val in resolutions.items()):
-                print('At least one of time resolution values is NaN. Skipping this iteration')
+            if any(val <= 0 for val in resolutions.values()):
+                print('At least one time resolution value is zero or non-physical. Skipping this iteration')
                 counter += 1
                 resample_counter += 1
                 continue
-
-            if do_reproducible:
-                resolution_from_bootstrap['RandomSeed'].append(counter)
 
             for key in resolutions.keys():
                 resolution_from_bootstrap[key].append(resolutions[key])
 
+            if do_reproducible:
+                resolution_from_bootstrap['RandomSeed'].append(counter)
+
             counter += 1
+            successful_runs += 1
 
         except Exception as inst:
-            print(inst)
+            print(f"An error occurred during fitting: {inst}. Skipping this iteration.")
             counter += 1
+            resample_counter += 1
             del diffs, corr_toas
 
-        break_flag = False
-        for key, val in resolution_from_bootstrap.items():
-            if len(val) > nouts:
-                break_flag = True
-                break
-
-        if break_flag:
-            print('Escaping bootstrap loop')
+        if successful_runs >= nouts:
+            print(f'Collected {nouts} successful runs. Escaping bootstrap loop.')
             break
 
-    print('How many times do resample?', resample_counter)
+    print(f'\nTotal iterations: {counter}, Resampled/Skipped: {resample_counter}, Successful: {successful_runs}')
 
     ### Empty dictionary case
     if not resolution_from_bootstrap:
         return pd.DataFrame()
     else:
-        resolution_from_bootstrap_df = pd.DataFrame(resolution_from_bootstrap)
-        return resolution_from_bootstrap_df
+        return pd.DataFrame(resolution_from_bootstrap)
 
 ## --------------------------------------
 if __name__ == "__main__":
@@ -504,11 +297,11 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        '--board_ids',
-        metavar='N',
-        type=int,
-        nargs='+',
-        help='board IDs to analyze'
+        '--twc_coeffs',
+        metavar = 'FILE',
+        type = str,
+        help = 'pre-calculated TWC coefficients, it has to be pickle file',
+        dest = 'twc_coeffs',
     )
 
     parser.add_argument(
@@ -520,11 +313,30 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    output_name = args.file.split('.')[0]
-    board_ids = args.board_ids
+    output_name = args.file.split('/')[-1].split('.')[0]
+    track_name = args.file.split('/')[-1].split('.')[0].split('track_')[1]
+    excluded_role = args.file.split('/')[-1].split('_')[1]
+    all_roles = {'trig', 'dut', 'ref', 'extra'}
+    board_roles = sorted(all_roles - {excluded_role})
+
+    if args.twc_coeffs is not None:
+        import pickle
+        with open(args.twc_coeffs, 'rb') as input_coeff:
+            calculated_twc_coeffs = pickle.load(input_coeff)[track_name]
+
+            # A slightly more efficient and readable version
+            coeff_keys = sorted(calculated_twc_coeffs['iter1'].keys())
+
+            if coeff_keys != board_roles:
+                print(f"Keys from TWC coefficient file: {coeff_keys}")
+                print(f'Board roles for current run: {board_roles}')
+                raise KeyError('Board roles in the provided TWC coefficient file do not match the current run.')
+    else:
+        calculated_twc_coeffs = None
+
     df = pd.read_pickle(args.file)
     df = df.reset_index(names='evt')
-    resolution_df = time_df_bootstrap(input_df=df, board_to_analyze=board_ids, limit=args.iteration_limit, nouts=args.num_bootstrap_output,
+    resolution_df = time_df_bootstrap(input_df=df, board_to_analyze=board_roles, twc_coeffs=calculated_twc_coeffs, limit=args.iteration_limit, nouts=args.num_bootstrap_output,
                                         sampling_fraction=args.sampling, minimum_nevt_cut=args.minimum_nevt, do_reproducible=args.reproducible)
 
     if not resolution_df.empty:
