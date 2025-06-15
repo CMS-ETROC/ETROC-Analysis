@@ -50,12 +50,14 @@ with open(args.config) as input_yaml:
 if args.runName not in config:
     raise ValueError(f"Run config {args.runName} not found")
 
+files = natsorted(Path(args.inputdir).glob('*_resolution.pkl'))
+final_dict = defaultdict(list)
+
+excluded_role = files[0].name.split('_')[1]
+
 roles = {}
 for board_id, board_info in config[args.runName].items():
     roles[board_info.get('role')] = board_id
-
-files = natsorted(Path(args.inputdir).glob('*pkl'))
-final_dict = defaultdict(list)
 
 def fit_unbinned(data):
     try:
@@ -103,6 +105,9 @@ def fit_binned(data):
         print(f"Error: {e}")
         return np.mean(data), np.std(data), False
 
+if len(files) == 0:
+    print('No input file found')
+
 for ifile in tqdm(files):
     pattern = r'R(\d+)C(\d+)'
     match_dict = {i: val for i, val in enumerate(re.findall(pattern, str(ifile)))}
@@ -116,18 +121,18 @@ for ifile in tqdm(files):
     columns = df.columns
 
     if len(match_dict.keys()) == 4:
-        final_dict[f'row{roles["trig"]}'].append(match_dict[roles["trig"]][0])
-        final_dict[f'col{roles["trig"]}'].append(match_dict[roles["trig"]][1])
+        final_dict[f'row_{excluded_role}'].append(match_dict[roles[excluded_role]][0])
+        final_dict[f'col_{excluded_role}'].append(match_dict[roles[excluded_role]][1])
 
     for val in columns:
-        final_dict[f'row{val}'].append(match_dict[val][0])
-        final_dict[f'col{val}'].append(match_dict[val][1])
+        final_dict[f'row_{val}'].append(match_dict[roles[val]][0])
+        final_dict[f'col_{val}'].append(match_dict[roles[val]][1])
 
         mu, sigma, unbinned_check = fit_unbinned(df[val])
         if not unbinned_check:
             mu, sigma, _ = fit_binned(df[val])
 
-        final_dict[f'res{val}'].append(mu)
-        final_dict[f'err{val}'].append(sigma)
+        final_dict[f'res_{val}'].append(mu)
+        final_dict[f'err_{val}'].append(sigma)
 
 pd.DataFrame(final_dict).to_csv('resolution_' + args.output + args.tag + '.csv', index=False)
