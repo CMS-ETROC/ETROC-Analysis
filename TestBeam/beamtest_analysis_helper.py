@@ -2211,12 +2211,29 @@ def plot_1d_TDC_histograms(
                     ax.set_yscale('log')
             elif i == 3:
                 if event_hist is None:
-                    ax.set_title(f"{plot_title} | {fig_tag}", loc="right", size=16)
-                    input_hist[board_name].project("TOA","TOT")[::2j,::2j].plot2d(ax=ax)
-                    if do_logy:
-                        #pcm = plt.pcolor(self._data, norm = colors.LogNorm())
-                        #plt.colorbar(pcm)
-                        pass
+                    # Hide the original axis frame from the main gridspec
+                    ax.set_frame_on(False)
+                    ax.tick_params(labelcolor='none', top=False, bottom=False, left=False, right=False)
+
+                    # 1. Create a sub-grid in the bottom-right cell
+                    sub_gs = plot_info.subgridspec(1, 2, width_ratios=[20, 1], wspace=0.1)
+
+                    # 2. Create axes for the plot and the colorbar using the sub-grid
+                    ax_2d = fig.add_subplot(sub_gs[0, 0])
+                    cax = fig.add_subplot(sub_gs[0, 1])
+
+                    # Set the title on the new plot axis
+                    ax_2d.set_title(f"{plot_title} | {fig_tag}", loc="right", size=16)
+
+                    # 3. Plot and capture the container object
+                    artists = input_hist[board_name].project("TOA", "TOT")[::2j, ::2j].plot2d(
+                        ax=ax_2d,
+                        cbar=False  # Keep this to prevent automatic resizing
+                    )
+
+                    # 4. Manually create the colorbar using the .mesh attribute of the returned object
+                    fig.colorbar(artists[0], cax=cax)
+
                 else:
                     ax.set_title(plot_title, loc="right", size=16)
                     event_hist.project("HA")[:].plot1d(ax=ax, lw=2, yerr=no_errorbar)
