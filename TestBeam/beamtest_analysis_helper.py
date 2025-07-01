@@ -1458,6 +1458,8 @@ def load_fig_title(
         plot_title = r'120 GeV p at Fermilab TB'
     elif tb_loc == 'northwestern':
         plot_title = r'217 MeV p at Northwestern Medicine Proton Center'
+    elif tb_loc == 'wh14':
+        plot_title = 'Wilson Hall 14th floor lab'
     # The assumption for louvain is the the tb_loc will specify location and ion with the following format:
     # louvain-Kr  - for example for louvain with Krypton ion beam
     # louvain-Xe  - for example for louvain with Xenon ion beam
