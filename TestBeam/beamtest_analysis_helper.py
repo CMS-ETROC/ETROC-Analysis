@@ -1793,12 +1793,12 @@ def plot_2d_nHits_nBoard(
 ## --------------------------------------
 def plot_occupany_map(
         input_df: pd.DataFrame,
-        board_ids: list[int],
-        board_names: list[str],
         tb_loc: str,
+        board_info: dict | None = None, # Prioritized argument
+        board_ids: list[int] | None = None,
+        board_names: list[str] | None = None,
         extra_cms_title: str = 'ETL ETROC Test Beam',
         fname_tag: str = '',
-        exclude_noise: bool = False,
         save_mother_dir: Path | None = None,
     ):
     """Make occupancy plot.
@@ -1807,18 +1807,20 @@ def plot_occupany_map(
     ----------
     input_df: pd.DataFrame,
         Pandas dataframe of data.
-    board_ids: list[int],
-        A list of integer (board ID) that wants to make plots.
-    board_names: list[str],
-        A list of board name that will use for the file name.
     tb_loc: str,
         Test Beam location for the title. Available argument: desy, cern, fnal.
+    board_info: dict, optional
+        Primary way to pass board data. A dictionary where keys are board IDs
+        and values are another dict containing board info, e.g., {'title': 'Board_Name'}.
+        If provided, 'board_ids' and 'board_names' are ignored.
+    board_ids: list[int], optional
+        A list of integer board IDs. Used if 'board_info' is not provided.
+    board_names: list[str], optional
+        A list of board names for plot titles. Used if 'board_info' is not provided.
     extra_cms_title: str,
-        Default is "ETL ETROC Test Beam". Please change it based on test source.
+        Default is "ETL ETROC Test Beam".
     fname_tag: str, optional
-        Draw boundary cut in the plot.
-    exclude_noise: bool, optional
-        Remove hits when TOT < 10 before plotting.
+        Tag to be added to the output filename.
     save_mother_dir: Path, optional
         Plot will be saved at save_mother_dir/'occupancy_map'.
     """
@@ -1827,75 +1829,74 @@ def plot_occupany_map(
     cmap = colormaps['viridis']
     cmap.set_under(color='lightgrey')
 
-    plot_title = load_fig_title(tb_loc)
+    loc_title = load_fig_title(tb_loc)
+    hits_df = input_df.groupby(['board', 'col', 'row'])['evt'].count().reset_index(name='hits')
 
-    if exclude_noise:
-        ana_df = input_df.loc[input_df['tot'] > 10].copy()
+    board_configs = {}
+    if board_info:
+        board_configs = board_info
+    elif board_ids and board_names:
+        if len(board_ids) != len(board_names):
+            raise ValueError("The lists 'board_ids' and 'board_names' must have the same length.")
+        for idx, board_id in enumerate(board_ids):
+            board_configs[board_id] = {
+                'name': board_names[idx],
+            }
     else:
-        ana_df = input_df
+        raise ValueError("You must provide either 'board_info' or both 'board_ids' and 'board_names'.")
 
-    # Group the DataFrame by 'col,' 'row,' and 'board,' and count the number of hits in each group
-    hits_count_by_col_row_board = ana_df.groupby(['col', 'row', 'board'])['evt'].count().reset_index()
-    del ana_df
-
-    # Rename the 'evt' column to 'hits'
-    hits_count_by_col_row_board = hits_count_by_col_row_board.rename(columns={'evt': 'hits'})
-
-    for idx ,board_id in enumerate(board_ids):
-        # Create a pivot table to reshape the data for plotting
-        pivot_table = hits_count_by_col_row_board[hits_count_by_col_row_board['board'] == board_id].pivot_table(
-            index='row',
-            columns='col',
-            values='hits',
-            fill_value=0  # Fill missing values with 0 (if any)
-        )
-
-        if pivot_table.empty:
+    for ikey, config in board_configs.items():
+        board_hits = hits_df.loc[hits_df['board'] == ikey]
+        if board_hits.empty:
+            print(f"Skipping Board ID {ikey}: No data available.")
             continue
 
-        if (pivot_table.shape[0] != 16) or (pivot_table.shape[1]!= 16):
-            pivot_table = pivot_table.reindex(pd.Index(np.arange(0,16), name='')).reset_index()
-            pivot_table = pivot_table.reindex(columns=np.arange(0,16))
-            pivot_table = pivot_table.fillna(-1)
+        pivot_table = board_hits.pivot_table(index='row', columns='col', values='hits')
 
-        # Create a heatmap to visualize the count of hits
+        # Ensure the pivot table is always 16x16, filling missing data
+        all_indices = np.arange(16)
+        pivot_table = pivot_table.reindex(index=all_indices, columns=all_indices, fill_value=-1)
+
+        # --- Plotting ---
         fig, ax = plt.subplots(dpi=100, figsize=(12, 12))
-        ax.cla()
         im = ax.imshow(pivot_table, cmap=cmap, interpolation="nearest", vmin=0)
 
-        # Add color bar
+        max_val = pivot_table.values.max()
+        min_val = pivot_table.values.min()
+        text_color_threshold = min_val + (max_val - min_val) * 0.45
+        for i in range(16):
+            for j in range(16):
+                value = pivot_table.iloc[i, j]
+                if value == -1: continue # Don't label cells with no data
+                text_color = 'black' if value > text_color_threshold else 'white'
+                ax.text(j, i, f"{value:.0f}", va='center', ha='center', color=text_color, fontsize=12)
+
+        # --- Styling and Labels ---
         cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
         cbar.set_label('Hits', fontsize=25)
         cbar.ax.tick_params(labelsize=18)
 
-        for i in range(16):
-            for j in range(16):
-                value = pivot_table.iloc[i, j]
-                if value == -1: continue
-                text_color = 'black' if value > 0.5*(pivot_table.values.max() + pivot_table.values.min()) else 'white'
-                text = str("{:.0f}".format(value))
-                plt.text(j, i, text, va='center', ha='center', color=text_color, fontsize=12)
-
         hep.cms.text(loc=0, ax=ax, text=extra_cms_title, fontsize=18)
+        ax.set_title(f"{loc_title} | {config['name']}", loc="right", size=16)
         ax.set_xlabel('Column', fontsize=25)
         ax.set_ylabel('Row', fontsize=25)
-        ticks = range(0, 16)
-        ax.set_xticks(ticks)
-        ax.set_yticks(ticks)
-        ax.set_title(f"{plot_title} | {board_names[idx].replace('_', ' ')}", loc="right", size=16)
-        ax.tick_params(axis='x', which='both', length=5, labelsize=17)
-        ax.tick_params(axis='y', which='both', length=5, labelsize=17)
+
+        ax.set_xticks(np.arange(16))
+        ax.set_yticks(np.arange(16))
+        ax.tick_params(axis='both', which='major', length=5, labelsize=17)
         ax.invert_xaxis()
         ax.invert_yaxis()
         plt.minorticks_off()
         plt.tight_layout()
 
-        if save_mother_dir is not None:
-            save_dir = save_mother_dir / 'occupancy_map'
-            save_dir.mkdir(exist_ok=True)
-            fig.savefig(save_dir / f"occupancy_{board_names[board_id]}_{fname_tag}.png")
-            fig.savefig(save_dir / f"occupancy_{board_names[board_id]}_{fname_tag}.pdf")
-            plt.close(fig)
+        # --- Saving ---
+        if save_mother_dir:
+            save_dir = Path(save_mother_dir) / 'occupancy_map'
+            save_dir.mkdir(parents=True, exist_ok=True)
+            output_base = save_dir / f"occupancy_{config['name']}_{fname_tag}"
+            fig.savefig(f"{output_base}.png")
+            fig.savefig(f"{output_base}.pdf")
+            plt.close(fig) # Close the figure to free memory
 
 ## --------------------------------------
 def plot_3d_occupany_map(
