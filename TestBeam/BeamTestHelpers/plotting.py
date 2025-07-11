@@ -788,9 +788,9 @@ def plot_1d_TDC_histograms(
         for i, plot_info in enumerate(gs):
             ax = fig.add_subplot(plot_info)
             hep.cms.text(loc=0, ax=ax, text=extra_cms_title, fontsize=18)
-            ax.set_title(f"{loc_title} | {fig_tag}", loc="right", size=16)
 
             if i < len(plot_vars):
+                ax.set_title(f"{loc_title} | {fig_tag}", loc="right", size=16)
                 input_hist[board_name].project(plot_vars[i]).plot1d(ax=ax, lw=2, yerr=not no_errorbar)
                 if do_logy:
                     ax.set_yscale('log')
