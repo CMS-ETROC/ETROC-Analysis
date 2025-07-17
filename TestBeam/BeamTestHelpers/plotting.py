@@ -110,20 +110,42 @@ def load_fig_title(
 ## --------------------------------------
 def return_hist(
         input_df: pd.DataFrame,
+        board_info: dict, # Prioritized argument
         board_ids: list[int],
         board_names: list[str],
-        hist_bins: list = [50, 64, 64]
+        hist_bins: list = [70, 64, 64]
 ):
-    h = {board_names[board_idx]: hist.Hist(hist.axis.Regular(hist_bins[0], 140, 240, name="CAL", label="CAL [LSB]"),
+    if board_info:
+
+        h = {val['short']: hist.Hist(hist.axis.Regular(hist_bins[0], 120, 260, name="CAL", label="CAL [LSB]"),
                 hist.axis.Regular(hist_bins[1], 0, 512,  name="TOT", label="TOT [LSB]"),
                 hist.axis.Regular(hist_bins[2], 0, 1024, name="TOA", label="TOA [LSB]"),
                 hist.axis.Regular(4, 0, 3, name="EA", label="EA"),
-        )
-    for board_idx in range(len(board_ids))}
+            )
+        for _, val in board_info.items()}
 
-    for board_idx in range(len(board_ids)):
-        tmp_df = input_df.loc[input_df['board'] == board_ids[board_idx]]
-        h[board_names[board_idx]].fill(tmp_df['cal'].values, tmp_df['tot'].values, tmp_df['toa'].values, tmp_df['ea'].values)
+        for ikey, val in board_info.items():
+            tmp_df = input_df.loc[input_df['board'] == ikey]
+            h[val['short']].fill(tmp_df['cal'].values, tmp_df['tot'].values, tmp_df['toa'].values, tmp_df['ea'].values)
+
+    elif board_ids and board_names:
+
+        if len(board_ids) != len(board_names):
+            raise ValueError("The lists 'board_ids' and 'board_names' must have the same length.")
+
+        h = {board_names[board_idx]: hist.Hist(hist.axis.Regular(hist_bins[0], 120, 260, name="CAL", label="CAL [LSB]"),
+                    hist.axis.Regular(hist_bins[1], 0, 512,  name="TOT", label="TOT [LSB]"),
+                    hist.axis.Regular(hist_bins[2], 0, 1024, name="TOA", label="TOA [LSB]"),
+                    hist.axis.Regular(4, 0, 3, name="EA", label="EA"),
+            )
+        for board_idx in range(len(board_ids))}
+
+        for board_idx in range(len(board_ids)):
+            tmp_df = input_df.loc[input_df['board'] == board_ids[board_idx]]
+            h[board_names[board_idx]].fill(tmp_df['cal'].values, tmp_df['tot'].values, tmp_df['toa'].values, tmp_df['ea'].values)
+
+    else:
+        raise ValueError("You must provide either 'board_info' or both 'board_ids' and 'board_names'.")
 
     return h
 
