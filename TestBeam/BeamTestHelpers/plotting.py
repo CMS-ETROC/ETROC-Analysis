@@ -514,7 +514,7 @@ def plot_occupany_map(
         cbar.ax.tick_params(labelsize=18)
 
         hep.cms.text(loc=0, ax=ax, text=extra_cms_title, fontsize=18)
-        ax.set_title(f"{loc_title} | {config['name']}", loc="right", size=16)
+        ax.set_title(f"{loc_title}\n{config['name']}", loc="right", size=16)
         ax.set_xlabel('Column', fontsize=25)
         ax.set_ylabel('Row', fontsize=25)
 
