@@ -110,20 +110,42 @@ def load_fig_title(
 ## --------------------------------------
 def return_hist(
         input_df: pd.DataFrame,
-        board_ids: list[int],
-        board_names: list[str],
-        hist_bins: list = [50, 64, 64]
+        board_info: dict | None = None, # Prioritized argument
+        board_ids: list[int] | None = None,
+        board_names: list[str] | None = None,
+        hist_bins: list = [70, 64, 64]
 ):
-    h = {board_names[board_idx]: hist.Hist(hist.axis.Regular(hist_bins[0], 140, 240, name="CAL", label="CAL [LSB]"),
+    if board_info:
+
+        h = {val['short']: hist.Hist(hist.axis.Regular(hist_bins[0], 120, 260, name="CAL", label="CAL [LSB]"),
                 hist.axis.Regular(hist_bins[1], 0, 512,  name="TOT", label="TOT [LSB]"),
                 hist.axis.Regular(hist_bins[2], 0, 1024, name="TOA", label="TOA [LSB]"),
                 hist.axis.Regular(4, 0, 3, name="EA", label="EA"),
-        )
-    for board_idx in range(len(board_ids))}
+            )
+        for _, val in board_info.items()}
 
-    for board_idx in range(len(board_ids)):
-        tmp_df = input_df.loc[input_df['board'] == board_ids[board_idx]]
-        h[board_names[board_idx]].fill(tmp_df['cal'].values, tmp_df['tot'].values, tmp_df['toa'].values, tmp_df['ea'].values)
+        for ikey, val in board_info.items():
+            tmp_df = input_df.loc[input_df['board'] == ikey]
+            h[val['short']].fill(tmp_df['cal'].values, tmp_df['tot'].values, tmp_df['toa'].values, tmp_df['ea'].values)
+
+    elif board_ids and board_names:
+
+        if len(board_ids) != len(board_names):
+            raise ValueError("The lists 'board_ids' and 'board_names' must have the same length.")
+
+        h = {board_names[board_idx]: hist.Hist(hist.axis.Regular(hist_bins[0], 120, 260, name="CAL", label="CAL [LSB]"),
+                    hist.axis.Regular(hist_bins[1], 0, 512,  name="TOT", label="TOT [LSB]"),
+                    hist.axis.Regular(hist_bins[2], 0, 1024, name="TOA", label="TOA [LSB]"),
+                    hist.axis.Regular(4, 0, 3, name="EA", label="EA"),
+            )
+        for board_idx in range(len(board_ids))}
+
+        for board_idx in range(len(board_ids)):
+            tmp_df = input_df.loc[input_df['board'] == board_ids[board_idx]]
+            h[board_names[board_idx]].fill(tmp_df['cal'].values, tmp_df['tot'].values, tmp_df['toa'].values, tmp_df['ea'].values)
+
+    else:
+        raise ValueError("You must provide either 'board_info' or both 'board_ids' and 'board_names'.")
 
     return h
 
@@ -492,7 +514,7 @@ def plot_occupany_map(
         cbar.ax.tick_params(labelsize=18)
 
         hep.cms.text(loc=0, ax=ax, text=extra_cms_title, fontsize=18)
-        ax.set_title(f"{loc_title} | {config['name']}", loc="right", size=16)
+        ax.set_title(f"{loc_title}\n{config['name']}", loc="right", size=16)
         ax.set_xlabel('Column', fontsize=25)
         ax.set_ylabel('Row', fontsize=25)
 
@@ -691,10 +713,9 @@ def plot_TDC_summary_table(
 ## --------------------------------------
 def plot_1d_TDC_histograms(
     input_hist: dict,
-    board_name: str,
     tb_loc: str,
     extra_cms_title: str = 'ETL ETROC Test Beam',
-    fig_tag: str | None = None,
+    fig_tag: list[str] | None = None,
     slide_friendly: bool = False,
     do_logy: bool = False,
     event_hist: hist.Hist | None = None,
@@ -708,8 +729,6 @@ def plot_1d_TDC_histograms(
     ----------
     input_hist: dict,
         A dictionary of TDC histograms, which returns from return_hist, return_hist_pivot
-    board_name: str,
-        Board name.
     tb_loc: str,
         Test Beam location for the title. Available argument: desy, cern, fnal.
     extra_cms_title: str,
@@ -734,98 +753,101 @@ def plot_1d_TDC_histograms(
     save_dir = save_mother_dir / '1d_tdc_hists' if save_mother_dir else None
 
     if not slide_friendly:
-        for ival in ["CAL", "TOT", "TOA", "EA"]:
-            try:
+        for idx, (board_name, ihist) in enumerate(input_hist.items()):
+            pass
+            for ival in ["CAL", "TOT", "TOA", "EA"]:
+                try:
+                    fig, ax = plt.subplots(figsize=(11, 10))
+                    ax.set_title(loc_title, loc="right", size=16)
+                    hep.cms.text(loc=0, ax=ax, text=extra_cms_title, fontsize=18)
+                    ihist.project(ival).plot1d(ax=ax, lw=2, yerr=not no_errorbar)
+                    ax.xaxis.label.set_fontsize(25)
+                    ax.yaxis.label.set_fontsize(25)
+                    if fig_tag[idx]:
+                        ax.text(0.98, 0.97, fig_tag[idx], transform=ax.transAxes, fontsize=17, verticalalignment='top', horizontalalignment='right')
+                    if do_logy:
+                        ax.set_yscale('log')
+                    plt.tight_layout()
+                    if save_dir:
+                        save_plot(fig, save_dir, f'{board_name}_{ival}_{tag}')
+                except Exception as e:
+                    print(f'No {ival} histogram is found: {e}')
+
+            # 2D TOA-TOT plot
+            fig, ax = plt.subplots(figsize=(11, 10))
+            ax.set_title(loc_title, loc="right", size=16)
+            hep.cms.text(loc=0, ax=ax, text=extra_cms_title, fontsize=18)
+            hep.hist2dplot(ihist.project("TOA", "TOT")[::2j, ::2j], ax=ax)
+            ax.xaxis.label.set_fontsize(25)
+            ax.yaxis.label.set_fontsize(25)
+            if fig_tag[idx]:
+                ax.text(0.98, 0.97, fig_tag[idx], transform=ax.transAxes, fontsize=17, verticalalignment='top', horizontalalignment='right', bbox=dict(facecolor='white'))
+            plt.tight_layout()
+            if save_dir:
+                save_plot(fig, save_dir, f'{board_name}_TOA_TOT_{tag}')
+
+            # Hamming Count plot
+            if event_hist:
                 fig, ax = plt.subplots(figsize=(11, 10))
                 ax.set_title(loc_title, loc="right", size=16)
                 hep.cms.text(loc=0, ax=ax, text=extra_cms_title, fontsize=18)
-                input_hist[board_name].project(ival).plot1d(ax=ax, lw=2, yerr=not no_errorbar)
+                event_hist.project("HA").plot1d(ax=ax, lw=2, yerr=not no_errorbar)
                 ax.xaxis.label.set_fontsize(25)
                 ax.yaxis.label.set_fontsize(25)
-                if fig_tag:
-                    ax.text(0.98, 0.97, fig_tag, transform=ax.transAxes, fontsize=17, verticalalignment='top', horizontalalignment='right')
+                if fig_tag[idx]:
+                    ax.text(0.98, 0.97, fig_tag[idx], transform=ax.transAxes, fontsize=17, verticalalignment='top', horizontalalignment='right')
                 if do_logy:
                     ax.set_yscale('log')
                 plt.tight_layout()
                 if save_dir:
-                    save_plot(fig, save_dir, f'{board_name}_{ival}_{tag}')
-            except Exception as e:
-                print(f'No {ival} histogram is found: {e}')
-
-        # 2D TOA-TOT plot
-        fig, ax = plt.subplots(figsize=(11, 10))
-        ax.set_title(loc_title, loc="right", size=16)
-        hep.cms.text(loc=0, ax=ax, text=extra_cms_title, fontsize=18)
-        hep.hist2dplot(input_hist[board_name].project("TOA", "TOT")[::2j, ::2j], ax=ax)
-        ax.xaxis.label.set_fontsize(25)
-        ax.yaxis.label.set_fontsize(25)
-        if fig_tag:
-            ax.text(0.98, 0.97, fig_tag, transform=ax.transAxes, fontsize=17, verticalalignment='top', horizontalalignment='right', bbox=dict(facecolor='white'))
-        plt.tight_layout()
-        if save_dir:
-            save_plot(fig, save_dir, f'{board_name}_TOA_TOT_{tag}')
-
-        # Hamming Count plot
-        if event_hist:
-            fig, ax = plt.subplots(figsize=(11, 10))
-            ax.set_title(loc_title, loc="right", size=16)
-            hep.cms.text(loc=0, ax=ax, text=extra_cms_title, fontsize=18)
-            event_hist.project("HA").plot1d(ax=ax, lw=2, yerr=not no_errorbar)
-            ax.xaxis.label.set_fontsize(25)
-            ax.yaxis.label.set_fontsize(25)
-            if fig_tag:
-                ax.text(0.98, 0.97, fig_tag, transform=ax.transAxes, fontsize=17, verticalalignment='top', horizontalalignment='right')
-            if do_logy:
-                ax.set_yscale('log')
-            plt.tight_layout()
-            if save_dir:
-                save_plot(fig, save_dir, f'{board_name}_Hamming_Count_{tag}')
+                    save_plot(fig, save_dir, f'{board_name}_Hamming_Count_{tag}')
     else:
-        fig = plt.figure(dpi=100, figsize=(30, 13))
-        gs = fig.add_gridspec(2, 2)
-        plot_vars = ["CAL", "TOA", "TOT"]
+        for idx, (board_name, ihist) in enumerate(input_hist.items()):
+            fig = plt.figure(dpi=100, figsize=(30, 13))
+            gs = fig.add_gridspec(2, 2)
+            plot_vars = ["CAL", "TOA", "TOT"]
 
-        for i, plot_info in enumerate(gs):
-            ax = fig.add_subplot(plot_info)
-            hep.cms.text(loc=0, ax=ax, text=extra_cms_title, fontsize=18)
-            ax.set_title(f"{loc_title} | {fig_tag}", loc="right", size=16)
+            for i, plot_info in enumerate(gs):
+                ax = fig.add_subplot(plot_info)
+                hep.cms.text(loc=0, ax=ax, text=extra_cms_title, fontsize=18)
 
-            if i < len(plot_vars):
-                input_hist[board_name].project(plot_vars[i]).plot1d(ax=ax, lw=2, yerr=not no_errorbar)
-                if do_logy:
-                    ax.set_yscale('log')
-            else:
-                if event_hist:
-                    event_hist.project("HA").plot1d(ax=ax, lw=2, yerr=no_errorbar)
+                if i < len(plot_vars):
+                    ax.set_title(f"{loc_title} | {fig_tag[idx]}", loc="right", size=16)
+                    ihist.project(plot_vars[i]).plot1d(ax=ax, lw=2, yerr=not no_errorbar)
                     if do_logy:
                         ax.set_yscale('log')
                 else:
-                    # Hide the original axis frame from the main gridspec
-                    ax.set_frame_on(False)
-                    ax.tick_params(labelcolor='none', top=False, bottom=False, left=False, right=False)
+                    if event_hist:
+                        event_hist.project("HA").plot1d(ax=ax, lw=2, yerr=no_errorbar)
+                        if do_logy:
+                            ax.set_yscale('log')
+                    else:
+                        # Hide the original axis frame from the main gridspec
+                        ax.set_frame_on(False)
+                        ax.tick_params(labelcolor='none', top=False, bottom=False, left=False, right=False)
 
-                    # 1. Create a sub-grid in the bottom-right cell
-                    sub_gs = plot_info.subgridspec(1, 2, width_ratios=[20, 1], wspace=0.1)
+                        # 1. Create a sub-grid in the bottom-right cell
+                        sub_gs = plot_info.subgridspec(1, 2, width_ratios=[20, 1], wspace=0.1)
 
-                    # 2. Create axes for the plot and the colorbar using the sub-grid
-                    ax_2d = fig.add_subplot(sub_gs[0, 0])
-                    cax = fig.add_subplot(sub_gs[0, 1])
+                        # 2. Create axes for the plot and the colorbar using the sub-grid
+                        ax_2d = fig.add_subplot(sub_gs[0, 0])
+                        cax = fig.add_subplot(sub_gs[0, 1])
 
-                    # Set the title on the new plot axis
-                    ax_2d.set_title(f"{loc_title} | {fig_tag}", loc="right", size=16)
+                        # Set the title on the new plot axis
+                        ax_2d.set_title(f"{loc_title} | {fig_tag[idx]}", loc="right", size=16)
 
-                    # 3. Plot and capture the container object
-                    artists = input_hist[board_name].project("TOA", "TOT")[::2j, ::2j].plot2d(
-                        ax=ax_2d,
-                        cbar=False  # Keep this to prevent automatic resizing
-                    )
+                        # 3. Plot and capture the container object
+                        artists = ihist.project("TOA", "TOT")[::2j, ::2j].plot2d(
+                            ax=ax_2d,
+                            cbar=False  # Keep this to prevent automatic resizing
+                        )
 
-                    # 4. Manually create the colorbar using the .mesh attribute of the returned object
-                    fig.colorbar(artists[0], cax=cax)
+                        # 4. Manually create the colorbar using the .mesh attribute of the returned object
+                        fig.colorbar(artists[0], cax=cax)
 
-        plt.tight_layout()
-        if save_dir:
-            save_plot(fig, save_dir, f'{board_name}_combined_{tag}')
+            plt.tight_layout()
+            if save_dir:
+                save_plot(fig, save_dir, f'{board_name}_combined_{tag}')
 
 ## --------------------------------------
 def plot_1d_event_CRC_histogram(
