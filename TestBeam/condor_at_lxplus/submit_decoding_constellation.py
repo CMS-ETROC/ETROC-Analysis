@@ -116,7 +116,7 @@ def make_jobs(args, log_dir, condor_scripts_dir, runAppend):
     with open(condor_scripts_dir / f'run_decode{runAppend}.sh','w') as bashfile:
         bashfile.write(bash_script)
 
-    outdir = f'{args.output}_feather'
+    outdir = f'{args.output}'
     jdl_script = load_jdl_template(condor_log_dir=log_dir, output_dir=outdir, runName=runAppend, condor_scripts_dir=condor_scripts_dir)
     with open(condor_scripts_dir / f'condor_decoding{runAppend}.jdl','w') as jdlfile:
         jdlfile.write(jdl_script)
