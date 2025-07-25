@@ -812,7 +812,7 @@ def plot_1d_TDC_histograms(
                 hep.cms.text(loc=0, ax=ax, text=extra_cms_title, fontsize=18)
 
                 if i < len(plot_vars):
-                    ax.set_title(f"{loc_title} | {fig_tag[idx]}", loc="right", size=16)
+                    ax.set_title(f"{loc_title}\n{fig_tag[idx]}", loc="right", size=16)
                     ihist.project(plot_vars[i]).plot1d(ax=ax, lw=2, yerr=not no_errorbar)
                     if do_logy:
                         ax.set_yscale('log')
@@ -834,7 +834,7 @@ def plot_1d_TDC_histograms(
                         cax = fig.add_subplot(sub_gs[0, 1])
 
                         # Set the title on the new plot axis
-                        ax_2d.set_title(f"{loc_title} | {fig_tag[idx]}", loc="right", size=16)
+                        ax_2d.set_title(f"{loc_title}\n{fig_tag[idx]}", loc="right", size=16)
 
                         # 3. Plot and capture the container object
                         artists = ihist.project("TOA", "TOT")[::2j, ::2j].plot2d(
@@ -1637,7 +1637,6 @@ def plot_resolution_table(
                 plt.close(fig)
 
         del tables
-
 
 ## --------------------------------------
 # def plot_TDC_correlation_scatter_matrix(
