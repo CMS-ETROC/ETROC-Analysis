@@ -110,9 +110,9 @@ def load_fig_title(
 ## --------------------------------------
 def return_hist(
         input_df: pd.DataFrame,
-        board_info: dict, # Prioritized argument
-        board_ids: list[int],
-        board_names: list[str],
+        board_info: dict | None = None, # Prioritized argument
+        board_ids: list[int] | None = None,
+        board_names: list[str] | None = None,
         hist_bins: list = [70, 64, 64]
 ):
     if board_info:
