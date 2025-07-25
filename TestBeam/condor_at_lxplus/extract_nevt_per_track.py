@@ -1,6 +1,7 @@
 import pandas as pd
 import argparse
 import re
+from yaml import safe_load
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from natsort import natsorted
@@ -34,6 +35,26 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    '-c',
+    '--config',
+    metavar = 'NAME',
+    type = str,
+    help = 'YAML file including run information.',
+    required = True,
+    dest = 'config',
+)
+
+parser.add_argument(
+    '-r',
+    '--runName',
+    metavar = 'NAME',
+    type = str,
+    help = 'Name of the run to process. It must be matched with the name defined in YAML.',
+    required = True,
+    dest = 'runName',
+)
+
+parser.add_argument(
     '--tag',
     metavar = 'NAME',
     type = str,
@@ -56,10 +77,13 @@ args = parser.parse_args()
 input_dir = Path(args.inputdir)
 files = natsorted(list(input_dir.glob('excluded*track*pkl')))
 
+with open(args.config) as input_yaml:
+    config = safe_load(input_yaml)
+selected_config = config[args.runName]
+
 if len(files) == 0:
-    import sys
     print('No input file')
-    sys.exit(1)
+    exit()
 
 final_dict = defaultdict(list)
 
@@ -70,17 +94,17 @@ def process_file(ifile):
     # Find all occurrences of the pattern in the string
     matches = re.findall(pattern, str(ifile))
 
-    if len(args.ids) != len(matches):
+    if len(selected_config) != len(matches):
         print('Please check given inputs')
-        print(f'Given board IDs: {args.ids}')
         print(f'Matches: {matches}')
-        import sys
-        sys.exit()
+        exit()
 
     file_dict = defaultdict(list)
-    for id, pixel in zip(args.ids, matches):
-        file_dict[f'row{id}'].append(pixel[0])
-        file_dict[f'col{id}'].append(pixel[1])
+
+    for board_id, board_info in selected_config.items():
+        role = board_info.get('role')
+        file_dict[f'row_{role}'].append(matches[board_id][0])
+        file_dict[f'col_{role}'].append(matches[board_id][1])
 
     tmp_df = pd.read_pickle(ifile)
     file_dict['nevt'].append(tmp_df.shape[0])
