@@ -715,7 +715,7 @@ def plot_1d_TDC_histograms(
     input_hist: dict,
     tb_loc: str,
     extra_cms_title: str = 'ETL ETROC Test Beam',
-    fig_tag: str | None = None,
+    fig_tag: list[str] | None = None,
     slide_friendly: bool = False,
     do_logy: bool = False,
     event_hist: hist.Hist | None = None,
