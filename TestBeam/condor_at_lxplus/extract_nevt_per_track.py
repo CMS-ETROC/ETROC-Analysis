@@ -54,7 +54,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 input_dir = Path(args.inputdir)
-files = natsorted(list(input_dir.glob('track*pkl')))
+files = natsorted(list(input_dir.glob('excluded*track*pkl')))
 
 if len(files) == 0:
     import sys
