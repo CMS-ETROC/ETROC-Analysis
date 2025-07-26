@@ -124,15 +124,27 @@ for ifile in tqdm(files):
         final_dict[f'row_{excluded_role}'].append(match_dict[roles[excluded_role]][0])
         final_dict[f'col_{excluded_role}'].append(match_dict[roles[excluded_role]][1])
 
-    for val in columns:
-        final_dict[f'row_{val}'].append(match_dict[roles[val]][0])
-        final_dict[f'col_{val}'].append(match_dict[roles[val]][1])
+        for val in columns:
+            final_dict[f'row_{val}'].append(match_dict[roles[val]][0])
+            final_dict[f'col_{val}'].append(match_dict[roles[val]][1])
 
-        mu, sigma, unbinned_check = fit_unbinned(df[val])
-        if not unbinned_check:
-            mu, sigma, _ = fit_binned(df[val])
+            mu, sigma, unbinned_check = fit_unbinned(df[val])
+            if not unbinned_check:
+                mu, sigma, _ = fit_binned(df[val])
 
-        final_dict[f'res_{val}'].append(mu)
-        final_dict[f'err_{val}'].append(sigma)
+            final_dict[f'res_{val}'].append(mu)
+            final_dict[f'err_{val}'].append(sigma)
+
+    else:
+         for val in columns:
+            final_dict[f'row_{val}'].append(match_dict[roles[val]][0])
+            final_dict[f'col_{val}'].append(match_dict[roles[val]][1])
+
+            mu, sigma, unbinned_check = fit_unbinned(df[val])
+            if not unbinned_check:
+                mu, sigma, _ = fit_binned(df[val])
+
+            final_dict[f'res_{val}'].append(mu)
+            final_dict[f'err_{val}'].append(sigma)
 
 pd.DataFrame(final_dict).to_csv('resolution_' + args.output + args.tag + '.csv', index=False)
