@@ -76,31 +76,32 @@ if len(files) == 0:
     print('No input file')
     exit()
 
+nickname_dict = {
+    't': 'trig',
+    'd': 'dut',
+    'r': 'ref',
+    'e': 'extra',
+}
+
 final_dict = defaultdict(list)
 
 def process_file(ifile):
     # Define the pattern to match "RxCx" part
-    pattern = r'R(\d+)C(\d+)'
+    # - (\w): Captures the nickname (e.g., 'r')
+    # - R(\d+): Captures the row number
+    # - C(\d+): Captures the column number
+    pattern = re.compile(r"(\w)-R(\d+)C(\d+)")
 
     # Find all occurrences of the pattern in the string
     matches = re.findall(pattern, str(ifile))
 
-    if len(selected_config) != len(matches):
-        print('Please check given inputs')
-        print(f'Matches: {matches}')
-        exit()
-
     file_dict = defaultdict(list)
+    for nickname, row, col in matches:
+        # Use the reverse maps to find the original data
+        full_role = nickname_dict[nickname]
 
-    sorted_board_ids = sorted(selected_config.keys())
-
-    for match, board_id in zip(matches, sorted_board_ids):
-        board_info = selected_config[board_id]
-        role = board_info.get('role')
-
-        # 'match' is now the tuple, e.g., ('25', '80')
-        file_dict[f'row_{role}'].append(match[0])
-        file_dict[f'col_{role}'].append(match[1])
+        file_dict[f'row_{full_role}'].append(row)
+        file_dict[f'col_{full_role}'].append(col)
 
     tmp_df = pd.read_pickle(ifile)
     file_dict['nevt'].append(tmp_df.shape[0])
