@@ -13,7 +13,8 @@ def load_bash_template(args, id_roles):
         'trigID': id_roles['trig'],
         'refID': id_roles['ref'],
         'dutID': id_roles['dut'],
-        'extraID': id_roles['extra'],
+        # Use .get() to safely access 'extra', providing an empty string as default
+        'extraID': id_roles.get('extra', ''),
     }
 
     bash_template = """#!/bin/bash
@@ -30,8 +31,9 @@ xrdcp -r root://eosuser.cern.ch/{{ path }} ./
 
 echo "Will process input file from {{ runname }} {{ filename }}"
 
-echo "python track_data_selection.py -f {{ filename }} -r {{ runname }} -t {{ track }} --trigID {{ trigID }} --refID {{ refID }} --dutID {{ dutID }} --extraID {{ extraID }} --cal_table {{ cal_table }}"
-python track_data_selection.py -f {{ filename }} -r {{ runname }} -t {{ track }} --trigID {{ trigID }} --refID {{ refID }} --dutID {{ dutID }} --extraID {{ extraID }} --cal_table {{ cal_table }}
+# Conditionally add the --extraID argument only if extraID has a value
+echo "python track_data_selection.py -f {{ filename }} -r {{ runname }} -t {{ track }} --trigID {{ trigID }} --refID {{ refID }} --dutID {{ dutID }}{% if extraID %} --extraID {{ extraID }}{% endif %} --cal_table {{ cal_table }}"
+python track_data_selection.py -f {{ filename }} -r {{ runname }} -t {{ track }} --trigID {{ trigID }} --refID {{ refID }} --dutID {{ dutID }}{% if extraID %} --extraID {{ extraID }}{% endif %} --cal_table {{ cal_table }}
 
 ls -ltrh
 echo ""
