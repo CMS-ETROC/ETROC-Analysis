@@ -69,6 +69,8 @@ def apply_TDC_cuts(
         board_roles: dict,
     ):
 
+    removed_role = board_roles.pop(args.exclude_role)
+
     dut_lowerTOT = args.dutTOTlower * 0.01
     dut_upperTOT = args.dutTOTupper * 0.01
 
@@ -318,8 +320,6 @@ if __name__ == "__main__":
 
     roles = {}
     for board_id, board_info in config[args.runName].items():
-        if args.exclude_role == board_info.get('role'):
-            continue
         roles[board_info.get('role')] = board_id
 
     if not args.reprocess:
