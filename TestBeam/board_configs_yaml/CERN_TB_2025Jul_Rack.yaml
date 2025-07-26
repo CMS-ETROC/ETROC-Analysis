@@ -38,3 +38,7 @@ run1:
 run2:
   <<: *run_common
   0: { <<: *PT-LF2, HV: 220 }
+
+run3:
+  <<: *run_common
+  0: { <<: *PT-LF2, HV: 220 }
