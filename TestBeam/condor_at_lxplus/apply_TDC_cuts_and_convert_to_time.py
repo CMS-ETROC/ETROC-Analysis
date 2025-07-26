@@ -69,24 +69,24 @@ def apply_TDC_cuts(
         board_roles: dict,
     ):
 
-    removed_role = board_roles.pop(args.exclude_role)
+    id_dict = {key: value for key, value in board_roles.items() if key != args.exclude_role}
 
     dut_lowerTOT = args.dutTOTlower * 0.01
     dut_upperTOT = args.dutTOTupper * 0.01
 
     df_in_time = pd.DataFrame()
 
-    dut_id = board_roles.get('dut')
-    trig_id = board_roles.get('trig')
+    dut_id = id_dict.get('dut')
+    trig_id = id_dict.get('trig')
     if trig_id is None:
-        trig_id = board_roles.get('ref')
+        trig_id = id_dict.get('ref')
 
     ### Apply TDC cut
     tot_cuts = {
         idx: list(input_df['tot'][idx].quantile(
             [dut_lowerTOT, dut_upperTOT] if dut_id is not None and idx == dut_id else [0.01, 0.96]
         ).values)
-        for _, idx in board_roles.items()
+        for _, idx in id_dict.items()
     }
 
     tdc_cuts = {
@@ -95,13 +95,13 @@ def apply_TDC_cuts(
             args.trigTOALower if trig_id is not None and idx == trig_id else 0,
             args.trigTOAUpper if trig_id is not None and idx == trig_id else 1100,
             *tot_cuts[idx]
-        ] for _, idx in board_roles.items()
+        ] for _, idx in id_dict.items()
     }
     interest_df = tdc_event_selection_pivot(input_df, tdc_cuts_dict=tdc_cuts)
 
     if not interest_df.empty:
 
-        board_ids = sorted(board_roles.values())
+        board_ids = sorted(id_dict.values())
 
         # --- Apply TOA correlation cut
         _, distance1 = return_TOA_correlation_param(interest_df, board_id1=board_ids[0], board_id2=board_ids[1])
