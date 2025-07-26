@@ -37,4 +37,4 @@ run1:
 
 run2:
   <<: *run_common
-  0: { <<: *PT-LH2, HV: 220 }
+  0: { <<: *PT-LF2, HV: 220 }
