@@ -151,14 +151,14 @@ def process_single_track(args, track_dfs: dict, board_roles: dict, save_track_di
 
     role_by_index = {value: key for key, value in board_roles.items()}
     nickname_dict = {
-        'trig': 't',
-        'dut': 'd',
-        'ref': 'r',
-        'extra': 'e',
+        'trig': '_t_',
+        'dut': '_d_',
+        'ref': '_r_',
+        'extra': '_e_',
     }
 
     prefix = f"excluded_{args.exclude_role}_"
-    outname = f"track" + ''.join([f"{nickname_dict[role_by_index[key]]}_R{row}C{col}" for key, (row, col) in row_cols.items()])
+    outname = f"track" + ''.join([f"{nickname_dict[role_by_index[key]]}R{row}C{col}" for key, (row, col) in row_cols.items()])
 
     concatenated_track_df.to_pickle(save_track_dir / f'{outname}.pkl')
     concatenated_time_df.to_pickle(save_time_dir / f'{prefix}{outname}.pkl')
