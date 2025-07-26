@@ -110,7 +110,10 @@ if len(files) == 0:
 
 for ifile in tqdm(files):
     pattern = r'R(\d+)C(\d+)'
-    match_dict = {i: val for i, val in enumerate(re.findall(pattern, str(ifile)))}
+    matches = re.findall(pattern, str(ifile))
+    board_ids = sorted(config[args.runName].keys())
+    match_dict = {board_id: val for board_id, val in zip(board_ids, matches)}
+
     df = pd.read_pickle(ifile)
     df = df.loc[(df != 0).all(axis=1)]
 
