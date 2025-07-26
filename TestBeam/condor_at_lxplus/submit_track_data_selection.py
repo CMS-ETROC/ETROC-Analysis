@@ -212,11 +212,8 @@ if __name__ == "__main__":
     print(f'Track csv file: {args.track}')
     print(f'Cal code mode table: {args.cal_table}')
     print(f'Output will be stored {eos_base_dir}/{args.outname}')
-    print(f'Trigger board ID: {roles["trig"]}')
-    print(f'DUT board ID: {roles["dut"]}')
-    print(f'Reference board ID: {roles["ref"]}')
-    print(f'Second reference (or will be ignored) board ID: {roles["extra"]}')
-    # print(f'TOT cut is {args.trigTOTLower}-{args.trigTOTUpper} on board ID={roles["trig"]}')
+    for key, val in roles.items():
+        print(f'Board ID: {val}, role: {key}')
     print('========= Run option =========\n')
 
     make_jobs(args=args, id_roles=roles, log_dir=log_dir, eos_base_dir=eos_base_dir, condor_scripts_dir=condor_scripts_dir, runAppend=runAppend)
