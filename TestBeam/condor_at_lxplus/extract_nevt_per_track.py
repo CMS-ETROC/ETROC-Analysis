@@ -92,10 +92,15 @@ def process_file(ifile):
 
     file_dict = defaultdict(list)
 
-    for board_id, board_info in selected_config.items():
+    sorted_board_ids = sorted(selected_config.keys())
+
+    for match, board_id in zip(matches, sorted_board_ids):
+        board_info = selected_config[board_id]
         role = board_info.get('role')
-        file_dict[f'row_{role}'].append(matches[board_id][0])
-        file_dict[f'col_{role}'].append(matches[board_id][1])
+
+        # 'match' is now the tuple, e.g., ('25', '80')
+        file_dict[f'row_{role}'].append(match[0])
+        file_dict[f'col_{role}'].append(match[1])
 
     tmp_df = pd.read_pickle(ifile)
     file_dict['nevt'].append(tmp_df.shape[0])
