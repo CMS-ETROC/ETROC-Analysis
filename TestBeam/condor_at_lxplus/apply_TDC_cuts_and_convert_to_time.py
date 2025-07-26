@@ -151,10 +151,10 @@ def process_single_track(args, track_dfs: dict, board_roles: dict, save_track_di
 
     role_by_index = {value: key for key, value in board_roles.items()}
     nickname_dict = {
-        'trig': '_t_',
-        'dut': '_d_',
-        'ref': '_r_',
-        'extra': '_e_',
+        'trig': '_t-',
+        'dut': '_d-',
+        'ref': '_r-',
+        'extra': '_e-',
     }
 
     prefix = f"excluded_{args.exclude_role}_"
