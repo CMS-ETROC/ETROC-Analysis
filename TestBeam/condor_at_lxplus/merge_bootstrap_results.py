@@ -16,24 +16,6 @@ parser.add_argument('-o', '--output', required=True, type=str, dest='output')
 parser.add_argument('--minimum', type=int, default=50, help='Minimum number of bootstrap results to perform a fit', dest='minimum')
 parser.add_argument('--hist_bins', type=int, default=35, help='Number of bins for binned fit', dest='hist_bins')
 parser.add_argument(
-    '-c',
-    '--config',
-    metavar = 'NAME',
-    type = str,
-    help = 'YAML file including run information.',
-    required = True,
-    dest = 'config',
-)
-parser.add_argument(
-    '-r',
-    '--runName',
-    metavar = 'NAME',
-    type = str,
-    help = 'Name of the run to process. It must be matched with the name defined in YAML.',
-    required = True,
-    dest = 'runName',
-)
-parser.add_argument(
     '--tag',
     metavar = 'NAME',
     type = str,
@@ -44,20 +26,17 @@ parser.add_argument(
 
 args = parser.parse_args()
 
-with open(args.config) as input_yaml:
-    config = yaml.safe_load(input_yaml)
-
-if args.runName not in config:
-    raise ValueError(f"Run config {args.runName} not found")
+nickname_dict = {
+    't': 'trig',
+    'd': 'dut',
+    'r': 'ref',
+    'e': 'extra',
+}
 
 files = natsorted(Path(args.inputdir).glob('*_resolution.pkl'))
 final_dict = defaultdict(list)
 
 excluded_role = files[0].name.split('_')[1]
-
-roles = {}
-for board_id, board_info in config[args.runName].items():
-    roles[board_info.get('role')] = board_id
 
 def fit_unbinned(data):
     try:
@@ -109,10 +88,12 @@ if len(files) == 0:
     print('No input file found')
 
 for ifile in tqdm(files):
-    pattern = r'R(\d+)C(\d+)'
+    pattern = re.compile(r"(\w)-R(\d+)C(\d+)")
     matches = re.findall(pattern, str(ifile))
-    board_ids = sorted(config[args.runName].keys())
-    match_dict = {board_id: val for board_id, val in zip(board_ids, matches)}
+
+    pixel_dict = {}
+    for nickname, row, col in matches:
+        pixel_dict[nickname_dict[nickname]] = (row, col)
 
     df = pd.read_pickle(ifile)
     df = df.loc[(df != 0).all(axis=1)]
@@ -123,13 +104,13 @@ for ifile in tqdm(files):
     df.reset_index(drop=True, inplace=True)
     columns = df.columns
 
-    if len(match_dict.keys()) == 4:
-        final_dict[f'row_{excluded_role}'].append(match_dict[roles[excluded_role]][0])
-        final_dict[f'col_{excluded_role}'].append(match_dict[roles[excluded_role]][1])
+    if len(pixel_dict.keys()) == 4:
+        final_dict[f'row_{excluded_role}'].append(pixel_dict[excluded_role][0])
+        final_dict[f'col_{excluded_role}'].append(pixel_dict[excluded_role][1])
 
         for val in columns:
-            final_dict[f'row_{val}'].append(match_dict[roles[val]][0])
-            final_dict[f'col_{val}'].append(match_dict[roles[val]][1])
+            final_dict[f'row_{val}'].append(pixel_dict[val][0])
+            final_dict[f'col_{val}'].append(pixel_dict[val][1])
 
             mu, sigma, unbinned_check = fit_unbinned(df[val])
             if not unbinned_check:
@@ -140,8 +121,8 @@ for ifile in tqdm(files):
 
     else:
          for val in columns:
-            final_dict[f'row_{val}'].append(match_dict[roles[val]][0])
-            final_dict[f'col_{val}'].append(match_dict[roles[val]][1])
+            final_dict[f'row_{val}'].append(pixel_dict[val][0])
+            final_dict[f'col_{val}'].append(pixel_dict[val][1])
 
             mu, sigma, unbinned_check = fit_unbinned(df[val])
             if not unbinned_check:
