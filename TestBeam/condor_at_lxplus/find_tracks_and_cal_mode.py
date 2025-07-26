@@ -289,7 +289,7 @@ if __name__ == "__main__":
     del dfs
 
     three_board_flag = False
-    if final_input_df['board'].nunique == 3:
+    if final_input_df['board'].nunique() == 3:
         three_board_flag = True
 
     print('CAL code filtering and Save Cal mode table')
@@ -346,11 +346,10 @@ if __name__ == "__main__":
 
         if three_board_flag:
             ignore_board_ids = list(set([0, 1, 2, 3]) - set([roles['trig'], roles['dut'], roles['ref']]))
-            list_of_ignore_boards = [roles['extra']]
-            columns_want_to_drop = [f'toa_{i}' for i in set([0, 1, 2, 3])-set(list_of_ignore_boards)]
+            columns_want_to_drop = [f'toa_{i}' for i in set([0, 1, 2, 3])-set(ignore_board_ids)]
 
             columns_want_to_group = []
-            for i in set([0, 1, 2, 3])-set(list_of_ignore_boards):
+            for i in set([0, 1, 2, 3])-set(ignore_board_ids):
                 columns_want_to_group.append(f'row_{i}')
                 columns_want_to_group.append(f'col_{i}')
         else:
