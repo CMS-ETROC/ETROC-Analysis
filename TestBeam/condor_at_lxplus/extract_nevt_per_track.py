@@ -63,15 +63,6 @@ parser.add_argument(
     dest = 'tag',
 )
 
-parser.add_argument(
-    "--ids",
-    type=int,
-    nargs='+',
-    default=[0, 1, 2, 3],
-    help="A list of board IDs (default: [0, 1, 2, 3]). How to use: --ids 0 1 2",
-    dest = 'ids'
-)
-
 args = parser.parse_args()
 
 input_dir = Path(args.inputdir)
