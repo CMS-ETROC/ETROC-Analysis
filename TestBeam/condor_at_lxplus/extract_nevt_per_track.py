@@ -35,26 +35,6 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    '-c',
-    '--config',
-    metavar = 'NAME',
-    type = str,
-    help = 'YAML file including run information.',
-    required = True,
-    dest = 'config',
-)
-
-parser.add_argument(
-    '-r',
-    '--runName',
-    metavar = 'NAME',
-    type = str,
-    help = 'Name of the run to process. It must be matched with the name defined in YAML.',
-    required = True,
-    dest = 'runName',
-)
-
-parser.add_argument(
     '--tag',
     metavar = 'NAME',
     type = str,
@@ -67,10 +47,6 @@ args = parser.parse_args()
 
 input_dir = Path(args.inputdir)
 files = natsorted(list(input_dir.glob('excluded*track*pkl')))
-
-with open(args.config) as input_yaml:
-    config = safe_load(input_yaml)
-selected_config = config[args.runName]
 
 if len(files) == 0:
     print('No input file')
