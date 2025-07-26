@@ -1267,6 +1267,7 @@ def plot_TWC(
 ## --------------------------------------
 def plot_resolution_with_pulls(
         input_df: pd.DataFrame,
+        list_of_boards: list[str],
         tb_loc: str,
         fig_config: dict,
         hist_range: list[int] = [20, 95],
@@ -1317,12 +1318,37 @@ def plot_resolution_with_pulls(
         if not column_to_check in input_df.columns:
             continue
 
+        if not role in list_of_boards:
+            continue
+
         hists[board_id] = hist.Hist(hist.axis.Regular(hist_bins, hist_range[0], hist_range[1], name="time_resolution", label=r'Time Resolution [ps]'))
         hists[board_id].fill(input_df[f'res_{role}'].values)
         means[board_id] = np.mean(input_df[f'res_{role}'].values)
+
+        ### ADD THIS CHECK ###
+        # Check if the histogram has any entries. If not, skip to the next board.
+        if hists[board_id].sum() == 0:
+            print(f"WARNING: Histogram for board_id '{board_id}' (role: {role}) is empty. Skipping fit.")
+            continue
+
         centers = hists[board_id].axes[0].centers
-        fit_range = centers[np.argmax(hists[board_id].values())-5:np.argmax(hists[board_id].values())+5]
-        fit_vals = hists[board_id].values()[np.argmax(hists[board_id].values())-5:np.argmax(hists[board_id].values())+5]
+
+        ### OPTIONAL BUT RECOMMENDED: IMPROVE SLICING LOGIC ###
+        # This makes your slice robust, preventing errors if the peak is near an edge.
+        peak_bin_index = np.argmax(hists[board_id].values())
+        fit_window_half_width = 5 # Your original value was 5
+
+        # Calculate start and end indices for the slice, ensuring they are within bounds
+        start_index = max(0, peak_bin_index - fit_window_half_width)
+        end_index   = min(len(centers), peak_bin_index + fit_window_half_width + 1) # +1 because slicing is exclusive on the end
+
+        fit_range = centers[start_index:end_index]
+        fit_vals = hists[board_id].values()[start_index:end_index]
+
+        # Check if the resulting slice is still empty (can happen in edge cases)
+        if len(fit_vals) == 0:
+            print(f"WARNING: Could not create a valid fit slice for board_id '{board_id}'. Skipping fit.")
+            continue
 
         pars = mod.guess(fit_vals, x=fit_range)
         out = mod.fit(fit_vals, pars, x=fit_range, weights=1/np.sqrt(fit_vals))
