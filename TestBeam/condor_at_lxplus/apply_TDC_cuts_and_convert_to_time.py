@@ -125,12 +125,20 @@ def apply_TDC_cuts(
 
 
 ## --------------------------------------
-def process_single_track(args, track_dfs: dict, board_roles: dict, save_track_dir: Path, save_time_dir: Path):
-    concatenated_track_df = pd.concat(track_dfs, ignore_index=True)
-    time_dfs = []
+def process_single_track(args, track_dfs: list, board_roles: dict, save_track_dir: Path, save_time_dir: Path):
 
-    if concatenated_track_df.empty:
+    if len(track_dfs) == 0:
         return
+
+    # Create a new list containing only DataFrames that are not completely empty
+    valid_dfs = [df for df in track_dfs() if df.shape[0] > 0 or df.shape[1] > 0]
+
+    # If the list of valid dataframes is empty, there's nothing to process.
+    if not valid_dfs:
+        return
+
+    concatenated_track_df = pd.concat(valid_dfs, ignore_index=True)
+    time_dfs = []
 
     for file_id in sorted(concatenated_track_df['file'].unique()):
         df_file = concatenated_track_df.loc[concatenated_track_df['file'] == file_id]
