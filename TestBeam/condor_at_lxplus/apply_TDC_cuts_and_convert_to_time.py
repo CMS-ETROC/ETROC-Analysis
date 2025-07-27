@@ -119,7 +119,7 @@ def apply_TDC_cuts(
         reduced_df = interest_df.loc[dist_cut]
 
         if not reduced_df.empty:
-            df_in_time = convert_code_to_time(reduced_df, board_roles, args.use_new_toa)
+            df_in_time = convert_code_to_time(reduced_df, id_dict, args.use_new_toa)
 
     return df_in_time
 
@@ -363,7 +363,18 @@ if __name__ == "__main__":
                         for _, itrack in track_data.items()
                 ]
                 for future in as_completed(futures):
-                    pbar.update(1)
+                    try:
+                        # This is the crucial line. It will re-raise any exception
+                        # that happened in the worker process.
+                        future.result()
+                    except Exception as exc:
+                        print(f"A worker process generated an exception: {exc}")
+                        # For a full error report, uncomment the next two lines
+                        #  import traceback
+                        #  traceback.print_exc()
+                    finally:
+                        # Update the progress bar whether it succeeded or failed
+                        pbar.update(1)
 
     else:
         track_dir = Path(args.outdir) / 'tracks'
