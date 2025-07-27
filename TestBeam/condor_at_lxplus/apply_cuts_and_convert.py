@@ -151,11 +151,11 @@ if __name__ == "__main__":
     parser.add_argument(
         '-d',
         '--inputdir',
-        metavar = 'DIRNAME',
+        metavar = 'INPUTNAME',
         type = str,
         help = 'input directory name',
         required = True,
-        dest = 'dirname',
+        dest = 'inputdir',
     )
 
     parser.add_argument(
