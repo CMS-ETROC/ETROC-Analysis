@@ -127,38 +127,31 @@ def process_track_file(track_filepath, args, board_roles, final_output_dir):
     Opens a single track file, applies cuts, and saves the final output.
     """
     track_df = pd.read_pickle(track_filepath)
+    df_in_time = pd.DataFrame()
 
     if track_df.shape[0] < 1000:
         # use single mean
         df_in_time = apply_TDC_cuts(args, track_df, board_roles)
-        if not df_in_time.empty:
-            prefix = f'exclude_{args.exclude_role}_'
-            output_name = f"{prefix}{track_filepath.stem}.pkl" # Use stem to get filename without .pkl
-            final_output_path = final_output_dir / output_name
-            df_in_time.to_pickle(final_output_path)
-            return f"Processed {track_filepath.name}"
 
-        else:
-            return f"Skipped {track_filepath.name} (no data after cuts)"
     else:
-
         dfs = []
-        for file_id in track_df['file']:
+        for file_id in track_df['file'].unique():
             partial_track_df = track_df.loc[track_df['file'] == file_id]
             partial_df_in_time = apply_TDC_cuts(args, partial_track_df, board_roles)
             if not partial_df_in_time.empty:
                 dfs.append(partial_df_in_time)
 
-        df_in_time = pd.concat(dfs)
-        if not df_in_time.empty:
-            prefix = f'exclude_{args.exclude_role}_'
-            output_name = f"{prefix}{track_filepath.stem}.pkl" # Use stem to get filename without .pkl
-            final_output_path = final_output_dir / output_name
-            df_in_time.to_pickle(final_output_path)
-            return f"Processed {track_filepath.name}"
+        df_in_time = pd.concat(dfs, ignore_index=True)
 
-        else:
-            return f"Skipped {track_filepath.name} (no data after cuts)"
+    if not df_in_time.empty:
+        prefix = f'exclude_{args.exclude_role}_'
+        output_name = f"{prefix}{track_filepath.stem}.pkl" # Use stem to get filename without .pkl
+        final_output_path = final_output_dir / output_name
+        df_in_time.to_pickle(final_output_path)
+        return f"Processed {track_filepath.name}"
+
+    else:
+        return f"Skipped {track_filepath.name} (no data after cuts)"
 
 if __name__ == "__main__":
 
