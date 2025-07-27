@@ -69,24 +69,22 @@ def apply_TDC_cuts(
         board_roles: dict,
     ):
 
-    id_dict = {key: value for key, value in board_roles.items() if key != args.exclude_role}
-
     dut_lowerTOT = args.dutTOTlower * 0.01
     dut_upperTOT = args.dutTOTupper * 0.01
 
     df_in_time = pd.DataFrame()
 
-    dut_id = id_dict.get('dut')
-    trig_id = id_dict.get('trig')
+    dut_id = board_roles.get('dut')
+    trig_id = board_roles.get('trig')
     if trig_id is None:
-        trig_id = id_dict.get('ref')
+        trig_id = board_roles.get('ref')
 
     ### Apply TDC cut
     tot_cuts = {
         idx: list(input_df['tot'][idx].quantile(
             [dut_lowerTOT, dut_upperTOT] if dut_id is not None and idx == dut_id else [0.01, 0.96]
         ).values)
-        for _, idx in id_dict.items()
+        for _, idx in board_roles.items()
     }
 
     tdc_cuts = {
@@ -95,13 +93,13 @@ def apply_TDC_cuts(
             args.trigTOALower if trig_id is not None and idx == trig_id else 0,
             args.trigTOAUpper if trig_id is not None and idx == trig_id else 1100,
             *tot_cuts[idx]
-        ] for _, idx in id_dict.items()
+        ] for _, idx in board_roles.items()
     }
     interest_df = tdc_event_selection_pivot(input_df, tdc_cuts_dict=tdc_cuts)
 
     if not interest_df.empty:
 
-        board_ids = sorted(id_dict.values())
+        board_ids = sorted(board_roles.values())
 
         # --- Apply TOA correlation cut
         _, distance1 = return_TOA_correlation_param(interest_df, board_id1=board_ids[0], board_id2=board_ids[1])
@@ -119,7 +117,7 @@ def apply_TDC_cuts(
         reduced_df = interest_df.loc[dist_cut]
 
         if not reduced_df.empty:
-            df_in_time = convert_code_to_time(reduced_df, id_dict, args.use_new_toa)
+            df_in_time = convert_code_to_time(reduced_df, board_roles, args.use_new_toa)
 
     return df_in_time
 
@@ -271,7 +269,7 @@ if __name__ == "__main__":
     id_role_map = {}
     for board_id, board_info in config[args.runName].items():
         role = board_info.get('role')
-        if role:
+        if role != args.exclude_role
             id_role_map[role] = board_id
             id_role_map[board_id] = role
 
