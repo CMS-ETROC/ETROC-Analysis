@@ -137,7 +137,7 @@ def process_track_file(track_filepath, args, board_roles, final_output_dir):
         if not df_in_time.empty:
             prefix = f'exclude_{args.exclude_role}_'
             output_name = f"{prefix}{track_filepath.stem}.pkl" # Use stem to get filename without .pkl
-            final_output_path = Path(final_output_dir) / output_name
+            final_output_path = final_output_dir / output_name
             df_in_time.to_pickle(final_output_path)
             return f"Processed {track_filepath.name}"
 
