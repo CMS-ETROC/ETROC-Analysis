@@ -75,6 +75,9 @@ def apply_TDC_cuts(
     df_in_time = pd.DataFrame()
 
     dut_id = board_roles.get('dut')
+    if dut_id is None:
+        dut_id = board_roles.get('extra')
+
     trig_id = board_roles.get('trig')
     if trig_id is None:
         trig_id = board_roles.get('ref')
