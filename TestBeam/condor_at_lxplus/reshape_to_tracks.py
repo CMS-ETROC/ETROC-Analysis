@@ -80,6 +80,8 @@ def reshape_to_tracks(args):
         for track_key, df in data_dict.items():
             if not df.empty:
                 track_data[track_key].append(df)
+                ### pd.concat usually work even if input includes empty dataframe
+                ### BUT!! for the case when pd.concat with MultiIndex dataframe, different style (even empty) is not allowed.
 
     # --- Saving Track Files (Parallelized for speed) ---
     print('\n====== Concatenating and saving individual track files in parallel ======')
