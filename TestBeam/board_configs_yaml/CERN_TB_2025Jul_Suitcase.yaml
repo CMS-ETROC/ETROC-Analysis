@@ -28,7 +28,7 @@ defaults:
     short: PT_NH25
     offset: 20
     HV: 210
-    role: dut
+    role: extra
   EP_NH3: &EP_NH3
     name: ET2.03 EPIR New HPK-3
     short: EP_NH3
@@ -60,4 +60,7 @@ run3:
   <<: *common_run
 
 run4:
+  <<: *common_run
+
+run5:
   <<: *common_run
