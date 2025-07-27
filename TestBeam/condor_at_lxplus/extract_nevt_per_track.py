@@ -101,6 +101,8 @@ track_nevt_df.sort_values(by=['nevt'], ascending=False, inplace=True)
 track_nevt_df.to_csv(f'{args.outputdir}_nevt_per_track{args.tag}.csv', index=False)
 
 cuts = range(100, 1600, 100)
+cuts = [1, *cuts]
+
 ntrk_survived = []
 cut_name = [f'ntrk > {jcut}' for jcut in cuts]
 
