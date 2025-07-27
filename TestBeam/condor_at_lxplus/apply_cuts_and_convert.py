@@ -133,7 +133,7 @@ def process_track_file(track_filepath, args, board_roles, final_output_dir):
         filtered_df = apply_TDC_cuts(args, track_df, board_roles)
 
         if not filtered_df.empty:
-            df_in_time = convert_code_to_time(filtered_df)
+            df_in_time = convert_code_to_time(filtered_df, board_roles, args.use_new_toa)
 
             if not df_in_time.empty:
                 prefix = f'exclude_{args.exclude_role}_'
@@ -150,7 +150,7 @@ def process_track_file(track_filepath, args, board_roles, final_output_dir):
             filtered_df = apply_TDC_cuts(args, partial_track_df, board_roles)
 
             if not filtered_df.empty:
-                df_in_time = convert_code_to_time(filtered_df)
+                df_in_time = convert_code_to_time(filtered_df, board_roles, args.use_new_toa)
 
                 if not df_in_time.empty:
                     prefix = f'exclude_{args.exclude_role}_'
