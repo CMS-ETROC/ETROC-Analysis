@@ -326,6 +326,8 @@ if __name__ == "__main__":
 
         if args.extraID == None:
             id_to_ignore = next((x for x in [0, 1, 2, 3] if x not in set([args.trigID, args.dutID, args.refID])), None)
+        else:
+            id_to_ignore = args.extraID
 
         reduced_run_df = run_df.loc[~(run_df['board'] == id_to_ignore)]
         board_to_analyze = sorted([args.trigID, args.dutID, args.refID])
