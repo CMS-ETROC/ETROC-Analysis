@@ -40,6 +40,7 @@ def save_single_track(track_key, track_parts, track_dir, nickname_dict, role_by_
         return f"Warning: Failed to name track {track_key}. Skipping."
 
 def reshape_to_tracks(args):
+
     # --- Configuration Loading ---
     with open(args.config) as input_yaml:
         config = yaml.safe_load(input_yaml)
@@ -86,6 +87,7 @@ def reshape_to_tracks(args):
     if args.debug:
         for key, parts in  track_data.items():
             save_single_track(key, parts, track_dir, nickname_dict, id_role_map)
+            break
 
     else:
         # --- Saving Track Files (Parallelized for speed) ---
