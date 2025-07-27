@@ -13,7 +13,8 @@ def load_bash_template(args, id_roles):
         'trigID': id_roles['trig'],
         'refID': id_roles['ref'],
         'dutID': id_roles['dut'],
-        'extraID': id_roles['extra'],
+        # Use .get() to safely access 'extra', providing an empty string as default
+        'extraID': id_roles.get('extra', ''),
     }
 
     bash_template = """#!/bin/bash
@@ -30,8 +31,9 @@ xrdcp -r root://eosuser.cern.ch/{{ path }} ./
 
 echo "Will process input file from {{ runname }} {{ filename }}"
 
-echo "python track_data_selection.py -f {{ filename }} -r {{ runname }} -t {{ track }} --trigID {{ trigID }} --refID {{ refID }} --dutID {{ dutID }} --extraID {{ extraID }} --cal_table {{ cal_table }}"
-python track_data_selection.py -f {{ filename }} -r {{ runname }} -t {{ track }} --trigID {{ trigID }} --refID {{ refID }} --dutID {{ dutID }} --extraID {{ extraID }} --cal_table {{ cal_table }}
+# Conditionally add the --extraID argument only if extraID has a value
+echo "python track_data_selection.py -f {{ filename }} -r {{ runname }} -t {{ track }} --trigID {{ trigID }} --refID {{ refID }} --dutID {{ dutID }}{% if extraID %} --extraID {{ extraID }}{% endif %} --cal_table {{ cal_table }}"
+python track_data_selection.py -f {{ filename }} -r {{ runname }} -t {{ track }} --trigID {{ trigID }} --refID {{ refID }} --dutID {{ dutID }}{% if extraID %} --extraID {{ extraID }}{% endif %} --cal_table {{ cal_table }}
 
 ls -ltrh
 echo ""
@@ -212,11 +214,8 @@ if __name__ == "__main__":
     print(f'Track csv file: {args.track}')
     print(f'Cal code mode table: {args.cal_table}')
     print(f'Output will be stored {eos_base_dir}/{args.outname}')
-    print(f'Trigger board ID: {roles["trig"]}')
-    print(f'DUT board ID: {roles["dut"]}')
-    print(f'Reference board ID: {roles["ref"]}')
-    print(f'Second reference (or will be ignored) board ID: {roles["extra"]}')
-    # print(f'TOT cut is {args.trigTOTLower}-{args.trigTOTUpper} on board ID={roles["trig"]}')
+    for key, val in roles.items():
+        print(f'Board ID: {val}, role: {key}')
     print('========= Run option =========\n')
 
     make_jobs(args=args, id_roles=roles, log_dir=log_dir, eos_base_dir=eos_base_dir, condor_scripts_dir=condor_scripts_dir, runAppend=runAppend)

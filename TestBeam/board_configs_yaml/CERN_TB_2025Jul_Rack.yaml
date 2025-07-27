@@ -1,0 +1,44 @@
+defaults: &defaults
+  PT-NH24: &PT-NH24
+    name: ET2.02 PacTech New HPK-24
+    short: PT-NH24
+    offset: 20
+    HV: 230
+    role: ref
+  PT-LF2: &PT-LF2
+    name: ET2.01 PacTech FBK-LF2
+    short: PT-LF2
+    offset: 20
+    HV: 210
+    role: dut
+  PT-LF3: &PT-LF3
+    name: ET2.01 PacTech FBK-LF3
+    short: PT-LF3
+    offset: 20
+    HV: 210
+    role: trig
+  PT-LF7: &PT-LF7
+    name: ET2.01 PacTech FBK-LF7
+    short: PT-LF7
+    offset: 20
+    HV: 210
+    role: extra
+
+run_common: &run_common
+  0: *PT-LF2
+  1: *PT-LF3
+  2: *PT-LF7
+  3: *PT-NH24
+
+run1:
+  <<: *run_common
+  0: { <<: *PT-LF2, role: trig, HV: 210 }
+  1: { <<: *PT-LF3, role: dut }
+
+run2:
+  <<: *run_common
+  0: { <<: *PT-LF2, HV: 220 }
+
+run3:
+  <<: *run_common
+  0: { <<: *PT-LF2, HV: 220 }

@@ -169,13 +169,6 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        '--three_board',
-        action = 'store_true',
-        help = 'If this option is turned on, board ID set by extraID argument will not be considered',
-        dest = 'three_board',
-    )
-
-    parser.add_argument(
         '-r',
         '--runName',
         metavar = 'NAME',
@@ -191,6 +184,14 @@ if __name__ == "__main__":
         help = 'The YAML config file for masking noisy pixels',
         default = None,
         dest = 'mask_config_file',
+    )
+
+    parser.add_argument(
+        '--exclude_role',
+        metavar = 'NAME',
+        type = str,
+        help = "Choose the board to exclude for track combination. Possible option: 'trig', 'dut', 'ref', 'extra'",
+        dest = 'exclude_role',
     )
 
     parser.add_argument(
@@ -230,7 +231,7 @@ if __name__ == "__main__":
     portion = args.sampling*0.01
 
     ### Estimate memory usage as another safety check
-    print('Memory Safety Check, using randomly selected 3 files')
+    print('Memory Safety Check, using randomly selected 10 files')
     import random
     if len(input_files) < 10:
       random_files = input_files
@@ -295,6 +296,15 @@ if __name__ == "__main__":
     final_input_df.reset_index(drop=True, inplace=True)
     del dfs
 
+    if not args.exclude_role == None:
+        print(f'Board {args.exclude_role}, ID: {roles[args.exclude_role]} will be dropped')
+        drop_id_condition = ~(final_input_df['board'] == roles[args.exclude_role])
+        final_input_df = final_input_df[drop_id_condition].reset_index(drop=True)
+
+    three_board_flag = False
+    if final_input_df['board'].nunique() == 3:
+        three_board_flag = True
+
     print('CAL code filtering and Save Cal mode table')
     ### CAL code filtering
     cal_table = final_input_df.pivot_table(index=["row", "col"], columns=["board"], values=["cal"], aggfunc=lambda x: x.mode().iat[0])
@@ -321,7 +331,7 @@ if __name__ == "__main__":
         check_empty_df(cal_filtered_df, "CAL filtering.")
 
         ## A wide TDC cuts
-        ids_to_loop = sorted([roles[k] for k in ('trig', 'dut', 'ref')]) if args.three_board else [0, 1, 2, 3]
+        ids_to_loop = sorted([roles[k] for k in ('trig', 'dut', 'ref')]) if three_board_flag else [0, 1, 2, 3]
         tdc_cuts = {
             idx: ([0, 1100, 100, 500, 50, 250] if idx == roles['trig']
                 else [0, 1100, 0, 1100, 50, 250] if idx == roles['ref']
@@ -334,7 +344,7 @@ if __name__ == "__main__":
         check_empty_df(filtered_df, "TDC filtering.")
 
         event_board_counts = filtered_df.groupby(['evt', 'board']).size().unstack(fill_value=0)
-        if args.three_board:
+        if three_board_flag:
             boards_needed = ['trig', 'ref', 'dut']
         else:
             boards_needed = ['trig', 'ref', 'extra', 'dut']
@@ -347,13 +357,12 @@ if __name__ == "__main__":
         del filtered_df
         check_empty_df(selected_subset_df, "Single hit event filtering.")
 
-        if args.three_board:
+        if three_board_flag:
             ignore_board_ids = list(set([0, 1, 2, 3]) - set([roles['trig'], roles['dut'], roles['ref']]))
-            list_of_ignore_boards = [roles['extra']]
-            columns_want_to_drop = [f'toa_{i}' for i in set([0, 1, 2, 3])-set(list_of_ignore_boards)]
+            columns_want_to_drop = [f'toa_{i}' for i in set([0, 1, 2, 3])-set(ignore_board_ids)]
 
             columns_want_to_group = []
-            for i in set([0, 1, 2, 3])-set(list_of_ignore_boards):
+            for i in set([0, 1, 2, 3])-set(ignore_board_ids):
                 columns_want_to_group.append(f'row_{i}')
                 columns_want_to_group.append(f'col_{i}')
         else:
@@ -376,7 +385,7 @@ if __name__ == "__main__":
 
         del pivot_data_df, combinations_df
 
-        if args.three_board:
+        if three_board_flag:
             role_pairs = [('row', 'trig', 'ref'), ('row', 'trig', 'dut'),
                           ('col', 'trig', 'ref'), ('col', 'trig', 'dut')]
         else:

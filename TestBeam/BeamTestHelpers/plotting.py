@@ -812,7 +812,7 @@ def plot_1d_TDC_histograms(
                 hep.cms.text(loc=0, ax=ax, text=extra_cms_title, fontsize=18)
 
                 if i < len(plot_vars):
-                    ax.set_title(f"{loc_title} | {fig_tag[idx]}", loc="right", size=16)
+                    ax.set_title(f"{loc_title}\n{fig_tag[idx]}", loc="right", size=16)
                     ihist.project(plot_vars[i]).plot1d(ax=ax, lw=2, yerr=not no_errorbar)
                     if do_logy:
                         ax.set_yscale('log')
@@ -834,7 +834,7 @@ def plot_1d_TDC_histograms(
                         cax = fig.add_subplot(sub_gs[0, 1])
 
                         # Set the title on the new plot axis
-                        ax_2d.set_title(f"{loc_title} | {fig_tag[idx]}", loc="right", size=16)
+                        ax_2d.set_title(f"{loc_title}\n{fig_tag[idx]}", loc="right", size=16)
 
                         # 3. Plot and capture the container object
                         artists = ihist.project("TOA", "TOT")[::2j, ::2j].plot2d(
@@ -1267,7 +1267,7 @@ def plot_TWC(
 ## --------------------------------------
 def plot_resolution_with_pulls(
         input_df: pd.DataFrame,
-        board_ids: list[int],
+        list_of_boards: list[str],
         tb_loc: str,
         fig_config: dict,
         hist_range: list[int] = [20, 95],
@@ -1311,26 +1311,57 @@ def plot_resolution_with_pulls(
     pulls_dict = {}
     means = {}
 
-    for key in board_ids:
-        hists[key] = hist.Hist(hist.axis.Regular(hist_bins, hist_range[0], hist_range[1], name="time_resolution", label=r'Time Resolution [ps]'))
-        hists[key].fill(input_df[f'res{key}'].values)
-        means[key] = np.mean(input_df[f'res{key}'].values)
-        centers = hists[key].axes[0].centers
-        fit_range = centers[np.argmax(hists[key].values())-5:np.argmax(hists[key].values())+5]
-        fit_vals = hists[key].values()[np.argmax(hists[key].values())-5:np.argmax(hists[key].values())+5]
+    for board_id, board_info in fig_config.items():
+        role = board_info.get('role')
+
+        column_to_check = f'res_{role}'
+        if not column_to_check in input_df.columns:
+            continue
+
+        if not role in list_of_boards:
+            continue
+
+        hists[board_id] = hist.Hist(hist.axis.Regular(hist_bins, hist_range[0], hist_range[1], name="time_resolution", label=r'Time Resolution [ps]'))
+        hists[board_id].fill(input_df[f'res_{role}'].values)
+        means[board_id] = np.mean(input_df[f'res_{role}'].values)
+
+        ### ADD THIS CHECK ###
+        # Check if the histogram has any entries. If not, skip to the next board.
+        if hists[board_id].sum() == 0:
+            print(f"WARNING: Histogram for board_id '{board_id}' (role: {role}) is empty. Skipping fit.")
+            continue
+
+        centers = hists[board_id].axes[0].centers
+
+        ### OPTIONAL BUT RECOMMENDED: IMPROVE SLICING LOGIC ###
+        # This makes your slice robust, preventing errors if the peak is near an edge.
+        peak_bin_index = np.argmax(hists[board_id].values())
+        fit_window_half_width = 5 # Your original value was 5
+
+        # Calculate start and end indices for the slice, ensuring they are within bounds
+        start_index = max(0, peak_bin_index - fit_window_half_width)
+        end_index   = min(len(centers), peak_bin_index + fit_window_half_width + 1) # +1 because slicing is exclusive on the end
+
+        fit_range = centers[start_index:end_index]
+        fit_vals = hists[board_id].values()[start_index:end_index]
+
+        # Check if the resulting slice is still empty (can happen in edge cases)
+        if len(fit_vals) == 0:
+            print(f"WARNING: Could not create a valid fit slice for board_id '{board_id}'. Skipping fit.")
+            continue
 
         pars = mod.guess(fit_vals, x=fit_range)
         out = mod.fit(fit_vals, pars, x=fit_range, weights=1/np.sqrt(fit_vals))
-        fit_params[key] = out
+        fit_params[board_id] = out
 
         if print_fit_results:
-            print(key)
+            print(role)
             print(out.fit_report())
 
         ### Calculate pull
-        pulls = (hists[key].values() - out.eval(x=centers))/np.sqrt(out.eval(x=centers))
+        pulls = (hists[board_id].values() - out.eval(x=centers))/np.sqrt(out.eval(x=centers))
         pulls[np.isnan(pulls) | np.isinf(pulls)] = 0
-        pulls_dict[key] = pulls
+        pulls_dict[board_id] = pulls
 
 
     if slides_friendly:
@@ -1498,7 +1529,6 @@ def plot_resolution_with_pulls(
 ## --------------------------------------
 def plot_resolution_table(
         input_df: pd.DataFrame,
-        board_ids: list[int],
         tb_loc: str,
         fig_config: dict,
         min_resolution: float = 25.0,
@@ -1516,14 +1546,20 @@ def plot_resolution_table(
     plot_title = load_fig_title(tb_loc)
 
     tables = {}
-    for board_id in board_ids:
-        board_info = input_df[[f'row{board_id}', f'col{board_id}', f'res{board_id}', f'err{board_id}']]
+    for board_id, board_info in fig_config.items():
+        role = board_info.get('role')
 
-        res = board_info.groupby([f'row{board_id}', f'col{board_id}']).apply(lambda x: np.average(x[f'res{board_id}'], weights=1/x[f'err{board_id}']**2)).reset_index()
-        err = board_info.groupby([f'row{board_id}', f'col{board_id}']).apply(lambda x: np.sqrt(1/(np.sum(1/x[f'err{board_id}']**2)))).reset_index()
+        column_to_check = f'res_{role}'
+        if not column_to_check in input_df.columns:
+            continue
 
-        res_table = res.pivot_table(index=f'row{board_id}', columns=f'col{board_id}', values=0, fill_value=-1)
-        err_table = err.pivot_table(index=f'row{board_id}', columns=f'col{board_id}', values=0, fill_value=-1)
+        board_info = input_df[[f'row_{role}', f'col_{role}', f'res_{role}', f'err_{role}']]
+
+        res = board_info.groupby([f'row_{role}', f'col_{role}']).apply(lambda x: np.average(x[f'res_{role}'], weights=1/x[f'err_{role}']**2)).reset_index()
+        err = board_info.groupby([f'row_{role}', f'col_{role}']).apply(lambda x: np.sqrt(1/(np.sum(1/x[f'err_{role}']**2)))).reset_index()
+
+        res_table = res.pivot_table(index=f'row_{role}', columns=f'col_{role}', values=0, fill_value=-1)
+        err_table = err.pivot_table(index=f'row_{role}', columns=f'col_{role}', values=0, fill_value=-1)
 
         res_table = res_table.reindex(pd.Index(np.arange(0,16), name='')).reset_index()
         res_table = res_table.reindex(columns=np.arange(0,16))
@@ -1621,7 +1657,7 @@ def plot_resolution_table(
             ax.set_xticks(ticks)
             ax.set_yticks(ticks)
             sup_title = fig_config[idx]['title']
-            ax.set_title(f"{plot_title} | {sup_title}", loc="right", size=16)
+            ax.set_title(f"{plot_title}\n{sup_title}", loc="right", size=16)
             ax.tick_params(axis='x', which='both', length=5, labelsize=18)
             ax.tick_params(axis='y', which='both', length=5, labelsize=18)
             ax.invert_xaxis()
@@ -1637,7 +1673,6 @@ def plot_resolution_table(
                 plt.close(fig)
 
         del tables
-
 
 ## --------------------------------------
 # def plot_TDC_correlation_scatter_matrix(

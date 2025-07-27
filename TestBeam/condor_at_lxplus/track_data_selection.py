@@ -279,13 +279,9 @@ if __name__ == "__main__":
         metavar = 'ID',
         type = int,
         help = 'board ID be ignored',
-        required = True,
         dest = 'extraID',
     )
     args = parser.parse_args()
-
-    board_ids = [0,1,2,3]
-    ignore_boards = [args.extraID]
 
     trig_id = args.trigID
     ref_id = args.refID
@@ -313,23 +309,28 @@ if __name__ == "__main__":
 
     if track_df.shape[1] == 8:
         print('Track separation with 4 boards combination')
-        board_to_analyze = board_ids
 
         for itrack in tqdm(range(track_df.shape[0])):
             pix_dict = {}
-            for idx in board_to_analyze:
+            for idx in [0, 1, 2, 3]:
                 pix_dict[idx] = [track_df.iloc[itrack][f'row_{idx}'], track_df.iloc[itrack][f'col_{idx}']]
 
             table = data_4board_selection_by_track(input_df=run_df, cal_mode_table=cal_table, pix_dict=pix_dict, trig_id=trig_id,
-                                                   board_to_analyze=board_to_analyze, tot_cuts=tot_cuts)
+                                                   board_to_analyze=[0, 1, 2, 3], tot_cuts=tot_cuts)
             table['file'] = file_num_indicator
             table['file'] = table['file'].astype('uint16')
 
             track_pivots[itrack] = table
     else:
         print('Track separation with 3 boards combination')
-        board_to_analyze = list(set(board_ids) - set(ignore_boards))
-        reduced_run_df = run_df.loc[~(run_df['board']==args.extraID)]
+
+        if args.extraID == None:
+            id_to_ignore = next((x for x in [0, 1, 2, 3] if x not in set([args.trigID, args.dutID, args.refID])), None)
+        else:
+            id_to_ignore = args.extraID
+
+        reduced_run_df = run_df.loc[~(run_df['board'] == id_to_ignore)]
+        board_to_analyze = sorted([args.trigID, args.dutID, args.refID])
 
         for itrack in tqdm(range(track_df.shape[0])):
             pix_dict = {}

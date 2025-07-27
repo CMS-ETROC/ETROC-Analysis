@@ -1,13 +1,13 @@
 from natsort import natsorted
 from pathlib import Path
-from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
-from collections import defaultdict
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import pandas as pd
 import numpy as np
-import yaml
 import warnings
+import argparse, yaml
+
 warnings.filterwarnings("ignore")
 
 ## --------------------------------------
@@ -121,77 +121,50 @@ def apply_TDC_cuts(
 
     return df_in_time
 
+# --- This would be your new worker function for parallel processing ---
+def process_track_file(track_filepath, args, board_roles, final_output_dir):
+    """
+    Opens a single track file, applies cuts, and saves the final output.
+    """
+    track_df = pd.read_pickle(track_filepath)
+    df_in_time = pd.DataFrame()
 
-## --------------------------------------
-def process_single_track(args, track_dfs: dict, board_roles: dict, save_track_dir: Path, save_time_dir: Path):
-    concatenated_track_df = pd.concat(track_dfs, ignore_index=True)
-    time_dfs = []
+    if track_df.shape[0] < 1000:
+        # use single mean
+        df_in_time = apply_TDC_cuts(args, track_df, board_roles)
 
-    for file_id in sorted(concatenated_track_df['file'].unique()):
-        df_file = concatenated_track_df.loc[concatenated_track_df['file'] == file_id]
+    else:
+        dfs = []
+        for file_id in track_df['file'].unique():
+            partial_track_df = track_df.loc[track_df['file'] == file_id]
+            partial_df_in_time = apply_TDC_cuts(args, partial_track_df, board_roles)
+            if not partial_df_in_time.empty:
+                dfs.append(partial_df_in_time)
 
-        if df_file.empty:
-            continue
+        df_in_time = pd.concat(dfs, ignore_index=True)
 
-        df_in_time = apply_TDC_cuts(args, df_file, board_roles)
-        time_dfs.append(df_in_time)
+    if not df_in_time.empty:
+        prefix = f'exclude_{args.exclude_role}_'
+        output_name = f"{prefix}{track_filepath.stem}.pkl" # Use stem to get filename without .pkl
+        final_output_path = final_output_dir / output_name
+        df_in_time.to_pickle(final_output_path)
+        return f"Processed {track_filepath.name}"
 
-    concatenated_time_df = pd.concat(time_dfs, ignore_index=True)
+    else:
+        return f"Skipped {track_filepath.name} (no data after cuts)"
 
-    ### Save dataframes
-    board_ids_for_naming = [
-        b for b in concatenated_track_df.columns.get_level_values('board').unique()
-        if isinstance(b, int)
-    ]
-
-    row_cols = {
-        idx: (concatenated_track_df['row'][idx].unique()[0], concatenated_track_df['col'][idx].unique()[0])
-        for idx in board_ids_for_naming
-    }
-
-    prefix = f"excluded_{args.exclude_role}_"
-    outname = f"track" + ''.join([f"_R{row}C{col}" for _, (row, col) in row_cols.items()])
-
-    concatenated_track_df.to_pickle(save_track_dir / f'{outname}.pkl')
-    concatenated_time_df.to_pickle(save_time_dir / f'{prefix}{outname}.pkl')
-
-
-## --------------------------------------
-def reprocess_code_to_time_df(args, input_file, board_roles: dict):
-
-    track_df = pd.read_pickle(input_file)
-    time_dfs = []
-
-    for file_id in sorted(track_df['file'].unique()):
-        df_file = track_df.loc[track_df['file'] == file_id]
-
-        if df_file.empty:
-            continue
-
-        df_in_time = apply_TDC_cuts(args, df_file, board_roles)
-        time_dfs.append(df_in_time)
-
-    concatenated_time_df = pd.concat(time_dfs, ignore_index=True)
-    return concatenated_time_df
-
-## --------------------------------------
 if __name__ == "__main__":
 
-    import argparse, sys
-
-    parser = argparse.ArgumentParser(
-            prog='PlaceHolder',
-            description='merge individual dataSelection results',
-    )
+    parser = argparse.ArgumentParser(description="Apply cuts to track files and save final output.")
 
     parser.add_argument(
         '-d',
         '--inputdir',
-        metavar = 'DIRNAME',
+        metavar = 'INPUTNAME',
         type = str,
         help = 'input directory name',
         required = True,
-        dest = 'dirname',
+        dest = 'inputdir',
     )
 
     parser.add_argument(
@@ -222,14 +195,6 @@ if __name__ == "__main__":
         help = 'YAML file including run information.',
         required = True,
         dest = 'config',
-    )
-
-    parser.add_argument(
-        '--file_pattern',
-        metavar = 'glob-pattern',
-        help = "Put the file pattern for glob, if you want to process part of dataset. Example: 'run*_loop_[0-9].pickle run*_loop_1[0-9].pickle run*_loop_2[0-4].pickle'",
-        default = 'run*_loop*.pickle',
-        dest = 'file_pattern',
     )
 
     parser.add_argument(
@@ -287,20 +252,24 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        '--reprocess',
-        action = 'store_true',
-        help = 'If set, reprocess track',
-        dest = 'reprocess',
-    )
-
-    parser.add_argument(
         '--use_new_toa',
         action = 'store_true',
         help = 'If set, use average of TOA and TOA+CAL as a new toa in time',
         dest = 'use_new_toa',
     )
 
+    parser.add_argument(
+        '--debug',
+        action = 'store_true',
+        help = 'If set, switch to loop mode to print error message',
+        dest = 'debug',
+    )
+
     args = parser.parse_args()
+
+    outdir = Path(args.outdir)
+    final_output_path = outdir / 'time'
+    final_output_path.mkdir(exist_ok=True)
 
     with open(args.config) as input_yaml:
         config = yaml.safe_load(input_yaml)
@@ -308,77 +277,30 @@ if __name__ == "__main__":
     if args.runName not in config:
         raise ValueError(f"Run config {args.runName} not found")
 
-    roles = {}
+    id_role_map = {}
     for board_id, board_info in config[args.runName].items():
-        if args.exclude_role == board_info.get('role'):
-            continue
-        roles[board_info.get('role')] = board_id
+        role = board_info.get('role')
+        if role != args.exclude_role:
+            id_role_map[role] = board_id
 
-    if not args.reprocess:
+    track_files = natsorted(Path(args.inputdir).glob('track_*.pkl'))
 
-        outputdir = Path(args.outdir)
-        outputdir.mkdir(exist_ok=True, parents=True)
-
-        track_dir = outputdir / 'tracks'
-        track_dir.mkdir(exist_ok=False)
-
-        time_dir = outputdir / 'time'
-        time_dir.mkdir(exist_ok=False)
-
-        print(f'\nInput path is: {args.dirname}')
-        print(f'Output path is: {args.outdir}')
-        print(f'Will process the files based on the pattern: {args.file_pattern}\n')
-
-        files = []
-        patterns = args.file_pattern.split()
-        for pattern in patterns:
-            files += natsorted(Path(args.dirname).glob(pattern))
-
-        if len(files) == 0:
-            print(f'No input files for the given path: {args.dirname}')
-            sys.exit()
-
-        print('====== Categorize data by track ======')
-        track_data = defaultdict(list)
-        for ifile in tqdm(files):
-            data_dict = pd.read_pickle(ifile)
-
-            for track_key, df in data_dict.items():
-                track_data[track_key].append(df)
-
-        print('\n====== Apply TDC cut and save track and time dataframes ======')
-        with tqdm(track_data) as pbar:
-            with ProcessPoolExecutor() as process_executor:
-                # Each input results in multiple threading jobs being created:
-                futures = [
-                    process_executor.submit(process_single_track, args, itrack, roles, track_dir, time_dir)
-                        for _, itrack in track_data.items()
-                ]
-                for future in as_completed(futures):
-                    pbar.update(1)
-
+    if args.debug:
+        for f in track_files:
+            process_track_file(f, args, id_role_map, final_output_path)
+            break
     else:
-        track_dir = Path(args.outdir) / 'tracks'
-        time_dir = Path(args.outdir) / 'reprocessed_time'
-        time_dir.mkdir(exist_ok=True)
-
-        print(f'Reprocess track pkl file at {track_dir}')
-        print(f'New quantile TOT cut for DUT: {args.dutTOTlower}% - {args.dutTOTupper}%')
-
-        prefix = f"excluded_{args.exclude_role}_"
-        files = natsorted(track_dir.glob('track*pkl'))
-
-        print('\n====== Apply TDC cut and save track and time dataframes ======')
-
-        with tqdm(files) as pbar:
-            with ProcessPoolExecutor() as process_executor:
-                # Each input results in multiple threading jobs being created:
-                futures = {
-                    process_executor.submit(reprocess_code_to_time_df, args, ifile, roles): ifile
-                    for ifile in files
-                }
-                for future in as_completed(futures):
-                    iresult = future.result()
-                    iresult = iresult.reset_index(drop=True) ## Make dataframe to use RangeIndex for memory efficient
-                    iresult.to_pickle(time_dir / f"{prefix}{futures[future].name}")
-                    pbar.update(1)
+        with ProcessPoolExecutor() as executor:
+            futures = [executor.submit(process_track_file, f, args, id_role_map, final_output_path) for f in track_files]
+            for future in tqdm(as_completed(futures), total=len(futures), desc="Saving Tracks"):
+                try:
+                    # This is the crucial line. It will re-raise any exception
+                    # that happened in the worker process.
+                    future.result()
+                except Exception as exc:
+                    print(f"A worker process generated an exception: {exc}")
+                    # For a full error report, uncomment the next two lines
+                    # import traceback
+                    # traceback.print_exc()
+                finally:
+                    pass

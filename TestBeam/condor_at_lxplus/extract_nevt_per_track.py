@@ -1,6 +1,7 @@
 import pandas as pd
 import argparse
 import re
+from yaml import safe_load
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from natsort import natsorted
@@ -42,45 +43,41 @@ parser.add_argument(
     dest = 'tag',
 )
 
-parser.add_argument(
-    "--ids",
-    type=int,
-    nargs='+',
-    default=[0, 1, 2, 3],
-    help="A list of board IDs (default: [0, 1, 2, 3]). How to use: --ids 0 1 2",
-    dest = 'ids'
-)
-
 args = parser.parse_args()
 
 input_dir = Path(args.inputdir)
-files = natsorted(list(input_dir.glob('track*pkl')))
+files = natsorted(input_dir.glob('exclude*pkl'))
 
 if len(files) == 0:
-    import sys
     print('No input file')
-    sys.exit(1)
+    exit()
+
+nickname_dict = {
+    't': 'trig',
+    'd': 'dut',
+    'r': 'ref',
+    'e': 'extra',
+}
 
 final_dict = defaultdict(list)
 
 def process_file(ifile):
     # Define the pattern to match "RxCx" part
-    pattern = r'R(\d+)C(\d+)'
+    # - (\w): Captures the nickname (e.g., 'r')
+    # - R(\d+): Captures the row number
+    # - C(\d+): Captures the column number
+    pattern = re.compile(r"(\w)-R(\d+)C(\d+)")
 
     # Find all occurrences of the pattern in the string
     matches = re.findall(pattern, str(ifile))
 
-    if len(args.ids) != len(matches):
-        print('Please check given inputs')
-        print(f'Given board IDs: {args.ids}')
-        print(f'Matches: {matches}')
-        import sys
-        sys.exit()
-
     file_dict = defaultdict(list)
-    for id, pixel in zip(args.ids, matches):
-        file_dict[f'row{id}'].append(pixel[0])
-        file_dict[f'col{id}'].append(pixel[1])
+    for nickname, row, col in matches:
+        # Use the reverse maps to find the original data
+        full_role = nickname_dict[nickname]
+
+        file_dict[f'row_{full_role}'].append(row)
+        file_dict[f'col_{full_role}'].append(col)
 
     tmp_df = pd.read_pickle(ifile)
     file_dict['nevt'].append(tmp_df.shape[0])
@@ -104,6 +101,8 @@ track_nevt_df.sort_values(by=['nevt'], ascending=False, inplace=True)
 track_nevt_df.to_csv(f'{args.outputdir}_nevt_per_track{args.tag}.csv', index=False)
 
 cuts = range(100, 1600, 100)
+cuts = [1, *cuts]
+
 ntrk_survived = []
 cut_name = [f'ntrk > {jcut}' for jcut in cuts]
 
