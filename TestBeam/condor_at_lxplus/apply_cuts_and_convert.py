@@ -127,20 +127,40 @@ def process_track_file(track_filepath, args, board_roles, final_output_dir):
     Opens a single track file, applies cuts, and saves the final output.
     """
     track_df = pd.read_pickle(track_filepath)
-    filtered_df = apply_TDC_cuts(args, track_df, board_roles)
 
-    if not filtered_df.empty:
-        df_in_time = convert_code_to_time(filtered_df)
+    if track_df.shape[0] < 1000:
+        # use single mean
+        filtered_df = apply_TDC_cuts(args, track_df, board_roles)
 
-        if not df_in_time.empty:
-            prefix = f'exclude_{args.exclude_role}_'
-            output_name = f"{prefix}{track_filepath.stem}.pkl" # Use stem to get filename without .pkl
-            final_output_path = final_output_dir / output_name
-            df_in_time.to_pickle(final_output_path)
-            return f"Processed {track_filepath.name}"
+        if not filtered_df.empty:
+            df_in_time = convert_code_to_time(filtered_df)
 
-        else:
-            return f"Skipped {track_filepath.name} (no data after cuts)"
+            if not df_in_time.empty:
+                prefix = f'exclude_{args.exclude_role}_'
+                output_name = f"{prefix}{track_filepath.stem}.pkl" # Use stem to get filename without .pkl
+                final_output_path = final_output_dir / output_name
+                df_in_time.to_pickle(final_output_path)
+                return f"Processed {track_filepath.name}"
+
+            else:
+                return f"Skipped {track_filepath.name} (no data after cuts)"
+    else:
+        for file_id in track_df['file']:
+            partial_track_df = track_df.loc[track_df['file'] == file_id]
+            filtered_df = apply_TDC_cuts(args, partial_track_df, board_roles)
+
+            if not filtered_df.empty:
+                df_in_time = convert_code_to_time(filtered_df)
+
+                if not df_in_time.empty:
+                    prefix = f'exclude_{args.exclude_role}_'
+                    output_name = f"{prefix}{track_filepath.stem}.pkl" # Use stem to get filename without .pkl
+                    final_output_path = final_output_dir / output_name
+                    df_in_time.to_pickle(final_output_path)
+                    return f"Processed {track_filepath.name}"
+
+                else:
+                    return f"Skipped {track_filepath.name} (no data after cuts)"
 
 if __name__ == "__main__":
 
@@ -269,7 +289,7 @@ if __name__ == "__main__":
     id_role_map = {}
     for board_id, board_info in config[args.runName].items():
         role = board_info.get('role')
-        if role != args.exclude_role
+        if role != args.exclude_role:
             id_role_map[role] = board_id
             id_role_map[board_id] = role
 
