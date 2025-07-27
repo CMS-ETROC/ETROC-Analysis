@@ -129,9 +129,8 @@ def process_single_track(args, track_dfs: dict, board_roles: dict, save_track_di
     concatenated_track_df = pd.concat(track_dfs, ignore_index=True)
     time_dfs = []
 
-    # If the concatenated dataframe has no rows, there's nothing to process.
     if concatenated_track_df.empty:
-        return  # Exit the function for this empty track
+        return
 
     for file_id in sorted(concatenated_track_df['file'].unique()):
         df_file = concatenated_track_df.loc[concatenated_track_df['file'] == file_id]
@@ -140,7 +139,8 @@ def process_single_track(args, track_dfs: dict, board_roles: dict, save_track_di
             continue
 
         df_in_time = apply_TDC_cuts(args, df_file, board_roles)
-        time_dfs.append(df_in_time)
+        if not df_in_time.empty:
+            time_dfs.append(df_in_time)
 
     concatenated_time_df = pd.concat(time_dfs, ignore_index=True)
 
@@ -374,8 +374,8 @@ if __name__ == "__main__":
                     except Exception as exc:
                         print(f"A worker process generated an exception: {exc}")
                         # For a full error report, uncomment the next two lines
-                        #  import traceback
-                        #  traceback.print_exc()
+                        # import traceback
+                        # traceback.print_exc()
                     finally:
                         # Update the progress bar whether it succeeded or failed
                         pbar.update(1)
