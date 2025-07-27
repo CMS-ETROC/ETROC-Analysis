@@ -291,7 +291,6 @@ if __name__ == "__main__":
         role = board_info.get('role')
         if role != args.exclude_role:
             id_role_map[role] = board_id
-            id_role_map[board_id] = role
 
     track_files = natsorted(Path(args.inputdir).glob('track_*.pkl'))
 
