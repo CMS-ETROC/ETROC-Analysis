@@ -83,27 +83,32 @@ def reshape_to_tracks(args):
                 ### pd.concat usually work even if input includes empty dataframe
                 ### BUT!! for the case when pd.concat with MultiIndex dataframe, different style (even empty) is not allowed.
 
-    # --- Saving Track Files (Parallelized for speed) ---
-    print('\n====== Concatenating and saving individual track files in parallel ======')
-    with ProcessPoolExecutor() as executor:
-        # Submit each track to be processed by the worker function
-        futures = [
-            executor.submit(save_single_track, key, parts, track_dir, nickname_dict, id_role_map)
-            for key, parts in track_data.items()
-        ]
-        # Use tqdm to show progress as jobs complete
-        for future in tqdm(as_completed(futures), total=len(futures), desc="Saving Tracks"):
-            try:
-                # This is the crucial line. It will re-raise any exception
-                # that happened in the worker process.
-                future.result()
-            except Exception as exc:
-                print(f"A worker process generated an exception: {exc}")
-                # For a full error report, uncomment the next two lines
-                # import traceback
-                # traceback.print_exc()
-            finally:
-                pass
+    if args.debug:
+        for key, parts in  track_data.items():
+            save_single_track(key, parts, track_dir, nickname_dict, id_role_map)
+
+    else:
+        # --- Saving Track Files (Parallelized for speed) ---
+        print('\n====== Concatenating and saving individual track files in parallel ======')
+        with ProcessPoolExecutor() as executor:
+            # Submit each track to be processed by the worker function
+            futures = [
+                executor.submit(save_single_track, key, parts, track_dir, nickname_dict, id_role_map)
+                for key, parts in track_data.items()
+            ]
+            # Use tqdm to show progress as jobs complete
+            for future in tqdm(as_completed(futures), total=len(futures), desc="Saving Tracks"):
+                try:
+                    # This is the crucial line. It will re-raise any exception
+                    # that happened in the worker process.
+                    future.result()
+                except Exception as exc:
+                    print(f"A worker process generated an exception: {exc}")
+                    # For a full error report, uncomment the next two lines
+                    # import traceback
+                    # traceback.print_exc()
+                finally:
+                    pass
 
     print(f"\nDone. Track files saved in {track_dir}")
 
@@ -158,8 +163,15 @@ if __name__ == "__main__":
         '--file_pattern',
         metavar = 'glob-pattern',
         help = "Put the file pattern for glob, if you want to process part of dataset. Example: 'run*_loop_[0-9].pickle run*_loop_1[0-9].pickle run*_loop_2[0-4].pickle'",
-        default = 'run*_loop*.pickle',
+        default = '*.pickle',
         dest = 'file_pattern',
+    )
+
+    parser.add_argument(
+        '--debug',
+        action = 'store_true',
+        help = 'If set, switch to loop mode to print error message',
+        dest = 'debug',
     )
 
     args = parser.parse_args()
