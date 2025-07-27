@@ -4,13 +4,13 @@ defaults:
     short: PT_NH18
     offset: 20
     HV: 230
-    role: trig
+    role: ref
   PT_NH17: &PT_NH17
     name: ET2.01 PacTech New HPK-17
     short: PT_NH17
     offset: 20
     HV: 230
-    role: ref
+    role: trig
   PT_NH15: &PT_NH15
     name: ET2.01 PacTech New HPK-15
     short: PT_NH15
@@ -46,3 +46,18 @@ run0:
 
 run1:
   <<: *test_run
+
+run2:
+  <<: *test_run
+
+common_run: &common_run
+  0: *PT_NH18
+  1: *PT_NH17
+  2: *PT_NH25
+  3: *EP_NH3
+
+run3:
+  <<: *common_run
+
+run4:
+  <<: *common_run
