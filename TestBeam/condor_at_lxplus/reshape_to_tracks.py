@@ -78,7 +78,8 @@ def reshape_to_tracks(args):
     for ifile in tqdm(files, desc="Reading Files"):
         data_dict = pd.read_pickle(ifile)
         for track_key, df in data_dict.items():
-            track_data[track_key].append(df)
+            if not df.empty:
+                track_data[track_key].append(df)
 
     # --- Saving Track Files (Parallelized for speed) ---
     print('\n====== Concatenating and saving individual track files in parallel ======')
