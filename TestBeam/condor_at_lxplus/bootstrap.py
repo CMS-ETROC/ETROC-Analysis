@@ -221,6 +221,7 @@ def time_df_bootstrap(
             resample_counter += 1
             del diffs, corr_toas
 
+        print(f"{successful_runs} / {nouts}")
         if successful_runs >= nouts:
             print(f'Collected {nouts} successful runs. Escaping bootstrap loop.')
             break
