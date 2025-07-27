@@ -152,7 +152,6 @@ def time_df_bootstrap(
         limit: int = 7500,
         nouts: int = 100,
         sampling_fraction: int = 75,
-        minimum_nevt_cut: int = 1000,
         do_reproducible: bool = False,
     ):
     resolution_from_bootstrap = defaultdict(list)
@@ -174,11 +173,6 @@ def time_df_bootstrap(
         n = int(random_sampling_fraction*input_df.shape[0])
         indices = np.random.choice(input_df['evt'].unique(), n, replace=False)
         selected_df = input_df.loc[input_df['evt'].isin(indices)]
-
-        if selected_df.shape[0] < minimum_nevt_cut:
-            print(f'Number of events in random sample is {selected_df.shape[0]}')
-            print('Warning!! Sampling size is too small. Bootstrap will not happen for this track')
-            break
 
         corr_toas = three_board_iterative_timewalk_correction(selected_df, 2, 2, board_roles=board_to_analyze, twc_coeffs=twc_coeffs)
 
@@ -336,8 +330,14 @@ if __name__ == "__main__":
 
     df = pd.read_pickle(args.file)
     df = df.reset_index(names='evt')
+
+    if df.shape[0] < args.minimum_nevt:
+        print(f'Number of events in the sample is {df.shape[0]}')
+        print('Warning!! Sampling size is too small. Bootstrap will not happen for this track')
+        exit()
+
     resolution_df = time_df_bootstrap(input_df=df, board_to_analyze=board_roles, twc_coeffs=calculated_twc_coeffs, limit=args.iteration_limit, nouts=args.num_bootstrap_output,
-                                        sampling_fraction=args.sampling, minimum_nevt_cut=args.minimum_nevt, do_reproducible=args.reproducible)
+                                        sampling_fraction=args.sampling, do_reproducible=args.reproducible)
 
     if not resolution_df.empty:
         resolution_df.to_pickle(f'{output_name}_resolution.pkl')
