@@ -299,7 +299,7 @@ if __name__ == "__main__":
     if not args.exclude_role == None:
         print(f'Board {args.exclude_role}, ID: {roles[args.exclude_role]} will be dropped')
         drop_id_condition = ~(final_input_df['board'] == roles[args.exclude_role])
-        final_input_df = final_input_df[drop_id_condition]
+        final_input_df = final_input_df[drop_id_condition].reset_index(drop=True)
 
     three_board_flag = False
     if final_input_df['board'].nunique() == 3:
