@@ -231,7 +231,7 @@ if __name__ == "__main__":
     portion = args.sampling*0.01
 
     ### Estimate memory usage as another safety check
-    print('Memory Safety Check, using randomly selected 3 files')
+    print('Memory Safety Check, using randomly selected 10 files')
     import random
     if len(input_files) < 10:
       random_files = input_files
