@@ -187,6 +187,14 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        '--exclude_role',
+        metavar = 'NAME',
+        type = str,
+        help = "Choose the board to exclude for track combination. Possible option: 'trig', 'dut', 'ref', 'extra'",
+        dest = 'exclude_role',
+    )
+
+    parser.add_argument(
         '--cal_table_only',
         action = 'store_true',
         help = 'If argument is on, code only does making CAL code table for a given dataset',
@@ -287,6 +295,11 @@ if __name__ == "__main__":
 
     final_input_df.reset_index(drop=True, inplace=True)
     del dfs
+
+    if not args.exclude_role == None:
+        print(f'Board {args.exclude_role}, ID: {roles[args.exclude_role]} will be dropped')
+        drop_id_condition = ~(final_input_df['board'] == roles[args.exclude_role])
+        final_input_df = final_input_df[drop_id_condition]
 
     three_board_flag = False
     if final_input_df['board'].nunique() == 3:
