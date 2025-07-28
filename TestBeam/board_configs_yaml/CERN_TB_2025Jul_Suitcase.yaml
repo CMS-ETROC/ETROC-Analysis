@@ -3,13 +3,13 @@ defaults:
     name: ET2.01 PacTech New HPK-18
     short: PT_NH18
     offset: 20
-    HV: 210
+    HV: 230
     role: ref
   PT_NH17: &PT_NH17
     name: ET2.01 PacTech New HPK-17
     short: PT_NH17
     offset: 20
-    HV: 210
+    HV: 230
     role: trig
   PT_NH15: &PT_NH15
     name: ET2.01 PacTech New HPK-15
@@ -27,7 +27,7 @@ defaults:
     name: ET2.02 PacTech New HPK-25
     short: PT_NH25
     offset: 20
-    HV: 210
+    HV: 230
     role: extra
   EP_NH3: &EP_NH3
     name: ET2.03 EPIR New HPK-3
