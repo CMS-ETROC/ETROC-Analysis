@@ -5,6 +5,18 @@ defaults: &defaults
     offset: 20
     HV: 230
     role: ref
+  PT-NH23: &PT-NH23
+    name: ET2.02 PacTech New HPK-23
+    short: PT-NH23
+    offset: 20
+    HV: 230
+    role: extra
+  PT-NH15: &PT-NH15
+    name: ET2.01 PacTech New HPK-15
+    short: PT-NH15
+    offset: 20
+    HV: 230
+    role: ref
   PT-LF2: &PT-LF2
     name: ET2.01 PacTech FBK-LF2
     short: PT-LF2
@@ -24,21 +36,49 @@ defaults: &defaults
     HV: 210
     role: extra
 
-run_common: &run_common
+run_start: &run_start
   0: *PT-LF2
   1: *PT-LF3
   2: *PT-LF7
   3: *PT-NH24
 
 run1:
-  <<: *run_common
+  <<: *run_start
   0: { <<: *PT-LF2, role: trig, HV: 210 }
   1: { <<: *PT-LF3, role: dut }
 
 run2:
-  <<: *run_common
+  <<: *run_start
   0: { <<: *PT-LF2, HV: 220 }
 
 run3:
+  <<: *run_start
+  0: { <<: *PT-LF2, HV: 220 }
+
+run_common: &run_common
+  0: *PT-LF2
+  1: *PT-LF3
+  2: *PT-NH23
+  3: *PT-NH24
+
+run4:
   <<: *run_common
   0: { <<: *PT-LF2, HV: 220 }
+
+run5:
+  <<: *run_common
+  0: { <<: *PT-LF2, HV: 220 }
+
+run_new: &run_new
+  0: *PT-LF2
+  1: *PT-LF3
+  2: *PT-NH23
+  3: *PT-NH15
+
+run7:
+  <<: *run_new
+  0: { <<: *PT-LF2, HV: 220 }
+
+run8:
+  <<: *run_new
+  0: { <<: *PT-LF2, HV: 230 }
