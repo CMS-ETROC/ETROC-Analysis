@@ -67,8 +67,12 @@ run5:
 
 run6:
   <<: *common_run
-  2: { << *PT_NH25, HV: 220 }
+  2: { <<: *PT_NH25, HV: 220 }
 
 run7:
   <<: *common_run
-  2: { << *PT_NH25, HV: 240 }
+  2: { <<: *PT_NH25, HV: 240 }
+
+run8:
+  <<: *common_run
+  2: { <<: *PT_NH25, HV: 240 }
