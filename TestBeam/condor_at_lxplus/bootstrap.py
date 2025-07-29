@@ -13,10 +13,10 @@ def three_board_iterative_timewalk_correction(
     twc_coeffs: dict = None,
     use_precomputed_coeffs: bool = False, # CHANGED: Added flag
 ):
-    
+
     if len(board_roles) != 3:
         raise ValueError(f"This function's logic requires exactly 3 boards, but {len(board_roles)} were provided.")
-    
+
     ## FIXED: Removed redundant size check. This logic is now handled in the calling function.
     if use_precomputed_coeffs and twc_coeffs is None:
         raise ValueError("Request to use pre-computed coefficients was made, but 'twc_coeffs' is None.")
@@ -169,7 +169,7 @@ def time_df_bootstrap(
         force_precomputed_coeffs: bool = False,
     ):
     resolution_from_bootstrap = defaultdict(list)
-    
+
     # --- NEW: Initialize state variables ---
     current_sampling_fraction = sampling_fraction
     consecutive_failures = 0
@@ -218,77 +218,89 @@ def time_df_bootstrap(
             gmm_failed = False
             for ikey in diffs.keys():
                 params, eval_scores = fwhm_based_on_gaussian_mixture_model(diffs[ikey], n_components=3)
-                
+
                 # Check GMM quality
                 if eval_scores[0] > 0.6 or eval_scores[1] > 0.075:
                     gmm_failed = True
                     break # A failure in any fit invalidates this iteration
-                
+
                 fit_params[ikey] = float(params[0]/2.355)
 
             # If GMM failed, handle it according to the new strategy
             if gmm_failed:
-                consecutive_failures += 1
-                print(f"GMM quality cut failed. Consecutive failures: {consecutive_failures}")
 
-                # ## REVISED LOGIC ##
-                # First, check if the failure threshold has been met.
-                if consecutive_failures >= failure_threshold:
-                    
-                    # If the threshold is met AND the sampling rate is already high,
-                    # then we trigger the final fallback.
-                    if current_sampling_fraction > 90:
-                        print("\n--- STRATEGY: GMM continues to fail even at a high sampling rate. Giving up on bootstrap. ---")
-                        print("--- Performing a single calculation on the full dataset using the histogram method. ---")
-                        
-                        # 1. Use the FULL original dataframe
-                        full_corr_toas = three_board_iterative_timewalk_correction(
-                            input_df, 2, 2,
-                            board_roles=board_to_analyze,
-                            twc_coeffs=twc_coeffs,
-                            use_precomputed_coeffs=force_precomputed_coeffs
-                        )
+                 # First, check if the sampling rate is already high. If so, move to fallback immediately.
+                if current_sampling_fraction > 90:
+                    print("\n--- STRATEGY: GMM failed at a high sampling rate. Giving up on bootstrap. ---")
+                    print("--- Performing a single calculation on the full dataset using the histogram method. ---")
 
-                        # 2. Calculate differences for the full dataset
-                        full_diffs = {}
-                        for board_a in board_to_analyze:
-                            for board_b in board_to_analyze:
-                                if board_b <= board_a: continue
-                                name = f"{board_a}-{board_b}"
-                                full_diffs[name] = full_corr_toas[board_a] - full_corr_toas[board_b]
+                    # 1. Use the FULL original dataframe for the calculation
+                    full_corr_toas = three_board_iterative_timewalk_correction(
+                        input_df, 2, 2,
+                        board_roles=board_to_analyze,
+                        twc_coeffs=twc_coeffs,
+                        use_precomputed_coeffs=force_precomputed_coeffs
+                    )
 
-                        # 3. Calculate resolution using the histogram fallback method
-                        fallback_params = {}
+                    full_diffs = {}
+                    for board_a in board_to_analyze:
+                        for board_b in board_to_analyze:
+                            if board_b <= board_a: continue
+                            name = f"{board_a}-{board_b}"
+                            full_diffs[name] = full_corr_toas[board_a] - full_corr_toas[board_b]
+
+                    # 2. Try the histogram method first
+                    fallback_params = {}
+                    for ikey, data in full_diffs.items():
+                        bins = get_optimal_bins(data)
+                        fwhm = fwhm_from_histogram(data, bins=bins)
+                        if fwhm is None:
+                            print("--- ERROR: Histogram fallback failed during FWHM calculation. Returning empty results. ---")
+                            return pd.DataFrame()
+                        fallback_params[ikey] = fwhm / 2.355
+
+                    final_resolution = return_resolution_three_board_fromFWHM(fallback_params, board_roles=board_to_analyze)
+                    print(f"Final calculated resolution (FWHM method): {final_resolution}")
+
+                    # 3. Check if the histogram result is physical. If not, try the "last resort" method.
+                    if any(val <= 0 for val in final_resolution.values()):
+                        print("--- Histogram method yielded non-physical results. Trying last resort: simple standard deviation. ---")
+
+                        std_params = {}
                         for ikey, data in full_diffs.items():
-                            bins = get_optimal_bins(data)
-                            fwhm = fwhm_from_histogram(data, bins=bins)
-                            if fwhm is None:
-                                raise ValueError(f"Histogram fallback failed for {ikey} on full dataset.")
-                            fallback_params[ikey] = fwhm / 2.355
-                        
-                        # 4. Get final resolution and immediately return it as a single-row DataFrame
-                        final_resolution = return_resolution_three_board_fromFWHM(fallback_params, board_roles=board_to_analyze)
-                        print(f"Final calculated resolution: {final_resolution}")
-                        return pd.DataFrame([final_resolution])
+                            std_params[ikey] = np.std(data)
 
-                    # Otherwise, if the threshold is met but the rate is not yet high,
-                    # just increase the rate and try again.
-                    else:
+                        # This is the absolute final calculation.
+                        last_resort_resolution = return_resolution_three_board_fromFWHM(std_params, board_roles=board_to_analyze)
+                        print(f"Final calculated resolution (STD method): {last_resort_resolution}")
+                        return pd.DataFrame([last_resort_resolution])
+
+                    # Return the single, valid result from the histogram method
+                    return pd.DataFrame([final_resolution])
+
+                # If the rate is NOT high, proceed with the normal consecutive failure logic
+                else:
+                    consecutive_failures += 1
+                    print(f"GMM quality cut failed. Consecutive failures: {consecutive_failures}")
+
+                    if consecutive_failures >= failure_threshold:
                         current_sampling_fraction = min(95, current_sampling_fraction + 10)
                         print(f"--- STRATEGY: Increasing sampling rate to {current_sampling_fraction}% ---")
-                        # Reset counter after taking action to give the new rate a fair chance
                         consecutive_failures = 0
-                
+
                 # If we haven't met the failure threshold yet, just continue the loop
                 counter += 1
                 continue
-        
+
             resolutions = return_resolution_three_board_fromFWHM(fit_params, board_roles=board_to_analyze)
 
             if any(val <= 0 for val in resolutions.values()):
                 print('At least one time resolution value is zero or non-physical. Skipping this iteration')
                 counter += 1
+                consecutive_failures += 1
                 continue
+
+            consecutive_failures = 0
 
             for key in resolutions.keys():
                 resolution_from_bootstrap[key].append(resolutions[key])
@@ -302,7 +314,7 @@ def time_df_bootstrap(
             print(f"An error occurred during fitting: {inst}. Skipping this iteration.")
             counter += 1
             del diffs, corr_toas
-        
+
         counter += 1
 
         print(f"{successful_runs} / {nouts}")
@@ -424,7 +436,7 @@ if __name__ == "__main__":
             first_key = next(iter(all_coeffs))
             print(f"INFO: Using first available TWC key ('{first_key}') for potential small-sample corrections.")
             calculated_twc_coeffs = all_coeffs[first_key]
-    
+
     if args.force_twc and not args.twc_coeffs:
         raise ValueError("--force-twc was used, but no coefficient file was provided via --twc_coeffs.")
 
@@ -436,7 +448,7 @@ if __name__ == "__main__":
     df = pd.read_pickle(args.file)
     df = df.reset_index(names='evt')
 
-    resolution_df = time_df_bootstrap(input_df=df, board_to_analyze=board_roles, twc_coeffs=calculated_twc_coeffs, limit=args.iteration_limit, 
+    resolution_df = time_df_bootstrap(input_df=df, board_to_analyze=board_roles, twc_coeffs=calculated_twc_coeffs, limit=args.iteration_limit,
                                       nouts=args.num_bootstrap_output, sampling_fraction=args.sampling, minimum_nevt_cut=args.minimum_nevt,
                                       do_reproducible=args.reproducible, force_precomputed_coeffs=args.force_twc)
 
