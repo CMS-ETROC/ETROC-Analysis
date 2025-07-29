@@ -187,7 +187,7 @@ def time_df_bootstrap(
         if do_reproducible:
             np.random.seed(counter)
 
-        n = int(current_sampling_fraction*input_df['evt'].nunique())
+        n = int(current_sampling_fraction*input_df.shape[0])
         indices = np.random.choice(input_df['evt'].unique(), n, replace=False)
         selected_df = input_df.loc[input_df['evt'].isin(indices)]
 
