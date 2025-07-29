@@ -12,6 +12,7 @@ def load_bash_script(args):
     conditional_args = {
         'reproducible': args.reproducible,
         'twc_coeffs': args.twc_coeffs,
+        'force-twc': args.force_twc,
     }
 
     for arg, value in conditional_args.items():
@@ -211,6 +212,13 @@ if __name__ == "__main__":
         action = 'store_true',
         help = 'If set, random seed will be set by counter and save random seed in the final output',
         dest = 'reproducible',
+    )
+
+    parser.add_argument(
+        '--force-twc',
+        action='store_true',
+        help='Force use of provided TWC file for all samples.',
+        dest='force_twc'
     )
 
     parser.add_argument(
