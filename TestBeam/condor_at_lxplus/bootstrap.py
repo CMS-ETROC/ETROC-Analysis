@@ -254,9 +254,6 @@ def time_df_bootstrap(
                     for ikey, data in full_diffs.items():
                         bins = get_optimal_bins(data)
                         fwhm = fwhm_from_histogram(data, bins=bins)
-                        if fwhm is None:
-                            print("--- ERROR: Histogram fallback failed during FWHM calculation. Returning empty results. ---")
-                            return pd.DataFrame()
                         fallback_params[ikey] = fwhm / 2.355
 
                     final_resolution = return_resolution_three_board_fromFWHM(fallback_params, board_roles=board_to_analyze)
