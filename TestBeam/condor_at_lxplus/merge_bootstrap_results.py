@@ -96,39 +96,45 @@ for ifile in tqdm(files):
         pixel_dict[nickname_dict[nickname]] = (row, col)
 
     df = pd.read_pickle(ifile)
-    df = df.loc[(df != 0).all(axis=1)]
+    df = df.loc[(df != 0).all(axis=1)].reset_index(drop=True)
 
-    if df.shape[0] < args.minimum:
+    if df.empty:
         continue
 
-    df.reset_index(drop=True, inplace=True)
-    columns = df.columns
+    file_results = {}
+    # CASE 1: Single-row file from bootstrap fallback
+    if df.shape[0] == 1:
+        # print(f"\nINFO: Found single-row file (fallback result): {ifile.name}")
+        single_row_values = df.iloc[0]
+        for col_name in df.columns:
+            # For a single result, mu is the value and sigma (error) is 0
+            file_results[col_name] = {'mu': single_row_values[col_name], 'sigma': 0}
 
+    # CASE 2: Standard file with enough bootstrap results to fit
+    else:
+        df.reset_index(drop=True, inplace=True)
+        for col_name in df.columns:
+            mu, sigma, unbinned_check = fit_unbinned(df[col_name])
+            if not unbinned_check:
+                # If unbinned fit fails, use the more robust binned fit
+                mu, sigma, _ = fit_binned(df[col_name])
+            file_results[col_name] = {'mu': mu, 'sigma': sigma}
+
+    # --- This block now handles appending for all successful cases ---
     if len(pixel_dict.keys()) == 4:
         final_dict[f'row_{excluded_role}'].append(pixel_dict[excluded_role][0])
         final_dict[f'col_{excluded_role}'].append(pixel_dict[excluded_role][1])
 
-        for val in columns:
-            final_dict[f'row_{val}'].append(pixel_dict[val][0])
-            final_dict[f'col_{val}'].append(pixel_dict[val][1])
-
-            mu, sigma, unbinned_check = fit_unbinned(df[val])
-            if not unbinned_check:
-                mu, sigma, _ = fit_binned(df[val])
-
-            final_dict[f'res_{val}'].append(mu)
-            final_dict[f'err_{val}'].append(sigma)
-
+        for val_name, results in file_results.items():
+            final_dict[f'row_{val_name}'].append(pixel_dict[val_name][0])
+            final_dict[f'col_{val_name}'].append(pixel_dict[val_name][1])
+            final_dict[f'res_{val_name}'].append(results['mu'])
+            final_dict[f'err_{val_name}'].append(results['sigma'])
     else:
-         for val in columns:
-            final_dict[f'row_{val}'].append(pixel_dict[val][0])
-            final_dict[f'col_{val}'].append(pixel_dict[val][1])
-
-            mu, sigma, unbinned_check = fit_unbinned(df[val])
-            if not unbinned_check:
-                mu, sigma, _ = fit_binned(df[val])
-
-            final_dict[f'res_{val}'].append(mu)
-            final_dict[f'err_{val}'].append(sigma)
+         for val_name, results in file_results.items():
+            final_dict[f'row_{val_name}'].append(pixel_dict[val_name][0])
+            final_dict[f'col_{val_name}'].append(pixel_dict[val_name][1])
+            final_dict[f'res_{val_name}'].append(results['mu'])
+            final_dict[f'err_{val_name}'].append(results['sigma'])
 
 pd.DataFrame(final_dict).to_csv('resolution_' + args.output + args.tag + '.csv', index=False)
