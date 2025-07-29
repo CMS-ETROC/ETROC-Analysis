@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from tqdm import tqdm
 
 ## --------------------------------------
 def return_coefficient_three_board_iterative_TWC(
@@ -115,8 +116,20 @@ if __name__ == "__main__":
             continue
         roles[board_info.get('role')] = board_id
 
+    # --- PASS 1: Get metadata (path and shape) without storing full dataframes ---
+    file_metadata = []
+    for ifile in tqdm(files, desc='Load files for metadata'):
+        df = pd.read_pickle(ifile)
+        file_metadata.append({'path': ifile, 'shape': df.shape})
+        del df  # Explicitly free memory
+
+    print(file_metadata[:5])
+    # --- Sort the metadata by shape in descending order ---
+    sorted_files_meta = sorted(file_metadata, key=lambda item: item['shape'], reverse=True)
+    print(sorted_files_meta[:5])
+
     output = {}
-    for ifile in files:
+    for ifile in tqdm(sorted_files_meta, desc='Compute TWC coeff'):
         track_name = ifile.name.split('.')[0].split('track_')[1]
 
         df = pd.read_pickle(ifile)
