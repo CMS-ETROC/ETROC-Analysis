@@ -130,7 +130,7 @@ if __name__ == "__main__":
     for ifile in tqdm(sorted_files_meta, desc='Compute TWC coeff'):
         track_name = ifile['path'].name.split('.')[0].split('track_')[1]
 
-        df = pd.read_pickle(ifile)
+        df = pd.read_pickle(ifile['path'])
         single_track_twc_coeffs = return_coefficient_three_board_iterative_TWC(df, args.iteration, args.poly_order, roles)
         output[track_name] = single_track_twc_coeffs
 
