@@ -10,11 +10,16 @@ def three_board_iterative_timewalk_correction(
     iterative_cnt: int,
     poly_order: int,
     board_roles: list[str],
-    twc_coeffs: dict,
+    twc_coeffs: dict = None,
+    use_precomputed_coeffs: bool = False, # CHANGED: Added flag
 ):
-
+    
     if len(board_roles) != 3:
         raise ValueError(f"This function's logic requires exactly 3 boards, but {len(board_roles)} were provided.")
+    
+    ## FIXED: Removed redundant size check. This logic is now handled in the calling function.
+    if use_precomputed_coeffs and twc_coeffs is None:
+        raise ValueError("Request to use pre-computed coefficients was made, but 'twc_coeffs' is None.")
 
     tots = {key: input_df[f'tot_{key}'].values for key in board_roles}
     corr_toas = {key: input_df[f'toa_{key}'].values for key in board_roles}
@@ -32,9 +37,14 @@ def three_board_iterative_timewalk_correction(
         corrections = {}
 
         for key in board_roles:
-
-            if twc_coeffs is not None:
-                coeff = twc_coeffs[f'iter{i+1}'][key]
+            # CHANGED: Logic now depends on the boolean flag
+            if use_precomputed_coeffs:
+                if twc_coeffs is None:
+                    raise ValueError("Cannot use pre-computed coefficients because 'twc_coeffs' is None.")
+                try:
+                    coeff = twc_coeffs[f'iter{i+1}'][key]
+                except KeyError:
+                    raise KeyError(f"Missing coefficients for iteration {i+1}, board '{key}' in 'twc_coeffs'.")
             else:
                 coeff = np.polyfit(tots[key], delta_toas[key], poly_order)
 
@@ -43,7 +53,6 @@ def three_board_iterative_timewalk_correction(
 
         for key in board_roles:
             corr_toas[key] += corrections[key]
-
         delta_toas = _calculate_deltas(corr_toas)
 
     return corr_toas
@@ -52,8 +61,6 @@ def three_board_iterative_timewalk_correction(
 def fwhm_based_on_gaussian_mixture_model(
         input_data: np.array,
         n_components: int = 2,
-        plotting: bool = False,
-        plotting_each_component: bool = False,
     ):
 
     from sklearn.mixture import GaussianMixture
@@ -81,34 +88,39 @@ def fwhm_based_on_gaussian_mixture_model(
 
     # Calculate the FWHM.
     fwhm = x_range[half_max_indices[-1]] - x_range[half_max_indices[0]]
-
-    ### Draw plot
-    if plotting_each_component:
-        # Compute PDF for each component
-        responsibilities = models.predict_proba(x_range)
-        pdf_individual = responsibilities * pdf[:, np.newaxis]
-
-    if plotting:
-        import matplotlib.pyplot as plt
-        fig, ax = plt.subplots(figsize=(10,10))
-
-        # Plot data histogram
-        bins, _, _ = ax.hist(input_data, bins=30, density=True, histtype='stepfilled', alpha=0.4, label='Data')
-
-        # Plot PDF of whole model
-        ax.plot(x_range, pdf, '-k', label='Mixture PDF')
-
-        if plotting_each_component:
-            # Plot PDF of each component
-            ax.plot(x_range, pdf_individual, '--', label='Component PDF')
-
-        # Plot
-        ax.vlines(x_range[half_max_indices[0]],  ymin=0, ymax=np.max(bins)*0.75, lw=1.5, colors='red', label='FWHM')
-        ax.vlines(x_range[half_max_indices[-1]], ymin=0, ymax=np.max(bins)*0.75, lw=1.5, colors='red')
-
-        ax.legend(loc='best', fontsize=14)
-
     return fwhm, [silhouette_eval_score, jensenshannon_score]
+
+## --------------------------------------
+def get_optimal_bins(data: np.array):
+    """Calculates the optimal number of histogram bins using the Freedman-Diaconis rule."""
+    q75, q25 = np.percentile(data, [75, 25])
+    iqr = q75 - q25
+    if iqr == 0:
+        return int(np.sqrt(len(data)))
+    bin_width = 2 * iqr * (len(data) ** (-1/3))
+    if bin_width == 0:
+        return int(np.sqrt(len(data)))
+    data_range = np.max(data) - np.min(data)
+    num_bins = int(data_range / bin_width)
+    return num_bins
+
+## --------------------------------------
+def fwhm_from_histogram(input_data: np.array, bins: int):
+    """Calculates FWHM directly from a histogram by finding the peak and interpolating."""
+    from scipy.interpolate import interp1d
+    counts, bin_edges = np.histogram(input_data, bins=bins)
+    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2.0
+    peak_height = np.max(counts)
+    peak_index = np.argmax(counts)
+    half_max = peak_height / 2.0
+    try:
+        f_left = interp1d(counts[:peak_index+1], bin_centers[:peak_index+1])
+        f_right = interp1d(counts[peak_index:], bin_centers[peak_index:])
+        x_left = f_left(half_max)
+        x_right = f_right(half_max)
+        return float(x_right - x_left)
+    except ValueError:
+        return None
 
 ## --------------------------------------
 def return_resolution_three_board_fromFWHM(
@@ -152,13 +164,18 @@ def time_df_bootstrap(
         limit: int = 7500,
         nouts: int = 100,
         sampling_fraction: int = 75,
+        minimum_nevt_cut: int = 1000,
         do_reproducible: bool = False,
+        force_precomputed_coeffs: bool = False,
     ):
     resolution_from_bootstrap = defaultdict(list)
-    random_sampling_fraction = sampling_fraction*0.01
+    
+    # --- NEW: Initialize state variables ---
+    current_sampling_fraction = sampling_fraction
+    consecutive_failures = 0
+    failure_threshold = int(limit * 0.02) # Consecutive failure threshold set to 2%
 
     counter = 0
-    resample_counter = 0
     successful_runs = 0
 
     while True:
@@ -170,11 +187,23 @@ def time_df_bootstrap(
         if do_reproducible:
             np.random.seed(counter)
 
-        n = int(random_sampling_fraction*input_df.shape[0])
+        n = int(current_sampling_fraction*input_df['evt'].nunique())
         indices = np.random.choice(input_df['evt'].unique(), n, replace=False)
         selected_df = input_df.loc[input_df['evt'].isin(indices)]
 
-        corr_toas = three_board_iterative_timewalk_correction(selected_df, 2, 2, board_roles=board_to_analyze, twc_coeffs=twc_coeffs)
+        use_coeffs_for_this_iteration = False
+        if force_precomputed_coeffs:
+            use_coeffs_for_this_iteration = True
+        elif selected_df.shape[0] < minimum_nevt_cut:
+            print(f"\nINFO: Subsample is small ({selected_df.shape[0]} rows). Forcing use of pre-computed TWC.", end="")
+            use_coeffs_for_this_iteration = True
+
+        corr_toas = three_board_iterative_timewalk_correction(
+            selected_df, 2, 2,
+            board_roles=board_to_analyze,
+            twc_coeffs=twc_coeffs,
+            use_precomputed_coeffs=use_coeffs_for_this_iteration,
+        )
 
         diffs = {}
         for board_a in board_to_analyze:
@@ -186,24 +215,79 @@ def time_df_bootstrap(
 
         try:
             fit_params = {}
-            scores = []
+            gmm_failed = False
             for ikey in diffs.keys():
-                params, eval_scores = fwhm_based_on_gaussian_mixture_model(diffs[ikey], n_components=3, plotting=False, plotting_each_component=False)
+                params, eval_scores = fwhm_based_on_gaussian_mixture_model(diffs[ikey], n_components=3)
+                
+                # Check GMM quality
+                if eval_scores[0] > 0.6 or eval_scores[1] > 0.075:
+                    gmm_failed = True
+                    break # A failure in any fit invalidates this iteration
+                
                 fit_params[ikey] = float(params[0]/2.355)
-                scores.append(eval_scores)
 
-            if np.any(np.asarray(scores)[:,0] > 0.6) or np.any(np.asarray(scores)[:,1] > 0.075) :
-                print('The result does not pass a fit evaluation cut. Redo the sampling')
+            # If GMM failed, handle it according to the new strategy
+            if gmm_failed:
+                consecutive_failures += 1
+                print(f"GMM quality cut failed. Consecutive failures: {consecutive_failures}")
+
+                # ## REVISED LOGIC ##
+                # First, check if the failure threshold has been met.
+                if consecutive_failures >= failure_threshold:
+                    
+                    # If the threshold is met AND the sampling rate is already high,
+                    # then we trigger the final fallback.
+                    if current_sampling_fraction > 90:
+                        print("\n--- STRATEGY: GMM continues to fail even at a high sampling rate. Giving up on bootstrap. ---")
+                        print("--- Performing a single calculation on the full dataset using the histogram method. ---")
+                        
+                        # 1. Use the FULL original dataframe
+                        full_corr_toas = three_board_iterative_timewalk_correction(
+                            input_df, 2, 2,
+                            board_roles=board_to_analyze,
+                            twc_coeffs=twc_coeffs,
+                            use_precomputed_coeffs=force_precomputed_coeffs
+                        )
+
+                        # 2. Calculate differences for the full dataset
+                        full_diffs = {}
+                        for board_a in board_to_analyze:
+                            for board_b in board_to_analyze:
+                                if board_b <= board_a: continue
+                                name = f"{board_a}-{board_b}"
+                                full_diffs[name] = full_corr_toas[board_a] - full_corr_toas[board_b]
+
+                        # 3. Calculate resolution using the histogram fallback method
+                        fallback_params = {}
+                        for ikey, data in full_diffs.items():
+                            bins = get_optimal_bins(data)
+                            fwhm = fwhm_from_histogram(data, bins=bins)
+                            if fwhm is None:
+                                raise ValueError(f"Histogram fallback failed for {ikey} on full dataset.")
+                            fallback_params[ikey] = fwhm / 2.355
+                        
+                        # 4. Get final resolution and immediately return it as a single-row DataFrame
+                        final_resolution = return_resolution_three_board_fromFWHM(fallback_params, board_roles=board_to_analyze)
+                        print(f"Final calculated resolution: {final_resolution}")
+                        return pd.DataFrame([final_resolution])
+
+                    # Otherwise, if the threshold is met but the rate is not yet high,
+                    # just increase the rate and try again.
+                    else:
+                        current_sampling_fraction = min(95, current_sampling_fraction + 10)
+                        print(f"--- STRATEGY: Increasing sampling rate to {current_sampling_fraction}% ---")
+                        # Reset counter after taking action to give the new rate a fair chance
+                        consecutive_failures = 0
+                
+                # If we haven't met the failure threshold yet, just continue the loop
                 counter += 1
-                resample_counter += 1
                 continue
-
+        
             resolutions = return_resolution_three_board_fromFWHM(fit_params, board_roles=board_to_analyze)
 
             if any(val <= 0 for val in resolutions.values()):
                 print('At least one time resolution value is zero or non-physical. Skipping this iteration')
                 counter += 1
-                resample_counter += 1
                 continue
 
             for key in resolutions.keys():
@@ -212,21 +296,19 @@ def time_df_bootstrap(
             if do_reproducible:
                 resolution_from_bootstrap['RandomSeed'].append(counter)
 
-            counter += 1
             successful_runs += 1
 
         except Exception as inst:
             print(f"An error occurred during fitting: {inst}. Skipping this iteration.")
             counter += 1
-            resample_counter += 1
             del diffs, corr_toas
+        
+        counter += 1
 
         print(f"{successful_runs} / {nouts}")
         if successful_runs >= nouts:
             print(f'Collected {nouts} successful runs. Escaping bootstrap loop.')
             break
-
-    print(f'\nTotal iterations: {counter}, Resampled/Skipped: {resample_counter}, Successful: {successful_runs}')
 
     ### Empty dictionary case
     if not resolution_from_bootstrap:
@@ -286,8 +368,8 @@ if __name__ == "__main__":
         '--minimum_nevt',
         metavar = 'NUM',
         type = int,
-        help = 'Minimum number of events for bootstrap',
-        default = 1000,
+        help='Minimum number of events to force TWC use',
+        default = 100,
         dest = 'minimum_nevt',
     )
 
@@ -306,6 +388,13 @@ if __name__ == "__main__":
         dest = 'reproducible',
     )
 
+    parser.add_argument(
+        '--force-twc',
+        action='store_true',
+        help='Force use of provided TWC file for all samples.',
+        dest='force_twc'
+    )
+
     args = parser.parse_args()
 
     output_name = args.file.split('/')[-1].split('.')[0]
@@ -314,31 +403,42 @@ if __name__ == "__main__":
     all_roles = {'trig', 'dut', 'ref', 'extra'}
     board_roles = sorted(all_roles - {excluded_role})
 
-    if args.twc_coeffs is not None:
+    # --- NEW: Conditional logic for loading TWC coefficients ---
+    calculated_twc_coeffs = None
+    if args.twc_coeffs:
         import pickle
         with open(args.twc_coeffs, 'rb') as input_coeff:
-            calculated_twc_coeffs = pickle.load(input_coeff)[track_name]
+            all_coeffs = pickle.load(input_coeff)
 
-            # A slightly more efficient and readable version
-            coeff_keys = sorted(calculated_twc_coeffs['iter1'].keys())
+        if args.force_twc:
+            # When forcing, select coefficients by the specific track name
+            track_name = args.file.split('/')[-1].split('.')[0].split('track_')[1]
+            print(f"INFO: --force-twc enabled. Selecting TWC coefficients for track: {track_name}")
+            try:
+                calculated_twc_coeffs = all_coeffs[track_name]
+            except KeyError:
+                raise KeyError(f"Track '{track_name}' not found in the provided TWC coefficient file.")
+        else:
+            # In default mode, use the first available set of coefficients in the file.
+            # This set will only be used if/when a small subsample is encountered.
+            first_key = next(iter(all_coeffs))
+            print(f"INFO: Using first available TWC key ('{first_key}') for potential small-sample corrections.")
+            calculated_twc_coeffs = all_coeffs[first_key]
+    
+    if args.force_twc and not args.twc_coeffs:
+        raise ValueError("--force-twc was used, but no coefficient file was provided via --twc_coeffs.")
 
-            if coeff_keys != board_roles:
-                print(f"Keys from TWC coefficient file: {coeff_keys}")
-                print(f'Board roles for current run: {board_roles}')
-                raise KeyError('Board roles in the provided TWC coefficient file do not match the current run.')
-    else:
-        calculated_twc_coeffs = None
+    if calculated_twc_coeffs:
+        coeff_keys = sorted(calculated_twc_coeffs['iter1'].keys())
+        if coeff_keys != board_roles:
+            raise KeyError('Board roles in the loaded TWC coefficients do not match the current run.')
 
     df = pd.read_pickle(args.file)
     df = df.reset_index(names='evt')
 
-    if df.shape[0] < args.minimum_nevt:
-        print(f'Number of events in the sample is {df.shape[0]}')
-        print('Warning!! Sampling size is too small. Bootstrap will not happen for this track')
-        exit()
-
-    resolution_df = time_df_bootstrap(input_df=df, board_to_analyze=board_roles, twc_coeffs=calculated_twc_coeffs, limit=args.iteration_limit, nouts=args.num_bootstrap_output,
-                                        sampling_fraction=args.sampling, do_reproducible=args.reproducible)
+    resolution_df = time_df_bootstrap(input_df=df, board_to_analyze=board_roles, twc_coeffs=calculated_twc_coeffs, limit=args.iteration_limit, 
+                                      nouts=args.num_bootstrap_output, sampling_fraction=args.sampling, minimum_nevt_cut=args.minimum_nevt,
+                                      do_reproducible=args.reproducible, force_precomputed_coeffs=args.force_twc)
 
     if not resolution_df.empty:
         resolution_df.to_pickle(f'{output_name}_resolution.pkl')
