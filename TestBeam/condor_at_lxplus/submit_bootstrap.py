@@ -1,7 +1,6 @@
 from pathlib import Path
 from jinja2 import Template
 from natsort import natsorted
-import yaml
 
 def load_bash_script(args):
 
@@ -63,13 +62,19 @@ echo ""
     return Template(bash_template).render(options)
 
 
-def load_jdl_script(log_dir, condor_scripts_dir, outdir, runAppend):
+def load_jdl_script(args, log_dir, condor_scripts_dir, outdir, runAppend):
+
+    # Start with the base file and add twc_coeffs if it exists
+    transfer_files = "bootstrap.py"
+    if args.twc_coeffs:
+        transfer_files += f", {args.twc_coeffs}"
+
     jdl = """universe              = vanilla
 executable            = {2}/run_bootstrap{3}.sh
 should_Transfer_Files = YES
 whenToTransferOutput  = ON_EXIT
 arguments             = $(ifile) $(path)
-transfer_Input_Files  = bootstrap.py
+transfer_Input_Files  = {4}
 TransferOutputRemaps = "$(ifile)_resolution.pkl={1}/$(ifile)_resolution.pkl"
 output                = {0}/$(ClusterId).$(ProcId).bootstrap.stdout
 error                 = {0}/$(ClusterId).$(ProcId).bootstrap.stderr
@@ -77,7 +82,7 @@ log                   = {0}/$(ClusterId).$(ProcId).bootstrap.log
 MY.WantOS             = "el9"
 +JobFlavour           = "microcentury"
 Queue ifile,path from {2}/input_list_for_bootstrap{3}.txt
-""".format(log_dir, outdir, condor_scripts_dir, runAppend)
+""".format(log_dir, outdir, condor_scripts_dir, runAppend, transfer_files)
 
     return jdl
 
@@ -98,7 +103,7 @@ def make_jobs(args, log_dir, condor_scripts_dir, outdir, runAppend):
     with open(condor_scripts_dir / f'run_bootstrap{runAppend}.sh','w') as bashfile:
         bashfile.write(bash_template)
 
-    jdl_templalte = load_jdl_script(log_dir, condor_scripts_dir, outdir, runAppend)
+    jdl_templalte = load_jdl_script(args, log_dir, condor_scripts_dir, outdir, runAppend)
     with open(condor_scripts_dir / f'condor_bootstrap{runAppend}.jdl','w') as jdlfile:
         jdlfile.write(jdl_templalte)
 
@@ -134,16 +139,6 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        '-c',
-        '--config',
-        metavar = 'NAME',
-        type = str,
-        help = 'YAML file including run information.',
-        required = True,
-        dest = 'config',
-    )
-
-    parser.add_argument(
         '-n',
         '--num_bootstrap_output',
         metavar = 'NUM',
@@ -161,16 +156,6 @@ if __name__ == "__main__":
         help = 'Random sampling fraction',
         default = 75,
         dest = 'sampling',
-    )
-
-    parser.add_argument(
-        '-r',
-        '--runName',
-        metavar = 'NAME',
-        type = str,
-        help = 'Name of the run to process. It must be matched with the name defined in YAML.',
-        required = True,
-        dest = 'runName',
     )
 
     parser.add_argument(
