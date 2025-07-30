@@ -82,3 +82,7 @@ run7:
 run8:
   <<: *run_new
   0: { <<: *PT-LF2, HV: 230 }
+
+run9:
+  <<: *run_new
+  0: { <<: *PT-LF2, HV: 210 }
