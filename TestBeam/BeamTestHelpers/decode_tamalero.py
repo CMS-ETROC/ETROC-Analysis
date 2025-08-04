@@ -287,28 +287,39 @@ class TamaleroDF:
         return data_type, res
 
 ## --------------------------------------
-def build_events_to_dataframe_dict(unpacked_data):
+# This function remains unchanged.
+def merge_words(res):
+    empty_frame_mask = np.array(res[0::2]) > (2**8)
+    len_cut = min(len(res[0::2]), len(res[1::2]))
+    if len(res) > 0:
+        return list(np.array(res[0::2])[:len_cut][empty_frame_mask[:len_cut]] | (np.array(res[1::2]) << 32)[:len_cut][empty_frame_mask[:len_cut]])
+    else:
+        return []
+
+## --------------------------------------
+# NEW: Replaces the old event builder with a sequential, stateful approach.
+def build_events_sequentially(unpacked_data):
     """
-    Builds events from an iterable of unpacked data and returns a single
-    dictionary in a format ready for direct conversion to a Pandas DataFrame.
-    This version includes the l1a_counter from the header and uses a robust
-    two-pass approach to ensure the event counter is correct and deterministic.
+    Builds events by processing the data stream sequentially. An event is defined
+    by a consistent BCID. The event number increments only when the BCID of a new,
+    complete packet changes from the previous one.
 
     Args:
         unpacked_data (iterable): An iterable that yields tuples of
                                   (record_type, record_data).
 
     Returns:
-        dict: A dictionary of lists (e.g., {'event': [...], 'bcid': [...], ...})
-              that can be passed directly to pd.DataFrame().
+        dict: A dictionary of lists ready for conversion to a Pandas DataFrame.
     """
-    pending_packets = {}
+    df_data = {
+        'evt': [], 'bcid': [], 'l1a_counter': [], 'ea': [], 'row': [], 'col': [],
+        'toa': [], 'tot': [], 'cal': [], 'elink': []
+    }
 
-    # --- Pass 1: Group all hits and l1a_counter by bcid, preserving order ---
-    # The dictionary will now store the l1a_counter and a list of hits.
-    events_by_bcid = {}
-    # This list will store bcids in the order they are first completed.
-    ordered_bcids = []
+    pending_packets = {}
+    # State variables for the new event counting logic
+    event_counter = -1
+    current_bcid = -1  # Sentinel value, assuming no real bcid is -1
 
     for record_type, record_data in unpacked_data:
         if not record_type or not record_data:
@@ -319,127 +330,99 @@ def build_events_to_dataframe_dict(unpacked_data):
             continue
 
         if record_type == 'header':
-            if elink in pending_packets:
-                pass # Discard previous incomplete packet for this elink.
+            # Start a new packet for this elink
             pending_packets[elink] = {'header': record_data, 'data': []}
 
         elif record_type == 'data':
+            # Add data to an existing packet
             if elink in pending_packets:
                 pending_packets[elink]['data'].append(record_data)
 
         elif record_type == 'trailer':
+            # A packet is complete if it's in pending_packets and has data
             if elink in pending_packets and pending_packets[elink]['data']:
                 packet = pending_packets.pop(elink)
-                bcid = packet['header'].get('bcid')
-                l1counter = packet['header'].get('l1counter')
+                packet_bcid = packet['header'].get('bcid')
 
-                if bcid is not None:
-                    # If this is the first time we've seen this bcid,
-                    # add it to our ordered list and create its event structure.
-                    if bcid not in events_by_bcid:
-                        events_by_bcid[bcid] = {
-                            'l1a_counter': l1counter, # Store the l1a_counter
-                            'hits': []
-                        }
-                        ordered_bcids.append(bcid)
+                if packet_bcid is None:
+                    continue # Ignore packets with no bcid
 
-                    # Add all data hits from the completed packet to the event.
-                    events_by_bcid[bcid]['hits'].extend(packet['data'])
+                # ---- CORE EVENT COUNTING LOGIC ----
+                # If the bcid of this valid packet is different from the
+                # bcid of the last valid packet, increment the event counter.
+                if packet_bcid != current_bcid:
+                    event_counter += 1
+                    current_bcid = packet_bcid
+                # ------------------------------------
+
+                l1a_for_event = packet['header'].get('l1a_counter')
+
+                # Add all hits from this completed packet to the final dictionary
+                for data_hit in packet['data']:
+                    df_data['evt'].append(event_counter)
+                    df_data['bcid'].append(current_bcid)
+                    df_data['l1a_counter'].append(l1a_for_event)
+                    df_data['ea'].append(data_hit.get('ea'))
+                    df_data['row'].append(data_hit.get('row_id'))
+                    df_data['col'].append(data_hit.get('col_id'))
+                    df_data['toa'].append(data_hit.get('toa'))
+                    df_data['tot'].append(data_hit.get('tot'))
+                    df_data['cal'].append(data_hit.get('cal'))
+                    df_data['elink'].append(data_hit.get('elink'))
 
             elif elink in pending_packets:
                 # Discard packet that has a header but no data.
                 del pending_packets[elink]
 
-    # --- Pass 2: Build the final dictionary for the DataFrame ---
-    all_hits_data = {
-        'evt': [], 'bcid': [], 'l1a_counter': [], 'ea': [], 'row': [], 'col': [],
-        'toa': [], 'tot': [], 'cal': [], 'elink': []
-    }
-
-    # Create a mapping from bcid to its final, sequential event number.
-    bcid_to_event_id = {bcid: i for i, bcid in enumerate(ordered_bcids)}
-
-    # Iterate through the bcids in the order they appeared.
-    for bcid in ordered_bcids:
-        event_id = bcid_to_event_id[bcid]
-        event_data = events_by_bcid[bcid]
-        l1a_counter_for_event = event_data['l1a_counter']
-
-        # Add all the hits for this event to the final dictionary.
-        for data_hit in event_data['hits']:
-            all_hits_data['evt'].append(event_id)
-            all_hits_data['bcid'].append(bcid)
-            all_hits_data['l1a_counter'].append(l1a_counter_for_event) # Add the event's l1a_counter
-            all_hits_data['ea'].append(data_hit.get('ea'))
-            all_hits_data['row'].append(data_hit.get('row_id'))
-            all_hits_data['col'].append(data_hit.get('col_id'))
-            all_hits_data['toa'].append(data_hit.get('toa'))
-            all_hits_data['tot'].append(data_hit.get('tot'))
-            all_hits_data['cal'].append(data_hit.get('cal'))
-            all_hits_data['elink'].append(data_hit.get('elink'))
-
-    return all_hits_data
+    return df_data
 
 ## --------------------------------------
-def merge_words(res):
-    empty_frame_mask = np.array(res[0::2]) > (2**8)
-    len_cut = min(len(res[0::2]), len(res[1::2]))
-    if len(res) > 0:
-        return list(np.array(res[0::2])[:len_cut][empty_frame_mask[:len_cut]] | (np.array(res[1::2]) << 32)[:len_cut][empty_frame_mask[:len_cut]])
-    else:
-        return []
-
-## --------------------------------------
+# UPDATED: The main processing function is now simpler and more robust.
 def process_tamalero_outputs(input_files: list):
 
-    list_of_dfs = []
-
+    all_merged_data = []
+    print("Reading and merging data from input files...")
     for ifile in tqdm(input_files):
-
         with open(ifile, 'rb') as f:
             bin_data = f.read()
             raw_data = struct.unpack(f'<{int(len(bin_data)/4)}I', bin_data)
 
-        merged_data = merge_words(raw_data)
+        # Merge data and add to a single list for unified processing
+        all_merged_data.extend(merge_words(raw_data))
 
-        df_decoder = TamaleroDF()
-        unpacked_data = [df_decoder.read(x) for x in merged_data]
-        events = build_events_to_dataframe_dict(unpacked_data)
+    print("Decoding data stream...")
+    df_decoder = TamaleroDF()
+    unpacked_data = [df_decoder.read(x) for x in tqdm(all_merged_data)]
 
-        df = pd.DataFrame(events)
+    print("Building events sequentially...")
+    events = build_events_sequentially(unpacked_data)
 
-        board_map = {
-            0: 0,
-            4: 1,
-            8: 2,
-            12: 3
-        }
+    final_df = pd.DataFrame(events)
 
-        df['board'] = df['elink'].map(board_map)
-        df.drop(columns=['elink'], inplace=True)
-        list_of_dfs.append(df)
-
-    final_df = pd.concat(list_of_dfs)
-    is_new_event = final_df['evt'] != final_df['evt'].shift()
-
-    # Assign a unique sequential number to each event
-    final_df['evt'] = is_new_event.cumsum() - 1
-    final_df.reset_index(drop=True, inplace=True)
-
-    # # Set data type
-    dtype_map = {
-        'evt': np.uint32,
-        'bcid': np.uint16,
-        'l1a_counter': np.uint8,
-        'ea': np.uint8,
-        'board': np.uint8,
-        'row': np.int8,
-        'col': np.int8,
-        'toa': np.uint16,
-        'tot': np.uint16,
-        'cal': np.uint16,
+    # The board mapping and final type casting remain useful
+    board_map = {
+        0: 0,
+        4: 1,
+        8: 2,
+        12: 3
     }
+    if not final_df.empty:
+        final_df['board'] = final_df['elink'].map(board_map)
+        final_df.drop(columns=['elink'], inplace=True)
 
-    final_df = final_df.astype(dtype_map)
+        # Set data types for memory efficiency
+        dtype_map = {
+            'evt': np.uint32,
+            'bcid': np.uint16,
+            'l1a_counter': np.uint16,
+            'ea': np.uint8,
+            'board': np.uint8,
+            'row': np.int8,
+            'col': np.int8,
+            'toa': np.uint16,
+            'tot': np.uint16,
+            'cal': np.uint16,
+        }
+        final_df = final_df.astype(dtype_map)
 
     return final_df
