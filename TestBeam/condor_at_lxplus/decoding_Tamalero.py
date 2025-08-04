@@ -338,7 +338,7 @@ def build_events_sequentially(unpacked_data):
 
         elif record_type == 'trailer':
             # A packet is complete if it's in pending_packets and has data
-            if elink in pending_packets and pending_packets[elink]['data']:
+            if elink in pending_packets and len(pending_packets[elink]['data']) > 0:
                 packet = pending_packets.pop(elink)
                 packet_bcid = packet['header'].get('bcid')
 
