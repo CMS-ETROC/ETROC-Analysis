@@ -218,7 +218,7 @@ def fwhm_based_on_gaussian_mixture_model(
         pdf_individual = responsibilities * pdf[:, np.newaxis]
 
     if show_plot:
-        from plotting import load_fig_title
+        from .plotting import load_fig_title
         import matplotlib.pyplot as plt
         import mplhep as hep
         hep.style.use('CMS')
