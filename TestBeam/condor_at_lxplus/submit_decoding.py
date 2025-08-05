@@ -2,7 +2,18 @@ from pathlib import Path
 from jinja2 import Template
 from natsort import natsorted
 
-def load_bash_template(input_dir_path):
+import argparse
+import subprocess
+
+def load_bash_template(input_dir_path, file_extension='bin'):
+    """
+    Loads and renders a bash script template.
+
+    Args:
+        input_dir_path (str): The path to the input directory on EOS.
+        file_extension (str): The file extension to use (e.g., 'bin' or 'dat').
+                              Defaults to 'bin'.
+    """
 
     # Define the bash script template
     bash_template = """#!/bin/bash
@@ -18,8 +29,9 @@ source /cvmfs/sft.cern.ch/lcg/views/LCG_104a/x86_64-el9-gcc13-opt/setup.sh
 mkdir -p ./job_{{ ClusterID }}_{{ idx }}
 
 # Copy input data from EOS to local work node
+# The file extension is now a variable
 for num in $(seq {{ start }} {{ end }}); do
-    xrdcp -s root://eosuser.cern.ch/{{ eos_path }}/file_${num}.bin ./job_{{ ClusterID }}_{{ idx }}
+    xrdcp -s root://eosuser.cern.ch/{{ eos_path }}/file_${num}.{{ file_ext }} ./job_{{ ClusterID }}_{{ idx }}
 done
 
 # Untar python environment
@@ -43,6 +55,7 @@ rm -r job_{{ ClusterID }}_{{ idx }}
     # Prepare the data for the template
     options = {
         'eos_path': input_dir_path,
+        'file_ext': file_extension,
         'start': '${1}',
         'end': '${2}',
         'idx': '${3}',
@@ -78,7 +91,29 @@ Queue start, end, index from {4}/input_list_for_decoding{3}.txt
 
 def make_jobs(args, log_dir, condor_scripts_dir, runAppend):
 
-    file_list = natsorted(Path(args.input_dir).glob('file*bin'))
+    input_path = Path(args.input_dir)
+    file_extension = None
+
+    # Use a fast check to see if at least one of each file type exists
+    has_bin = next(input_path.glob('file*.bin'), None)
+    has_dat = next(input_path.glob('file*.dat'), None)
+
+    if has_bin and has_dat:
+        print(f"Warning: Found both '.bin' and '.dat' files in {args.input_dir}.")
+        print("Prioritizing '.bin' files by default.")
+        file_extension = 'bin'
+    elif has_bin:
+        file_extension = 'bin'
+    elif has_dat:
+        file_extension = 'dat'
+    else:
+        print(f"!!! ERROR: No '*.bin' or '*.dat' files found in '{args.input_dir}'. Exiting.")
+        return # Stop execution if no relevant files are found
+
+    print(f"--> Auto-detected and using file extension: '{file_extension}'")
+
+    glob_pattern = f'file*.{file_extension}'
+    file_list = natsorted(input_path.glob(glob_pattern))
     print(f'\nFirst file: {file_list[0].name}')
     print(f'Last file: {file_list[-1].name}')
 
@@ -112,7 +147,7 @@ def make_jobs(args, log_dir, condor_scripts_dir, runAppend):
             base_txt.write(save_string + '\n')
             idx += job_size
 
-    bash_script = load_bash_template(args.input_dir)
+    bash_script = load_bash_template(args.input_dir, file_extension)
     with open(condor_scripts_dir / f'run_decode{runAppend}.sh','w') as bashfile:
         bashfile.write(bash_script)
 
@@ -124,8 +159,7 @@ def make_jobs(args, log_dir, condor_scripts_dir, runAppend):
 
 ## --------------------------------------
 if __name__ == "__main__":
-    import argparse
-    import subprocess
+
 
     parser = argparse.ArgumentParser(
             prog='PlaceHolder',

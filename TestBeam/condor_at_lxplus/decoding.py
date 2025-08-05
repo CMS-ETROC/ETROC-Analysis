@@ -1056,49 +1056,69 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    constellation_files = natsorted(Path(args.input_dir).glob('file*bin'))
-    ce_files = natsorted(Path(args.input_dir).glob('file*dat'))
+    input_path = Path(args.input_dir)
+    files_to_process = []
+    processing_mode = None
 
-    if len(constellation_files) != 0:
+    constellation_files = natsorted(input_path.glob('file*.bin'))
+    if constellation_files:
+        processing_mode = 'constellation'
+        files_to_process = constellation_files
+    else:
+        ce_files = natsorted(input_path.glob('file*.dat'))
+        if ce_files:
+            processing_mode = 'ce'
+            files_to_process = ce_files
 
-        files = constellation_files
+    if not processing_mode:
+        print(f"Error: No 'file*.bin' or 'file*.dat' files found in {input_path}.")
+        exit() # Use 'return' if in a function, 'exit()' if in a main script
 
+    print(f"--> Found {len(files_to_process)} files. Processing in '{processing_mode}' mode.")
+
+    # 3. Processing logic is now separated based on the detected mode.
+    #    Initialize dataframes to None.
+    df = None
+    filler_df = None
+
+    if processing_mode == 'constellation':
         decoder = DecodeBinary(
-            firmware_key = 0b0001,
-            board_id = [0x17f0f, 0x17f0f, 0x17f0f, 0x17f0f],
-            file_list = files,
-            save_nem = None,
-            skip_fw_filler = True,
-            skip_event_df = True,
-            skip_crc_df = True,
+            firmware_key=0b0001,
+            board_id=[0x17f0f, 0x17f0f, 0x17f0f, 0x17f0f],
+            file_list=files_to_process,
+            save_nem=None,
+            skip_fw_filler=True,
+            skip_event_df=True,
+            skip_crc_df=True,
         )
-        df, _, _, filler_df = decoder.decode_files()
+        # Use a try-except block for robustness in case decoding fails
+        try:
+            df, _, _, filler_df = decoder.decode_files()
+        except Exception as e:
+            print(f"An error occurred during 'constellation' decoding: {e}")
 
-        name = Path(args.input_dir).name
-        if args.output_name is not None:
-            name = args.output_name
+    elif processing_mode == 'ce':
+        try:
+            df = process_tamalero_outputs(files_to_process)
+        except Exception as e:
+            print(f"An error occurred during 'ce' processing: {e}")
 
-        if not df.empty:
-            df.to_feather(f'{name}.feather')
-        else:
-            print('No data is recorded!')
+    # 4. Centralized and non-repetitive saving logic.
+    print("\n--- Saving Results ---")
 
-        if not filler_df.empty:
-            filler_df.to_feather(f'filler_{name}.feather')
-        else:
-            print('No filler information is recorded!')
+    # Determine output name once. This is more concise.
+    output_base_name = args.output_name or input_path.name
 
-    elif len(ce_files) != 0:
+    # Save the main DataFrame
+    if df is not None and not df.empty:
+        output_path = f'{output_base_name}.feather'
+        df.to_feather(output_path)
+        print(f"Successfully saved main data to: {output_path}")
+    else:
+        print('No main data was recorded!')
 
-        files = ce_files
-
-        if len(files) == 0:
-            print('Input files not found')
-            exit()
-
-        df = process_tamalero_outputs(files)
-
-        if not df.empty:
-            df.to_feather(f'{args.output_name}.feather')
-        else:
-            print('No data is recorded!')
+    # Save the filler DataFrame only if it was created (in constellation mode)
+    if filler_df is not None and not filler_df.empty:
+        filler_output_path = f'filler_{output_base_name}.feather'
+        filler_df.to_feather(filler_output_path)
+        print(f"Successfully saved filler data to: {filler_output_path}")
