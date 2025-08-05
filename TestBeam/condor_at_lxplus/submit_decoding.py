@@ -5,7 +5,7 @@ from natsort import natsorted
 import argparse
 import subprocess
 
-def load_bash_template(input_dir_path, file_extension='bin'):
+def load_bash_template(input_dir_path, file_extension, file_suffix=''):
     """
     Loads and renders a bash script template.
 
@@ -31,7 +31,7 @@ mkdir -p ./job_{{ ClusterID }}_{{ idx }}
 # Copy input data from EOS to local work node
 # The file extension is now a variable
 for num in $(seq {{ start }} {{ end }}); do
-    xrdcp -s root://eosuser.cern.ch/{{ eos_path }}/file_${num}.{{ file_ext }} ./job_{{ ClusterID }}_{{ idx }}
+    xrdcp -s root://eosuser.cern.ch/{{ eos_path }}/file_${num}{{ file_suffix }}.{{ file_ext }} ./job_{{ ClusterID }}_{{ idx }}
 done
 
 # Untar python environment
@@ -56,6 +56,7 @@ rm -r job_{{ ClusterID }}_{{ idx }}
     options = {
         'eos_path': input_dir_path,
         'file_ext': file_extension,
+        'file_suffix': file_suffix,
         'start': '${1}',
         'end': '${2}',
         'idx': '${3}',
@@ -93,22 +94,26 @@ def make_jobs(args, log_dir, condor_scripts_dir, runAppend):
 
     input_path = Path(args.input_dir)
     file_extension = None
+    file_suffix = None
 
-    # Use a fast check to see if at least one of each file type exists
-    has_bin = next(input_path.glob('file*.bin'), None)
-    has_dat = next(input_path.glob('file*.dat'), None)
-
-    if has_bin and has_dat:
-        print(f"Warning: Found both '.bin' and '.dat' files in {args.input_dir}.")
-        print("Prioritizing '.bin' files by default.")
+    bin_files = natsorted(input_path.glob('file*.bin'))
+    if bin_files:
+        print("Found '.bin' files.")
         file_extension = 'bin'
-    elif has_bin:
-        file_extension = 'bin'
-    elif has_dat:
-        file_extension = 'dat'
+        file_suffix = ''  # No suffix for .bin files
+        file_list = bin_files
     else:
-        print(f"!!! ERROR: No '*.bin' or '*.dat' files found in '{args.input_dir}'. Exiting.")
-        return # Stop execution if no relevant files are found
+        # If no .bin files, check for '_CE.dat' files.
+        dat_files = natsorted(input_path.glob('file*_CE.dat'))
+        if dat_files:
+            print("Found '_CE.dat' files.")
+            file_extension = 'dat'
+            file_suffix = '_CE' # Suffix is '_CE' for .dat files
+            file_list = dat_files
+
+    if not file_list:
+        print(f"!!! ERROR: No 'file*.bin' or 'file*_CE.dat' files found in '{input_path}'. Exiting.")
+        return
 
     print(f"--> Auto-detected and using file extension: '{file_extension}'")
 
@@ -147,7 +152,12 @@ def make_jobs(args, log_dir, condor_scripts_dir, runAppend):
             base_txt.write(save_string + '\n')
             idx += job_size
 
-    bash_script = load_bash_template(args.input_dir, file_extension)
+    bash_script = load_bash_template(
+        args.input_dir,
+        file_extension=file_extension,
+        file_suffix=file_suffix
+    )
+
     with open(condor_scripts_dir / f'run_decode{runAppend}.sh','w') as bashfile:
         bashfile.write(bash_script)
 
