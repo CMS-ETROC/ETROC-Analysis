@@ -220,6 +220,13 @@ if __name__ == "__main__":
         dest = 'resubmit',
     )
 
+    parser.add_argument(
+        '--resubmit_with_stderr',
+        action = 'store_true',
+        help = 'If set, condor resubmission for jobs when stderr is not empty.',
+        dest = 'resubmit_with_stderr',
+    )
+
     args = parser.parse_args()
 
     tag_for_condor = args.condor_tag
@@ -252,9 +259,10 @@ if __name__ == "__main__":
     print('========= Run option =========\n')
 
     make_jobs(args=args, log_dir=log_dir, condor_scripts_dir=condor_scripts_dir, outdir=outdir, runAppend=runAppend)
+    input_txt_path = condor_scripts_dir / f"input_list_for_bootstrap{runAppend}.txt"
 
     if args.dryrun:
-        input_txt_path = condor_scripts_dir / f"input_list_for_bootstrap{runAppend}.txt"
+
         print('\n=========== Input text file ===========')
         subprocess.run(f"head -n 10 {input_txt_path}", shell=True)
         subprocess.run(f"tail -n 10 {input_txt_path}", shell=True)
@@ -268,7 +276,6 @@ if __name__ == "__main__":
         print()
 
     elif args.resubmit:
-        input_txt_path = condor_scripts_dir / f"input_list_for_bootstrap{runAppend}.txt"
         condor_output = subprocess.run(['condor_q', '-nobatch'], capture_output=True, text=True)
 
         # Filter lines containing the target script
@@ -299,6 +306,33 @@ if __name__ == "__main__":
                 subprocess.run(['condor_submit', f'{condor_scripts_dir}/condor_bootstrap{runAppend}.jdl'])
             else:
                 print("No jobs to submit — input list is empty.")
+
+    elif args.resubmit_with_stderr:
+        condor_output = subprocess.run(['condor_q', '-nobatch'], capture_output=True, text=True)
+        filtered_lines = [line for line in condor_output.stdout.splitlines() if f'run_bootstrap{runAppend}.sh' in line]
+
+        if filtered_lines:
+            print('Found running jobs. This option is only allowed when no job with the same condor tag is running on condor')
+            exit()
+
+        print('No running jobs found. Checking stderr files...')
+        stderr_files = condor_scripts_dir.glob('*.stderr')
+
+        line_numbers = []
+        for ifile in stderr_files:
+            if ifile.stat().st_size > 0:
+                line_numbers.append(ifile.name.split('.')[1])
+
+        with open(input_txt_path, 'r') as f:
+            all_lines = f.readlines()
+
+        selected_data = []
+        for line_num in line_numbers:
+            data = all_lines[int(line_num)].strip()
+            selected_data.append(data)
+
+        for item in selected_data:
+            print(item)
 
     else:
         subprocess.run(['condor_submit', f'{condor_scripts_dir}/condor_bootstrap{runAppend}.jdl'])
