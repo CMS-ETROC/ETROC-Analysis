@@ -316,7 +316,7 @@ if __name__ == "__main__":
             exit()
 
         print('No running jobs found. Checking stderr files...')
-        stderr_files = condor_scripts_dir.glob('*.stderr')
+        stderr_files = log_dir.glob('*.stderr')
 
         line_numbers = []
         for ifile in stderr_files:
@@ -330,9 +330,15 @@ if __name__ == "__main__":
         for line_num in line_numbers:
             data = all_lines[int(line_num)].strip()
             selected_data.append(data)
+        del all_lines
 
-        for item in selected_data:
-            print(item)
+        print(f'Found {len(selected_data)} jobs to resubmit')
+        with open(input_txt_path, 'w') as f:
+            for item in selected_data:
+                f.write(item + '\n')
+
+        # if input_txt_path.stat().st_size > 0:
+        #     subprocess.run(['condor_submit', f'{condor_scripts_dir}/condor_bootstrap{runAppend}.jdl'])
 
     else:
         subprocess.run(['condor_submit', f'{condor_scripts_dir}/condor_bootstrap{runAppend}.jdl'])
