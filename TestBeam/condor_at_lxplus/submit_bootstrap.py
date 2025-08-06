@@ -242,7 +242,7 @@ if __name__ == "__main__":
     log_dir.mkdir(exist_ok=True, parents=True)
 
     outdir = Path('./') / f'bootstrap_{args.outputdir}'
-    if not args.dryrun and not args.resubmit:
+    if not args.dryrun and not args.resubmit and not args.resubmit_with_stderr:
         outdir.mkdir(exist_ok = False)
 
     print('\n========= Run option =========')
