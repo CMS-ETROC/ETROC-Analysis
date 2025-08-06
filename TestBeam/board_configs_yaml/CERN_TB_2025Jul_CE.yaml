@@ -17,9 +17,9 @@ defaults: &defaults
     offset: 20
     HV: 230
     role: ref
-  PT-NH41: &PT-NH41
-    name: ET2.02 PacTech New HPK-41
-    short: PT-NH41
+  PT-NH42: &PT-NH42
+    name: ET2.02 PacTech New HPK-42
+    short: PT-NH42
     offset: 20
     HV: 230
     role: extra
