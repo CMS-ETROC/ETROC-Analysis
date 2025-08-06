@@ -337,8 +337,8 @@ if __name__ == "__main__":
             for item in selected_data:
                 f.write(item + '\n')
 
-        # if input_txt_path.stat().st_size > 0:
-        #     subprocess.run(['condor_submit', f'{condor_scripts_dir}/condor_bootstrap{runAppend}.jdl'])
+        if input_txt_path.stat().st_size > 0:
+            subprocess.run(['condor_submit', f'{condor_scripts_dir}/condor_bootstrap{runAppend}.jdl'])
 
     else:
         subprocess.run(['condor_submit', f'{condor_scripts_dir}/condor_bootstrap{runAppend}.jdl'])
