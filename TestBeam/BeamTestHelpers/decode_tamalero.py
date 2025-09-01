@@ -340,7 +340,7 @@ def build_events_sequentially(unpacked_data):
 
         elif record_type == 'trailer':
             # A packet is complete if it's in pending_packets and has data
-            if elink in pending_packets and pending_packets[elink]['data']:
+            if elink in pending_packets and len(pending_packets[elink]['data']) > 0:
                 packet = pending_packets.pop(elink)
                 packet_bcid = packet['header'].get('bcid')
 
@@ -355,7 +355,7 @@ def build_events_sequentially(unpacked_data):
                     current_bcid = packet_bcid
                 # ------------------------------------
 
-                l1a_for_event = packet['header'].get('l1a_counter')
+                l1a_for_event = packet['header'].get('l1counter')
 
                 # Add all hits from this completed packet to the final dictionary
                 for data_hit in packet['data']:
