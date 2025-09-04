@@ -33,6 +33,10 @@ nickname_dict = {
     'e': 'extra',
 }
 
+outdir = Path('.') / args.output
+outdir.mkdir(exist_ok=True)
+outname = outdir / f'resolution_{args.output}{args.tag}.csv'
+
 files = natsorted(Path(args.inputdir).glob('*_resolution.pkl'))
 final_dict = defaultdict(list)
 
@@ -137,4 +141,4 @@ for ifile in tqdm(files):
             final_dict[f'res_{val_name}'].append(results['mu'])
             final_dict[f'err_{val_name}'].append(results['sigma'])
 
-pd.DataFrame(final_dict).to_csv('resolution_' + args.output + args.tag + '.csv', index=False)
+pd.DataFrame(final_dict).to_csv(outname, index=False)

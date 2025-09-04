@@ -48,6 +48,10 @@ args = parser.parse_args()
 input_dir = Path(args.inputdir)
 files = natsorted(input_dir.glob('exclude*pkl'))
 
+outdir = Path('.') / args.outputdir
+outdir.mkdir(exist_ok=True)
+outname = outdir / f'{args.outputdir}_nevt_per_track{args.tag}.csv'
+
 if len(files) == 0:
     print('No input file')
     exit()
@@ -98,7 +102,7 @@ with tqdm(files) as pbar:
 
 track_nevt_df = pd.DataFrame(data=final_dict)
 track_nevt_df.sort_values(by=['nevt'], ascending=False, inplace=True)
-track_nevt_df.to_csv(f'{args.outputdir}_nevt_per_track{args.tag}.csv', index=False)
+track_nevt_df.to_csv(outname, index=False)
 
 cuts = range(100, 1600, 100)
 cuts = [1, *cuts]
