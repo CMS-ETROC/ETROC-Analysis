@@ -1,0 +1,67 @@
+defaults:
+  PT_NH18: &PT_NH18
+    name: ET2.01 PacTech New HPK-18
+    short: PT_NH18
+    offset: 20
+    HV: 230
+    role: extra
+  PT_NH17: &PT_NH17
+    name: ET2.01 PacTech New HPK-17
+    short: PT_NH17
+    offset: 20
+    HV: 230
+    role: ref
+  PT_NH23: &PT_NH23
+    name: ET2.02 PacTech New HPK-23
+    short: PT_NH23
+    offset: 20
+    HV: 230
+    role: dut
+  PT_NH25: &PT_NH25
+    name: ET2.02 PacTech New HPK-25
+    short: PT_NH25
+    offset: 20
+    HV: 230
+    role: dut
+  PT_NH31: &PT_NH31
+    name: ET2.02 PacTech New HPK-31
+    short: PT_NH31
+    offset: 20
+    HV: 230
+    role: dut
+  EP_NH3: &EP_NH3
+    name: ET2.03 EPIR New HPK-3
+    short: EP_NH3
+    offset: 20
+    HV: 230
+    role: trig
+
+run0:
+  0: *PT_NH18
+  1: *PT_NH17
+  2: *PT_NH25
+  3: *EP_NH3
+
+run5:
+  0: { <<: *PT_NH18, role: trig }
+  1: *PT_NH17
+  2: { <<: *PT_NH25, role: extra }
+  3: *PT_NH31
+
+run10:
+  0: { <<: *PT_NH18, role: trig }
+  1: *PT_NH17
+  2: { <<: *PT_NH25, role: extra }
+  3: { <<: *PT_NH23, HV: 250 }
+
+run14:
+  0: { <<: *PT_NH18, role: trig }
+  1: *PT_NH17
+  2: { <<: *PT_NH25, role: extra }
+  3: { <<: *PT_NH23, HV: 240 }
+
+run28:
+  0: { <<: *PT_NH18, role: trig }
+  1: *PT_NH17
+  2: { <<: *PT_NH25, role: extra }
+  3: *PT_NH23
