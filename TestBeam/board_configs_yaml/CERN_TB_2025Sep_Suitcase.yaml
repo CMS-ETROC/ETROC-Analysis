@@ -71,3 +71,9 @@ run32:
   1: *PT_NH17
   2: { <<: *PT_NH25, role: extra }
   3: { <<: *PT_NH23, HV: 210 }
+
+run36:
+  0: { <<: *PT_NH18, role: trig }
+  1: *PT_NH17
+  2: { <<: *PT_NH25, role: extra }
+  3: { <<: *PT_NH23, HV: 190 }
