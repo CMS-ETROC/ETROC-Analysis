@@ -224,3 +224,145 @@
 #     )
 #     hep.cms.text(loc=0, ax=main_ax, text="Preliminary", fontsize=25)
 #     main_ax.set_title(f'{fig_title}', loc="right", size=25)
+
+## --------------------------------------
+# def lmfit_gaussfit_with_pulls(
+#         model: str,
+#         input_data: np.array,
+#         input_hist: hist.Hist,
+#         width_factor: float,
+#         fig_title: str,
+#         chipNames: str,
+#         use_pred_uncert: bool,
+#         no_show_fit: bool,
+#         no_draw: bool,
+#         get_chisqure: bool = False,
+#         full_data: bool = False,
+#         save: bool = False,
+#     ):
+
+#     from lmfit.models import GaussianModel
+#     # from lmfit.lineshapes import gaussian
+
+#     mod = GaussianModel(nan_policy='omit')
+
+#     if full_data:
+#         fit_min = input_data.min()
+#         fit_max = input_data.max()
+#         input_hist_peak = input_hist
+#         centers = input_hist.axes[0].centers
+#     else:
+#         fit_min = input_data.mean()-width_factor*input_data.std()
+#         fit_max = input_data.mean()+width_factor*input_data.std()
+
+
+#     input_hist_peak = input_hist[(fit_min)*1j:(fit_max)*1j]
+#     centers = input_hist.axes[0].centers
+#     fit_centers = input_hist_peak.axes[0].centers
+#     # pars = mod.guess(input_hist.values(), x=centers)
+#     pars = mod.guess(input_hist_peak.values(), x=fit_centers)
+#     out = mod.fit(input_hist_peak.values(), pars, x=fit_centers, weights=1/np.sqrt(input_hist_peak.values()))
+
+#     if not no_draw:
+
+#         x_range = np.linspace(fit_min, fit_max, 500)
+#         # x_range = np.linspace(centers[0], centers[-1], 500)
+#         dely = out.eval_uncertainty(x=x_range)
+
+#         # popt = [par for name, par in out.best_values.items()]
+#         # pcov = out.covar
+
+#         # if np.isfinite(pcov).all():
+#         #     n_samples = 100
+#         #     vopts = np.random.multivariate_normal(popt, pcov, n_samples)
+#         #     # sampled_ydata = np.vstack([gaussian(fit_centers, *vopt).T for vopt in vopts])
+#         #     # sampled_ydata = np.vstack([gaussian(np.linspace(fit_min-1, fit_max+1, 500), *vopt).T for vopt in vopts])
+#         #     sampled_ydata = np.vstack([gaussian(x_range, *vopt).T for vopt in vopts])
+#         #     dely = np.nanstd(sampled_ydata, axis=0)
+#         #     # model_uncert = np.nanstd(sampled_ydata, axis=0)
+
+#         # else:
+#         #     # model_uncert = np.zeros_like(np.sqrt(input_hist.variances()))
+#         #     dely = np.zeros_like(np.sqrt(input_hist.variances()))
+
+#         ### Calculate pull
+#         if use_pred_uncert:
+#             pulls = (input_hist.values() - out.eval(x=centers))/np.sqrt(out.eval(x=centers))
+#         else:
+#             pulls = (input_hist.values() - out.eval(x=centers))/np.sqrt(input_hist.variances())
+#         pulls[np.isnan(pulls) | np.isinf(pulls)] = 0
+
+#         left_edge = centers[0]
+#         right_edge = centers[-1]
+
+#         # Pull: plot the pulls using Matplotlib bar method
+#         width = (right_edge - left_edge) / len(pulls)
+
+#         fig = plt.figure()
+
+#         if no_show_fit:
+#             grid = fig.add_gridspec(1, 1, hspace=0)
+#             main_ax = fig.add_subplot(grid[0])
+#             hep.cms.text(loc=0, ax=main_ax, text="Preliminary", fontsize=25)
+#             main_ax.set_title(f'{fig_title}', loc="right", size=20)
+#             main_ax.errorbar(centers, input_hist.values(), np.sqrt(input_hist.variances()),
+#                             ecolor="steelblue", mfc="steelblue", mec="steelblue", fmt="o",
+#                             ms=6, capsize=1, capthick=2, alpha=0.8)
+#             main_ax.plot(x_range, out.eval(x=x_range), color="hotpink", ls="-", lw=2, alpha=0.8,
+#                         label=fr"$\mu:{out.params['center'].value:.2f}, \sigma: {abs(out.params['sigma'].value):.2f}$")
+#             main_ax.set_ylabel('Counts')
+#             main_ax.set_ylim(-20, None)
+#             main_ax.set_xlabel(r'Time Walk Corrected $\Delta$TOA [ns]')
+#             plt.tight_layout()
+
+#         else:
+#             grid = fig.add_gridspec(2, 1, hspace=0, height_ratios=[3, 1])
+#             main_ax = fig.add_subplot(grid[0])
+#             subplot_ax = fig.add_subplot(grid[1], sharex=main_ax)
+#             plt.setp(main_ax.get_xticklabels(), visible=False)
+#             hep.cms.text(loc=0, ax=main_ax, text="Preliminary", fontsize=25)
+
+#             main_ax.set_title(f'{fig_title}', loc="right", size=25)
+#             main_ax.errorbar(centers, input_hist.values(), np.sqrt(input_hist.variances()),
+#                             ecolor="steelblue", mfc="steelblue", mec="steelblue", fmt="o",
+#                             ms=6, capsize=1, capthick=2, alpha=0.8)
+#             main_ax.plot(x_range, out.eval(x=x_range), color="hotpink", ls="-", lw=2, alpha=0.8,
+#                         label=fr"$\mu:{out.params['center'].value:.2f}, \sigma: {abs(out.params['sigma'].value):.2f}$")
+#             main_ax.set_ylabel('Counts')
+#             main_ax.set_ylim(-20, None)
+
+#             main_ax.fill_between(
+#                 x_range,
+#                 out.eval(x=x_range) - dely,
+#                 out.eval(x=x_range) + dely,
+#                 color="hotpink",
+#                 alpha=0.2,
+#                 label='Uncertainty'
+#             )
+#             main_ax.legend(fontsize=18, loc='upper right')
+
+#             subplot_ax.axvline(fit_min, c='red', lw=2)
+#             subplot_ax.axvline(fit_max, c='red', lw=2)
+#             subplot_ax.axhline(1, c='black', lw=0.75)
+#             subplot_ax.axhline(0, c='black', lw=1.2)
+#             subplot_ax.axhline(-1, c='black', lw=0.75)
+#             subplot_ax.bar(centers, pulls, width=width, fc='royalblue')
+#             subplot_ax.set_ylim(-2, 2)
+#             subplot_ax.set_yticks(ticks=np.arange(-1, 2), labels=[-1, 0, 1])
+#             subplot_ax.set_xlabel(r'Time Walk Corrected $\Delta$TOA [ps]')
+#             subplot_ax.set_ylabel('Pulls', fontsize=20, loc='center')
+#             subplot_ax.minorticks_off()
+
+#             plt.tight_layout()
+
+#         if (save):
+#             fig.savefig(f'./lmfit_{chipNames}.png')
+#             plt.close(fig)
+
+
+#     if get_chisqure:
+#         return [out.params['sigma'].value, out.params['sigma'].stderr, out.redchi]
+#     else:
+#         return [out.params['sigma'].value, out.params['sigma'].stderr]
+
+## --------------------------------------
