@@ -1586,8 +1586,8 @@ def plot_resolution_table(
 
         board_info = input_df[[f'row_{role}', f'col_{role}', f'res_{role}', f'err_{role}']]
 
-        res = board_info.groupby([f'row_{role}', f'col_{role}']).apply(lambda x: np.average(x[f'res_{role}'], weights=1/x[f'err_{role}']**2)).reset_index()
-        err = board_info.groupby([f'row_{role}', f'col_{role}']).apply(lambda x: np.sqrt(1/(np.sum(1/x[f'err_{role}']**2)))).reset_index()
+        res = board_info.groupby([f'row_{role}', f'col_{role}']).apply(lambda x: np.average(x[f'res_{role}'], weights=1/x[f'err_{role}']**2), include_groups=False).reset_index()
+        err = board_info.groupby([f'row_{role}', f'col_{role}']).apply(lambda x: np.sqrt(1/(np.sum(1/x[f'err_{role}']**2))), include_groups=False).reset_index()
 
         res_table = res.pivot_table(index=f'row_{role}', columns=f'col_{role}', values=0, fill_value=-1)
         err_table = err.pivot_table(index=f'row_{role}', columns=f'col_{role}', values=0, fill_value=-1)
