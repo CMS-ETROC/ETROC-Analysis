@@ -175,9 +175,18 @@ if __name__ == "__main__":
         '--outdir',
         metavar = 'OUTNAME',
         type = str,
-        help = 'output directory name',
+        help = 'output directory path',
         required = True,
         dest = 'outdir',
+    )
+
+    parser.add_argument(
+        '--dirname',
+        metavar = 'NAME',
+        type = str,
+        help = 'output directory name',
+        default = 'time',
+        dest = 'dirname',
     )
 
     parser.add_argument(
@@ -271,7 +280,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     outdir = Path(args.outdir)
-    final_output_path = outdir / 'time'
+    final_output_path = outdir / args.dirname
     final_output_path.mkdir(exist_ok=True)
 
     with open(args.config) as input_yaml:
