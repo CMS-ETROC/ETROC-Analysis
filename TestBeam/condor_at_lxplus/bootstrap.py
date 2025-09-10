@@ -278,7 +278,7 @@ def time_df_bootstrap(
                 # If the rate is NOT high, proceed with the normal consecutive failure logic
                 else:
                     consecutive_failures += 1
-                    print(f"GMM quality cut failed. Consecutive failures: {consecutive_failures}")
+                    print(f"GMM quality cut failed. Consecutive failures: {consecutive_failures}. Total run: {counter}")
 
                     if consecutive_failures >= failure_threshold:
                         current_sampling_fraction = min(95, current_sampling_fraction + 10)
@@ -314,7 +314,7 @@ def time_df_bootstrap(
 
         counter += 1
 
-        print(f"{successful_runs} / {nouts}")
+        print(f"Success: {successful_runs} / {nouts}")
         if successful_runs >= nouts:
             print(f'Collected {nouts} successful runs. Escaping bootstrap loop.')
             break
