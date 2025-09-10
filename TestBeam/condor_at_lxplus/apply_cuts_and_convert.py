@@ -124,6 +124,19 @@ def apply_TDC_cuts(
 
     return df_in_time
 
+
+## --------------------------------------
+def apply_time_domain_cuts(df_in_time: pd.DataFrame, args):
+    pass
+    # Your new cutting logic goes here
+    # Example: Filter based on time values
+    # time_based_df = df_in_time[
+    #     (df_in_time['toa_trig'] >= args.trigTOALowerTime) &
+    #     (df_in_time['toa_trig'] <= args.trigTOAUpperTime) &
+    #     # ... and other time-based cuts
+    # ]
+    # return time_based_df
+
 # --- This would be your new worker function for parallel processing ---
 def process_track_file(track_filepath, args, board_roles, final_output_dir):
     """
@@ -132,19 +145,25 @@ def process_track_file(track_filepath, args, board_roles, final_output_dir):
     track_df = pd.read_pickle(track_filepath)
     df_in_time = pd.DataFrame()
 
-    if track_df.shape[0] < 1000:
-        # use single mean
-        df_in_time = apply_TDC_cuts(args, track_df, board_roles)
+    if args.convert_first:
+        df_in_time = convert_code_to_time(track_df, board_roles)
+        # if not tmp_df.empty:
+        #     df_in_time = apply_time_domain_cuts(tmp_df, args)
 
     else:
-        dfs = []
-        for file_id in track_df['file'].unique():
-            partial_track_df = track_df.loc[track_df['file'] == file_id]
-            partial_df_in_time = apply_TDC_cuts(args, partial_track_df, board_roles)
-            if not partial_df_in_time.empty:
-                dfs.append(partial_df_in_time)
+        if track_df.shape[0] < 1000:
+            # use single mean
+            df_in_time = apply_TDC_cuts(args, track_df, board_roles)
 
-        df_in_time = pd.concat(dfs, ignore_index=True)
+        else:
+            dfs = []
+            for file_id in track_df['file'].unique():
+                partial_track_df = track_df.loc[track_df['file'] == file_id]
+                partial_df_in_time = apply_TDC_cuts(args, partial_track_df, board_roles)
+                if not partial_df_in_time.empty:
+                    dfs.append(partial_df_in_time)
+
+            df_in_time = pd.concat(dfs, ignore_index=True)
 
     if not df_in_time.empty:
         prefix = f'exclude_{args.exclude_role}_'
@@ -268,6 +287,13 @@ if __name__ == "__main__":
         action = 'store_true',
         help = 'If set, use average of TOA and TOA+CAL as a new toa in time',
         dest = 'use_new_toa',
+    )
+
+    parser.add_argument(
+        '--convert-first',
+        action='store_true',
+        help='If set, converts to time domain first, then applies cuts.',
+        dest='convert_first',
     )
 
     parser.add_argument(
