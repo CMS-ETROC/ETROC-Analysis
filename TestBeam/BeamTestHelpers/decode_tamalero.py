@@ -287,7 +287,6 @@ class TamaleroDF:
         return data_type, res
 
 ## --------------------------------------
-# This function remains unchanged.
 def merge_words(res):
     empty_frame_mask = np.array(res[0::2]) > (2**8)
     len_cut = min(len(res[0::2]), len(res[1::2]))
@@ -297,31 +296,17 @@ def merge_words(res):
         return []
 
 ## --------------------------------------
-# NEW: Replaces the old event builder with a sequential, stateful approach.
-def build_events_sequentially(unpacked_data):
+def generate_event_rows(unpacked_data_list):
     """
-    Builds events by processing the data stream sequentially. An event is defined
-    by a consistent BCID. The event number increments only when the BCID of a new,
-    complete packet changes from the previous one.
-
-    Args:
-        unpacked_data (iterable): An iterable that yields tuples of
-                                  (record_type, record_data).
-
-    Returns:
-        dict: A dictionary of lists ready for conversion to a Pandas DataFrame.
+    Generator that processes a list of unpacked data and yields a complete
+    row dictionary for each hit. This function does NOT store all the
+    output data in memory.
     """
-    df_data = {
-        'evt': [], 'bcid': [], 'l1a_counter': [], 'ea': [], 'row': [], 'col': [],
-        'toa': [], 'tot': [], 'cal': [], 'elink': []
-    }
-
     pending_packets = {}
-    # State variables for the new event counting logic
     event_counter = -1
-    current_bcid = -1  # Sentinel value, assuming no real bcid is -1
+    current_bcid = -1
 
-    for record_type, record_data in unpacked_data:
+    for record_type, record_data in unpacked_data_list:
         if not record_type or not record_data:
             continue
 
@@ -330,51 +315,42 @@ def build_events_sequentially(unpacked_data):
             continue
 
         if record_type == 'header':
-            # Start a new packet for this elink
             pending_packets[elink] = {'header': record_data, 'data': []}
 
         elif record_type == 'data':
-            # Add data to an existing packet
             if elink in pending_packets:
                 pending_packets[elink]['data'].append(record_data)
 
         elif record_type == 'trailer':
-            # A packet is complete if it's in pending_packets and has data
             if elink in pending_packets and len(pending_packets[elink]['data']) > 0:
                 packet = pending_packets.pop(elink)
                 packet_bcid = packet['header'].get('bcid')
 
                 if packet_bcid is None:
-                    continue # Ignore packets with no bcid
+                    continue
 
-                # ---- CORE EVENT COUNTING LOGIC ----
-                # If the bcid of this valid packet is different from the
-                # bcid of the last valid packet, increment the event counter.
                 if packet_bcid != current_bcid:
                     event_counter += 1
                     current_bcid = packet_bcid
-                # ------------------------------------
 
                 l1a_for_event = packet['header'].get('l1counter')
 
-                # Add all hits from this completed packet to the final dictionary
                 for data_hit in packet['data']:
-                    df_data['evt'].append(event_counter)
-                    df_data['bcid'].append(current_bcid)
-                    df_data['l1a_counter'].append(l1a_for_event)
-                    df_data['ea'].append(data_hit.get('ea'))
-                    df_data['row'].append(data_hit.get('row_id'))
-                    df_data['col'].append(data_hit.get('col_id'))
-                    df_data['toa'].append(data_hit.get('toa'))
-                    df_data['tot'].append(data_hit.get('tot'))
-                    df_data['cal'].append(data_hit.get('cal'))
-                    df_data['elink'].append(data_hit.get('elink'))
-
+                    # YIELD a dictionary for each individual row
+                    yield {
+                        'evt': event_counter,
+                        'bcid': current_bcid,
+                        'l1a_counter': l1a_for_event,
+                        'ea': data_hit.get('ea'),
+                        'row': data_hit.get('row_id'),
+                        'col': data_hit.get('col_id'),
+                        'toa': data_hit.get('toa'),
+                        'tot': data_hit.get('tot'),
+                        'cal': data_hit.get('cal'),
+                        'elink': data_hit.get('elink')
+                    }
             elif elink in pending_packets:
-                # Discard packet that has a header but no data.
                 del pending_packets[elink]
-
-    return df_data
 
 ## --------------------------------------
 # UPDATED: The main processing function is now simpler and more robust.
@@ -386,18 +362,26 @@ def process_tamalero_outputs(input_files: list):
         with open(ifile, 'rb') as f:
             bin_data = f.read()
             raw_data = struct.unpack(f'<{int(len(bin_data)/4)}I', bin_data)
+            del bin_data
 
         # Merge data and add to a single list for unified processing
         all_merged_data.extend(merge_words(raw_data))
+        del raw_data
 
     print("Decoding data stream...")
     df_decoder = TamaleroDF()
-    unpacked_data = [df_decoder.read(x) for x in tqdm(all_merged_data)]
+    unpacked_data = (df_decoder.read(x) for x in tqdm(all_merged_data))
+    del all_merged_data
 
-    print("Building events sequentially...")
-    events = build_events_sequentially(unpacked_data)
+    # --- LOW MEMORY STEP 3: Building events with a generator ---
+    print("Building events from data...")
+    # Create the generator object. This uses almost no memory.
+    row_generator = generate_event_rows(unpacked_data)
 
-    final_df = pd.DataFrame(events)
+    # Build the DataFrame directly from the generator. This is memory-efficient
+    # as it avoids creating another massive intermediate dictionary.
+    print("Building data from generator...")
+    final_df = pd.DataFrame.from_records(row_generator)
 
     # The board mapping and final type casting remain useful
     board_map = {
