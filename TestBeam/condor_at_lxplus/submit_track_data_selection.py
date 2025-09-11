@@ -218,6 +218,15 @@ if __name__ == "__main__":
         print(f'Board ID: {val}, role: {key}')
     print('========= Run option =========\n')
 
+    ### Check if input csv files of tracks and cal code table exist
+    if not Path(args.track).is_file():
+        print(f"Error: The track CSV file was not found at '{args.track}'.")
+        raise FileNotFoundError("Please check the path and filename for the track file.")
+
+    if not Path(args.cal_table).is_file():
+        print(f"Error: The calibration table was not found at '{args.cal_table}'.")
+        raise FileNotFoundError("Please check the path and filename for the cal code table.")
+
     make_jobs(args=args, id_roles=roles, log_dir=log_dir, eos_base_dir=eos_base_dir, condor_scripts_dir=condor_scripts_dir, runAppend=runAppend)
 
     if args.dryrun:
