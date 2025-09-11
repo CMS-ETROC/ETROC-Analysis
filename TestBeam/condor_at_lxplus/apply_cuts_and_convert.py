@@ -195,7 +195,7 @@ def apply_TDC_time_cuts(
 
     combined_mask = pd.Series(True, index=df_after_toa_cut.index)
     for role, cuts in tot_cuts.items():
-        mask = df_after_toa_cut[f'tot_{role}'].between(cuts[0], cuts[1])
+        mask = df_after_toa_cut[f'{role}'].between(cuts[0], cuts[1])
         combined_mask &= mask
 
     interest_df = df_after_toa_cut.loc[combined_mask].reset_index(drop=True)
