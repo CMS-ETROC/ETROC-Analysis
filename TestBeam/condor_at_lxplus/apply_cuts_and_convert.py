@@ -332,7 +332,7 @@ if __name__ == "__main__":
         type = float,
         help = 'Lower TOA time (in ns) selection boundary',
         default = 2,
-        dest = 'trigTOALowerTime',
+        dest = 'TOALowerTime',
     )
 
     parser.add_argument(
@@ -341,7 +341,7 @@ if __name__ == "__main__":
         type = float,
         help = 'Upper TOA time (in ns) selection boundary',
         default = 10,
-        dest = 'trigTOAUpperTime',
+        dest = 'TOAUpperTime',
     )
 
     parser.add_argument(
