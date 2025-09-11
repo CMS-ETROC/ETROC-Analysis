@@ -376,7 +376,7 @@ def process_tamalero_outputs(input_files: list):
 
     print("Decoding data stream...")
     df_decoder = TamaleroDF()
-    unpacked_data = [df_decoder.read(x) for x in tqdm(all_merged_data)]
+    unpacked_data = (df_decoder.read(x) for x in tqdm(all_merged_data))
     del all_merged_data
 
     # --- LOW MEMORY STEP 3: Building events with a generator ---
