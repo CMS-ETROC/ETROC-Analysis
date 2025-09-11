@@ -1353,7 +1353,8 @@ def plot_resolution_with_pulls(
         list_of_boards: list[str],
         tb_loc: str,
         fig_config: dict,
-        hist_range_buffer: float = 0.1,
+        hist_range: list[int] = [20, 75],
+        hist_bins: int = 15,
         slides_friendly: bool = False,
         print_fit_results: bool = False,
         constraint_ylim: bool = False,
@@ -1372,7 +1373,7 @@ def plot_resolution_with_pulls(
     fig_config: dict,
         Dictionary with board ID as a dict key. It contains a figure title.
     hist_range: list[int], optional
-        Set the histogram range. Default value is [20, 95].
+        Set the histogram range. Default value is [20, 75].
     hist_bins: int, optional
         Adjust the histogram bins. Default value is 15.
     slide_friendly: bool, optional
@@ -1404,38 +1405,8 @@ def plot_resolution_with_pulls(
             continue
 
         data_to_hist = input_df[f'res_{role}'].dropna().values
-        # --- Dynamic Binning and Range Calculation (Freedman-Diaconis Rule) ---
-        Q1 = np.percentile(data_to_hist, 25)
-        Q3 = np.percentile(data_to_hist, 75)
-        IQR = Q3 - Q1
 
-        # Handle cases where IQR is zero (e.g., all data points are the same)
-        if IQR == 0:
-            bin_width = 1.0
-        else:
-            bin_width = 2 * IQR / (len(data_to_hist)**(1/3))
-
-        # Define histogram range with a dynamic, relative buffer
-        data_min = np.min(data_to_hist)
-        data_max = np.max(data_to_hist)
-        data_range = data_max - data_min
-        buffer_percent = hist_range_buffer
-
-        # Add a dynamic buffer to the range
-        hist_range_auto = [
-            data_min - buffer_percent * data_range,
-            data_max + buffer_percent * data_range
-        ]
-
-        # Calculate the number of bins based on the new range
-        n_bins_auto = int(np.ceil((hist_range_auto[1] - hist_range_auto[0]) / bin_width))
-
-        # Ensure a minimum number of bins
-        if n_bins_auto < 10:
-            n_bins_auto = 10
-
-
-        hists[board_id] = hist.Hist(hist.axis.Regular(n_bins_auto, hist_range_auto[0], hist_range_auto[1], name="time_resolution", label=r'Time Resolution [ps]'))
+        hists[board_id] = hist.Hist(hist.axis.Regular(hist_bins, hist_range[0], hist_range[1], name="time_resolution", label='Time Resolution [ps]'))
         hists[board_id].fill(data_to_hist)
         means[board_id] = np.mean(data_to_hist)
 
