@@ -41,6 +41,42 @@ def return_TOA_correlation_param(
     return params, distance
 
 ## --------------------------------------
+def apply_toa_time_correlation_cut(
+        input_df: pd.DataFrame,
+        factor: float,
+    ):
+
+    from itertools import combinations
+
+    distances = []
+    roles = input_df.columns.str.split('_').str.get(-1).unique()
+    role_pairs = list(combinations(roles, 2))
+
+    for role1, role2 in role_pairs:
+        if f'toa_{role1}' in input_df.columns and f'toa_{role2}' in input_df.columns:
+            x = input_df[f'toa_{role1}']
+            y = input_df[f'toa_{role2}']
+
+            params = np.polyfit(x, y, 1)
+            distance = (x*params[0] - y + params[1])/(np.sqrt(params[0]**2 + 1))
+            distances.append(distance)
+        else:
+            # Handle the case where a column is missing
+            print(f"Warning: Columns for {role1} or {role2} not found. Skipping.")
+            continue
+
+    dist_cut = pd.Series(True, index=input_df.index)
+
+    for dist in distances:
+        # Calculate the standard deviation and apply the cut
+        std = np.nanstd(dist)
+        cut_mask = (dist < factor * std)
+        dist_cut &= cut_mask
+
+    # Apply the final combined cut to the DataFrame
+    return input_df.loc[dist_cut].reset_index(drop=True)
+
+## --------------------------------------
 def convert_code_to_time(
         input_df: pd.DataFrame,
         board_roles: dict,
@@ -93,8 +129,8 @@ def apply_TDC_cuts(
     tdc_cuts = {
         idx: [
             0, 1100,
-            args.trigTOALower if trig_id is not None and idx == trig_id else 0,
-            args.trigTOAUpper if trig_id is not None and idx == trig_id else 1100,
+            args.TOALower if trig_id is not None and idx == trig_id else 0,
+            args.TOAUpper if trig_id is not None and idx == trig_id else 1100,
             *tot_cuts[idx]
         ] for _, idx in board_roles.items()
     }
@@ -126,16 +162,51 @@ def apply_TDC_cuts(
 
 
 ## --------------------------------------
-def apply_time_domain_cuts(df_in_time: pd.DataFrame, args):
-    pass
-    # Your new cutting logic goes here
-    # Example: Filter based on time values
-    # time_based_df = df_in_time[
-    #     (df_in_time['toa_trig'] >= args.trigTOALowerTime) &
-    #     (df_in_time['toa_trig'] <= args.trigTOAUpperTime) &
-    #     # ... and other time-based cuts
-    # ]
-    # return time_based_df
+def apply_TDC_time_cuts(
+        args,
+        input_df: pd.DataFrame,
+    ):
+
+    dut_lowerTOT = args.dutTOTlower * 0.01
+    dut_upperTOT = args.dutTOTupper * 0.01
+
+    lowerTOA = args.TOALowerTime * 1e3
+    upperTOA = args.TOAUpperTime * 1e3
+
+    ### Apply simple TOA cut
+    toa_cut_on_board = 'ref'
+
+    if not f'toa_ref' in input_df.columns:
+        toa_cut_on_board = 'extra'
+
+        if not 'toa_extra' in input_df.columns:
+            toa_cut_on_board = 'trig'
+
+    df_after_toa_cut = input_df.loc[(input_df[f'toa_{toa_cut_on_board}'] >= lowerTOA) & (input_df[f'toa_{toa_cut_on_board}'] <= upperTOA)]
+
+    ### Apply percentile TOT cut
+    tot_cols = [col for col in df_after_toa_cut.columns if col.startswith('tot')]
+    tot_cuts = {}
+    # Apply the percentile cut to each 'tot' column
+    for col in tot_cols:
+        tot_cuts[col] = list(df_after_toa_cut[col].quantile(
+            [dut_lowerTOT, dut_upperTOT] if col == 'tot_dut' else [0.01, 0.96]
+        ))
+
+    combined_mask = pd.Series(True, index=df_after_toa_cut.index)
+    for role, cuts in tot_cuts.items():
+        mask = df_after_toa_cut[f'tot_{role}'].between(cuts[0], cuts[1])
+        combined_mask &= mask
+
+    interest_df = df_after_toa_cut.loc[combined_mask].reset_index(drop=True)
+    del df_after_toa_cut
+
+    if not interest_df.empty:
+
+        reduced_df = apply_toa_time_correlation_cut(interest_df, args.distance_factor)
+
+        if not reduced_df.empty:
+            return reduced_df
 
 # --- This would be your new worker function for parallel processing ---
 def process_track_file(track_filepath, args, board_roles, final_output_dir):
@@ -146,9 +217,9 @@ def process_track_file(track_filepath, args, board_roles, final_output_dir):
     df_in_time = pd.DataFrame()
 
     if args.convert_first:
-        df_in_time = convert_code_to_time(track_df, board_roles)
-        # if not tmp_df.empty:
-        #     df_in_time = apply_time_domain_cuts(tmp_df, args)
+        tmp_df = convert_code_to_time(track_df, board_roles)
+        if not tmp_df.empty:
+            df_in_time = apply_TDC_time_cuts(args, tmp_df)
 
     else:
         if track_df.shape[0] < 1000:
@@ -238,21 +309,39 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        '--trigTOALower',
+        '--TOALower',
         metavar = 'NUM',
         type = int,
-        help = 'Lower TOA selection boundary for the trigger board',
+        help = 'Lower TOA code selection boundary',
         default = 100,
-        dest = 'trigTOALower',
+        dest = 'TOALower',
     )
 
     parser.add_argument(
-        '--trigTOAUpper',
+        '--TOAUpper',
         metavar = 'NUM',
         type = int,
-        help = 'Upper TOA selection boundary for the trigger board',
+        help = 'Upper TOA code selection boundary',
         default = 500,
-        dest = 'trigTOAUpper',
+        dest = 'TOAUpper',
+    )
+
+    parser.add_argument(
+        '--TOALowerTime',
+        metavar = 'NUM',
+        type = float,
+        help = 'Lower TOA time (in ns) selection boundary',
+        default = 2,
+        dest = 'trigTOALowerTime',
+    )
+
+    parser.add_argument(
+        '--TOAUpperTime',
+        metavar = 'NUM',
+        type = float,
+        help = 'Upper TOA time (in ns) selection boundary',
+        default = 10,
+        dest = 'trigTOAUpperTime',
     )
 
     parser.add_argument(
