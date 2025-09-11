@@ -17,6 +17,7 @@ __all__ = [
     'return_event_hist',
     'return_crc_hist',
     'return_hist_pivot',
+    'return_time_hist_pivot',
     'plot_BL_and_NW',
     'plot_number_of_fired_board',
     'plot_number_of_hits_per_event',
@@ -25,6 +26,7 @@ __all__ = [
     'plot_3d_occupany_map',
     'plot_TDC_summary_table',
     'plot_1d_TDC_histograms',
+    'plot_TDC_time_histograms',
     'plot_1d_event_CRC_histogram',
     'plot_1d_CRC_histogram',
     'plot_correlation_of_pixels',
@@ -193,6 +195,22 @@ def return_hist_pivot(
 
     for idx, board_id in enumerate(board_ids):
         h[board_names[idx]].fill(input_df['cal'][board_id].values, input_df['tot'][board_id].values, input_df['toa'][board_id].values)
+
+    return h
+
+## --------------------------------------
+def return_time_hist_pivot(
+        input_df: pd.DataFrame,
+):
+    roles = input_df.columns.str.split('_').str.get(-1).unique()
+    h = {role: hist.Hist(
+        hist.axis.Regular(100, 0, 12.5, name="TOA", label="TOA [ns]", flow=False),
+        hist.axis.Regular(100, 0, 20.5, name="TOT", label="TOT [ns]", flow=False),
+        )
+        for role in roles}
+
+    for role in roles:
+        h[role].fill(input_df[f'toa_{str(role)}']*1e-3, input_df[f'tot_{str(role)}']*1e-3)
 
     return h
 
@@ -848,6 +866,71 @@ def plot_1d_TDC_histograms(
             plt.tight_layout()
             if save_dir:
                 save_plot(fig, save_dir, f'{board_name}_combined_{tag}')
+
+## --------------------------------------
+def plot_TDC_time_histograms(
+    input_hist: dict,
+    board_config: dict,
+):
+    from matplotlib.ticker import MaxNLocator
+    from matplotlib import transforms
+
+    role_to_config = {config['role']: config for config in board_config.values()}
+
+    for role, ihist in input_hist.items():
+        fig = plt.figure()
+
+        config = role_to_config.get(role, {})
+        board_name = config.get('short', 'Unknown Board')
+        hv = config.get('HV', 'N/A')
+        offset = config.get('offset', 'N/A')
+
+        grid = fig.add_gridspec(
+            2, 2, hspace=0.03, wspace=0.03, width_ratios=[4, 1], height_ratios=[1, 4]
+        )
+        main_ax = fig.add_subplot(grid[1, 0])
+        top_ax = fig.add_subplot(grid[0, 0], sharex=main_ax)
+        side_ax = fig.add_subplot(grid[1, 1], sharey=main_ax)
+
+        # main plot
+        hep.hist2dplot(ihist, ax=main_ax, cbar=False, norm= colors.LogNorm())
+        main_ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+        main_ax.text(
+            1.15, 1.2, f"Role: {role}\n Name: {board_name}\n HV: {hv}\n offset: {offset}",
+            transform=main_ax.transAxes,
+            ha='center', va='top',
+            fontsize=14,
+            bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="black", lw=1)
+        )
+
+
+        # top plot
+        hep.histplot(
+            ihist.project(ihist.axes[0].name or 0),
+            ax=top_ax,
+            lw=1.5,
+            color="orange",
+        )
+
+        top_ax.spines["top"].set_visible(False)
+        top_ax.xaxis.set_visible(False)
+
+        top_ax.set_ylabel("Counts")
+
+        # side plot
+        base = side_ax.transData
+        rot = transforms.Affine2D().rotate_deg(90).scale(-1, 1)
+
+        hep.histplot(
+            ihist.project(ihist.axes[1].name or 1),
+            ax=side_ax,
+            transform=rot + base,
+            lw=1.5,
+        )
+
+        side_ax.spines["right"].set_visible(False)
+        side_ax.yaxis.set_visible(False)
+        side_ax.set_xlabel("Counts")
 
 ## --------------------------------------
 def plot_1d_event_CRC_histogram(
