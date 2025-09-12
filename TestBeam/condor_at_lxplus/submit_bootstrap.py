@@ -75,7 +75,7 @@ should_Transfer_Files = YES
 whenToTransferOutput  = ON_EXIT
 arguments             = $(ifile) $(path)
 transfer_Input_Files  = {4}
-TransferOutputRemaps = "$(ifile)_resolution.pkl={1}/$(ifile)_resolution.pkl"
+TransferOutputRemaps = "$(ifile)_resolution.pkl={1}/$(ifile)_resolution.pkl; $(ifile)_gmmInfo.pkl={1}/$(ifile)_gmmInfo.pkl"
 output                = {0}/$(ClusterId).$(ProcId).bootstrap.stdout
 error                 = {0}/$(ClusterId).$(ProcId).bootstrap.stderr
 log                   = {0}/$(ClusterId).$(ProcId).bootstrap.log
