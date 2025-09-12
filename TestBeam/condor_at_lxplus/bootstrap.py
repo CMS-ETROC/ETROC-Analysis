@@ -66,8 +66,19 @@ def fwhm_based_on_gaussian_mixture_model(
     from sklearn.mixture import GaussianMixture
     from scipy.spatial import distance
 
+    ### Find the best number of bins
+    n = len(input_data)
+    iqr = np.percentile(input_data, 75) - np.percentile(input_data, 25)
+
+    if iqr == 0:
+        print("IQR is zero. Cannot apply Freedman-Diaconis rule.")
+        hist_bins = 200
+    else:
+        bin_width = 2 * iqr / (n**(1/3))
+        hist_bins = int(np.ceil((input_data.max() - input_data.min()) / bin_width))
+
     x_range = np.linspace(input_data.min(), input_data.max(), 1000).reshape(-1, 1)
-    bins, edges = np.histogram(input_data, bins=30, density=True)
+    bins, edges = np.histogram(input_data, bins=hist_bins, density=True)
     centers = 0.5*(edges[1:] + edges[:-1])
     models = GaussianMixture(n_components=n_components).fit(input_data.reshape(-1, 1))
 
@@ -185,9 +196,9 @@ def time_df_bootstrap(
         if do_reproducible:
             np.random.seed(counter)
 
-        n = int(current_sampling_fraction*0.01*input_df['evt'].nunique())
-        indices = np.random.choice(input_df['evt'].unique(), n, replace=False)
-        selected_df = input_df.loc[input_df['evt'].isin(indices)]
+        n = int(0.01 * current_sampling_fraction * input_df.shape[0])
+        indices = np.random.choice(input_df.index, n, replace=False)
+        selected_df = input_df.loc[indices]
 
         use_coeffs_for_this_iteration = False
         if force_precomputed_coeffs:
@@ -220,6 +231,7 @@ def time_df_bootstrap(
 
                 # Check GMM quality
                 if jensenshannon_score > 0.05:
+                    print(    f'{ikey}, js score: {jensenshannon_score}')
                     gmm_failed = True
                     break # A failure in any fit invalidates this iteration
 
@@ -442,7 +454,6 @@ if __name__ == "__main__":
             raise KeyError('Board roles in the loaded TWC coefficients do not match the current run.')
 
     df = pd.read_pickle(args.file)
-    df = df.reset_index(names='evt')
 
     resolution_df = time_df_bootstrap(input_df=df, board_to_analyze=board_roles, twc_coeffs=calculated_twc_coeffs, limit=args.iteration_limit,
                                       nouts=args.num_bootstrap_output, sampling_fraction=args.sampling, minimum_nevt_cut=args.minimum_nevt,
