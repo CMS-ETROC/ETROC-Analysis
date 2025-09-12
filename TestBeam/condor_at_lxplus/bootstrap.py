@@ -82,13 +82,15 @@ def find_optimal_gmm(input_data: np.array, max_components: int = 5):
     best_gmm = None
 
     # Iterate through a range of components
-    for n_components in range(1, max_components + 1):
-        gmm = GaussianMixture(n_components=n_components).fit(data)
-        bic = gmm.bic(data)
+    # for n_components in range(1, max_components + 1):
+    #     gmm = GaussianMixture(n_components=n_components).fit(data)
+    #     bic = gmm.bic(data)
 
-        if bic < lowest_bic:
-            lowest_bic = bic
-            best_gmm = gmm
+    #     if bic < lowest_bic:
+    #         lowest_bic = bic
+    #         best_gmm = gmm
+
+    best_gmm = GaussianMixture(n_components=3).fit(data)
 
     return best_gmm
 
@@ -308,6 +310,10 @@ def time_df_bootstrap(
                 if do_reproducible:
                     resolution_from_bootstrap['RandomSeed'].append(counter)
 
+                run_diagnostics['nevt'].append(selected_df.shape[0])
+                run_diagnostics['gmm_quality_cut'].append(gmm_quality_cut)
+                run_diagnostics['success'].append(True)
+
                 successful_runs += 1
 
         if gmm_failed:
@@ -315,6 +321,10 @@ def time_df_bootstrap(
             if not current_sampling_fraction > 90:
                 consecutive_failures += 1
                 print(f"GMM quality cut failed. Consecutive failures: {consecutive_failures}. Total run: {counter}")
+
+                run_diagnostics['nevt'].append(selected_df.shape[0])
+                run_diagnostics['gmm_quality_cut'].append(gmm_quality_cut)
+                run_diagnostics['success'].append(False)
 
                 if consecutive_failures >= failure_threshold:
                     current_sampling_fraction = min(95, current_sampling_fraction + 10)
@@ -375,9 +385,9 @@ def time_df_bootstrap(
 
     ### Empty dictionary case
     if not resolution_from_bootstrap:
-        return pd.DataFrame()
+        return pd.DataFrame(), None
     else:
-        return pd.DataFrame(resolution_from_bootstrap)
+        return pd.DataFrame(resolution_from_bootstrap), pd.DataFrame(run_diagnostics)
 
 ## --------------------------------------
 if __name__ == "__main__":
@@ -498,7 +508,7 @@ if __name__ == "__main__":
 
     df = pd.read_pickle(args.file)
 
-    resolution_df = time_df_bootstrap(input_df=df, board_to_analyze=board_roles, twc_coeffs=calculated_twc_coeffs, limit=args.iteration_limit,
+    resolution_df, gmm_check = time_df_bootstrap(input_df=df, board_to_analyze=board_roles, twc_coeffs=calculated_twc_coeffs, limit=args.iteration_limit,
                                       nouts=args.num_bootstrap_output, sampling_fraction=args.sampling, minimum_nevt_cut=args.minimum_nevt,
                                       do_reproducible=args.reproducible, force_precomputed_coeffs=args.force_twc)
 
@@ -506,3 +516,6 @@ if __name__ == "__main__":
         resolution_df.to_pickle(f'{output_name}_resolution.pkl')
     else:
         print(f'With {args.sampling}% sampling, number of events in sample is not enough to do bootstrap')
+
+    if not gmm_check.empty:
+        gmm_check.to_pickle(f'{output_name}_gmmInfo.pkl')
