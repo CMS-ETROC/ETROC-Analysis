@@ -273,7 +273,7 @@ def time_df_bootstrap(
             fit_params = {}
             gmm_failed = False
             for ikey in diffs.keys():
-                params, jensenshannon_score = fwhm_based_on_gaussian_mixture_model(diffs[ikey], n_components=3)
+                params, jensenshannon_score = fwhm_based_on_gaussian_mixture_model(diffs[ikey])
                 ## jensenshannon_score means how overall shape matches between data and fit
 
                 # Check GMM quality
