@@ -77,6 +77,9 @@ def fwhm_based_on_gaussian_mixture_model(
         bin_width = 2 * iqr / (n**(1/3))
         hist_bins = int(np.ceil((input_data.max() - input_data.min()) / bin_width))
 
+        if hist_bins > 200:
+            hist_bins = 200
+
     x_range = np.linspace(input_data.min(), input_data.max(), 1000).reshape(-1, 1)
     bins, edges = np.histogram(input_data, bins=hist_bins, density=True)
     centers = 0.5*(edges[1:] + edges[:-1])
@@ -231,7 +234,6 @@ def time_df_bootstrap(
 
                 # Check GMM quality
                 if jensenshannon_score > 0.05:
-                    print(    f'{ikey}, js score: {jensenshannon_score}')
                     gmm_failed = True
                     break # A failure in any fit invalidates this iteration
 
