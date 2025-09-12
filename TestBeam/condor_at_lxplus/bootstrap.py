@@ -315,6 +315,7 @@ def time_df_bootstrap(
                 run_diagnostics['success'].append(True)
 
                 successful_runs += 1
+                print(f"Success: {successful_runs} / {nouts}")
 
         if gmm_failed:
 
@@ -378,7 +379,6 @@ def time_df_bootstrap(
 
         counter += 1
 
-        print(f"Success: {successful_runs} / {nouts}")
         if successful_runs >= nouts:
             print(f'Collected {nouts} successful runs. Escaping bootstrap loop.')
             break
