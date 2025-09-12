@@ -371,10 +371,10 @@ def time_df_bootstrap(
                     # This is the absolute final calculation.
                     last_resort_resolution = return_resolution_three_board_fromFWHM(std_params, board_roles=board_to_analyze)
                     print(f"Final calculated resolution (STD method): {last_resort_resolution}")
-                    return pd.DataFrame([last_resort_resolution])
+                    return pd.DataFrame([last_resort_resolution]), None
 
                 # Return the single, valid result from the histogram method
-                return pd.DataFrame([final_resolution])
+                return pd.DataFrame([final_resolution]), None
 
         counter += 1
 
