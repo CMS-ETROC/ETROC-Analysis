@@ -58,12 +58,45 @@ def three_board_iterative_timewalk_correction(
     return corr_toas
 
 ## --------------------------------------
+def find_optimal_gmm(input_data: np.array, max_components: int = 5):
+    from sklearn.mixture import GaussianMixture
+    """
+    Finds the optimal Gaussian Mixture Model by minimizing the Bayesian Information Criterion (BIC).
+
+    Parameters
+    ----------
+    input_data: np.array
+        The data to fit.
+    max_components: int
+        The maximum number of GMM components to test.
+
+    Returns
+    -------
+    sklearn.mixture.GaussianMixture
+        The best-fitting GMM model.
+    """
+
+    data = input_data.reshape(-1, 1)
+
+    lowest_bic = np.inf
+    best_gmm = None
+
+    # Iterate through a range of components
+    for n_components in range(1, max_components + 1):
+        gmm = GaussianMixture(n_components=n_components).fit(data)
+        bic = gmm.bic(data)
+
+        if bic < lowest_bic:
+            lowest_bic = bic
+            best_gmm = gmm
+
+    return best_gmm
+
+## --------------------------------------
 def fwhm_based_on_gaussian_mixture_model(
         input_data: np.array,
-        n_components: int = 2,
     ):
 
-    from sklearn.mixture import GaussianMixture
     from scipy.spatial import distance
 
     ### Find the best number of bins
@@ -85,23 +118,23 @@ def fwhm_based_on_gaussian_mixture_model(
     x_range = np.linspace(input_data.min(), input_data.max(), 1000).reshape(-1, 1)
     bins, edges = np.histogram(input_data, bins=hist_bins, density=True)
     centers = 0.5*(edges[1:] + edges[:-1])
-    models = GaussianMixture(n_components=n_components).fit(input_data.reshape(-1, 1))
 
+    # --- Use the new function to find the optimal GMM ---
+    models = find_optimal_gmm(input_data)
+
+    # Calculate the Jensen-Shannon distance with the optimal model
     logprob = models.score_samples(centers.reshape(-1, 1))
     pdf = np.exp(logprob)
     jensenshannon_score = distance.jensenshannon(bins, pdf)
 
+    # Calculate the FWHM
     logprob = models.score_samples(x_range)
     pdf = np.exp(logprob)
-
     peak_height = np.max(pdf)
-
-    # Find the half-maximum points.
-    half_max = peak_height*0.5
+    half_max = peak_height * 0.5
     half_max_indices = np.where(pdf >= half_max)[0]
-
-    # Calculate the FWHM.
     fwhm = x_range[half_max_indices[-1]] - x_range[half_max_indices[0]]
+
     return fwhm, jensenshannon_score
 
 ## --------------------------------------
@@ -205,6 +238,15 @@ def time_df_bootstrap(
         indices = np.random.choice(input_df.index, n, replace=False)
         selected_df = input_df.loc[indices]
 
+        ### Determine GMM quality cut based on the given sample size
+        ### This is data-driven by separate study
+        ### Log equation + margin
+        gmm_quality_cut = (-0.0148 * np.log(selected_df.shape[0]) + 0.1842) + 0.002
+
+        ### Avoid to restrict cut
+        if gmm_quality_cut < 0.05:
+            gmm_quality_cut = 0.05
+
         use_coeffs_for_this_iteration = False
         if force_precomputed_coeffs:
             use_coeffs_for_this_iteration = True
@@ -235,7 +277,7 @@ def time_df_bootstrap(
                 ## jensenshannon_score means how overall shape matches between data and fit
 
                 # Check GMM quality
-                if jensenshannon_score > 0.05:
+                if jensenshannon_score > gmm_quality_cut:
                     gmm_failed = True
                     break # A failure in any fit invalidates this iteration
 
