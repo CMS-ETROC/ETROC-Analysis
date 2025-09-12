@@ -79,6 +79,8 @@ def fwhm_based_on_gaussian_mixture_model(
 
         if hist_bins > 200:
             hist_bins = 200
+        elif hist_bins < 30:
+            hist_bins = 30
 
     x_range = np.linspace(input_data.min(), input_data.max(), 1000).reshape(-1, 1)
     bins, edges = np.histogram(input_data, bins=hist_bins, density=True)
