@@ -517,5 +517,5 @@ if __name__ == "__main__":
     else:
         print(f'With {args.sampling}% sampling, number of events in sample is not enough to do bootstrap')
 
-    if not gmm_check.empty:
+    if not gmm_check.empty and gmm_check is not None:
         gmm_check.to_pickle(f'{output_name}_gmmInfo.pkl')
