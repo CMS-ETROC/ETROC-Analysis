@@ -216,11 +216,12 @@ def time_df_bootstrap(
         force_precomputed_coeffs: bool = False,
     ):
     resolution_from_bootstrap = defaultdict(list)
+    run_diagnostics = defaultdict(list)
 
     # --- NEW: Initialize state variables ---
     current_sampling_fraction = sampling_fraction
     consecutive_failures = 0
-    failure_threshold = int(limit * 0.02) # Consecutive failure threshold set to 2%
+    failure_threshold = int(limit * 0.025) # Consecutive failure threshold set to 2.5% of total run
 
     counter = 0
     successful_runs = 0
@@ -234,7 +235,9 @@ def time_df_bootstrap(
         if do_reproducible:
             np.random.seed(counter)
 
-        n = int(0.01 * current_sampling_fraction * input_df.shape[0])
+        target_n = int(0.01 * current_sampling_fraction * input_df.shape[0])
+        n = min(target_n, 5000)
+
         indices = np.random.choice(input_df.index, n, replace=False)
         selected_df = input_df.loc[indices]
 
@@ -269,105 +272,99 @@ def time_df_bootstrap(
                 name = f"{board_a}-{board_b}"
                 diffs[name] = corr_toas[board_a] - corr_toas[board_b]
 
-        try:
-            fit_params = {}
-            gmm_failed = False
-            for ikey in diffs.keys():
-                params, jensenshannon_score = fwhm_based_on_gaussian_mixture_model(diffs[ikey])
-                ## jensenshannon_score means how overall shape matches between data and fit
+        fit_params = {}
+        js_scores = {}
 
-                # Check GMM quality
-                if jensenshannon_score > gmm_quality_cut:
-                    gmm_failed = True
-                    break # A failure in any fit invalidates this iteration
+        ### First try GMM
+        for ikey in diffs.keys():
+            params, jensenshannon_score = fwhm_based_on_gaussian_mixture_model(diffs[ikey])
+            ## jensenshannon_score means how overall shape matches between data and fit
 
-                fit_params[ikey] = float(params[0]/2.355)
+            fit_params[ikey] = float(params[0]/2.355)
+            js_scores[ikey] = jensenshannon_score
 
-            # If GMM failed, handle it according to the new strategy
-            if gmm_failed:
+        # --- Check for failure AFTER all fits are done ---
+        gmm_failed = False
 
-                 # First, check if the sampling rate is already high. If so, move to fallback immediately.
-                if current_sampling_fraction > 90:
-                    print("\n--- STRATEGY: GMM failed at a high sampling rate. Giving up on bootstrap. ---")
-                    print("--- Performing a single calculation on the full dataset using the histogram method. ---")
+        for ikey in js_scores.keys():
+            if js_scores[ikey] > gmm_quality_cut:
+                gmm_failed = True
+                break
 
-                    # 1. Use the FULL original dataframe for the calculation
-                    full_corr_toas = three_board_iterative_timewalk_correction(
-                        input_df, 2, 2,
-                        board_roles=board_to_analyze,
-                        twc_coeffs=twc_coeffs,
-                        use_precomputed_coeffs=force_precomputed_coeffs
-                    )
-
-                    full_diffs = {}
-                    for board_a in board_to_analyze:
-                        for board_b in board_to_analyze:
-                            if board_b <= board_a: continue
-                            name = f"{board_a}-{board_b}"
-                            full_diffs[name] = full_corr_toas[board_a] - full_corr_toas[board_b]
-
-                    # 2. Try the histogram method first
-                    fallback_params = {}
-                    for ikey, data in full_diffs.items():
-                        bins = get_optimal_bins(data)
-                        fwhm = fwhm_from_histogram(data, bins=bins)
-                        fallback_params[ikey] = fwhm / 2.355
-
-                    final_resolution = return_resolution_three_board_fromFWHM(fallback_params, board_roles=board_to_analyze)
-                    print(f"Final calculated resolution (FWHM method): {final_resolution}")
-
-                    # 3. Check if the histogram result is physical. If not, try the "last resort" method.
-                    if any(val <= 0 for val in final_resolution.values()):
-                        print("--- Histogram method yielded non-physical results. Trying last resort: simple standard deviation. ---")
-
-                        std_params = {}
-                        for ikey, data in full_diffs.items():
-                            std_params[ikey] = np.std(data)
-
-                        # This is the absolute final calculation.
-                        last_resort_resolution = return_resolution_three_board_fromFWHM(std_params, board_roles=board_to_analyze)
-                        print(f"Final calculated resolution (STD method): {last_resort_resolution}")
-                        return pd.DataFrame([last_resort_resolution])
-
-                    # Return the single, valid result from the histogram method
-                    return pd.DataFrame([final_resolution])
-
-                # If the rate is NOT high, proceed with the normal consecutive failure logic
-                else:
-                    consecutive_failures += 1
-                    print(f"GMM quality cut failed. Consecutive failures: {consecutive_failures}. Total run: {counter}")
-
-                    if consecutive_failures >= failure_threshold:
-                        current_sampling_fraction = min(95, current_sampling_fraction + 10)
-                        print(f"--- STRATEGY: Increasing sampling rate to {current_sampling_fraction}% ---")
-                        consecutive_failures = 0
-
-                # If we haven't met the failure threshold yet, just continue the loop
-                counter += 1
-                continue
+        # If GMM failed, handle it according to the new strategy
+        if not gmm_failed:
 
             resolutions = return_resolution_three_board_fromFWHM(fit_params, board_roles=board_to_analyze)
 
             if any(val <= 0 for val in resolutions.values()):
-                print('At least one time resolution value is zero or non-physical. Skipping this iteration')
-                counter += 1
+                gmm_failed = True
+                print(f'At least one time resolution value is zero or non-physical. Skipping this iteration. Total run: {counter}')
+            else:
+                consecutive_failures = 0
+
+                for key in resolutions.keys():
+                    resolution_from_bootstrap[key].append(resolutions[key])
+
+                if do_reproducible:
+                    resolution_from_bootstrap['RandomSeed'].append(counter)
+
+                successful_runs += 1
+
+        if gmm_failed:
+
+            if not current_sampling_fraction > 90:
                 consecutive_failures += 1
-                continue
+                print(f"GMM quality cut failed. Consecutive failures: {consecutive_failures}. Total run: {counter}")
 
-            consecutive_failures = 0
+                if consecutive_failures >= failure_threshold:
+                    current_sampling_fraction = min(95, current_sampling_fraction + 10)
+                    print(f"--- STRATEGY: Increasing sampling rate to {current_sampling_fraction}% ---")
+                    consecutive_failures = 0
 
-            for key in resolutions.keys():
-                resolution_from_bootstrap[key].append(resolutions[key])
+            else:
+                print("\n--- STRATEGY: GMM failed at a high sampling rate. Giving up on bootstrap. ---")
+                print("--- Performing a single calculation on the full dataset using the histogram method. ---")
 
-            if do_reproducible:
-                resolution_from_bootstrap['RandomSeed'].append(counter)
+                # 1. Use the FULL original dataframe for the calculation
+                full_corr_toas = three_board_iterative_timewalk_correction(
+                    input_df, 2, 2,
+                    board_roles=board_to_analyze,
+                    twc_coeffs=twc_coeffs,
+                    use_precomputed_coeffs=force_precomputed_coeffs
+                )
 
-            successful_runs += 1
+                full_diffs = {}
+                for board_a in board_to_analyze:
+                    for board_b in board_to_analyze:
+                        if board_b <= board_a: continue
+                        name = f"{board_a}-{board_b}"
+                        full_diffs[name] = full_corr_toas[board_a] - full_corr_toas[board_b]
 
-        except Exception as inst:
-            print(f"An error occurred during fitting: {inst}. Skipping this iteration.")
-            counter += 1
-            del diffs, corr_toas
+                # 2. Try the histogram method first
+                fallback_params = {}
+                for ikey, data in full_diffs.items():
+                    bins = get_optimal_bins(data)
+                    fwhm = fwhm_from_histogram(data, bins=bins)
+                    fallback_params[ikey] = fwhm / 2.355
+
+                final_resolution = return_resolution_three_board_fromFWHM(fallback_params, board_roles=board_to_analyze)
+                print(f"Final calculated resolution (FWHM method): {final_resolution}")
+
+                # 3. Check if the histogram result is physical. If not, try the "last resort" method.
+                if any(val <= 0 for val in final_resolution.values()):
+                    print("--- Histogram method yielded non-physical results. Trying last resort: simple standard deviation. ---")
+
+                    std_params = {}
+                    for ikey, data in full_diffs.items():
+                        std_params[ikey] = np.std(data)
+
+                    # This is the absolute final calculation.
+                    last_resort_resolution = return_resolution_three_board_fromFWHM(std_params, board_roles=board_to_analyze)
+                    print(f"Final calculated resolution (STD method): {last_resort_resolution}")
+                    return pd.DataFrame([last_resort_resolution])
+
+                # Return the single, valid result from the histogram method
+                return pd.DataFrame([final_resolution])
 
         counter += 1
 
