@@ -64,14 +64,12 @@ def fwhm_based_on_gaussian_mixture_model(
     ):
 
     from sklearn.mixture import GaussianMixture
-    from sklearn.metrics import silhouette_score
     from scipy.spatial import distance
 
     x_range = np.linspace(input_data.min(), input_data.max(), 1000).reshape(-1, 1)
     bins, edges = np.histogram(input_data, bins=30, density=True)
     centers = 0.5*(edges[1:] + edges[:-1])
     models = GaussianMixture(n_components=n_components).fit(input_data.reshape(-1, 1))
-    silhouette_eval_score = silhouette_score(centers.reshape(-1, 1), models.predict(centers.reshape(-1, 1)))
 
     logprob = models.score_samples(centers.reshape(-1, 1))
     pdf = np.exp(logprob)
@@ -88,7 +86,7 @@ def fwhm_based_on_gaussian_mixture_model(
 
     # Calculate the FWHM.
     fwhm = x_range[half_max_indices[-1]] - x_range[half_max_indices[0]]
-    return fwhm, [silhouette_eval_score, jensenshannon_score]
+    return fwhm, jensenshannon_score
 
 ## --------------------------------------
 def get_optimal_bins(data: np.array):
@@ -217,10 +215,11 @@ def time_df_bootstrap(
             fit_params = {}
             gmm_failed = False
             for ikey in diffs.keys():
-                params, eval_scores = fwhm_based_on_gaussian_mixture_model(diffs[ikey], n_components=3)
+                params, jensenshannon_score = fwhm_based_on_gaussian_mixture_model(diffs[ikey], n_components=3)
+                ## jensenshannon_score means how overall shape matches between data and fit
 
                 # Check GMM quality
-                if eval_scores[0] > 0.6 or eval_scores[1] > 0.075:
+                if jensenshannon_score > 0.05:
                     gmm_failed = True
                     break # A failure in any fit invalidates this iteration
 
