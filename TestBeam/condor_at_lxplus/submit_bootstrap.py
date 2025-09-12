@@ -80,7 +80,7 @@ output                = {0}/$(ClusterId).$(ProcId).bootstrap.stdout
 error                 = {0}/$(ClusterId).$(ProcId).bootstrap.stderr
 log                   = {0}/$(ClusterId).$(ProcId).bootstrap.log
 MY.WantOS             = "el9"
-+JobFlavour           = "microcentury"
++JobFlavour           = "workday"
 Queue ifile,path from {2}/input_list_for_bootstrap{3}.txt
 """.format(log_dir, outdir, condor_scripts_dir, runAppend, transfer_files)
 
