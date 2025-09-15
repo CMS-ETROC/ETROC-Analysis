@@ -95,6 +95,7 @@ def make_jobs(args, log_dir, condor_scripts_dir, runAppend):
     input_path = Path(args.input_dir)
     file_extension = None
     file_suffix = None
+    file_list = None
 
     bin_files = natsorted(input_path.glob('file*.bin'))
     if bin_files:
@@ -111,7 +112,7 @@ def make_jobs(args, log_dir, condor_scripts_dir, runAppend):
             file_suffix = '_CE' # Suffix is '_CE' for .dat files
             file_list = dat_files
 
-    if not file_list:
+    if file_list is None:
         print(f"!!! ERROR: No 'file*.bin' or 'file*_CE.dat' files found in '{input_path}'. Exiting.")
         return
 
