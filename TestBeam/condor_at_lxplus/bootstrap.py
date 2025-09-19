@@ -381,6 +381,7 @@ def calculate_single_resolution(
     input_df: pd.DataFrame,
     board_to_analyze: list[str],
     twc_coeffs: dict,
+    minimum_nevt_cut: int = 1000,
     force_precomputed_coeffs: bool = False,
 ):
     """
@@ -389,6 +390,10 @@ def calculate_single_resolution(
     a simple standard deviation method if results are non-physical.
     """
     print("\n--- Performing a single calculation on the full dataset. ---")
+
+    if input_df.shape[0] < minimum_nevt_cut:
+        print('Not enough stats for single measurement')
+        return pd.DataFrame()
 
     gmm_quality_cut = (-0.0148 * np.log(input_df.shape[0]) + 0.1842) + 0.002
 
