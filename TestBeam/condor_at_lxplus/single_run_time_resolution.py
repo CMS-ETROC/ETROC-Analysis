@@ -139,7 +139,6 @@ def return_resolution_three_board_fromFWHM(
 def time_df_bootstrap(
         input_file: Path,
         args: argparse,
-        twc_coeffs: dict,
         minimum_nevt_cut: int = 1000,
     ):
 
@@ -164,7 +163,6 @@ def time_df_bootstrap(
     corr_toas = three_board_iterative_timewalk_correction(
         input_df, 2, 2,
         board_roles=board_to_analyze,
-        twc_coeffs=twc_coeffs,
     )
 
     diffs = {}
@@ -176,7 +174,12 @@ def time_df_bootstrap(
             diffs[name] = corr_toas[board_a] - corr_toas[board_b]
 
     resolution_from_bootstrap = defaultdict(list)
+
+    fail_counter = 0
     while True:
+
+        if fail_counter > 10:
+            break
 
         fit_params = {}
         js_scores = {}
@@ -197,12 +200,14 @@ def time_df_bootstrap(
                 break
 
         if gmm_failed:
+            fail_counter += 1
             continue
 
         else:
             resolutions = return_resolution_three_board_fromFWHM(fit_params, board_roles=board_to_analyze)
 
             if any(val <= 0 for val in resolutions.values()):
+                fail_counter += 1
                 continue
 
             for key in resolutions.keys():
@@ -211,8 +216,9 @@ def time_df_bootstrap(
         if resolution_from_bootstrap:
             break
 
-    final_result = pd.DataFrame(resolution_from_bootstrap)
-    final_result.to_pickle(Path(args.outdir) / f'{output_name}_single.pkl')
+    if resolution_from_bootstrap:
+        final_result = pd.DataFrame(resolution_from_bootstrap)
+        final_result.to_pickle(Path(args.outdir) / f'{output_name}_single.pkl')
 
 if __name__ == "__main__":
 
