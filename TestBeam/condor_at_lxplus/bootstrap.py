@@ -441,7 +441,7 @@ def calculate_single_resolution(
 
         # --- If both checks pass, we have a successful result ---
         print(f"Success on attempt {fail_counter + 1}/10 with GMM method.")
-        return pd.DataFrame([resolutions])
+        return pd.DataFrame(resolutions)
 
     # 3. If the loop finishes without a successful result
     print("Calculation failed after 10 attempts. Returning empty result.")
