@@ -92,6 +92,15 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        '--exclude_role',
+        metavar = 'NAME',
+        type = str,
+        help = "Decide which board will be discarded for TWC calculation",
+        default = 'dut',
+        dest = 'exclude_role',
+    )
+
+    parser.add_argument(
         '--iteration',
         metavar = 'NUM',
         type = int,
@@ -109,10 +118,9 @@ if __name__ == "__main__":
     if args.runName not in config:
         raise ValueError(f"Run config {args.runName} not found")
 
-    excluded_role = files[0].name.split('_')[1]
     roles = {}
     for board_id, board_info in config[args.runName].items():
-        if excluded_role == board_info.get('role'):
+        if args.excluded_role == board_info.get('role'):
             continue
         roles[board_info.get('role')] = board_id
 
