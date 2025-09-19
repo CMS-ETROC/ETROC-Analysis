@@ -12,6 +12,7 @@ def load_bash_script(args):
         'reproducible': args.reproducible,
         'twc_coeffs': args.twc_coeffs,
         'force-twc': args.force_twc,
+        'single': args.single,
     }
 
     for arg, value in conditional_args.items():
@@ -207,6 +208,13 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        '--single',
+        action='store_true',
+        help='Perform a single calculation with full statistics instead of bootstrapping.',
+        dest='single'
+    )
+
+    parser.add_argument(
         '--dryrun',
         action = 'store_true',
         help = 'If set, condor submission will not happen',
@@ -248,14 +256,18 @@ if __name__ == "__main__":
     print('\n========= Run option =========')
     print(f'Input dataset: {args.dirname}')
     print(f'Output direcotry: resolution_{args.outputdir}')
-    print(f'Bootstrap iteration limit: {args.iteration_limit}')
-    print(f'Number of bootstrap outputs: {args.num_bootstrap_output}')
-    print(f'{args.sampling}% of random sampling')
-    print(f'Number of events larger than {args.minimum_nevt} will be considered')
-    if args.reproducible:
-        print('Random seed will be set by counter. The final output will have a seed information together')
-    if args.twc_coeffs is not None:
-        print('Pre-calculated TWC coeffs will be used')
+    if not args.single:
+        print(f'Bootstrap iteration limit: {args.iteration_limit}')
+        print(f'Number of bootstrap outputs: {args.num_bootstrap_output}')
+        print(f'{args.sampling}% of random sampling')
+        print(f'Number of events larger than {args.minimum_nevt} will be considered')
+        if args.reproducible:
+            print('Random seed will be set by counter. The final output will have a seed information together')
+        if args.twc_coeffs is not None:
+            print('Pre-calculated TWC coeffs will be used')
+    else:
+        print('No boostrap, single output will be calculated')
+
     print('========= Run option =========\n')
 
     make_jobs(args=args, log_dir=log_dir, condor_scripts_dir=condor_scripts_dir, outdir=outdir, runAppend=runAppend)
