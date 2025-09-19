@@ -77,19 +77,6 @@ def find_optimal_gmm(input_data: np.array, max_components: int = 5):
     """
 
     data = input_data.reshape(-1, 1)
-
-    lowest_bic = np.inf
-    best_gmm = None
-
-    # Iterate through a range of components
-    # for n_components in range(1, max_components + 1):
-    #     gmm = GaussianMixture(n_components=n_components).fit(data)
-    #     bic = gmm.bic(data)
-
-    #     if bic < lowest_bic:
-    #         lowest_bic = bic
-    #         best_gmm = gmm
-
     best_gmm = GaussianMixture(n_components=3).fit(data)
 
     return best_gmm
@@ -299,8 +286,8 @@ def time_df_bootstrap(
             resolutions = return_resolution_three_board_fromFWHM(fit_params, board_roles=board_to_analyze)
 
             if any(val <= 0 for val in resolutions.values()):
-                gmm_failed = True
-                print(f'At least one time resolution value is zero or non-physical. Skipping this iteration. Total run: {counter}')
+                consecutive_failures += 1
+                print(f'At least one time resolution value is zero or non-physical. Total run: {counter}')
             else:
                 consecutive_failures = 0
 
@@ -390,6 +377,72 @@ def time_df_bootstrap(
         return pd.DataFrame(resolution_from_bootstrap), pd.DataFrame(run_diagnostics)
 
 ## --------------------------------------
+def calculate_single_resolution(
+    input_df: pd.DataFrame,
+    board_to_analyze: list[str],
+    twc_coeffs: dict,
+    force_precomputed_coeffs: bool = False,
+):
+    """
+    Performs a single time resolution calculation on the full dataset.
+    It first attempts a histogram-based FWHM method and falls back to
+    a simple standard deviation method if results are non-physical.
+    """
+    print("\n--- Performing a single calculation on the full dataset. ---")
+
+    gmm_quality_cut = (-0.0148 * np.log(input_df.shape[0]) + 0.1842) + 0.002
+
+    ### Avoid to restrict cut
+    if gmm_quality_cut < 0.05:
+        gmm_quality_cut = 0.05
+
+    # 1. Run TWC on the FULL original dataframe
+    full_corr_toas = three_board_iterative_timewalk_correction(
+        input_df, 2, 2,
+        board_roles=board_to_analyze,
+        twc_coeffs=twc_coeffs,
+        use_precomputed_coeffs=force_precomputed_coeffs
+    )
+
+    full_diffs = {}
+    for board_a in board_to_analyze:
+        for board_b in board_to_analyze:
+            if board_b <= board_a: continue
+            name = f"{board_a}-{board_b}"
+            full_diffs[name] = full_corr_toas[board_a] - full_corr_toas[board_b]
+
+    fail_counter = 0
+    while fail_counter < 10:
+        fit_params = {}
+        js_scores = {}
+        for ikey, data in full_diffs.items():
+            fwhm, jensenshannon_score = fwhm_based_on_gaussian_mixture_model(data)
+            fit_params[ikey] = fwhm / 2.355
+            js_scores[ikey] = jensenshannon_score
+
+        # --- Validate the results of this attempt ---
+        gmm_failed = any(score > gmm_quality_cut for score in js_scores.values())
+        if gmm_failed:
+            print(f"Attempt {fail_counter + 1}/10: GMM fit quality was above threshold.")
+            fail_counter += 1
+            continue
+
+        resolutions = return_resolution_three_board_fromFWHM(fit_params, board_roles=board_to_analyze)
+        resolution_is_nonphysical = any(np.isnan(val) or val <= 0 for val in resolutions.values())
+        if resolution_is_nonphysical:
+            print(f"Attempt {fail_counter + 1}/10: GMM method yielded non-physical results.")
+            fail_counter += 1
+            continue
+
+        # --- If both checks pass, we have a successful result ---
+        print(f"Success on attempt {fail_counter + 1}/10 with GMM method.")
+        return pd.DataFrame([resolutions])
+
+    # 3. If the loop finishes without a successful result
+    print("Calculation failed after 10 attempts. Returning empty result.")
+    return pd.DataFrame()
+
+## --------------------------------------
 if __name__ == "__main__":
     import argparse
 
@@ -462,6 +515,13 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        '--single',
+        action='store_true',
+        help='Perform a single calculation with full statistics instead of bootstrapping.',
+        dest='single'
+    )
+
+    parser.add_argument(
         '--force-twc',
         action='store_true',
         help='Force use of provided TWC file for all samples.',
@@ -508,9 +568,20 @@ if __name__ == "__main__":
 
     df = pd.read_pickle(args.file)
 
-    resolution_df, gmm_check = time_df_bootstrap(input_df=df, board_to_analyze=board_roles, twc_coeffs=calculated_twc_coeffs, limit=args.iteration_limit,
-                                      nouts=args.num_bootstrap_output, sampling_fraction=args.sampling, minimum_nevt_cut=args.minimum_nevt,
-                                      do_reproducible=args.reproducible, force_precomputed_coeffs=args.force_twc)
+    if args.single:
+        # --- CALL THE NEW SINGLE-RUN FUNCTION ---
+        resolution_df = calculate_single_resolution(
+            input_df=df,
+            board_to_analyze=board_roles,
+            twc_coeffs=calculated_twc_coeffs,
+            force_precomputed_coeffs=args.force_twc
+        )
+        gmm_check = None # No diagnostics in single-run mode
+
+    else:
+        resolution_df, gmm_check = time_df_bootstrap(input_df=df, board_to_analyze=board_roles, twc_coeffs=calculated_twc_coeffs, limit=args.iteration_limit,
+                                        nouts=args.num_bootstrap_output, sampling_fraction=args.sampling, minimum_nevt_cut=args.minimum_nevt,
+                                        do_reproducible=args.reproducible, force_precomputed_coeffs=args.force_twc)
 
     if not resolution_df.empty:
         resolution_df.to_pickle(f'{output_name}_resolution.pkl')
