@@ -34,10 +34,10 @@ run11:
   0: *PT_NH18
   1: *PT_NH17
   2: *PT_NH25
-  3: { <<: *PT_NH31, HV: 170 }
+  3: { <<: *PT_LF2, HV: 170 }
 
 run15:
   0: *PT_NH18
   1: *PT_NH17
   2: *PT_NH25
-  3: { <<: *PT_NH31, HV: 190 }
+  3: { <<: *PT_LF2, HV: 190 }
