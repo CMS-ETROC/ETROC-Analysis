@@ -1,0 +1,43 @@
+defaults:
+  PT_NH18: &PT_NH18
+    name: ET2.01 PacTech New HPK-18
+    short: PT_NH18
+    offset: 20
+    HV: 230
+    role: trig
+  PT_NH17: &PT_NH17
+    name: ET2.01 PacTech New HPK-17
+    short: PT_NH17
+    offset: 20
+    HV: 230
+    role: ref
+  PT_NH25: &PT_NH25
+    name: ET2.02 PacTech New HPK-25
+    short: PT_NH25
+    offset: 20
+    HV: 230
+    role: extra
+  PT_LF2: &PT_LF2
+    name: ET2.01 PacTech FBK-LF2
+    short: PT-LF2
+    offset: 20
+    HV: 230
+    role: dut
+
+run8:
+  0: *PT_NH18
+  1: *PT_NH17
+  2: *PT_NH25
+  3: *PT_LF2
+
+run11:
+  0: *PT_NH18
+  1: *PT_NH17
+  2: *PT_NH25
+  3: { <<: *PT_NH31, HV: 170 }
+
+run15:
+  0: *PT_NH18
+  1: *PT_NH17
+  2: *PT_NH25
+  3: { <<: *PT_NH31, HV: 190 }
