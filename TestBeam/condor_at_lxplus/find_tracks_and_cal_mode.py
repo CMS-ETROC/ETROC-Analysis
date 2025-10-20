@@ -204,6 +204,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     input_files = list(Path(f'{args.path}').glob('loop*feather'))
+
+    if len(input_files) > 100:
+        input_files = input_files[:100]
+
     columns_to_read = ['evt', 'board', 'row', 'col', 'toa', 'tot', 'cal']
 
     with open(args.config) as input_yaml:
