@@ -65,3 +65,33 @@ run31:
   1: *PT_NH17
   2: *PT_NH25
   3: { <<: *PT_LF2, HV: 170, offset: 10 }
+
+run36:
+  0: *PT_NH18
+  1: *PT_NH17
+  2: *PT_NH25
+  3: { <<: *PT_LF2, HV: 160, offset: 10 }
+
+run40:
+  0: *PT_NH18
+  1: *PT_NH17
+  2: *PT_NH25
+  3: { <<: *PT_LF2, HV: 200, offset: 10 }
+
+run46:
+  0: *PT_NH18
+  1: *PT_NH17
+  2: *PT_NH25
+  3: { <<: *PT_LF2, HV: 210, offset: 10 }
+
+run50:
+  0: *PT_NH18
+  1: *PT_NH17
+  2: *PT_NH25
+  3: { <<: *PT_LF2, HV: 220 }
+
+run54:
+  0: *PT_NH18
+  1: *PT_NH17
+  2: *PT_NH25
+  3: { <<: *PT_LF2, HV: 235 }
