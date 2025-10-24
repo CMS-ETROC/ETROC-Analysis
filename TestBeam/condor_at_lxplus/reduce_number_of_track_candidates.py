@@ -38,11 +38,6 @@ args = parser.parse_args()
 track_output_df = pd.read_csv(f'{args.file}')
 previous_num = track_output_df.shape[0]
 
-if previous_num < 1000:
-    print(f'Number of track combinations: {previous_num}')
-    print('This script is only recommended if you have too many track combinations (e.g., over 2000).')
-    sys.exit(1)
-
 if args.ntrk_table:
     from tabulate import tabulate
     import sys
