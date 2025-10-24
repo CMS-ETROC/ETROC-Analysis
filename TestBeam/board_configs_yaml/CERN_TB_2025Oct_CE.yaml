@@ -1,0 +1,78 @@
+PT-NH39: &PT-NH39
+  name: ET2.02 PacTech New HPK-39
+  short: PT-NH39
+  offset: 20
+  HV: 220
+  role: trig
+PT-NH41: &PT-NH41
+  name: ET2.02 PacTech New HPK-41
+  short: PT-NH41
+  offset: 20
+  HV: 220
+  role: ref
+PT-NH42: &PT-NH42
+  name: ET2.02 PacTech New HPK-42
+  short: PT-NH42
+  offset: 20
+  HV: 220
+  role: extra
+PT-NH47: &PT-NH47
+  name: ET2.02 PacTech New HPK-47 (1uF)
+  short: PT-NH47
+  offset: 20
+  HV: 220
+  role: dut
+
+run12:
+  0: *PT-NH39
+  1: *PT-NH42
+  2: *PT-NH41
+  3: *PT-NH47
+
+run13:
+  0: *PT-NH39
+  1: *PT-NH42
+  2: *PT-NH41
+  3: *PT-NH47
+
+run14:
+  0: *PT-NH39
+  1: *PT-NH42
+  2: *PT-NH41
+  3: { <<: *PT-NH47, HV: 210 }
+
+run15:
+  0: *PT-NH39
+  1: *PT-NH42
+  2: *PT-NH41
+  3: { <<: *PT-NH47, HV: 200 }
+
+run16:
+  0: *PT-NH39
+  1: *PT-NH42
+  2: *PT-NH41
+  3: { <<: *PT-NH47, HV: 190 }
+
+run17:
+  0: *PT-NH39
+  1: *PT-NH42
+  2: *PT-NH41
+  3: { <<: *PT-NH47, HV: 180 }
+
+run18:
+  0: *PT-NH39
+  1: *PT-NH42
+  2: *PT-NH41
+  3: { <<: *PT-NH47, HV: 180 }
+
+run19:
+  0: *PT-NH39
+  1: *PT-NH42
+  2: *PT-NH41
+  3: { <<: *PT-NH47, HV: 170 }
+
+run20:
+  0: *PT-NH39
+  1: *PT-NH42
+  2: *PT-NH41
+  3: { <<: *PT-NH47, HV: 160 }
