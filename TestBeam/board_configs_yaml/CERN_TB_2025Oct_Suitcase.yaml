@@ -125,3 +125,39 @@ run74:
   1: { <<: *PT_NH17, role: dut, HV: 200 }
   2: *PT_NH25
   3: { <<: *PT_LF2, role: ref }
+
+run80:
+  0: *PT_NH18
+  1: { <<: *PT_NH17, role: dut, HV: 190 }
+  2: *PT_NH25
+  3: { <<: *PT_LF2, role: ref }
+
+run85:
+  0: *PT_NH18
+  1: { <<: *PT_NH17, role: dut, HV: 180 }
+  2: *PT_NH25
+  3: { <<: *PT_LF2, role: ref }
+
+run89:
+  0: *PT_NH18
+  1: { <<: *PT_NH17, role: dut, HV: 170 }
+  2: *PT_NH25
+  3: { <<: *PT_LF2, role: ref }
+
+run93:
+  0: *PT_NH18
+  1: { <<: *PT_NH17, role: dut, HV: 160 }
+  2: *PT_NH25
+  3: { <<: *PT_LF2, role: ref }
+
+run97:
+  0: *PT_NH18
+  1: { <<: *PT_NH17, role: dut, HV: 190, offset: 10 }
+  2: *PT_NH25
+  3: { <<: *PT_LF2, role: ref }
+
+run98:
+  0: *PT_NH18
+  1: { <<: *PT_NH17, role: dut, HV: 190, offset: 10 }
+  2: *PT_NH25
+  3: { <<: *PT_LF2, role: ref }
