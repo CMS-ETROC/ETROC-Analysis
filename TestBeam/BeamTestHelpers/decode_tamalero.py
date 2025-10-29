@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 import struct
 
+from natsort import natsorted
+import os
 from tqdm import tqdm
 
 ## --------------------------------------
@@ -410,3 +412,108 @@ def process_tamalero_outputs(input_files: list):
         final_df = final_df.astype(dtype_map)
 
     return final_df
+def get_last_complete_event(directory, lines_to_read, hits_per_board):
+    """
+    Loads data and returns the last complete event that satisfies the hits criteria.
+
+    If lines_to_read is -1, it searches through all data from all files.
+    Otherwise, it loads the last few lines of the most recent file.
+
+    An event is considered complete if for each board specified in the
+    `hits_per_board` dictionary, the number of hits is at least the number required.
+
+    Args:
+        directory (str): Path to the directory containing data files.
+        lines_to_read (int): Number of 64-bit words to read. Use -1 to read all files.
+        hits_per_board (dict): A dictionary specifying the minimum number of hits
+                               required per board (e.g., {0: 10, 1: 10}).
+
+    Returns:
+        pd.DataFrame: A DataFrame containing a single complete event.
+                      Returns an empty DataFrame if no such event is found or an error occurs.
+    """
+    try:
+        files = natsorted([f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))])
+        if not files:
+            return pd.DataFrame()
+
+        merged_data = []
+        if lines_to_read == -1:
+            # Full search mode: Read all data from all files.
+            print("Full search mode: Reading all files...")
+            for file_name in tqdm(files):
+                file_path = os.path.join(directory, file_name)
+                with open(file_path, 'rb') as f:
+                    raw_data = f.read()
+                if not raw_data:
+                    continue
+                raw_data_32bit = struct.unpack(f'<{len(raw_data)//4}I', raw_data)
+                merged_data.extend(merge_words(raw_data_32bit))
+        else:
+            # Original mode: Read last few lines of the last file.
+            latest_file_path = os.path.join(directory, files[-1])
+            word_size = 8  # 8 bytes for a 64-bit unsigned integer
+            with open(latest_file_path, 'rb') as f:
+                f.seek(0, os.SEEK_END)
+                file_size = f.tell()
+                if file_size < word_size:
+                    return pd.DataFrame()
+
+                num_words_in_file = file_size // word_size
+                words_to_read = min(lines_to_read, num_words_in_file)
+
+                if words_to_read == 0:
+                    return pd.DataFrame()
+
+                f.seek(-words_to_read * word_size, os.SEEK_END)
+                raw_data = f.read()
+            
+            if raw_data:
+                raw_data_32bit = struct.unpack(f'<{len(raw_data)//4}I', raw_data)
+                merged_data = merge_words(raw_data_32bit)
+
+        if not merged_data:
+            return pd.DataFrame()
+
+        # Common decoding and searching logic
+        df_decoder = TamaleroDF()
+        unpacked_data = [df_decoder.read(x) for x in merged_data]
+
+        events = build_events_sequentially(unpacked_data)
+        df = pd.DataFrame(events)
+
+        if df.empty:
+            return pd.DataFrame()
+
+        # The board mapping from `process_tamalero_outputs`
+        board_map = {0: 0, 4: 1, 8: 2, 12: 3}
+        df['board'] = df['elink'].map(board_map)
+
+        # An event is identified by a unique evt number from our sequential builder
+        event_identifiers = df['evt'].unique()
+
+        # Iterate through events from last to first
+        for evt_id in reversed(event_identifiers):
+            event_hits = df[df['evt'] == evt_id]
+            hit_counts = event_hits['board'].value_counts()
+
+            is_complete = True
+            for board, required_hits in hits_per_board.items():
+                if hit_counts.get(board, 0) < required_hits:
+                    is_complete = False
+                    break
+
+            if is_complete:
+                # Found a complete event, return it
+                return event_hits.drop(columns=['elink'])
+
+    except (FileNotFoundError, IndexError):
+        # Handles cases where the directory doesn't exist or is empty
+        return pd.DataFrame()
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+        # Return empty dataframe on any other error to prevent crashes
+        return pd.DataFrame()
+
+    # If no complete event is found after checking all candidates
+    return pd.DataFrame()
