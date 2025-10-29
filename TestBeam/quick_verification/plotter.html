@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VTemp Advanced Calibration Tool</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7fafc;
+        }
+        .plot-container {
+            width: 100%;
+            height: 45vh;
+        }
+         .table-container {
+            max-height: 250px;
+            overflow-y: auto;
+        }
+        .tab-button {
+            transition: background-color 0.3s, color 0.3s;
+        }
+        .tab-button.active {
+            border-color: #3b82f6;
+            background-color: #3b82f6;
+            color: white;
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-6">
+        <header class="text-center mb-6">
+            <h1 class="text-4xl font-bold text-gray-900">Advanced VTemp Calibration Tool</h1>
+            <p class="text-lg text-gray-600 mt-2">Perform per-sensor linear calibration with confidence intervals.</p>
+        </header>
+
+        <!-- Step 1: Load Data or Calibration -->
+        <div class="bg-white rounded-2xl shadow-xl p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4 border-b pb-2">1. Get Started</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                <div class="text-center md:text-left p-4 border-r-0 md:border-r">
+                    <h3 class="font-semibold text-lg mb-2">Create New Calibration</h3>
+                    <p class="text-sm text-gray-600 mb-4">Upload a CSV file with raw time-series data to begin a new calibration.</p>
+                    <label for="csv-file" class="block mb-2 text-sm font-medium text-gray-700">Upload CSV File</label>
+                    <input id="csv-file" type="file" accept=".csv" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"/>
+                </div>
+                <div class="text-center md:text-left p-4">
+                     <h3 class="font-semibold text-lg mb-2">Use Existing Calibration</h3>
+                     <p class="text-sm text-gray-600 mb-4">Load a previously saved `.json` file to go directly to temperature prediction.</p>
+                    <label for="load-cal-file" class="block mb-2 text-sm font-medium text-gray-700">Load Calibration File</label>
+                    <input id="load-cal-file" type="file" accept=".json" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 cursor-pointer"/>
+                </div>
+            </div>
+            <div id="checkbox-container-wrapper" class="p-4 bg-gray-50 rounded-lg border mt-4 hidden">
+                 <h3 class="text-md font-semibold mb-3 text-gray-700">Select Parameters to Plot</h3>
+                 <div id="checkbox-container" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3"></div>
+            </div>
+        </div>
+
+        <!-- Step 2: Assign Board Names -->
+        <div id="board-name-section" class="bg-white rounded-2xl shadow-xl p-6 mb-6 hidden">
+            <h2 class="text-xl font-semibold mb-4 border-b pb-2">2. Assign Board Names (Optional)</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                <div>
+                    <p class="text-sm text-gray-600 mb-4">Assign a name to each VTEMP sensor. You can do this by uploading a YAML file or entering them manually below.</p>
+                    <label for="yaml-file" class="block mb-2 text-sm font-medium text-gray-700">Upload YAML File</label>
+                    <input id="yaml-file" type="file" accept=".yml,.yaml" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"/>
+                    <p class="text-xs text-gray-500 mt-2">Example format: <br><code>VTEMP1_volts: Board-A</code><br><code>VTEMP2_volts: Board-B</code></p>
+                </div>
+                <div>
+                     <p class="text-sm font-medium text-gray-700 mb-2">Manual Assignment:</p>
+                     <div id="board-name-inputs" class="space-y-2"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="calibration-workflow" class="hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="bg-white rounded-2xl shadow-xl p-6">
+                    <h2 class="text-xl font-semibold mb-4 border-b pb-2">3. Select Data Range</h2>
+                    <p class="text-sm text-gray-500 mb-4">Zoom into a stable time range on the plot. The tool will capture all VTemp data points within that range for calibration.</p>
+                    <div id="time-series-plot" class="plot-container border rounded-lg bg-gray-50 flex items-center justify-center">
+                         <p class="text-gray-400">Time-series plot will appear here.</p>
+                    </div>
+                    <div id="analysis-controls" class="mt-4 p-4 bg-blue-50 rounded-lg hidden">
+                        <h3 class="font-semibold text-lg text-blue-800">Selected Range Analysis</h3>
+                        <div id="vtemp-averages" class="grid grid-cols-2 md:grid-cols-4 gap-4 my-3 text-center"></div>
+                        <div class="flex items-end mt-2">
+                            <div class="flex-1">
+                                <label for="known-temp-input" class="block text-sm font-medium text-gray-700">Enter Known Temp (°C) for this Range:</label>
+                                <input type="number" id="known-temp-input" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2" placeholder="e.g., 25.5">
+                            </div>
+                            <button id="add-point-btn" class="ml-4 bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition duration-300 disabled:bg-gray-400">Add Data</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-xl p-6">
+                     <h2 class="text-xl font-semibold mb-4 border-b pb-2">4. Perform Calibration</h2>
+                     <p class="text-sm text-gray-500 mb-4">Add data from at least two different temperature ranges to generate a fit for each sensor.</p>
+                    <div class="mb-4 border-b border-gray-200">
+                        <nav id="cal-tabs" class="flex space-x-2" aria-label="Tabs"></nav>
+                    </div>
+                    <div id="cal-content"></div>
+                    <div class="mt-4 text-center">
+                         <button id="save-cal-btn" class="hidden bg-green-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-green-700 transition duration-300">Save Calibration</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl shadow-xl p-6 mt-6">
+                <h2 class="text-xl font-semibold mb-4 border-b pb-2">5. All Calibration Data</h2>
+                <div class="table-container border rounded-lg">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Board (Sensor)</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Voltage (V)</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Temp (°C)</th>
+                                <th scope="col" class="relative px-6 py-3"><span class="sr-only">Delete</span></th>
+                            </tr>
+                        </thead>
+                        <tbody id="calibration-table-body" class="bg-white divide-y divide-gray-200"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 6: Prediction -->
+        <div id="prediction-section" class="bg-white rounded-2xl shadow-xl p-6 mt-6 hidden">
+            <h2 class="text-xl font-semibold mb-4 border-b pb-2">6. Predict Temperature from New Measurements</h2>
+            <p class="text-sm text-gray-500 mb-4">Enter a measured voltage for any calibrated sensor to predict the temperature.</p>
+            <div id="prediction-inputs" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            </div>
+        </div>
+    </div>
+
+<script>
+    // --- DOM Elements ---
+    const csvFileInput = document.getElementById('csv-file');
+    const loadCalFileInput = document.getElementById('load-cal-file');
+    const yamlFileInput = document.getElementById('yaml-file');
+    const saveCalBtn = document.getElementById('save-cal-btn');
+    const checkboxContainer = document.getElementById('checkbox-container');
+    const checkboxWrapper = document.getElementById('checkbox-container-wrapper');
+    const timeSeriesPlotDiv = document.getElementById('time-series-plot');
+    const analysisControls = document.getElementById('analysis-controls');
+    const vtempAveragesDiv = document.getElementById('vtemp-averages');
+    const knownTempInput = document.getElementById('known-temp-input');
+    const addPointBtn = document.getElementById('add-point-btn');
+    const calibrationTableBody = document.getElementById('calibration-table-body');
+    const calTabsContainer = document.getElementById('cal-tabs');
+    const calContentContainer = document.getElementById('cal-content');
+    const predictionSection = document.getElementById('prediction-section');
+    const predictionInputsContainer = document.getElementById('prediction-inputs');
+    const calibrationWorkflowDiv = document.getElementById('calibration-workflow');
+    const boardNameSection = document.getElementById('board-name-section');
+    const boardNameInputs = document.getElementById('board-name-inputs');
+
+    // --- State Variables ---
+    let parsedData = { headers: [], columns: {} };
+    let calibrationData = {};
+    let fitResults = {};
+    let currentRangeRawData = {};
+    let boardNameMap = {};
+
+    // --- Event Listeners ---
+    csvFileInput.addEventListener('change', handleFileUpload);
+    loadCalFileInput.addEventListener('change', handleLoadCalibration);
+    yamlFileInput.addEventListener('change', handleYamlUpload);
+    saveCalBtn.addEventListener('click', saveCalibration);
+    addPointBtn.addEventListener('click', addCalibrationData);
+
+    // --- Main Functions ---
+    function handleFileUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        resetUI();
+        calibrationWorkflowDiv.classList.remove('hidden');
+        const reader = new FileReader();
+        reader.onload = e => {
+            processData(e.target.result);
+            populateCheckboxes();
+            populateBoardNameInputs();
+            checkboxWrapper.classList.remove('hidden');
+            boardNameSection.classList.remove('hidden');
+        };
+        reader.readAsText(file);
+    }
+
+    function handleYamlUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = e => {
+            try {
+                const yamlData = jsyaml.load(e.target.result);
+                if (typeof yamlData !== 'object' || yamlData === null) {
+                    throw new Error("Invalid YAML format. Expected a key-value map.");
+                }
+                for (const sensor in yamlData) {
+                    const input = document.getElementById(`board-name-${sensor}`);
+                    if (input) {
+                        input.value = yamlData[sensor];
+                        boardNameMap[sensor] = yamlData[sensor];
+                    }
+                }
+            } catch (error) {
+                alert(`Error parsing YAML file: ${error.message}`);
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    function handleLoadCalibration(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        resetUI();
+        const reader = new FileReader();
+        reader.onload = e => {
+            try {
+                const loadedData = JSON.parse(e.target.result);
+                if (typeof loadedData !== 'object' || !loadedData.fitResults) {
+                    throw new Error("Invalid calibration file format.");
+                }
+                fitResults = loadedData.fitResults;
+                boardNameMap = loadedData.boardNames || {};
+                calibrationWorkflowDiv.classList.remove('hidden');
+                renderUIFromFits(false);
+            } catch (error) {
+                alert(`Error loading calibration file: ${error.message}`);
+                resetUI();
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    function saveCalibration() {
+        if (Object.keys(fitResults).length === 0) {
+            alert("No calibration data to save.");
+            return;
+        }
+        const dataToSave = {
+            fitResults: fitResults,
+            boardNames: boardNameMap
+        };
+        const jsonString = JSON.stringify(dataToSave, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'vtemp_calibration.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    function resetUI() {
+        calibrationWorkflowDiv.classList.add('hidden');
+        checkboxWrapper.classList.add('hidden');
+        checkboxContainer.innerHTML = '';
+        boardNameSection.classList.add('hidden');
+        boardNameInputs.innerHTML = '';
+        analysisControls.classList.add('hidden');
+        calTabsContainer.innerHTML = '';
+        calContentContainer.innerHTML = '';
+        calibrationTableBody.innerHTML = '';
+        predictionSection.classList.add('hidden');
+        predictionInputsContainer.innerHTML = '';
+        saveCalBtn.classList.add('hidden');
+        Plotly.purge(timeSeriesPlotDiv);
+        timeSeriesPlotDiv.innerHTML = '<p class="text-gray-400">Time-series plot will appear here.</p>';
+        calibrationData = {};
+        fitResults = {};
+        currentRangeRawData = {};
+        boardNameMap = {};
+        csvFileInput.value = '';
+        loadCalFileInput.value = '';
+        yamlFileInput.value = '';
+    }
+
+    function processData(csv) {
+        const lines = csv.split('\n').filter(line => line.trim() !== '');
+        parsedData.headers = lines[0].trim().split(',');
+        parsedData.columns = {};
+        parsedData.headers.forEach(header => parsedData.columns[header] = []);
+        for (let i = 1; i < lines.length; i++) {
+            const values = lines[i].trim().split(',');
+            if (values.length === parsedData.headers.length) {
+                parsedData.headers.forEach((header, index) => {
+                    let value = values[index];
+                    const isNumeric = index > 0 && !isNaN(parseFloat(value));
+                    parsedData.columns[header].push(isNumeric ? parseFloat(value) : value);
+                });
+            }
+        }
+    }
+
+    function populateCheckboxes() {
+        parsedData.headers.slice(1).forEach(header => {
+            const div = document.createElement('div');
+            div.className = 'flex items-center';
+            const input = document.createElement('input');
+            input.type = 'checkbox';
+            input.id = header;
+            input.value = header;
+            input.className = 'h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer';
+            if (header.startsWith('VTEMP')) input.checked = true;
+            input.addEventListener('change', updateTimeSeriesPlot);
+            const label = document.createElement('label');
+            label.htmlFor = header;
+            label.textContent = header;
+            label.className = 'ml-2 block text-sm text-gray-900 cursor-pointer';
+            div.appendChild(input);
+            div.appendChild(label);
+            checkboxContainer.appendChild(div);
+        });
+        updateTimeSeriesPlot();
+    }
+
+    function populateBoardNameInputs() {
+        boardNameInputs.innerHTML = '';
+        const vtempColumns = parsedData.headers.filter(h => h.startsWith('VTEMP') && h.endsWith('_volts'));
+        vtempColumns.forEach(sensor => {
+            const div = document.createElement('div');
+            div.className = 'flex items-center gap-2';
+            const label = document.createElement('label');
+            label.htmlFor = `board-name-${sensor}`;
+            label.className = 'w-28 text-sm text-gray-600';
+            label.textContent = sensor;
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.id = `board-name-${sensor}`;
+            input.className = 'flex-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm p-1';
+            input.placeholder = 'e.g., Board-A';
+            input.oninput = () => {
+                boardNameMap[sensor] = input.value.trim();
+                renderUIFromFits(true);
+            };
+            div.appendChild(label);
+            div.appendChild(input);
+            boardNameInputs.appendChild(div);
+        });
+    }
+
+    function updateTimeSeriesPlot() {
+        const checkedColumns = Array.from(checkboxContainer.querySelectorAll('input:checked')).map(input => input.value);
+        if (checkedColumns.length === 0) {
+            Plotly.purge(timeSeriesPlotDiv);
+            analysisControls.classList.add('hidden');
+            return;
+        }
+        const traces = checkedColumns.map(header => ({
+            x: parsedData.columns[parsedData.headers[0]],
+            y: parsedData.columns[header],
+            mode: 'lines', name: header, line: { width: 1.5 }
+        }));
+        const layout = { title: 'Time Series Data', xaxis: { title: 'Timestamp', type: 'date' }, margin: { l: 50, r: 20, b: 50, t: 40 }, dragmode: 'zoom' };
+        Plotly.newPlot(timeSeriesPlotDiv, traces, layout, {responsive: true});
+        timeSeriesPlotDiv.on('plotly_relayout', handleRangeSelection);
+    }
+
+    function handleRangeSelection(eventData) {
+        if (!eventData['xaxis.range[0]']) return;
+        const startTime = new Date(eventData['xaxis.range[0]']);
+        const endTime = new Date(eventData['xaxis.range[1]']);
+        const vtempColumns = parsedData.headers.filter(h => h.startsWith('VTEMP') && h.endsWith('_volts'));
+        const timestamps = parsedData.columns[parsedData.headers[0]].map(ts => new Date(ts));
+        currentRangeRawData = {};
+        vtempAveragesDiv.innerHTML = '';
+        if (vtempColumns.length === 0) return;
+        vtempColumns.forEach(colName => {
+            const voltages = parsedData.columns[colName];
+            const pointsInRange = [];
+            for (let i = 0; i < timestamps.length; i++) {
+                if (timestamps[i] >= startTime && timestamps[i] <= endTime) {
+                    pointsInRange.push(voltages[i]);
+                }
+            }
+            currentRangeRawData[colName] = pointsInRange;
+            let avg = pointsInRange.length > 0 ? pointsInRange.reduce((a, b) => a + b, 0) / pointsInRange.length : 0;
+            const avgDiv = document.createElement('div');
+            avgDiv.className = 'p-2 bg-gray-100 rounded';
+            avgDiv.innerHTML = `<p class="text-xs text-gray-600">${getDisplayName(colName, false)}</p><p class="font-bold text-lg">${avg.toFixed(4)} V</p>`;
+            vtempAveragesDiv.appendChild(avgDiv);
+        });
+        analysisControls.classList.remove('hidden');
+    }
+
+    function addCalibrationData() {
+        const temp = parseFloat(knownTempInput.value);
+        if (isNaN(temp) || Object.keys(currentRangeRawData).length === 0) return;
+        for (const sensor in currentRangeRawData) {
+            if (!calibrationData[sensor]) calibrationData[sensor] = [];
+            const newData = currentRangeRawData[sensor].map(voltage => ({ voltage, temp, id: `${temp}-${Math.random()}` }));
+            calibrationData[sensor].push(...newData);
+        }
+        knownTempInput.value = '';
+        renderCalibrationTable();
+        calculateAndStoreFits();
+        renderUIFromFits(true);
+    }
+
+    function renderCalibrationTable() {
+        calibrationTableBody.innerHTML = '';
+        for (const sensor in calibrationData) {
+            calibrationData[sensor].forEach(point => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${getDisplayName(sensor, true)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${point.voltage.toFixed(4)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${point.temp}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button class="text-red-600 hover:text-red-900" onclick="deletePoint('${sensor}', '${point.id}')">Delete</button>
+                    </td>
+                `;
+                calibrationTableBody.appendChild(row);
+            });
+        }
+    }
+
+    window.deletePoint = function(sensor, id) {
+        calibrationData[sensor] = calibrationData[sensor].filter(p => p.id !== id);
+        renderCalibrationTable();
+        calculateAndStoreFits();
+        renderUIFromFits(true);
+    }
+
+    function calculateAndStoreFits() {
+        fitResults = {};
+        const sensors = Object.keys(calibrationData);
+        sensors.forEach(sensor => {
+            const points = calibrationData[sensor];
+            const uniqueTemps = [...new Set(points.map(p => p.temp))];
+            if (points.length >= 3 && uniqueTemps.length >= 2) {
+                const x = points.map(p => p.voltage);
+                const y = points.map(p => p.temp);
+                fitResults[sensor] = linearRegression(x, y);
+            }
+        });
+    }
+
+    function renderUIFromFits(showPlots = true) {
+        calTabsContainer.innerHTML = '';
+        calContentContainer.innerHTML = '';
+        const sensors = Object.keys(fitResults).sort();
+
+        if (sensors.length > 0) {
+            predictionSection.classList.remove('hidden');
+            saveCalBtn.classList.remove('hidden');
+        } else {
+            predictionSection.classList.add('hidden');
+            saveCalBtn.classList.add('hidden');
+        }
+
+        sensors.forEach((sensor, index) => {
+            const tabButton = document.createElement('button');
+            tabButton.className = `tab-button py-2 px-4 text-sm font-medium text-center text-gray-500 rounded-t-lg border-b-2 border-transparent hover:text-gray-600 hover:border-gray-300`;
+            tabButton.innerHTML = getDisplayName(sensor, false);
+            tabButton.dataset.target = `panel-${sensor}`;
+            if (index === 0) tabButton.classList.add('active');
+            tabButton.onclick = () => {
+                calTabsContainer.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+                calContentContainer.querySelectorAll('.tab-panel').forEach(pnl => pnl.classList.add('hidden'));
+                tabButton.classList.add('active');
+                document.getElementById(`panel-${sensor}`).classList.remove('hidden');
+            };
+            calTabsContainer.appendChild(tabButton);
+
+            const tabPanel = document.createElement('div');
+            tabPanel.id = `panel-${sensor}`;
+            tabPanel.className = 'tab-panel p-4 bg-gray-50 rounded-b-lg rounded-tr-lg';
+            if (index !== 0) tabPanel.classList.add('hidden');
+            const fitResultsDiv = document.createElement('div');
+            fitResultsDiv.className = 'mb-4';
+            const plotDiv = document.createElement('div');
+            plotDiv.className = 'plot-container';
+            tabPanel.appendChild(fitResultsDiv);
+            tabPanel.appendChild(plotDiv);
+            calContentContainer.appendChild(tabPanel);
+
+            const fit = fitResults[sensor];
+            fitResultsDiv.innerHTML = `
+                <h4 class="font-semibold text-lg text-green-800 text-center">Linear Fit: T = mV + b</h4>
+                <div class="text-sm text-gray-700 text-center sm:space-x-4 flex flex-col sm:flex-row justify-center">
+                    <span>Slope (m): <strong class="text-base">${fit.slope.toFixed(3)}</strong> &plusmn; ${fit.se_slope.toFixed(3)} (SE)</span>
+                    <span>Intercept (b): <strong class="text-base">${fit.intercept.toFixed(3)}</strong> &plusmn; ${fit.se_intercept.toFixed(3)} (SE)</span>
+                    <span>R²: <strong class="text-base">${fit.r2.toFixed(4)}</strong></span>
+                </div>
+            `;
+
+            if (showPlots && calibrationData[sensor]) {
+                const points = calibrationData[sensor];
+                const x = points.map(p => p.voltage);
+                const y = points.map(p => p.temp);
+
+                const x_range_padding = (Math.max(...x) - Math.min(...x)) * 0.05 || 0.01;
+                const x_range = [Math.min(...x) - x_range_padding, Math.max(...x) + x_range_padding];
+                const plot_x = Array.from({length: 50}, (_, i) => x_range[0] + i * (x_range[1] - x_range[0]) / 49);
+
+                const plot_y_fit = plot_x.map(val => fit.slope * val + fit.intercept);
+                const ci_margin = plot_x.map(val => fit.t_crit * fit.s_err * Math.sqrt(1/fit.n + Math.pow(val - fit.x_mean, 2) / fit.ss_xx));
+                const pi_margin = plot_x.map(val => fit.t_crit * fit.s_err * Math.sqrt(1 + 1/fit.n + Math.pow(val - fit.x_mean, 2) / fit.ss_xx));
+
+                const ci_upper = plot_y_fit.map((v,i) => v + ci_margin[i]);
+                const ci_lower = plot_y_fit.map((v,i) => v - ci_margin[i]).reverse();
+                const pi_upper = plot_y_fit.map((v,i) => v + pi_margin[i]);
+                const pi_lower = plot_y_fit.map((v,i) => v - pi_margin[i]).reverse();
+                const plot_x_rev = [...plot_x].reverse();
+
+                const trace_data = { x, y, mode: 'markers', type: 'scatter', name: 'Data', marker: { size: 6, opacity: 0.5, color: '#3b82f6' } };
+                const trace_fit = { x: plot_x, y: plot_y_fit, mode: 'lines', type: 'scatter', name: 'Fit', line: { color: '#ef4444' } };
+                const trace_ci_band = { x: [...plot_x, ...plot_x_rev], y: [...ci_upper, ...ci_lower], fill: 'toself', fillcolor: 'rgba(239, 68, 68, 0.3)', line: {width: 0}, name: '95% Confidence Band', type: 'scatter' };
+                const trace_pi_band = { x: [...plot_x, ...plot_x_rev], y: [...pi_upper, ...pi_lower], fill: 'toself', fillcolor: 'rgba(239, 68, 68, 0.15)', line: {width: 0}, name: '95% Prediction Band', type: 'scatter' };
+
+                const layout = { title: `Calibration for ${getDisplayName(sensor, true)}`, xaxis: { title: 'Voltage (V)'}, yaxis: { title: 'Temperature (°C)'}, margin: { l: 50, r: 20, b: 50, t: 40 }, showlegend: true, legend: {x: 0.05, y: 0.95} };
+                Plotly.newPlot(plotDiv, [trace_data, trace_pi_band, trace_ci_band, trace_fit], layout, {responsive: true});
+            } else {
+                plotDiv.innerHTML = `<div class="flex items-center justify-center h-full"><p class="text-gray-500 text-center">Calibration loaded from file.<br>Upload raw data to view plots.</p></div>`;
+            }
+        });
+        generatePredictionInputs();
+    }
+
+    function generatePredictionInputs() {
+        predictionInputsContainer.innerHTML = '';
+        const sensors = Object.keys(fitResults).sort();
+        sensors.forEach(sensor => {
+            const div = document.createElement('div');
+            div.className = 'p-4 bg-gray-50 rounded-lg';
+            const label = document.createElement('label');
+            label.htmlFor = `predict-${sensor}`;
+            label.className = 'block text-sm font-medium text-gray-700';
+            label.innerHTML = `Voltage for ${getDisplayName(sensor, false)}`;
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.id = `predict-${sensor}`;
+            input.dataset.sensor = sensor;
+            input.className = 'mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm p-2';
+            input.placeholder = 'e.g., 0.55';
+            input.addEventListener('input', predictTemperature);
+            const resultP = document.createElement('p');
+            resultP.id = `result-${sensor}`;
+            resultP.className = 'mt-2 text-center text-lg font-bold text-blue-800 h-6';
+            div.appendChild(label);
+            div.appendChild(input);
+            div.appendChild(resultP);
+            predictionInputsContainer.appendChild(div);
+        });
+    }
+
+    function predictTemperature(event) {
+        const input = event.target;
+        const sensor = input.dataset.sensor;
+        const resultP = document.getElementById(`result-${sensor}`);
+        const voltage = parseFloat(input.value);
+        if (isNaN(voltage) || !fitResults[sensor]) {
+            resultP.textContent = '';
+            return;
+        }
+        const fit = fitResults[sensor];
+        const temp = fit.slope * voltage + fit.intercept;
+        const error = fit.t_crit * fit.s_err * Math.sqrt(1 + 1/fit.n + Math.pow(voltage - fit.x_mean, 2) / fit.ss_xx);
+        resultP.textContent = `${temp.toFixed(2)} ± ${error.toFixed(2)} °C`;
+    }
+
+    function getDisplayName(sensor, includeSensor) {
+        const shortName = sensor.replace('_volts', '');
+        const boardName = boardNameMap[sensor];
+        if (boardName && includeSensor) {
+            return `${boardName} (${shortName})`;
+        }
+        if (boardName) {
+            return boardName;
+        }
+        return shortName;
+    }
+
+    // --- Statistics Functions ---
+    function linearRegression(x, y) {
+        const n = x.length;
+        if (n < 3) return null;
+        let sum_x = 0, sum_y = 0, sum_xy = 0, sum_xx = 0;
+        for (let i = 0; i < n; i++) { sum_x += x[i]; sum_y += y[i]; sum_xy += x[i] * y[i]; sum_xx += x[i] * x[i]; }
+        const slope = (n * sum_xy - sum_x * sum_y) / (n * sum_xx - sum_x * sum_x);
+        const intercept = (sum_y - slope * sum_x) / n;
+        const x_mean = sum_x / n;
+        const y_mean = sum_y / n;
+        let ss_tot = 0, ss_res = 0, ss_xx = 0;
+        for (let i = 0; i < n; i++) {
+            ss_res += Math.pow(y[i] - (slope * x[i] + intercept), 2);
+            ss_tot += Math.pow(y[i] - y_mean, 2);
+            ss_xx += Math.pow(x[i] - x_mean, 2);
+        }
+        const r2 = ss_tot > 0 ? 1 - ss_res / ss_tot : 1;
+        const df = n - 2;
+        if (df <= 0) return { slope, intercept, r2, se_slope: 0, se_intercept: 0, s_err: 0, t_crit: 0, n, x_mean, ss_xx };
+        const s_err = Math.sqrt(ss_res / df);
+        const t_crit = getTValue(df);
+        const se_slope = ss_xx > 0 ? s_err / Math.sqrt(ss_xx) : 0;
+        const se_intercept = ss_xx > 0 ? s_err * Math.sqrt(1/n + Math.pow(x_mean, 2) / ss_xx) : s_err * Math.sqrt(1/n);
+        return { slope, intercept, r2, se_slope, se_intercept, s_err, t_crit, n, x_mean, ss_xx };
+    }
+
+    function getTValue(df) {
+        const t_table = {1:12.706, 2:4.303, 3:3.182, 4:2.776, 5:2.571, 6:2.447, 7:2.365, 8:2.306, 9:2.262, 10:2.228, 15:2.131, 20:2.086, 25:2.060, 30:2.042, 40:2.021, 60:2.000, 120:1.980};
+        if (df >= 120) return 1.96;
+        if (t_table[df]) return t_table[df];
+        const keys = Object.keys(t_table).map(Number);
+        const closest_df = keys.reduce((prev, curr) => (Math.abs(curr - df) < Math.abs(prev - df) ? curr : prev));
+        return t_table[closest_df];
+    }
+</script>
+</body>
+</html>
+
