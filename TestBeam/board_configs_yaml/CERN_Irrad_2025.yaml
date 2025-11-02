@@ -3,25 +3,25 @@ T1:
     name: ET2.02 PacTech Irradiated HPK-16
     short: PT_IH16
     offset: 20
-    HV: 220
+    HV: 200
     role: trig
   PT_IH15: &PT_IH15
     name: ET2.02 PacTech Irradiated HPK-15
     short: PT_IH15
     offset: 20
-    HV: 220
+    HV: 200
     role: ref
   PT_IH6: &PT_IH6
     name: ET2.02 PacTech Irradiated HPK-6
     short: PT_IH6
     offset: 20
-    HV: 220
+    HV: 200
     role: dut
   PT_IH8: &PT_IH8
     name: ET2.02 PacTech Irradiated HPK-8
     short: PT_IH8
     offset: 20
-    HV: 220
+    HV: 200
     role: extra
 
 run0:
@@ -29,3 +29,9 @@ run0:
   1: *PT_IH15
   2: *PT_IH6
   3: *PT_IH8
+
+run3:
+  0: { <<: *PT_IH16, HV:180 }
+  1: { <<: *PT_IH15, HV:180 }
+  2: { <<: *PT_IH6, HV:180 }
+  3: { <<: *PT_IH8, HV:180 }
