@@ -7,17 +7,20 @@ import matplotlib.ticker as ticker
 import mplhep as hep
 hep.style.use('CMS')
 
+from natsort import natsorted
 from pathlib import Path
 from matplotlib import rcParams
 rcParams["axes.formatter.useoffset"] = False
 rcParams["axes.formatter.use_mathtext"] = False
 
 __all__ = [
+    'load_fig_title',
     'return_hist',
     'return_event_hist',
     'return_crc_hist',
     'return_hist_pivot',
     'return_time_hist_pivot',
+    'preprocess_ranking_data',
     'plot_BL_and_NW',
     'plot_number_of_fired_board',
     'plot_number_of_hits_per_event',
@@ -36,6 +39,8 @@ __all__ = [
     'plot_TWC',
     'plot_resolution_with_pulls',
     'plot_resolution_table',
+    'plot_resolutions_per_row',
+    'plot_avg_resolution_per_row',
 ]
 
 ## --------------- Plotting -----------------------
@@ -78,6 +83,8 @@ def load_fig_title(
         plot_title = r'217 MeV p at Northwestern Medicine Proton Center'
     elif tb_loc == 'wh14':
         plot_title = 'Wilson Hall 14th floor lab'
+    elif tb_loc == 'irrad':
+        plot_title = 'CERN IRRAD'
     # The assumption for louvain is the the tb_loc will specify location and ion with the following format:
     # louvain-Kr  - for example for louvain with Krypton ion beam
     # louvain-Xe  - for example for louvain with Xenon ion beam
@@ -183,18 +190,39 @@ def return_crc_hist(
 ## --------------------------------------
 def return_hist_pivot(
         input_df: pd.DataFrame,
-        board_ids: list[int],
-        board_names: list[str],
+        board_info: dict | None = None,
+        board_ids: list[int] | None = None,
+        board_names: list[str] | None = None,
         hist_bins: list = [50, 64, 64]
 ):
-    h = {board_names[board_idx]: hist.Hist(hist.axis.Regular(hist_bins[0], 140, 240, name="CAL", label="CAL [LSB]"),
+
+    if board_info:
+
+        h = {val['short']: hist.Hist(hist.axis.Regular(hist_bins[0], 120, 260, name="CAL", label="CAL [LSB]"),
                 hist.axis.Regular(hist_bins[1], 0, 512,  name="TOT", label="TOT [LSB]"),
                 hist.axis.Regular(hist_bins[2], 0, 1024, name="TOA", label="TOA [LSB]"),
-        )
-    for board_idx in range(len(board_ids))}
+            )
+        for _, val in board_info.items()}
 
-    for idx, board_id in enumerate(board_ids):
-        h[board_names[idx]].fill(input_df['cal'][board_id].values, input_df['tot'][board_id].values, input_df['toa'][board_id].values)
+        for ikey, val in board_info.items():
+            h[val['short']].fill(input_df['cal'][ikey].values, input_df['tot'][ikey].values, input_df['toa'][ikey].values)
+
+
+    elif board_ids and board_names:
+        if len(board_ids) != len(board_names):
+            raise ValueError("The lists 'board_ids' and 'board_names' must have the same length.")
+
+        h = {board_names[board_idx]: hist.Hist(hist.axis.Regular(hist_bins[0], 120, 260, name="CAL", label="CAL [LSB]"),
+                hist.axis.Regular(hist_bins[1], 0, 512,  name="TOT", label="TOT [LSB]"),
+                hist.axis.Regular(hist_bins[2], 0, 1024, name="TOA", label="TOA [LSB]"),
+            )
+        for board_idx in range(len(board_ids))}
+
+        for idx, board_id in enumerate(board_ids):
+            h[board_names[idx]].fill(input_df['cal'][board_id].values, input_df['tot'][board_id].values, input_df['toa'][board_id].values)
+
+    else:
+        raise ValueError("You must provide either 'board_info' or both 'board_ids' and 'board_names'.")
 
     return h
 
@@ -1572,7 +1600,7 @@ def plot_resolution_with_pulls(
                 sampled_ydata = np.vstack([gaussian(x_range, *vopt).T for vopt in vopts])
                 model_uncert = np.nanstd(sampled_ydata, axis=0)
             else:
-                model_uncert = np.zeros_like(np.sqrt(hists[i].variances()))
+                model_uncert = np.zeros_like(np.sqrt(hists[idx].variances()))
 
             main_ax.plot(x_range, fit_params[idx].eval(x=x_range), color="hotpink", ls="-", lw=2, alpha=0.8,
                         label=fr"$\mu$:{fit_params[idx].params['center'].value:.2f} $\pm$ {fit_params[idx].params['center'].stderr:.2f} ps")
@@ -1719,7 +1747,6 @@ def plot_resolution_table(
             cbar.set_label('Time Resolution (ps)', fontsize=18)
             cbar.ax.tick_params(labelsize=18)
 
-
             if show_number:
                 for i in range(16):
                     for j in range(16):
@@ -1758,6 +1785,225 @@ def plot_resolution_table(
                 plt.close(fig)
 
         del tables
+
+## --------------------------------------
+def preprocess_ranking_data(
+    input_df: pd.DataFrame,
+    row_col: str,
+    col_col: str,
+    rank_by_col: str = 'nevt',
+    num_cols: int = 16
+):
+    """
+    Prepares a DataFrame for plotting by ranking and categorizing.
+
+    Sorts by 'rank_by_col', groups by 'row_col' and 'col_col' to create ranks,
+    and adds 'category' and 'subgroup' columns.
+    Also returns mappings for plotting.
+
+    Returns:
+        A tuple containing:
+        (df_proc, subgroup_x_map, tick_positions)
+    """
+    # 1. Create Subgroup/Column Mappings
+    all_subgroups = [f"Col {i}" for i in range(num_cols)]
+    subgroup_x_map = {subgroup: i for i, subgroup in enumerate(all_subgroups)}
+    tick_positions = list(subgroup_x_map.values())
+
+    # 2. Vectorized Data Processing
+    df_proc = input_df.copy()
+
+    # Sort by the ranking column
+    df_proc = df_proc.sort_values(by=[rank_by_col], ascending=False)
+
+    # Group by row and col, then rank by the ranking column
+    ranks = df_proc.groupby([row_col, col_col])[rank_by_col].rank(ascending=False, method='first')
+
+    # 3. Create new columns
+    df_proc['category'] = "Path " + ranks.astype(int).astype(str)
+    df_proc['subgroup'] = "Col " + df_proc[col_col].astype(str)
+
+    return df_proc, subgroup_x_map, tick_positions
+
+
+## --------------------------------------
+def plot_resolutions_per_row(
+    input_df: pd.DataFrame,
+    board_role: str,
+    tb_loc: str,
+    fig_config: dict,
+    rows_to_draw: list[int] = [0, 15],
+):
+
+    row_col = f'row_{board_role}'
+    col_col = f'col_{board_role}'
+    res_col = f'res_{board_role}'
+    err_col = f'err_{board_role}'
+
+    loc_title = load_fig_title(tb_loc)
+
+    for _, val in fig_config.items():
+        if val['role'] == board_role:
+            selected_fig_config = val
+            break
+
+    # All the data processing happens in one line
+    df_proc, subgroup_x_map, tick_positions = preprocess_ranking_data(
+        input_df,
+        row_col,
+        col_col,
+        rank_by_col='nevt',
+        num_cols=16
+    )
+
+    for irow in range(rows_to_draw[0], rows_to_draw[1]+1):
+
+        df_summary = df_proc.loc[df_proc[row_col] == irow].reset_index(drop=True)
+
+        if df_summary.empty:
+            print(f"No data for {board_role} row {irow}, skipping plot.")
+            continue
+
+        # 2. Get unique subgroups and categories for plotting
+        unique_categories = natsorted(df_summary['category'].unique())
+        n_categories = len(unique_categories)
+
+        if n_categories == 0:
+            continue # Skip if, for some reason, categories are empty
+
+        # Offsets for categories (e.g., -0.2, 0, 0.2)
+        # We create a small "dodge" for each category
+        offsets = np.linspace(-0.2, 0.2, n_categories)
+        category_offset_map = {category: offset for category, offset in zip(unique_categories, offsets)}
+
+        # Get colors for categories
+        colors = plt.cm.viridis(np.linspace(0, 1, n_categories))
+        category_color_map = {category: color for category, color in zip(unique_categories, colors)}
+
+        # 4. Create the plot
+        fig, ax = plt.subplots(figsize=(25, 7))
+        hep.cms.text(loc=0, ax=ax, text="ETL ETROC Test Beam", fontsize=20)
+
+        # Plot the points for each category one by one
+        for category in unique_categories:
+            df_cat = df_summary[df_summary['category'] == category]
+
+            if df_cat.empty:
+                continue
+
+            x_base = df_cat['subgroup'].map(subgroup_x_map)
+            offset = category_offset_map[category]
+            x_final = x_base + offset
+
+            # Plot this category's points
+            ax.errorbar(
+                x=x_final,
+                y=df_cat[res_col],
+                yerr=df_cat[err_col],
+                fmt='o',  # 'o' specifies a circular marker
+                linestyle='None', # No connecting line
+                capsize=5,
+                markersize=8,
+                color=category_color_map[category],
+                label=category # Label for the legend
+            )
+
+        # 5. Format the plot
+        ax.set_ylabel('Time resolution [ps]')
+        ax.set_ylim(10, 90)
+        ax.set_xticks(ticks=list(subgroup_x_map.values()), labels=list(subgroup_x_map.keys()))
+
+        # Loop until the second-to-last tick
+        for i in range(len(tick_positions) - 1):
+            line_pos = tick_positions[i] + 0.5
+            ax.axvline(x=line_pos, color='black', linestyle='dashed', linewidth=1)
+
+        # Plot threshold lines for 'Path 1'
+        thres_df = df_summary.loc[df_summary['category'] == 'Path 1']
+        for _, row in thres_df.iterrows():
+            x_pos = subgroup_x_map.get(row['subgroup'])
+            if x_pos is None:
+                continue
+
+            ax.hlines(
+                y=row[res_col], # <-- Use variable
+                xmin=x_pos - 0.5,
+                xmax=x_pos + 0.5,
+                color='red',
+                linestyle='solid',
+                linewidth=1
+            )
+
+        ax.set_title(f'{loc_title}\n{selected_fig_config['title']} - Row {irow}', loc='right', fontsize=20)
+        ax.set_xlim(-0.5, 15.5)
+        ax.legend(title='Ordered paths', bbox_to_anchor=(1, 1), loc='upper left')
+        ax.grid(axis='y', linestyle='--', alpha=0.7)
+        fig.tight_layout() # Adjust layout to make room for the legend
+        plt.minorticks_off()
+
+
+## --------------------------------------
+def plot_avg_resolution_per_row(
+    input_df: pd.DataFrame,
+    board_role: str,
+    tb_loc: str,
+    fig_config: dict,
+):
+
+    row_col = f'row_{board_role}'
+    col_col = f'col_{board_role}'
+    res_col = f'res_{board_role}'
+    err_col = f'err_{board_role}'
+
+    loc_title = load_fig_title(tb_loc)
+
+    for _, val in fig_config.items():
+        if val['role'] == board_role:
+            selected_fig_config = val
+            break
+
+    # All the data processing happens in one line
+    df_proc, _, _ = preprocess_ranking_data(
+        input_df,
+        row_col,
+        col_col,
+        rank_by_col='nevt',
+        num_cols=16
+    )
+
+    summary_array = []
+    for irow in range(0, 16):
+        thres_df = df_proc.loc[(df_proc['category'] == 'Path 1') & (df_proc[row_col] == irow)]
+
+        if thres_df.empty:
+            summary_array.append(irow, np.NaN, np.NaN)
+        else:
+            summary_array.append((irow, np.average(thres_df[res_col], weights=1/thres_df[err_col]**2), np.sqrt(1/(np.sum(1/thres_df[err_col]**2)))))
+
+    summary_df = pd.DataFrame(summary_array, columns=['row', res_col, err_col])
+
+    fig, ax = plt.subplots(figsize=(12, 10))
+    hep.cms.text(loc=0, ax=ax, text="ETL ETROC Test Beam", fontsize=20)
+    ax.set_title(f'{loc_title}\n{selected_fig_config['title']}', loc='right', fontsize=17)
+
+    ax.errorbar(
+        x=summary_df['row'],
+        y=summary_df[res_col],
+        yerr=summary_df[err_col],
+        fmt='o',  # 'o' specifies a circular marker
+        linestyle='None', # No connecting line
+        capsize=5,
+        markersize=8,
+        # label=category # Label for the legend
+    )
+
+    ax.set_xticks(ticks=range(16))
+    ax.set_xlabel('Row')
+    ax.set_ylabel('Avg. time resolution [ps]')
+    ax.grid(axis='y')
+    ax.xaxis.set_minor_locator(plt.NullLocator())
+
+    fig.tight_layout()
 
 ## --------------------------------------
 # def plot_TDC_correlation_scatter_matrix(
