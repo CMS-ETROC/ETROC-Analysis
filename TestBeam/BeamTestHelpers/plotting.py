@@ -1182,6 +1182,52 @@ def plot_distance(
     return h_dis
 
 ## --------------------------------------
+def plot_TOA_correlation_hit(
+        input_df: pd.DataFrame,
+        board_id1: int,
+        board_id2: int,
+        boundary_cut: float,
+        tb_loc: str,
+        board_info: dict | None = None, # Prioritized argument
+        draw_boundary: bool = False,
+    ):
+
+    loc_title = load_fig_title(tb_loc)
+
+    h = hist.Hist(
+        hist.axis.Regular(128, 0, 1024, name=f'{board_info[board_id1]['short']}',
+                          label=f'TOA of {board_info[board_id1]['short']} ({board_info[board_id1]['role']}) [LSB]'),
+        hist.axis.Regular(128, 0, 1024, name=f'{board_info[board_id2]['short']}',
+                          label=f'TOA of {board_info[board_id2]['short']} ({board_info[board_id2]['role']}) [LSB]'),
+    )
+
+    x = input_df.loc[input_df['board'] == board_id1]['toa'].values
+    y = input_df.loc[input_df['board'] == board_id2]['toa'].values
+
+    params = np.polyfit(x, y, 1)
+    distance = (x*params[0] - y + params[1])/(np.sqrt(params[0]**2 + 1))
+
+    fig, ax = plt.subplots(figsize=(11, 10))
+    hep.cms.text(loc=0, ax=ax, text="ETL ETROC Test Beam", fontsize=18)
+    ax.set_title(loc_title, loc='right', fontsize=16)
+    ax.xaxis.label.set_fontsize(25)
+    ax.yaxis.label.set_fontsize(25)
+    hep.hist2dplot(h, ax=ax, norm=colors.LogNorm())
+
+    # calculate the trendline
+    trendpoly = np.poly1d(params)
+    x_range = np.linspace(x.min(), x.max(), 500)
+
+    # plot the trend line
+    ax.plot(x_range, trendpoly(x_range), 'r-', label='linear fit')
+    if draw_boundary:
+        ax.plot(x_range, trendpoly(x_range)-boundary_cut*np.std(distance), 'r--', label=fr'{boundary_cut}$\sigma$ boundary')
+        ax.plot(x_range, trendpoly(x_range)+boundary_cut*np.std(distance), 'r--')
+    ax.legend()
+    fig.tight_layout()
+
+
+## --------------------------------------
 def plot_TOA_correlation(
         input_df: pd.DataFrame,
         board_id1: int,
@@ -1251,6 +1297,7 @@ def plot_TOA_correlation(
         # ax.fill_between(x_range, y1=trendpoly(x_range)-boundary_cut*np.std(distance), y2=trendpoly(x_range)+boundary_cut*np.std(distance),
         #                 facecolor='red', alpha=0.35, label=fr'{boundary_cut}$\sigma$ boundary')
     ax.legend()
+    fig.tight_layout()
 
     if save_dir:
         save_plot(fig, save_dir, f"toa_correlation_{board_names[board_id1]}_{board_names[board_id2]}")
