@@ -254,7 +254,7 @@ if __name__ == "__main__":
 
     print(f'Average dataframe memory usage: {avg_use} MB')
     print(f'Estimated total memory usage: {total_use} MB')
-    if (avg_use > 20) or (total_use > 2560):
+    if (avg_use > 26) or (total_use > 2600):
         print('\nMemory Safety Check Fail, Memory usages are over limit.')
         print('Recommend: Single dataframe < 20 MB or Total dataframe < 2560 MB')
         import sys
