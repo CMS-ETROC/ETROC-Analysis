@@ -36,8 +36,15 @@ run3:
   2: { <<: *PT_IH6, HV: 180 }
   3: { <<: *PT_IH8, HV: 180 }
 
-run4:
-  0: { <<: *PT_IH16, HV: 220 }
-  1: { <<: *PT_IH15, HV: 220 }
-  2: { <<: *PT_IH6, HV: 220 }
-  3: { <<: *PT_IH8, HV: 220 }
+run5:
+  0: { <<: *PT_IH16, HV: 220, irrad: 4e14 }
+  1: { <<: *PT_IH15, HV: 220, irrad: 4e14 }
+  2: { <<: *PT_IH6, HV: 220, irrad: 4e14 }
+  3: { <<: *PT_IH8, HV: 220, irrad: 4e14 }
+
+run8:
+  0: { <<: *PT_IH16, HV: 290, irrad: 1e15 }
+  1: { <<: *PT_IH15, HV: 290, irrad: 1e15 }
+  2: { <<: *PT_IH6, HV: 290, irrad: 1e15 }
+  3: { <<: *PT_IH8, HV: 290, irrad: 1e15 }
+
