@@ -1187,11 +1187,40 @@ def plot_TOA_correlation_hit(
         input_df: pd.DataFrame,
         board_id1: int,
         board_id2: int,
-        boundary_cut: float,
         tb_loc: str,
         board_info: dict | None = None, # Prioritized argument
-        draw_boundary: bool = False,
     ):
+
+    ### Filtering dataframe
+    # 1. Get unique event IDs with board 0
+    #    .loc is used for a slight speed-up
+    evt_has_0 = set(input_df.loc[input_df['board'] == 0, 'evt'].unique())
+
+    # 2. Get unique event IDs with board 1
+    evt_has_1 = set(input_df.loc[input_df['board'] == 1, 'evt'].unique())
+
+    # 3. Find the intersection
+    good_evt_ids = evt_has_0.intersection(evt_has_1)
+
+    # 4. Filter the main DataFrame. This is the final answer.
+    selected_events = input_df.loc[input_df['evt'].isin(good_evt_ids)].reset_index(drop=True)
+
+    ### Broadcasting (cross product)
+    # 1. Create a DataFrame for board 0 hits
+    df_b0 = selected_events.loc[selected_events['board'] == 0]
+
+    # 2. Create a DataFrame for board 1 hits
+    df_b1 = selected_events.loc[selected_events['board'] == 1]
+
+    # 3. Perform the cross-product merge on the 'evt' column
+    #    This pairs every board 0 hit with every board 1 hit
+    #    from the same event.
+    paired_hits = pd.merge(
+        df_b0,
+        df_b1,
+        on='evt',           # The key to match
+        suffixes=('_b0', '_b1') # Renames duplicate columns
+    )
 
     loc_title = load_fig_title(tb_loc)
 
@@ -1202,11 +1231,9 @@ def plot_TOA_correlation_hit(
                           label=f'TOA of {board_info[board_id2]['short']} ({board_info[board_id2]['role']}) [LSB]'),
     )
 
-    x = input_df.loc[input_df['board'] == board_id1]['toa'].values
-    y = input_df.loc[input_df['board'] == board_id2]['toa'].values
-
-    params = np.polyfit(x, y, 1)
-    distance = (x*params[0] - y + params[1])/(np.sqrt(params[0]**2 + 1))
+    x = paired_hits['toa_b0'].values
+    y = paired_hits['toa_b1'].values
+    h.fill(x, y)
 
     fig, ax = plt.subplots(figsize=(11, 10))
     hep.cms.text(loc=0, ax=ax, text="ETL ETROC Test Beam", fontsize=18)
@@ -1214,17 +1241,6 @@ def plot_TOA_correlation_hit(
     ax.xaxis.label.set_fontsize(25)
     ax.yaxis.label.set_fontsize(25)
     hep.hist2dplot(h, ax=ax, norm=colors.LogNorm())
-
-    # calculate the trendline
-    trendpoly = np.poly1d(params)
-    x_range = np.linspace(x.min(), x.max(), 500)
-
-    # plot the trend line
-    ax.plot(x_range, trendpoly(x_range), 'r-', label='linear fit')
-    if draw_boundary:
-        ax.plot(x_range, trendpoly(x_range)-boundary_cut*np.std(distance), 'r--', label=fr'{boundary_cut}$\sigma$ boundary')
-        ax.plot(x_range, trendpoly(x_range)+boundary_cut*np.std(distance), 'r--')
-    ax.legend()
     fig.tight_layout()
 
 
