@@ -1194,10 +1194,10 @@ def plot_TOA_correlation_hit(
     ### Filtering dataframe
     # 1. Get unique event IDs with board 0
     #    .loc is used for a slight speed-up
-    evt_has_0 = set(input_df.loc[input_df['board'] == 0, 'evt'].unique())
+    evt_has_0 = set(input_df.loc[input_df['board'] == board_id1, 'evt'].unique())
 
     # 2. Get unique event IDs with board 1
-    evt_has_1 = set(input_df.loc[input_df['board'] == 1, 'evt'].unique())
+    evt_has_1 = set(input_df.loc[input_df['board'] == board_id2, 'evt'].unique())
 
     # 3. Find the intersection
     good_evt_ids = evt_has_0.intersection(evt_has_1)
@@ -1207,10 +1207,10 @@ def plot_TOA_correlation_hit(
 
     ### Broadcasting (cross product)
     # 1. Create a DataFrame for board 0 hits
-    df_b0 = selected_events.loc[selected_events['board'] == 0]
+    df_b0 = selected_events.loc[selected_events['board'] == board_id1]
 
     # 2. Create a DataFrame for board 1 hits
-    df_b1 = selected_events.loc[selected_events['board'] == 1]
+    df_b1 = selected_events.loc[selected_events['board'] == board_id2]
 
     # 3. Perform the cross-product merge on the 'evt' column
     #    This pairs every board 0 hit with every board 1 hit
@@ -1285,7 +1285,6 @@ def plot_TOA_correlation(
     axis_name2 = board_names[board_id2].replace('_', ' ')
 
     save_dir = save_mother_dir / 'temporal_correlation' if save_mother_dir else None
-
 
     h = hist.Hist(
         hist.axis.Regular(128, 0, 1024, name=f'{board_names[board_id1]}', label=f'TOA of {axis_name1} [LSB]'),
