@@ -36,6 +36,7 @@ __all__ = [
     'plot_difference_of_pixels',
     'plot_distance',
     'plot_TOA_correlation',
+    'plot_TOA_correlation_hit',
     'plot_TWC',
     'plot_resolution_with_pulls',
     'plot_resolution_table',
