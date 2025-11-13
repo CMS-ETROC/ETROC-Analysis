@@ -8,6 +8,7 @@ import pandas as pd
 import json
 import struct
 import argparse
+import gc # Import the garbage collector
 
 ## --------------- Tamalero Decoding Class -----------------------
 ## --------------------------------------
@@ -358,9 +359,72 @@ def generate_event_rows(unpacked_data_list):
             elif elink in pending_packets:
                 del pending_packets[elink]
 
+
+## --------------------------------------
+def generate_event_status(unpacked_data_list):
+    """
+    Generator that processes unpacked data and yields a status summary
+    for each complete packet, correlated to an event number.
+    """
+    pending_packets = {}
+    event_counter = -1
+    current_bcid = -1
+
+    for record_type, record_data in unpacked_data_list:
+        if not record_type or not record_data:
+            continue
+
+        elink = record_data.get('elink')
+        if elink is None:
+            continue
+
+        if record_type == 'header':
+            pending_packets[elink] = {'header': record_data, 'data': []}
+
+        elif record_type == 'data':
+            if elink in pending_packets:
+                pending_packets[elink]['data'].append(record_data)
+
+        elif record_type == 'trailer':
+            # Check for a valid, non-empty packet
+            if elink in pending_packets and len(pending_packets[elink]['data']) > 0:
+                packet = pending_packets.pop(elink)
+                packet_bcid = packet['header'].get('bcid')
+
+                if packet_bcid is None:
+                    continue
+
+                # --- This is the identical event counting logic ---
+                if packet_bcid != current_bcid:
+                    event_counter += 1
+                    current_bcid = packet_bcid
+                # --- End of event counting logic ---
+
+                # YIELD the status dictionary (once per packet)
+                yield {
+                    'evt': event_counter,
+                    'bcid': current_bcid,
+                    'l1a_counter': packet['header'].get('l1counter'),
+                    'elink': packet['header'].get('elink'),
+                    'sof': record_data.get('sof'),
+                    'eof': record_data.get('eof'),
+                    'full': record_data.get('full'),
+                    'any_full': record_data.get('any_full'),
+                    'global_full': record_data.get('global_full'),
+                    'chipid': record_data.get('chipid'),
+                    'status': record_data.get('status'),
+                    'hits': record_data.get('hits'),
+                    'crc': record_data.get('crc'),
+                }
+
+            elif elink in pending_packets:
+                # Clean up empty packets that had no data
+                del pending_packets[elink]
+
+
 ## --------------------------------------
 # UPDATED: The main processing function is now simpler and more robust.
-def process_tamalero_outputs(input_files: list):
+def process_tamalero_outputs(input_files: list, hit_path: str, status_path: str):
 
     all_merged_data = []
     print("Reading and merging data from input files...")
@@ -374,50 +438,77 @@ def process_tamalero_outputs(input_files: list):
         all_merged_data.extend(merge_words(raw_data))
         del raw_data
 
-    print("Decoding data stream...")
+    print("Initializing decoder...")
     df_decoder = TamaleroDF()
-    unpacked_data = (df_decoder.read(x) for x in tqdm(all_merged_data))
-    del all_merged_data
 
-    # --- LOW MEMORY STEP 3: Building events with a generator ---
-    print("Building events from data...")
-    # Create the generator object. This uses almost no memory.
-    row_generator = generate_event_rows(unpacked_data)
+    print("Building hits from data...")
+    unpacked_data_hits = (df_decoder.read(x) for x in tqdm(all_merged_data))
+    row_generator = generate_event_rows(unpacked_data_hits)
+    hit_df = pd.DataFrame.from_records(row_generator)
 
-    # Build the DataFrame directly from the generator. This is memory-efficient
-    # as it avoids creating another massive intermediate dictionary.
-    final_df = pd.DataFrame.from_records(row_generator)
+    # Clean up the generators immediately
+    del unpacked_data_hits
+    del row_generator
 
-    # The board mapping and final type casting remain useful
-    board_map = {
-        0: 0,
-        4: 1,
-        8: 2,
-        12: 3
-    }
-    if not final_df.empty:
-        final_df['board'] = final_df['elink'].map(board_map)
-        final_df.drop(columns=['elink'], inplace=True)
+    # --- Post-processing for Hit DataFrame ---
+    board_map = { 0: 0, 4: 1, 8: 2, 12: 3 }
+    if not hit_df.empty:
+        print("Post-processing hit_df...")
+        hit_df['board'] = hit_df['elink'].map(board_map)
+        hit_df.drop(columns=['elink'], inplace=True)
 
-        # Set data types for memory efficiency
         dtype_map = {
-            'evt': np.uint32,
-            'bcid': np.uint16,
-            'l1a_counter': np.uint16,
-            'ea': np.uint8,
-            'board': np.uint8,
-            'row': np.int8,
-            'col': np.int8,
-            'toa': np.uint16,
-            'tot': np.uint16,
+            'evt': np.uint32, 'bcid': np.uint16, 'l1a_counter': np.uint16,
+            'ea': np.uint8, 'board': np.uint8, 'row': np.int8,
+            'col': np.int8, 'toa': np.uint16, 'tot': np.uint16,
             'cal': np.uint16,
         }
-        final_df = final_df.astype(dtype_map)
+        hit_df = hit_df.astype(dtype_map)
 
-    return final_df
+        print(f"Saving dataframe to {hit_path}.")
+        hit_df.to_feather(hit_path)
 
+        print("Clearing hit_df from memory...")
+        del hit_df
+        gc.collect()  # Ask the garbage collector to free the memory
+    else:
+        print("No hit data found.")
 
+    print("Building event status from data...")
+    unpacked_data_status = (df_decoder.read(x) for x in tqdm(all_merged_data))
+    status_generator = generate_event_status(unpacked_data_status)
+    status_df = pd.DataFrame.from_records(status_generator)
 
+    # Clean up the second set of generators
+    del unpacked_data_status
+    del status_generator
+
+    # --- NOW we can delete the source data ---
+    del all_merged_data
+    gc.collect()
+    print("Source data deleted.")
+
+    # --- Post-processing for Status DataFrame ---
+    if not status_df.empty:
+        print("Post-processing status_df...")
+        status_df['board'] = status_df['elink'].map(board_map)
+
+        status_dtype_map = {
+            'evt': np.uint32, 'bcid': np.uint16, 'l1a_counter': np.uint16,
+            'sof': np.uint8, 'eof': np.uint8,
+            'full': np.uint8, 'any_full': np.uint8, 'global_full': np.uint8,
+            'chipid': np.uint16, 'status': np.uint8, 'hits': np.uint8, 'crc': np.uint8,
+            'board': np.uint8,
+        }
+        status_df = status_df.astype(status_dtype_map, errors='ignore')
+
+        # --- SAVE status_df ---
+        print(f"Saving status records to {status_path}...")
+        status_df.to_feather(status_path)
+    else:
+        print("No status data found.")
+
+    print("Processing complete.")
 
 ## --------------- Decoding Class -----------------------
 ## --------------------------------------
@@ -1065,6 +1156,12 @@ if __name__ == "__main__":
     df = None
     filler_df = None
 
+    # Determine output name once. This is more concise.
+    output_base_name = args.output_name or input_path.name
+    output_path = f'{output_base_name}.feather'
+    status_output_path = f'status_{output_base_name}.feather'
+    filler_output_path = f'filler_{output_base_name}.feather'
+
     if processing_mode == 'constellation':
         decoder = DecodeBinary(
             firmware_key=0b0001,
@@ -1078,31 +1175,30 @@ if __name__ == "__main__":
         # Use a try-except block for robustness in case decoding fails
         try:
             df, _, _, filler_df = decoder.decode_files()
+
+            # Save the main DataFrame
+            if df is not None and not df.empty:
+                df.to_feather(output_path)
+                print(f"Successfully saved main data to: {output_path}")
+            else:
+                print('No main data was recorded!')
+
+            # Save the filler DataFrame only if it was created (in constellation mode)
+            if filler_df is not None and not filler_df.empty:
+                filler_df.to_feather(filler_output_path)
+                print(f"Successfully saved filler data to: {filler_output_path}")
+
         except Exception as e:
             print(f"An error occurred during 'constellation' decoding: {e}")
 
     elif processing_mode == 'ce':
         try:
-            df = process_tamalero_outputs(files_to_process)
+            process_tamalero_outputs(files_to_process, output_path, status_output_path)
         except Exception as e:
             print(f"An error occurred during 'ce' processing: {e}")
 
     # 4. Centralized and non-repetitive saving logic.
     print("\n--- Saving Results ---")
 
-    # Determine output name once. This is more concise.
-    output_base_name = args.output_name or input_path.name
 
-    # Save the main DataFrame
-    if df is not None and not df.empty:
-        output_path = f'{output_base_name}.feather'
-        df.to_feather(output_path)
-        print(f"Successfully saved main data to: {output_path}")
-    else:
-        print('No main data was recorded!')
 
-    # Save the filler DataFrame only if it was created (in constellation mode)
-    if filler_df is not None and not filler_df.empty:
-        filler_output_path = f'filler_{output_base_name}.feather'
-        filler_df.to_feather(filler_output_path)
-        print(f"Successfully saved filler data to: {filler_output_path}")
