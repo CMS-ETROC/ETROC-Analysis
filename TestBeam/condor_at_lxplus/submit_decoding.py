@@ -84,7 +84,7 @@ log                   = {0}/$(ClusterId).$(ProcId).decoding.log
 output_destination    = root://eosuser.cern.ch/{1}/{2}
 MY.XRDCP_CREATE_DIR   = True
 MY.WantOS             = "el9"
-+JobFlavour           = "longlunch"
++JobFlavour           = "workday"
 Queue start, end, index from {4}/input_list_for_decoding{3}.txt
 """.format(condor_log_dir, eos_base_dir, output_dir, runName, condor_scripts_dir)
 
