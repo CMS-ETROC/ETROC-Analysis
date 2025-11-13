@@ -24,6 +24,32 @@ T1:
     HV: 200
     role: extra
 
+T3:
+  PT_LF7: &PT_LF7
+    name: ET2.01 PacTech LFoundry-7
+    short: PT_LF7
+    offset: 20
+    HV: 160
+    role: trig
+  PT_LF6: &PT_LF6
+    name: ET2.01 PacTech LFoundry-6
+    short: PT_LF6
+    offset: 20
+    HV: 150
+    role: ref
+  PT_LF9: &PT_LF9
+    name: ET2.01 PacTech LFoundry-9
+    short: PT_LF9
+    offset: 20
+    HV: 160
+    role: dut
+  PT_LF8: &PT_LF8
+    name: ET2.01 PacTech LFoundry-8
+    short: PT_LF8
+    offset: 20
+    HV: 140
+    role: extra
+
 run0:
   0: *PT_IH16
   1: *PT_IH15
@@ -66,20 +92,38 @@ run9:
   2: { <<: *PT_IH6, HV: 290, irrad: 1e15 }
   3: { <<: *PT_IH8, HV: 290, irrad: 1e15 }
 
+run10:
+  0: { <<: *PT_IH16, HV: 320, irrad: 1e15, offset: 10 }
+  1: { <<: *PT_IH15, HV: 310, irrad: 1e15, offset: 10 }
+  2: { <<: *PT_IH6, HV: 310, irrad: 1e15, offset: 10 }
+  3: { <<: *PT_IH8, HV: 310, irrad: 1e15, offset: 10 }
+
+run11:
+  0: { <<: *PT_IH16, HV: 320, irrad: 1e15, offset: 10 }
+  1: { <<: *PT_IH15, HV: 310, irrad: 1e15, offset: 10 }
+  2: { <<: *PT_IH6, HV: 310, irrad: 1e15, offset: 10 }
+  3: { <<: *PT_IH8, HV: 310, irrad: 1e15, offset: 10 }
+
 run12:
-  0: { <<: *PT_IH16, HV: 380, irrad: 1.7e15 }
-  1: { <<: *PT_IH15, HV: 360, irrad: 1.7e15 }
-  2: { <<: *PT_IH6, HV: 360, irrad: 1.7e15 }
-  3: { <<: *PT_IH8, HV: 360, irrad: 1.7e15 }
+  0: { <<: *PT_IH16, HV: 380, irrad: 1.7e15, offset: 10 }
+  1: { <<: *PT_IH15, HV: 360, irrad: 1.7e15, offset: 10 }
+  2: { <<: *PT_IH6, HV: 360, irrad: 1.7e15, offset: 10 }
+  3: { <<: *PT_IH8, HV: 360, irrad: 1.7e15, offset: 10 }
 
 run13:
-  0: { <<: *PT_IH16, HV: 380, irrad: 1.7e15 }
-  1: { <<: *PT_IH15, HV: 360, irrad: 1.7e15 }
-  2: { <<: *PT_IH6, HV: 360, irrad: 1.7e15 }
-  3: { <<: *PT_IH8, HV: 360, irrad: 1.7e15 }
+  0: { <<: *PT_IH16, HV: 380, irrad: 1.7e15, offset: 10 }
+  1: { <<: *PT_IH15, HV: 360, irrad: 1.7e15, offset: 10 }
+  2: { <<: *PT_IH6, HV: 360, irrad: 1.7e15, offset: 10 }
+  3: { <<: *PT_IH8, HV: 360, irrad: 1.7e15, offset: 10 }
 
 run14:
-  0: { <<: *PT_IH16, HV: 380, irrad: 1.7e15 }
-  1: { <<: *PT_IH15, HV: 360, irrad: 1.7e15 }
-  2: { <<: *PT_IH6, HV: 360, irrad: 1.7e15 }
-  3: { <<: *PT_IH8, HV: 360, irrad: 1.7e15 }
+  0: { <<: *PT_IH16, HV: 380, irrad: 1.7e15, offset: 10 }
+  1: { <<: *PT_IH15, HV: 360, irrad: 1.7e15, offset: 10 }
+  2: { <<: *PT_IH6, HV: 360, irrad: 1.7e15, offset: 10 }
+  3: { <<: *PT_IH8, HV: 360, irrad: 1.7e15, offset: 10 }
+
+run15:
+  0: *PT_LF7
+  1: *PT_LF6
+  2: *PT_LF9
+  3: *PT_LF8
