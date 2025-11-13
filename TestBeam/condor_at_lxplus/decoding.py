@@ -424,7 +424,7 @@ def generate_event_status(unpacked_data_list):
 
 ## --------------------------------------
 # UPDATED: The main processing function is now simpler and more robust.
-def process_tamalero_outputs(input_files: list, hit_path: str, status_path: str):
+def process_tamalero_outputs(input_files: list, hit_path: str, status_path: str, return_dataframes: bool = False):
 
     all_merged_data = []
     print("Reading and merging data from input files...")
@@ -465,12 +465,13 @@ def process_tamalero_outputs(input_files: list, hit_path: str, status_path: str)
         }
         hit_df = hit_df.astype(dtype_map)
 
-        print(f"Saving dataframe to {hit_path}.")
-        hit_df.to_feather(hit_path)
+        if not return_dataframes:
+            print(f"Saving dataframe to {hit_path}.")
+            hit_df.to_feather(hit_path)
 
-        print("Clearing hit_df from memory...")
-        del hit_df
-        gc.collect()  # Ask the garbage collector to free the memory
+            print("Clearing hit_df from memory...")
+            del hit_df
+            gc.collect()  # Ask the garbage collector to free the memory
     else:
         print("No hit data found.")
 
@@ -503,12 +504,24 @@ def process_tamalero_outputs(input_files: list, hit_path: str, status_path: str)
         status_df = status_df.astype(status_dtype_map, errors='ignore')
 
         # --- SAVE status_df ---
-        print(f"Saving status records to {status_path}...")
-        status_df.to_feather(status_path)
+        if not return_dataframes:
+            print(f"Saving status records to {status_path}...")
+            status_df.to_feather(status_path)
+
+            # --- ADDED FOR CONSISTENCY ---
+            print("Clearing status_df from memory...")
+            del status_df
+            gc.collect()
     else:
         print("No status data found.")
 
-    print("Processing complete.")
+    # --- NEW: FINAL RETURN LOGIC ---
+    if return_dataframes:
+        print("Processing complete. Returning dataframes.")
+        return hit_df, status_df
+
+    else:
+        print("Processing complete. Saved dataframes")
 
 ## --------------- Decoding Class -----------------------
 ## --------------------------------------
@@ -1199,6 +1212,3 @@ if __name__ == "__main__":
 
     # 4. Centralized and non-repetitive saving logic.
     print("\n--- Saving Results ---")
-
-
-
