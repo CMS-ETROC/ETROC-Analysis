@@ -65,3 +65,21 @@ run9:
   1: { <<: *PT_IH15, HV: 290, irrad: 1e15 }
   2: { <<: *PT_IH6, HV: 290, irrad: 1e15 }
   3: { <<: *PT_IH8, HV: 290, irrad: 1e15 }
+
+run12:
+  0: { <<: *PT_IH16, HV: 380, irrad: 1.7e15 }
+  1: { <<: *PT_IH15, HV: 360, irrad: 1.7e15 }
+  2: { <<: *PT_IH6, HV: 360, irrad: 1.7e15 }
+  3: { <<: *PT_IH8, HV: 360, irrad: 1.7e15 }
+
+run13:
+  0: { <<: *PT_IH16, HV: 380, irrad: 1.7e15 }
+  1: { <<: *PT_IH15, HV: 360, irrad: 1.7e15 }
+  2: { <<: *PT_IH6, HV: 360, irrad: 1.7e15 }
+  3: { <<: *PT_IH8, HV: 360, irrad: 1.7e15 }
+
+run14:
+  0: { <<: *PT_IH16, HV: 380, irrad: 1.7e15 }
+  1: { <<: *PT_IH15, HV: 360, irrad: 1.7e15 }
+  2: { <<: *PT_IH6, HV: 360, irrad: 1.7e15 }
+  3: { <<: *PT_IH8, HV: 360, irrad: 1.7e15 }
