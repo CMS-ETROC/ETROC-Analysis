@@ -275,16 +275,23 @@ class TamaleroDF:
                 print ("Found data of type None:", val)
             return None, res
 
-        if data_type == 'data':
-            datatypelist = self.format['types']
-        else:
-            datatypelist = self.format['data'][data_type]
+        # if data_type == 'data':
+        #     datatypelist = self.format['types']
+        # else:
+        #     datatypelist = self.format['data'][data_type]
 
-        for d in datatypelist:
-            res[d] = (val & self.format['data'][data_type][d]['mask']) >> self.format['data'][data_type][d]['shift']
+        # for d in datatypelist:
+        #     res[d] = (val & self.format['data'][data_type][d]['mask']) >> self.format['data'][data_type][d]['shift']
 
-        if data_type == 'header':
-            self.type = res['type']
+        data_format_dict = self.format['data'][data_type]
+
+        for field_name in data_format_dict:
+            # field_name is 'bcid', 'ea', 'row_id', etc.
+            field_info = data_format_dict[field_name]
+            res[field_name] = (val & field_info['mask']) >> field_info['shift']
+
+        # if data_type == 'header':
+        #     self.type = res['type']
 
         # Commented out since they're not needed
         # res['raw'] = hex(val&0xFFFFFFFFFF)
