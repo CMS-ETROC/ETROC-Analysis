@@ -285,9 +285,11 @@ class TamaleroDF:
 
         if data_type == 'header':
             self.type = res['type']
-        res['raw'] = hex(val&0xFFFFFFFFFF)
-        res['raw_full'] = hex(val)
-        res['meta'] = hex((val>>40)&0xFFFFFF)
+
+        # Commented out since they're not needed
+        # res['raw'] = hex(val&0xFFFFFFFFFF)
+        # res['raw_full'] = hex(val)
+        # res['meta'] = hex((val>>40)&0xFFFFFF)
 
         if not quiet:
             print (f"Found data of type {data_type}:", res)
@@ -295,12 +297,33 @@ class TamaleroDF:
 
 ## --------------------------------------
 def merge_words(res):
-    empty_frame_mask = np.array(res[0::2]) > (2**8)
-    len_cut = min(len(res[0::2]), len(res[1::2]))
-    if len(res) > 0:
-        return list(np.array(res[0::2])[:len_cut][empty_frame_mask[:len_cut]] | (np.array(res[1::2]) << 32)[:len_cut][empty_frame_mask[:len_cut]])
-    else:
+
+    # 1. Handle the empty case first
+    if not res:
         return []
+
+    # 2. Create the slices ONCE
+    low_words_list = res[0::2]
+    high_words_list = res[1::2]
+
+    # 3. Find the minimum length for pairing
+    #    (We only care about elements that have a partner)
+    len_cut = min(len(low_words_list), len(high_words_list))
+
+    # 4. Convert the relevant (sliced) parts to arrays ONCE
+    #    We truncate the lists *before* converting to NumPy
+    low_words = np.array(low_words_list[:len_cut])
+    high_words = np.array(high_words_list[:len_cut])
+
+    # 5. Create the mask from the final `low_words` array
+    mask = low_words > (2**8)  # 256
+
+    # 6. Apply the mask to *both* arrays and combine them
+    #    This is much more readable
+    merged_words = low_words[mask] | (high_words[mask] << 32)
+
+    # 7. Return the final result as a list
+    return merged_words
 
 ## --------------------------------------
 def generate_event_rows(unpacked_data_list):
@@ -426,7 +449,7 @@ def generate_event_status(unpacked_data_list):
 # UPDATED: The main processing function is now simpler and more robust.
 def process_tamalero_outputs(input_files: list, hit_path: str, status_path: str, return_dataframes: bool = False):
 
-    all_merged_data = []
+    all_merged_arrays = []
     print("Reading and merging data from input files...")
     for ifile in tqdm(input_files):
         with open(ifile, 'rb') as f:
@@ -435,14 +458,18 @@ def process_tamalero_outputs(input_files: list, hit_path: str, status_path: str,
             del bin_data
 
         # Merge data and add to a single list for unified processing
-        all_merged_data.extend(merge_words(raw_data))
+        all_merged_arrays.append(merge_words(raw_data))
         del raw_data
+
+    print("Concatenating all data blocks...")
+    final_merged_data = np.concatenate(all_merged_arrays)
+    del all_merged_arrays # Free up the list of arrays
 
     print("Initializing decoder...")
     df_decoder = TamaleroDF()
 
     print("Building hits from data...")
-    unpacked_data_hits = (df_decoder.read(x) for x in tqdm(all_merged_data))
+    unpacked_data_hits = (df_decoder.read(x) for x in tqdm(final_merged_data))
     row_generator = generate_event_rows(unpacked_data_hits)
     hit_df = pd.DataFrame.from_records(row_generator)
 
@@ -476,7 +503,7 @@ def process_tamalero_outputs(input_files: list, hit_path: str, status_path: str,
         print("No hit data found.")
 
     print("Building event status from data...")
-    unpacked_data_status = (df_decoder.read(x) for x in tqdm(all_merged_data))
+    unpacked_data_status = (df_decoder.read(x) for x in tqdm(final_merged_data))
     status_generator = generate_event_status(unpacked_data_status)
     status_df = pd.DataFrame.from_records(status_generator)
 
@@ -485,7 +512,7 @@ def process_tamalero_outputs(input_files: list, hit_path: str, status_path: str,
     del status_generator
 
     # --- NOW we can delete the source data ---
-    del all_merged_data
+    del final_merged_data
     gc.collect()
     print("Source data deleted.")
 
