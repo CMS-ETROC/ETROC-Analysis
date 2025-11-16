@@ -56,6 +56,12 @@ run0:
   2: *PT_IH6
   3: *PT_IH8
 
+run2:
+  0: *PT_IH16
+  1: *PT_IH15
+  2: *PT_IH6
+  3: *PT_IH8
+
 run3:
   0: { <<: *PT_IH16, HV: 180 }
   1: { <<: *PT_IH15, HV: 180 }
