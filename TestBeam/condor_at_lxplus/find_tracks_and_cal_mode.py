@@ -392,28 +392,6 @@ if __name__ == "__main__":
                 columns_want_to_group.append(f'row_{i}')
                 columns_want_to_group.append(f'col_{i}')
 
-        selected_subset_df['xprime'] = (selected_subset_df['col'] - 7.5) * 1.3
-        selected_subset_df['yprime'] = (selected_subset_df['row'] - 7.5) * 1.3
-
-        board_df_list = []
-        for id in range(4):
-            board_df = selected_subset_df.loc[selected_subset_df['board'] == id]
-            rot, tra = get_tranformation(id, config[args.runName])
-
-            board_df['x'] = board_df['xprime'] * (np.cos(rot[2]) * np.cos(rot[1])) + board_df['yprime'] * (np.cos(rot[2])*np.sin(rot[1])*np.sin(rot[0]) - np.sin(rot[2])*np.cos(rot[0]))
-            board_df['y'] = board_df['xprime'] * (np.sin(rot[2]) * np.cos(rot[1])) + board_df['yprime'] * (np.sin(rot[2])*np.sin(rot[1])*np.sin(rot[0]) + np.cos(rot[2])*np.cos(rot[0]))
-            board_df['z'] = board_df['xprime'] * (- np.sin(rot[1]))                + board_df['yprime'] * (np.cos(rot[1])*np.sin(rot[0]))
-
-            board_df['x'] += tra[0]
-            board_df['y'] += tra[1]
-            board_df['z'] += tra[2]
-
-            board_df_list.append(board_df)
-
-        selected_subset_df = pd.concat(board_df_list)
-        selected_subset_df['row'] = selected_subset_df['row'].astype(np.int8)
-        selected_subset_df['col'] = selected_subset_df['col'].astype(np.int8)
-
         pivot_data_df = making_pivot(selected_subset_df, 'evt', 'board', set({'board', 'evt', 'cal', 'tot'}), ignore_boards=ignore_board_ids)
 
         combinations_df = pivot_data_df.groupby(columns_want_to_group).count()
@@ -424,6 +402,20 @@ if __name__ == "__main__":
         track_df.reset_index(inplace=True)
 
         del pivot_data_df, combinations_df
+
+        for id in range(4):
+            track_df[f'xprime_{id}'] = (track_df[f'col_{id}'] - 7.5) * 1.3
+            track_df[f'yprime_{id}'] = (track_df[f'row_{id}'] - 7.5) * 1.3
+
+            rot, tra = get_tranformation(id, config[args.runName])
+
+            track_df[f'x_{id}'] = track_df[f'xprime_{id}'] * (np.cos(rot[2]) * np.cos(rot[1])) + track_df[f'yprime_{id}'] * (np.cos(rot[2])*np.sin(rot[1])*np.sin(rot[0]) - np.sin(rot[2])*np.cos(rot[0]))
+            track_df[f'y_{id}'] = track_df[f'xprime_{id}'] * (np.sin(rot[2]) * np.cos(rot[1])) + track_df[f'yprime_{id}'] * (np.sin(rot[2])*np.sin(rot[1])*np.sin(rot[0]) + np.cos(rot[2])*np.cos(rot[0]))
+            track_df[f'z_{id}'] = track_df[f'xprime_{id}'] * (- np.sin(rot[1]))                + track_df[f'yprime_{id}'] * (np.cos(rot[1])*np.sin(rot[0]))
+
+            track_df[f'x_{id}'] += tra[0]
+            track_df[f'y_{id}'] += tra[1]
+            track_df[f'z_{id}'] += tra[2]
 
         if three_board_flag:
             role_pairs = [('y', 'trig', 'ref'), ('y', 'trig', 'dut'),
