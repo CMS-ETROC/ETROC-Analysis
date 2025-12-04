@@ -1,0 +1,30 @@
+PT_NH47: &PT_NH47
+  name: ET2.02 PacTech New HPK-47
+  short: PT_NH47
+  offset: 20
+  HV: 220
+  role: trig
+PT_IH18: &PT_IH18
+  name: ET2.02 PacTech (will be) Irradiated HPK-3
+  short: PT_IH18
+  offset: 20
+  HV: 220
+  role: ref
+PT_IH21: &PT_IH21
+  name: ET2.02 PacTech (will be) Irradiated HPK-21
+  short: PT_IH21
+  offset: 20
+  HV: 220
+  role: dut
+PT_IH22: &PT_IH22
+  name: ET2.02 PacTech (will be) Irradiated HPK-22
+  short: PT_IH22
+  offset: 20
+  HV: 220
+  role: extra
+
+run0:
+  0: *PT_NH47
+  1: *PT_IH18
+  2: *PT_IH21
+  3: *PT_IH22
