@@ -67,7 +67,7 @@ def tdc_event_selection(
 def delta_within_limit(input_df: pd.DataFrame, id_roles: dict, axis: str, role1: str, role2: str) -> pd.Series:
     return (
         np.abs(input_df[f'{axis}_{id_roles[role1]}'] - input_df[f'{axis}_{id_roles[role2]}'])
-        <= args.max_diff_pixel
+        <= args.max_diff_pixel * 1.3
     )
 
 ## --------------------------------------
@@ -91,6 +91,20 @@ def making_pivot(
 
         return pivot_data_df
 
+
+def get_tranformation(
+        board_id: int,
+        config,
+    ):
+    # TODO: Add here a check if these values exist and if not return a default value of 0
+    rot_x = config[board_id]['transformation']['rotation']['x']*np.pi/180
+    rot_y = config[board_id]['transformation']['rotation']['y']*np.pi/180
+    rot_z = config[board_id]['transformation']['rotation']['z']*np.pi/180
+    tra_x = config[board_id]['transformation']['translation']['x']
+    tra_y = config[board_id]['transformation']['translation']['y']
+    tra_z = config[board_id]['transformation']['translation']['z']
+
+    return (rot_x, rot_y, rot_z), (tra_x, tra_y, tra_z)
 
 ## --------------------------------------
 if __name__ == "__main__":
@@ -378,6 +392,26 @@ if __name__ == "__main__":
                 columns_want_to_group.append(f'row_{i}')
                 columns_want_to_group.append(f'col_{i}')
 
+        selected_subset_df['xprime'] = (selected_subset_df['col'] - 7.5) * 1.3
+        selected_subset_df['yprime'] = (selected_subset_df['row'] - 7.5) * 1.3
+
+        board_df_list = []
+        for id in range(4):
+            board_df = selected_subset_df.loc[selected_subset_df['board'] == id]
+            rot, tra = get_tranformation(id, config[args.runName])
+
+            board_df['x'] = board_df['xprime'] * (np.cos(rot[2]) * np.cos(rot[1])) + board_df['yprime'] * (np.cos(rot[2])*np.sin(rot[1])*np.sin(rot[0]) - np.sin(rot[2])*np.cos(rot[0]))
+            board_df['y'] = board_df['xprime'] * (np.sin(rot[2]) * np.cos(rot[1])) + board_df['yprime'] * (np.sin(rot[2])*np.sin(rot[1])*np.sin(rot[0]) + np.cos(rot[2])*np.cos(rot[0]))
+            board_df['z'] = board_df['xprime'] * (- np.sin(rot[1]))                + board_df['yprime'] * (np.cos(rot[1])*np.sin(rot[0]))
+
+            board_df['x'] += tra[0]
+            board_df['y'] += tra[1]
+            board_df['z'] += tra[2]
+
+            board_df_list.append(board_df)
+
+        selected_subset_df = pd.concat(board_df_list)
+
         pivot_data_df = making_pivot(selected_subset_df, 'evt', 'board', set({'board', 'evt', 'cal', 'tot'}), ignore_boards=ignore_board_ids)
 
         combinations_df = pivot_data_df.groupby(columns_want_to_group).count()
@@ -390,11 +424,11 @@ if __name__ == "__main__":
         del pivot_data_df, combinations_df
 
         if three_board_flag:
-            role_pairs = [('row', 'trig', 'ref'), ('row', 'trig', 'dut'),
-                          ('col', 'trig', 'ref'), ('col', 'trig', 'dut')]
+            role_pairs = [('y', 'trig', 'ref'), ('y', 'trig', 'dut'),
+                          ('x', 'trig', 'ref'), ('x', 'trig', 'dut')]
         else:
-            role_pairs = [('row', 'trig', 'ref'), ('row', 'trig', 'dut'), ('row', 'trig', 'extra'),
-                          ('col', 'trig', 'ref'), ('col', 'trig', 'dut'), ('col', 'trig', 'extra')]
+            role_pairs = [('y', 'trig', 'ref'), ('y', 'trig', 'dut'), ('y', 'trig', 'extra'),
+                          ('x', 'trig', 'ref'), ('x', 'trig', 'dut'), ('x', 'trig', 'extra')]
 
         track_condition = np.logical_and.reduce([delta_within_limit(track_df, roles, axis, r1, r2) for axis, r1, r2 in role_pairs])
 
