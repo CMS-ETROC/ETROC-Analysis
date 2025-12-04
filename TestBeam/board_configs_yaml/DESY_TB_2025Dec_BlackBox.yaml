@@ -4,24 +4,60 @@ PT_IH2: &PT_IH2
   offset: 20
   HV: 220
   role: trig
+  transformation:
+    rotation:
+      x: 0
+      y: 0
+      z: 90
+    translation:
+      x: 0
+      y: 0
+      z: 3
 PT_IH3: &PT_IH3
   name: ET2.02 PacTech Irradiated HPK-3
   short: PT_IH3
   offset: 20
   HV: 220
   role: ref
+  transformation:
+    rotation:
+      x: 0
+      y: 0
+      z: 90
+    translation:
+      x: 0
+      y: 0
+      z: 2
 PT_IH5: &PT_IH5
   name: ET2.02 PacTech Irradiated HPK-5
   short: PT_IH5
   offset: 20
   HV: 220
   role: dut
+  transformation:
+    rotation:
+      x: 0
+      y: 0
+      z: 90
+    translation:
+      x: 0
+      y: 0
+      z: 1
 PT_IH24: &PT_IH24
   name: ET2.02 PacTech Irradiated HPK-24
   short: PT_IH24
   offset: 20
   HV: 220
   role: extra
+  transformation:
+    rotation:
+      x: 0
+      y: 0
+      z: 90
+    translation:
+      x: 0
+      y: 0
+      z: 0
 
 run0:
   0: *PT_IH2

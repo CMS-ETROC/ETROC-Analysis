@@ -4,24 +4,60 @@ PT_NH47: &PT_NH47
   offset: 20
   HV: 220
   role: dut
+  transformation:
+    rotation:
+      x: 0
+      y: 60
+      z: 0
+    translation:
+      x: 0
+      y: 0
+      z: 4
 PT_IH18: &PT_IH18
-  name: ET2.02 PacTech (will be) Irradiated HPK-18
+  name: ET2.02 PacTech (Non) Irradiated HPK-18
   short: PT_IH18
   offset: 20
   HV: 220
   role: ref
+  transformation:
+    rotation:
+      x: 0
+      y: 0
+      z: 180
+    translation:
+      x: 0
+      y: 0
+      z: 2
 PT_IH21: &PT_IH21
   name: ET2.02 PacTech (will be) Irradiated HPK-21
   short: PT_IH21
   offset: 20
   HV: 220
   role: extra
+  transformation:
+    rotation:
+      x: 0
+      y: 0
+      z: 180
+    translation:
+      x: 0
+      y: 0
+      z: 1
 PT_IH22: &PT_IH22
   name: ET2.02 PacTech (will be) Irradiated HPK-22
   short: PT_IH22
   offset: 20
   HV: 220
   role: trig
+  transformation:
+    rotation:
+      x: 0
+      y: 0
+      z: 180
+    translation:
+      x: 0
+      y: 0
+      z: 0
 
 run01:
   0: *PT_NH47
