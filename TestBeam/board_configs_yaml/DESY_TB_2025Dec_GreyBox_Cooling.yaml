@@ -23,8 +23,14 @@ PT_IH22: &PT_IH22
   HV: 220
   role: trig
 
-run0:
+run01:
   0: *PT_NH47
+  1: *PT_IH18
+  2: *PT_IH21
+  3: *PT_IH22
+
+run02:
+  0: { <<: *PT_NH47, HV: 180 }
   1: *PT_IH18
   2: *PT_IH21
   3: *PT_IH22
