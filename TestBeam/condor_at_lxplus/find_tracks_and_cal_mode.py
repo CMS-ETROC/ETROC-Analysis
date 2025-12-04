@@ -411,6 +411,8 @@ if __name__ == "__main__":
             board_df_list.append(board_df)
 
         selected_subset_df = pd.concat(board_df_list)
+        selected_subset_df['row'] = selected_subset_df['row'].astype(np.int8)
+        selected_subset_df['col'] = selected_subset_df['col'].astype(np.int8)
 
         pivot_data_df = making_pivot(selected_subset_df, 'evt', 'board', set({'board', 'evt', 'cal', 'tot'}), ignore_boards=ignore_board_ids)
 
