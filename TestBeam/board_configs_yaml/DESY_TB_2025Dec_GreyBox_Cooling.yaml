@@ -29,7 +29,7 @@ PT_IH18: &PT_IH18
       y: 0
       z: 2
 PT_IH21: &PT_IH21
-  name: ET2.02 PacTech (will be) Irradiated HPK-21
+  name: ET2.02 PacTech (Non) Irradiated HPK-21
   short: PT_IH21
   offset: 20
   HV: 220
@@ -44,7 +44,7 @@ PT_IH21: &PT_IH21
       y: 0
       z: 1
 PT_IH22: &PT_IH22
-  name: ET2.02 PacTech (will be) Irradiated HPK-22
+  name: ET2.02 PacTech (Non) Irradiated HPK-22
   short: PT_IH22
   offset: 20
   HV: 220
