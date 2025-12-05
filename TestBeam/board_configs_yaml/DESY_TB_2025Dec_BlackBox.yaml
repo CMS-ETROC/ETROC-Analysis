@@ -100,3 +100,9 @@ run05:
   1: { <<: *PT_IH3, angle: 30, HV: 200 }
   2: { <<: *PT_IH5, angle: 30, HV: 200 }
   3: { <<: *PT_IH24, angle: 30, HV: 200 }
+
+run06:
+  0: { <<: *PT_IH2, angle: 30, offset: 10 }
+  1: { <<: *PT_IH3, angle: 30, offset: 10 }
+  2: { <<: *PT_IH5, angle: 30, offset: 10 }
+  3: { <<: *PT_IH24, angle: 30, offset: 10 }
