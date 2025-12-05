@@ -7,25 +7,14 @@ from tqdm import tqdm
 def pixel_filter(
         input_df: pd.DataFrame,
         pixel_dict: dict,
-        filter_by_area: bool = False,
-        pixel_buffer: int = 2,
     ):
 
     masks = {}
-    if filter_by_area:
-        for board, pix in pixel_dict.items():
-            mask = (
-                (input_df['board'] == board)
-                & (input_df['row'] >= pix[0]-pixel_buffer) & (input_df['row'] <= pix[0]+pixel_buffer)
-                & (input_df['col'] >= pix[1]-pixel_buffer) & (input_df['col'] <= pix[1]+pixel_buffer)
-            )
-            masks[board] = mask
-    else:
-        for board, pix in pixel_dict.items():
-            mask = (
-                (input_df['board'] == board) & (input_df['row'] == pix[0]) & (input_df['col'] == pix[1])
-            )
-            masks[board] = mask
+    for board, pix in pixel_dict.items():
+        mask = (
+            (input_df['board'] == board) & (input_df['row'] == pix[0]) & (input_df['col'] == pix[1])
+        )
+        masks[board] = mask
 
     # Combine the masks using logical OR
     combined_mask = pd.concat(masks, axis=1).any(axis=1)
@@ -303,34 +292,48 @@ if __name__ == "__main__":
         exit(0)
 
     cal_table = pd.read_csv(args.cal_table)
-    track_df = pd.read_csv(args.track)
-    track_df = track_df.drop(columns=['count'])
     track_pivots = defaultdict(pd.DataFrame)
 
-    if track_df.shape[1] == 8:
+    # Load data
+    track_df = pd.read_csv(args.track)
+
+    # Robustly identify which boards are actually in the file
+    # We check if 'row_0', 'row_1', etc. exist in the columns
+    present_boards = sorted([i for i in [0, 1, 2, 3] if f'row_{i}' in track_df.columns])
+
+    # 2. Use the length of present_boards to decide logic
+    if len(present_boards) == 4:
         print('Track separation with 4 boards combination')
 
         for itrack in tqdm(range(track_df.shape[0])):
             pix_dict = {}
-            for idx in [0, 1, 2, 3]:
+            # Use present_boards instead of hardcoded [0, 1, 2, 3] to be safe
+            for idx in present_boards:
                 pix_dict[idx] = [track_df.iloc[itrack][f'row_{idx}'], track_df.iloc[itrack][f'col_{idx}']]
 
             table = data_4board_selection_by_track(input_df=run_df, cal_mode_table=cal_table, pix_dict=pix_dict, trig_id=trig_id,
-                                                   board_to_analyze=[0, 1, 2, 3], tot_cuts=tot_cuts)
+                                                   board_to_analyze=present_boards, tot_cuts=tot_cuts)
             table['file'] = file_num_indicator
             table['file'] = table['file'].astype('uint16')
 
             track_pivots[itrack] = table
-    else:
-        print('Track separation with 3 boards combination')
 
-        if args.extraID == None:
-            id_to_ignore = next((x for x in [0, 1, 2, 3] if x not in set([args.trigID, args.dutID, args.refID])), None)
+    else:
+        print(f'Track separation with 3 boards combination. Found: {present_boards}')
+
+        # Logic to determine which board is missing (the 'extra' or ignored one)
+        # If args.extraID is None, we deduce it from what's missing in the CSV
+        if args.extraID is None:
+            # Find the ID that is in [0,1,2,3] but NOT in present_boards
+            missing_ids = list(set([0, 1, 2, 3]) - set(present_boards))
+            id_to_ignore = missing_ids[0] if missing_ids else None
         else:
             id_to_ignore = args.extraID
 
         reduced_run_df = run_df.loc[~(run_df['board'] == id_to_ignore)]
-        board_to_analyze = sorted([args.trigID, args.dutID, args.refID])
+
+        # The boards to analyze are simply the ones we found in the CSV
+        board_to_analyze = present_boards
 
         for itrack in tqdm(range(track_df.shape[0])):
             pix_dict = {}
