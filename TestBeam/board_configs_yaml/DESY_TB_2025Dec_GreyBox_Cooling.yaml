@@ -21,9 +21,9 @@ PT_IH18: &PT_IH18
   role: ref
   transformation:
     rotation:
-      x: 0
+      x: 180
       y: 0
-      z: 180
+      z: 0
     translation:
       x: 0
       y: 0
@@ -36,9 +36,9 @@ PT_IH21: &PT_IH21
   role: extra
   transformation:
     rotation:
-      x: 0
+      x: 180
       y: 0
-      z: 180
+      z: 0
     translation:
       x: 0
       y: 0
@@ -51,9 +51,9 @@ PT_IH22: &PT_IH22
   role: trig
   transformation:
     rotation:
-      x: 0
+      x: 180
       y: 0
-      z: 180
+      z: 0
     translation:
       x: 0
       y: 0
