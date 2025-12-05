@@ -443,6 +443,9 @@ def main():
     # Remove duplicates if any remain based on pattern
     final_tracks = final_tracks.drop_duplicates(subset=group_cols)
 
+    coord_cols = [c for c in final_tracks.columns if c.split('_')[0] in ['x', 'y', 'z']]
+    final_tracks[coord_cols] = final_tracks[coord_cols].round(2)
+
     output_file = f'{args.out_trackname}_tracks.csv'
     final_tracks.to_csv(output_file, index=False)
     logging.info(f"Done. Tracks saved to {output_file}")
