@@ -7,7 +7,7 @@ PT_NH47: &PT_NH47
   transformation:
     rotation:
       x: 0
-      y: 60
+      y: -60
       z: 0
     translation:
       x: 0
