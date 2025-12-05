@@ -108,7 +108,7 @@ def data_3board_selection_by_track(
         tot_cuts: list[int],
     ):
 
-    track_tmp_df = pixel_filter(input_df, pix_dict, filter_by_area=False)
+    track_tmp_df = pixel_filter(input_df, pix_dict)
 
     if sorted(track_tmp_df['board'].unique().tolist()) != board_to_analyze:
         print('dataframe is not sufficient after pixel selection. Exit the function')
@@ -154,7 +154,7 @@ def data_4board_selection_by_track(
         tot_cuts: list[int],
     ):
 
-    track_tmp_df = pixel_filter(input_df, pix_dict, filter_by_area=False)
+    track_tmp_df = pixel_filter(input_df, pix_dict)
 
     if sorted(track_tmp_df['board'].unique().tolist()) != board_to_analyze:
         print('dataframe is not sufficient after pixel selection. Exit the function')
