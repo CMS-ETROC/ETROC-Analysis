@@ -3,7 +3,7 @@ import sys
 import logging
 import warnings
 import random
-import yaml
+import ruamel.yaml
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -96,9 +96,9 @@ def apply_geometric_transformation(df: pd.DataFrame, board_ids: List[int], confi
         # Note: Optimization could be done using matrix multiplication, but keeping
         # explicit expansion to match original logic exactly.
 
+        cos_rx, sin_rx = np.cos(rx), np.sin(rx)
         cos_ry, sin_ry = np.cos(ry), np.sin(ry)
         cos_rz, sin_rz = np.cos(rz), np.sin(rz)
-        cos_rx, sin_rx = np.cos(rx), np.sin(rx)
 
         df[f'x_{bid}'] = (x_prime * (cos_rz * cos_ry) +
                           y_prime * (cos_rz * sin_ry * sin_rx - sin_rz * cos_rx) +
@@ -297,12 +297,13 @@ def main():
     parser.add_argument('--mask_config', type=Path, dest='mask_config_file', help='Mask config YAML')
     parser.add_argument('--exclude_role', help='Role to exclude')
     parser.add_argument('--cal_table_only', action='store_true', help='Only generate CAL table')
+    parser.add_argument('--find_alignment', action='store_true', help='Find the board offset alignments refer to trigger board')
 
     args = parser.parse_args()
 
     # 1. Setup & Config
     with open(args.config) as f:
-        full_config = yaml.safe_load(f)
+        full_config = ruamel.yaml.load(f, Loader=ruamel.yaml.RoundTripLoader)
 
     if args.runName not in full_config:
         raise ValueError(f"Run config {args.runName} not found")
@@ -402,6 +403,39 @@ def main():
 
     # 6. Geometric Transformation & Final Filtering
     apply_geometric_transformation(track_candidates, ids_to_process, run_config)
+
+    if args.find_alignment:
+        shift_df = track_candidates.copy(deep=True)
+        trig_id = roles['trig']
+        for bid in range(4):
+            if bid == trig_id:
+                continue
+
+            shift_df[f'x_{bid}'] = shift_df[f'x_{bid}'] - shift_df[f'x_{trig_id}']
+            shift_df[f'y_{bid}'] = shift_df[f'y_{bid}'] - shift_df[f'y_{trig_id}']
+
+            counts, bin_edges = np.histogram(shift_df[f'x_{bid}'], weights=shift_df['count'], bins=30)
+            max_index = np.argmax(counts)
+            max_bin_start = bin_edges[max_index]
+            max_bin_end = bin_edges[max_index + 1]
+
+            center_x = round(float(0.5*(max_bin_end+max_bin_start)), 2)
+
+            counts, bin_edges = np.histogram(shift_df[f'y_{bid}'], weights=shift_df['count'], bins=30)
+            max_index = np.argmax(counts)
+            max_bin_start = bin_edges[max_index]
+            max_bin_end = bin_edges[max_index + 1]
+
+            center_y = round(float(0.5*(max_bin_end+max_bin_start)), 2)
+
+            full_config[args.runName][bid]['transformation']['translation']['x'] += -center_x
+            full_config[args.runName][bid]['transformation']['translation']['y'] += -center_y
+
+        with open(args.config, 'w') as f:
+            ruamel.yaml.dump(full_config, f, Dumper=ruamel.yaml.RoundTripDumper)
+
+        run_config = full_config[args.runName]
+        apply_geometric_transformation(track_candidates, ids_to_process, run_config)
 
     spatial_mask = check_spatial_alignment(track_candidates, roles, args.max_diff_pixel)
     final_tracks = track_candidates[spatial_mask]
