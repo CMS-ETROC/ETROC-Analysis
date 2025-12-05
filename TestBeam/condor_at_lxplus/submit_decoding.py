@@ -4,6 +4,7 @@ from natsort import natsorted
 
 import argparse
 import subprocess
+import sys
 
 def load_bash_template(input_dir_path, file_extension, file_suffix=''):
     """
@@ -114,7 +115,7 @@ def make_jobs(args, log_dir, condor_scripts_dir, runAppend):
 
     if file_list is None:
         print(f"!!! ERROR: No 'file*.bin' or 'file*_CE.dat' files found in '{input_path}'. Exiting.")
-        return
+        sys.exit(1)
 
     print(f"--> Auto-detected and using file extension: '{file_extension}'")
 
@@ -269,7 +270,6 @@ if __name__ == "__main__":
 
         if len(filtered_lines) == 0:
             print('No condor job found.')
-            import sys
             sys.exit(1)
 
         with open(input_txt_path, 'w') as f:
