@@ -1,180 +1,235 @@
-from natsort import natsorted
+import argparse
+import sys
+import yaml
+import warnings
+import pandas as pd
+import gc
 from pathlib import Path
 from tqdm import tqdm
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from natsort import natsorted
+from typing import List, Dict, Any, Tuple
 
-import pandas as pd
-import yaml
-import warnings
-import argparse
-
+# --- Configuration ---
 warnings.filterwarnings("ignore")
 
-def save_single_track(track_key, track_parts, track_dir, nickname_dict, role_by_index):
-    """
-    Worker function to concatenate, name, and save a single track file.
-    This function will be run in parallel.
-    """
-    concatenated_track_df = pd.concat(track_parts, ignore_index=True)
+# --- Helper Functions ---
 
-    # Robustness Check 1: Skip empty tracks
-    if concatenated_track_df.empty:
-        return f"Skipped empty track: {track_key}"
+def load_config_and_roles(config_path: str, run_name: str) -> Tuple[Dict[int, str], Dict[str, str]]:
+    """Loads YAML config and builds the board ID to Role mapping."""
+    with open(config_path) as f:
+        config = yaml.safe_load(f)
 
-    # Robustness Check 2: Protect filename generation
-    try:
-        board_ids_for_naming = [
-            b for b in concatenated_track_df.columns.get_level_values('board').unique()
-            if isinstance(b, int)
-        ]
-        row_cols = {
-            idx: (concatenated_track_df['row'][idx].unique()[0], concatenated_track_df['col'][idx].unique()[0])
-            for idx in board_ids_for_naming
-        }
-        outname = f"track" + ''.join([f"{nickname_dict[role_by_index[key]]}R{row}C{col}" for key, (row, col) in row_cols.items()])
-        concatenated_track_df.to_pickle(track_dir / f'{outname}.pkl')
-        return f"Saved track: {outname}.pkl"
+    if run_name not in config:
+        raise ValueError(f"Run config '{run_name}' not found in {config_path}")
 
-    except IndexError:
-        return f"Warning: Failed to name track {track_key}. Skipping."
-
-def reshape_to_tracks(args):
-
-    # --- Configuration Loading ---
-    with open(args.config) as input_yaml:
-        config = yaml.safe_load(input_yaml)
-
-    if args.runName not in config:
-        raise ValueError(f"Run config {args.runName} not found")
-
+    # Map ID -> Role
     id_role_map = {}
-    for board_id, board_info in config[args.runName].items():
+    for board_id, board_info in config[run_name].items():
         role = board_info.get('role')
         if role:
-            id_role_map[role] = board_id
             id_role_map[board_id] = role
 
+    # Nickname mapping
     nickname_dict = {'trig': '_t-', 'dut': '_d-', 'ref': '_r-', 'extra': '_e-'}
 
-    output_dir = Path(args.outdir)
-    track_dir = output_dir / 'tracks'
-    track_dir.mkdir(exist_ok=True, parents=True)
+    return id_role_map, nickname_dict
 
-    # --- File Discovery ---
-    print(f'\nInput path is: {args.dirname}')
-    print(f'Output path is: {args.outdir}\n')
+def generate_track_filename(df: pd.DataFrame, id_map: Dict[int, str], nicknames: Dict[str, str]) -> str:
+    """Generates a descriptive filename based on the track's coordinates."""
+    # We look for level 'board' in columns
+    board_ids = [
+        b for b in df.columns.get_level_values('board').unique()
+        if isinstance(b, int)
+    ]
 
+    filename_parts = ["track"]
+
+    for bid in board_ids:
+        role = id_map.get(bid, 'unknown')
+        prefix = nicknames.get(role, f'_{bid}-')
+
+        try:
+            # unique()[0] assumes the track is static across the event
+            r_val = df['row'][bid].unique()[0]
+            c_val = df['col'][bid].unique()[0]
+            filename_parts.append(f"{prefix}R{r_val}C{c_val}")
+        except KeyError:
+            continue
+
+    return "".join(filename_parts)
+
+def process_and_save_track(
+    track_key: Any,
+    df_parts: List[pd.DataFrame],
+    output_dir: Path,
+    id_map: Dict[int, str],
+    nicknames: Dict[str, str]
+) -> str:
+    """Worker function: Concatenates data parts for one track and saves to disk."""
+    if not df_parts:
+        return f"Skipped empty track list: {track_key}"
+
+    try:
+        full_df = pd.concat(df_parts, ignore_index=True)
+
+        if full_df.empty:
+            return f"Skipped empty dataframe: {track_key}"
+
+        out_name = generate_track_filename(full_df, id_map, nicknames)
+        save_path = output_dir / f"{out_name}.pkl"
+        full_df.to_pickle(save_path)
+
+        return f"Saved: {save_path.name}"
+
+    except Exception as e:
+        return f"Error saving track {track_key}: {e}"
+
+def determine_file_batches(files: List[Path]) -> List[List[Path]]:
+    """
+    Splits files into batches based on the logic:
+    - If < 100 files: 1 batch.
+    - If >= 100 files: Split into 2-5 groups.
+      Choose min groups such that batch size < 100 (if possible).
+    """
+    n_files = len(files)
+
+    if n_files < 100:
+        return [files]
+
+    # Logic: Try groups 2, 3, 4, 5.
+    # Pick the first one (minimum) that results in a chunk size < 100.
+    # If none do (e.g. 1000 files), cap at 5 groups.
+    num_groups = 5 # Default max
+    for g in range(2, 6):
+        # Ceiling division equivalent for roughly equal chunks
+        chunk_size = (n_files + g - 1) // g
+        if chunk_size < 100:
+            num_groups = g
+            break
+
+    # Calculate chunk size for the chosen number of groups
+    k, m = divmod(n_files, num_groups)
+    batches = []
+    start_idx = 0
+    for i in range(num_groups):
+        # Distribute remainder to first few groups
+        batch_size = k + 1 if i < m else k
+        end_idx = start_idx + batch_size
+        batches.append(files[start_idx:end_idx])
+        start_idx = end_idx
+
+    print(f"\nLarge dataset detected ({n_files} files). Splitting into {num_groups} processing groups.")
+    for i, b in enumerate(batches):
+        print(f"  Group {i+1}: {len(b)} files")
+
+    return batches
+
+# --- Main Logic ---
+
+def main():
+    parser = argparse.ArgumentParser(
+        description='Reads file-based data, reshapes it, and saves as track-based files.'
+    )
+    parser.add_argument('-d', '--inputdir', required=True, dest='dirname', help='Input directory')
+    parser.add_argument('-o', '--outdir', required=True, dest='outdir', help='Output directory')
+    parser.add_argument('-r', '--runName', required=True, dest='runName', help='Run name')
+    parser.add_argument('-c', '--config', required=True, dest='config', help='YAML config file')
+    parser.add_argument('--file_pattern', default='*.pickle', help="Glob pattern for input files")
+    parser.add_argument('--debug', action='store_true', help='Run sequentially for debugging')
+
+    args = parser.parse_args()
+
+    # 1. Setup paths and config
+    try:
+        id_role_map, nickname_dict = load_config_and_roles(args.config, args.runName)
+    except Exception as e:
+        sys.exit(f"Config Error: {e}")
+
+    base_out_path = Path(args.outdir)
+
+    print(f'\nInput:  {args.dirname}')
+    print(f'Output Base: {base_out_path}\n')
+
+    # 2. Find Files
     files = []
     for pattern in args.file_pattern.split():
         files.extend(natsorted(Path(args.dirname).glob(pattern)))
 
     if not files:
-        print(f'No input files found for the given path: {args.dirname}')
-        exit()
+        sys.exit(f"No files found matching '{args.file_pattern}' in {args.dirname}")
 
-    # --- Data Grouping (Single-threaded, memory-intensive part) ---
-    print('====== Reading and grouping data by track ======')
-    track_data = defaultdict(list)
-    for ifile in tqdm(files, desc="Reading Files"):
-        data_dict = pd.read_pickle(ifile)
-        for track_key, df in data_dict.items():
-            if not df.empty:
-                track_data[track_key].append(df)
-                ### pd.concat usually work even if input includes empty dataframe
-                ### BUT!! for the case when pd.concat with MultiIndex dataframe, different style (even empty) is not allowed.
+    # 3. Determine Batches
+    batches = determine_file_batches(files)
 
-    if args.debug:
-        for key, parts in  track_data.items():
-            save_single_track(key, parts, track_dir, nickname_dict, id_role_map)
-            break
+    # Check if we have multiple batches to decide naming convention
+    is_multi_group = len(batches) > 1
 
-    else:
-        # --- Saving Track Files (Parallelized for speed) ---
-        print('\n====== Concatenating and saving individual track files in parallel ======')
-        with ProcessPoolExecutor() as executor:
-            # Submit each track to be processed by the worker function
-            futures = [
-                executor.submit(save_single_track, key, parts, track_dir, nickname_dict, id_role_map)
-                for key, parts in track_data.items()
-            ]
-            # Use tqdm to show progress as jobs complete
-            for future in tqdm(as_completed(futures), total=len(futures), desc="Saving Tracks"):
-                try:
-                    # This is the crucial line. It will re-raise any exception
-                    # that happened in the worker process.
-                    future.result()
-                except Exception as exc:
-                    print(f"A worker process generated an exception: {exc}")
-                    # For a full error report, uncomment the next two lines
-                    # import traceback
-                    # traceback.print_exc()
-                finally:
-                    pass
+    # 4. Process Batches
+    for batch_idx, batch_files in enumerate(batches):
 
-    print(f"\nDone. Track files saved in {track_dir}")
+        # --- Update Output Directory ---
+        # If multiple groups: tracks_group1, tracks_group2...
+        # If single group: tracks
+        if is_multi_group:
+            subdir_name = f'tracks_group{batch_idx + 1}'
+        else:
+            subdir_name = 'tracks'
+
+        current_out_dir = base_out_path / subdir_name
+        current_out_dir.mkdir(parents=True, exist_ok=True)
+
+        print(f'\n====== Processing Group {batch_idx + 1}/{len(batches)} ({len(batch_files)} files) ======')
+        print(f"Saving to: {current_out_dir}")
+
+        track_data = defaultdict(list)
+
+        # A. Read Files into Memory
+        for f in tqdm(batch_files, desc=f"Reading Group {batch_idx + 1}"):
+            try:
+                data_dict = pd.read_pickle(f)
+                for key, df in data_dict.items():
+                    if not df.empty:
+                        track_data[key].append(df)
+            except Exception as e:
+                print(f"Warning: Failed to read {f.name}: {e}")
+
+        total_tracks = len(track_data)
+        print(f"Group {batch_idx + 1}: Found {total_tracks} unique tracks.")
+
+        # B. Save Tracks
+        print(f'Saving tracks for Group {batch_idx + 1}...')
+
+        if args.debug:
+            print("(Debug Mode: Processing sequentially)")
+            for key, parts in track_data.items():
+                res = process_and_save_track(key, parts, current_out_dir, id_role_map, nickname_dict)
+                print(res)
+                if "Saved" in res: break
+        else:
+            with ProcessPoolExecutor() as executor:
+                futures = [
+                    executor.submit(
+                        process_and_save_track,
+                        key, parts, current_out_dir, id_role_map, nickname_dict
+                    )
+                    for key, parts in track_data.items()
+                ]
+
+                for future in tqdm(as_completed(futures), total=total_tracks, desc="Saving"):
+                    try:
+                        future.result()
+                    except Exception as e:
+                        print(f"Worker Error: {e}")
+
+        # C. Memory Cleanup
+        print(f"Cleaning up memory for Group {batch_idx + 1}...")
+        track_data.clear()
+        del track_data
+        gc.collect()
+
+    print(f"\nDone. All groups processed.")
 
 if __name__ == "__main__":
-
-    parser = argparse.ArgumentParser(
-            prog='reshape_to_tracks',
-            description='Reads file-based data, reshapes it, and saves as track-based files.',
-    )
-
-    parser.add_argument(
-        '-d',
-        '--inputdir',
-        metavar = 'DIRNAME',
-        type = str,
-        help = 'input directory name',
-        required = True,
-        dest = 'dirname',
-    )
-
-    parser.add_argument(
-        '-o',
-        '--outdir',
-        metavar = 'OUTNAME',
-        type = str,
-        help = 'output directory name',
-        required = True,
-        dest = 'outdir',
-    )
-
-    parser.add_argument(
-        '-r',
-        '--runName',
-        metavar = 'NAME',
-        type = str,
-        help = 'Name of the run to process. It must be matched with the name defined in YAML.',
-        required = True,
-        dest = 'runName',
-    )
-
-    parser.add_argument(
-        '-c',
-        '--config',
-        metavar = 'NAME',
-        type = str,
-        help = 'YAML file including run information.',
-        required = True,
-        dest = 'config',
-    )
-
-    parser.add_argument(
-        '--file_pattern',
-        metavar = 'glob-pattern',
-        help = "Put the file pattern for glob, if you want to process part of dataset. Example: 'run*_loop_[0-9].pickle run*_loop_1[0-9].pickle run*_loop_2[0-4].pickle'",
-        default = '*.pickle',
-        dest = 'file_pattern',
-    )
-
-    parser.add_argument(
-        '--debug',
-        action = 'store_true',
-        help = 'If set, switch to loop mode to print error message',
-        dest = 'debug',
-    )
-
-    args = parser.parse_args()
-    reshape_to_tracks(args)
+    main()
