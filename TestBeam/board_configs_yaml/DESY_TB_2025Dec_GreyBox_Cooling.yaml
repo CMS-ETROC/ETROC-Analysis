@@ -313,3 +313,40 @@ run09:
         y: 0
         z: 1
   3: *PT_IH22
+
+run14:
+  0:
+    <<: *PT_NH47
+    HV: 240
+    transformation:
+      rotation:
+        x: 0
+        y: -60
+        z: 0
+      translation:
+        x: 0
+        y: 0
+        z: 4
+  1:
+    <<: *PT_IH18
+    transformation:
+      rotation:
+        x: 180
+        y: 0
+        z: 0
+      translation:
+        x: 0
+        y: 0
+        z: 2
+  2:
+    <<: *PT_IH21
+    transformation:
+      rotation:
+        x: 180
+        y: 0
+        z: 0
+      translation:
+        x: 0
+        y: 0
+        z: 1
+  3: *PT_IH22
