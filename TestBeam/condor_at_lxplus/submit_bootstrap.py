@@ -16,12 +16,6 @@ ls -ltrh
 echo ""
 pwd
 
-# Note: Input file path is passed as argument 2 ($2).
-# If absolute (local/EOS), we might need to handle it.
-# However, standard Condor vanilla universe with input lists usually
-# handles the logic either via TransferInput or manual xrdcp in the bash script.
-# Below assumes the 'path' argument is an EOS path to copy.
-
 # Load python environment from work node
 source /cvmfs/sft.cern.ch/lcg/views/LCG_104a/x86_64-el9-gcc13-opt/setup.sh
 
@@ -101,8 +95,7 @@ def create_submission_files(
     with open(input_list_path, 'a') as f:
         for file_path in files:
             name = file_path.stem
-            # We still resolve the INPUT DATA path to absolute,
-            # because xrdcp needs the full path to find the source on EOS/Disk.
+            # Write absolute path for xrdcp to find it on EOS
             f.write(f"{name}, {file_path.resolve()}\n")
 
     # 2. Generate Bash Script
@@ -123,12 +116,12 @@ def create_submission_files(
     if args.twc_coeffs:
         transfer_list.append(args.twc_coeffs)
 
-    # Render with RELATIVE paths (converting Path objects to string)
+    # Render with RELATIVE paths for portability
     jdl_content = Template(JDL_TEMPLATE).render({
-        'script_dir': str(paths['scripts']), # e.g. condor_scripts/job_tag
+        'script_dir': str(paths['scripts']),
         'unique_tag': unique_tag,
-        'out_dir': str(group_out_dir),       # e.g. bootstrap_out/time_group1
-        'log_dir': str(group_log_dir),       # e.g. condor_logs/bootstrap/...
+        'out_dir': str(group_out_dir),       # Top-level separate output dir
+        'log_dir': str(group_log_dir),       # Top-level separate log dir
         'transfer_files': ", ".join(transfer_list)
     })
 
@@ -211,7 +204,7 @@ if __name__ == "__main__":
 
     # Required
     parser.add_argument('-d', '--inputdir', required=True, dest='dirname', help='Mother directory containing time/time_group folders')
-    parser.add_argument('-o', '--outputdir', required=True, dest='outputdir', help='Output directory name (Local relative path)')
+    parser.add_argument('-o', '--outputdir', required=True, dest='outputdir', help='Output directory base name')
 
     # Bootstrap Params
     parser.add_argument('-n', '--num_bootstrap_output', type=int, default=100)
@@ -234,7 +227,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # --- 1. Identify Groups ---
-    # We resolve inputdir just to find the folders, but we don't force absolute paths in JDL unless needed.
     mother_dir = Path(args.dirname).resolve()
 
     if mother_dir.name.find('time') != -1:
@@ -247,19 +239,17 @@ if __name__ == "__main__":
 
     print(f"Found {len(time_dirs)} groups: {[d.name for d in time_dirs]}")
 
-    # --- 2. Setup Base Paths (Relative) ---
+    # --- 2. Setup Base Paths ---
     run_append = f"_{args.condor_tag}" if args.condor_tag else ""
 
-    # Define paths relative to CWD
-    paths = {
-        'scripts': Path('condor_scripts') / f'bootstrap_job{run_append}',
-        'logs':    Path('condor_logs') / 'bootstrap' / f'bootstrap_job{run_append}',
-        'output':  Path(f'bootstrap_{args.outputdir}')
-    }
+    # Only script paths are global; Output/Log paths are calculated per group
+    script_dir = Path('condor_scripts') / f'bootstrap_job{run_append}'
+    base_log_dir = Path('condor_logs') / 'bootstrap' / f'bootstrap_job{run_append}'
 
-    # Create Base Directories
-    for p in paths.values():
-        p.mkdir(parents=True, exist_ok=True)
+    script_dir.mkdir(parents=True, exist_ok=True)
+    base_log_dir.mkdir(parents=True, exist_ok=True)
+
+    paths = {'scripts': script_dir} # Wrapper for create_submission_files
 
     if not Path(WORKER_SCRIPT_NAME).is_file():
         sys.exit(f"Error: Worker script '{WORKER_SCRIPT_NAME}' not found.")
@@ -268,15 +258,27 @@ if __name__ == "__main__":
     for group_dir in time_dirs:
         group_name = group_dir.name
 
+        # Calculate Suffix: time -> "", time_group1 -> _group1
+        # Use simple replace to handle complex names like "cut_v1_time_group1"
+        group_suffix = group_name.replace('time', '')
+
+        # 1. Output Directory: bootstrap_OutName_group1
+        unique_out_name = f"bootstrap_{args.outputdir}{group_suffix}"
+        group_out_dir = Path(unique_out_name)
+
+        # 2. Log Directory: condor_logs/.../time_group1
+        group_log_dir = base_log_dir / group_name
+
+        # Create directories (unless dryrun/resubmit)
+        if not (args.dryrun or args.resubmit or args.resubmit_with_stderr):
+            try:
+                group_out_dir.mkdir(parents=True, exist_ok=True)
+                group_log_dir.mkdir(parents=True, exist_ok=True)
+            except OSError as e:
+                print(f"Error creating directories for {group_name}: {e}")
+                continue
+
         unique_group_tag = f"{run_append}_{group_name}"
-
-        # 1. Separate Output Directory per Group
-        group_out_dir = paths['output'] / group_name
-        group_out_dir.mkdir(parents=True, exist_ok=True)
-
-        # 2. Separate Log Directory per Group
-        group_log_dir = paths['logs'] / group_name
-        group_log_dir.mkdir(parents=True, exist_ok=True)
 
         print(f"\n>>> Processing Group: {group_name}")
         print(f"    Out: {group_out_dir}")
@@ -305,7 +307,6 @@ if __name__ == "__main__":
                 subprocess.run(['condor_submit', str(jdl)])
 
         else:
-            # Standard Submit
             if list_file.stat().st_size > 0:
                 print(f"    Submitting jobs...")
                 subprocess.run(['condor_submit', str(jdl)])
