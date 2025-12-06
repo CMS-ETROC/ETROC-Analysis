@@ -1,144 +1,233 @@
+import argparse
+import sys
+import re
+import warnings
+import pandas as pd
+import numpy as np
+from pathlib import Path
 from collections import defaultdict
 from natsort import natsorted
 from tqdm import tqdm
-from pathlib import Path
 from scipy.stats import norm
-import argparse
-import pandas as pd
-import re, yaml
-import numpy as np
-import warnings
+
+# Optional imports for binned fitting fallback
+try:
+    import hist
+    from lmfit.models import GaussianModel
+    HAS_LMFIT = True
+except ImportError:
+    HAS_LMFIT = False
+
+# --- Configuration ---
 warnings.filterwarnings("ignore")
 
-parser = argparse.ArgumentParser(description='merge individual bootstrap results')
-parser.add_argument('-d', '--inputdir', required=True, type=str, dest='inputdir')
-parser.add_argument('-o', '--output', required=True, type=str, dest='output')
-parser.add_argument('--minimum', type=int, default=50, help='Minimum number of bootstrap results to perform a fit', dest='minimum')
-parser.add_argument('--hist_bins', type=int, default=35, help='Number of bins for binned fit', dest='hist_bins')
-parser.add_argument(
-    '--tag',
-    metavar = 'NAME',
-    type = str,
-    help = 'Tag for the output file name.',
-    default = '',
-    dest = 'tag',
-)
-
-args = parser.parse_args()
-
-nickname_dict = {
+NICKNAME_DICT = {
     't': 'trig',
     'd': 'dut',
     'r': 'ref',
     'e': 'extra',
 }
 
-outdir = Path('.') / args.output
-outdir.mkdir(exist_ok=True)
-outname = outdir / f'resolution_{args.output}{args.tag}.csv'
+# Regex to capture role nickname and coordinates from filename
+# Matches: "r-R12C34" -> ('r', '12', '34')
+FILENAME_PATTERN = re.compile(r"(\w)-R(\d+)C(\d+)")
 
-files = natsorted(Path(args.inputdir).glob('*_resolution.pkl'))
-final_dict = defaultdict(list)
+# --- Helper Functions ---
 
-excluded_role = files[0].name.split('_')[1]
+def fit_binned_gaussian(data: pd.Series, bins: int):
+    """
+    Performs a binned Gaussian fit using lmfit/hist.
+    Returns (mu, sigma, success_bool).
+    """
+    if not HAS_LMFIT:
+        return 0, 0, False
 
-def fit_unbinned(data):
     try:
-        mu, sigma = norm.fit(data)
-
-        ### Future development: Set threshold for unbinned fit
-        # Calculate the MSE between data and fitted PDF
-        # pdf_values = norm.pdf(data, mu, sigma)
-        # mse = np.mean((data - pdf_values)**2)
-
-        # Log-Likelihood
-        # log_likelihood = np.sum(np.log(pdf_values))
-
-        #print(f" {mu}, {sigma}")
-        #print(f"   MSE: {mse}, Log-Likelihood: {log_likelihood}")
-
-        return mu, sigma, True
-
-    except Exception as e:
-        print(e)
-        return np.mean(data), np.std(data), False
-
-def fit_binned(data):
-    try:
-        import hist
-        x_min = data.min()-5
-        x_max = data.max()+5
-        h_temp = hist.Hist(hist.axis.Regular(args.hist_bins, x_min, x_max))
+        x_min, x_max = data.min() - 5, data.max() + 5
+        h_temp = hist.Hist(hist.axis.Regular(bins, x_min, x_max))
         h_temp.fill(data)
+
         centers = h_temp.axes[0].centers
         values = h_temp.values()
-        lower_bound = np.percentile(data, 17) # left percentile for 1.5 sigma
-        upper_bound = np.percentile(data, 83) # right percentile for 1.5 sigma
-        fit_mask = (centers > lower_bound) & (centers < upper_bound)
 
-        from lmfit.models import GaussianModel
+        # Fit range: +/- 1.5 sigma (approx 17th-83rd percentile)
+        lower = np.percentile(data, 17)
+        upper = np.percentile(data, 83)
+        mask = (centers > lower) & (centers < upper)
+
+        if np.sum(mask) < 3: # Not enough points to fit
+            return 0, 0, False
+
         mod = GaussianModel(nan_policy='omit')
-        pars = mod.guess(values[fit_mask], x=centers[fit_mask])
-        out = mod.fit(values[fit_mask], pars, x=centers[fit_mask], weights=1/np.sqrt(values[fit_mask]))
+        pars = mod.guess(values[mask], x=centers[mask])
+        out = mod.fit(values[mask], pars, x=centers[mask], weights=1/np.sqrt(values[mask] + 1e-6))
 
         if out.success:
             return out.params['center'].value, abs(out.params['sigma'].value), True
 
-    except Exception as e:
-        print(f"Error: {e}")
-        return np.mean(data), np.std(data), False
+    except Exception:
+        pass
 
-if len(files) == 0:
-    print('No input file found')
+    return 0, 0, False
 
-for ifile in tqdm(files):
-    pattern = re.compile(r"(\w)-R(\d+)C(\d+)")
-    matches = re.findall(pattern, str(ifile))
+def calculate_statistics(data: pd.Series, hist_bins: int) -> dict:
+    """
+    Determines Mean and Sigma for a distribution using:
+    1. Unbinned Gaussian Fit (Primary)
+    2. Binned Gaussian Fit (Fallback 1)
+    3. Simple Statistics (Fallback 2)
+    """
+    # Strategy 1: Unbinned Fit (Fastest & Standard)
+    try:
+        mu, sigma = norm.fit(data)
+        return {'mu': mu, 'sigma': sigma}
+    except Exception:
+        pass
 
+    # Strategy 2: Binned Fit (Robust against outliers/noise)
+    mu, sigma, success = fit_binned_gaussian(data, hist_bins)
+    if success:
+        return {'mu': mu, 'sigma': sigma}
+
+    # Strategy 3: Last Resort (Simple Stats)
+    return {'mu': data.mean(), 'sigma': data.std()}
+
+def parse_filename_metadata(filename: str) -> dict:
+    """Extracts board coordinates from the standard filename format."""
+    matches = re.findall(FILENAME_PATTERN, filename)
     pixel_dict = {}
     for nickname, row, col in matches:
-        pixel_dict[nickname_dict[nickname]] = (row, col)
+        full_role = NICKNAME_DICT.get(nickname)
+        if full_role:
+            pixel_dict[full_role] = (int(row), int(col))
+    return pixel_dict
 
-    df = pd.read_pickle(ifile)
-    df = df.loc[(df != 0).all(axis=1)].reset_index(drop=True)
+def process_group(
+    input_dir: Path,
+    output_dir: Path,
+    args: argparse.Namespace
+):
+    """
+    Processes all pickle files in a specific directory (group) and saves a CSV.
+    """
+    # Find files (exclude_... resolution.pkl)
+    files = natsorted(input_dir.glob('*_resolution.pkl'))
 
-    if df.empty:
-        continue
+    if not files:
+        print(f"Warning: No resolution files found in {input_dir.name}. Skipping.")
+        return
 
-    file_results = {}
-    # CASE 1: Single-row file from bootstrap fallback
-    if df.shape[0] == 1:
-        # print(f"\nINFO: Found single-row file (fallback result): {ifile.name}")
-        single_row_values = df.iloc[0]
-        for col_name in df.columns:
-            # For a single result, mu is the value and sigma (error) is 0
-            file_results[col_name] = {'mu': single_row_values[col_name], 'sigma': 0}
+    # Determine Excluded Role from the first file name convention
+    # Expected format: "exclude_trig_..."
+    try:
+        excluded_role = files[0].name.split('_')[1]
+    except IndexError:
+        excluded_role = 'trig' # Default fallback
 
-    # CASE 2: Standard file with enough bootstrap results to fit
+    final_dict = defaultdict(list)
+
+    print(f"Processing {len(files)} files in {input_dir.name}...")
+
+    for ifile in tqdm(files, desc=f"  Merging {input_dir.name}"):
+        # 1. Load Data
+        try:
+            df = pd.read_pickle(ifile)
+            # Filter rows that are all zeros (failed bootstraps often return 0s)
+            df = df.loc[(df != 0).all(axis=1)].reset_index(drop=True)
+
+            if df.empty: continue
+        except Exception as e:
+            print(f"Error reading {ifile.name}: {e}")
+            continue
+
+        # 2. Parse Coordinates
+        pixel_dict = parse_filename_metadata(str(ifile))
+
+        # 3. Calculate Results
+        file_results = {}
+
+        if df.shape[0] == 1:
+            # Single-shot result
+            row = df.iloc[0]
+            for col in df.columns:
+                file_results[col] = {'mu': row[col], 'sigma': 0.0}
+        else:
+            # Bootstrap distribution
+            for col in df.columns:
+                file_results[col] = calculate_statistics(df[col], args.hist_bins)
+
+        # 4. Append to Final Dictionary
+        # We always want the coordinates of the 'excluded' board as the primary key
+        # if it exists in the filename metadata.
+        if excluded_role in pixel_dict:
+            final_dict[f'row_{excluded_role}'].append(pixel_dict[excluded_role][0])
+            final_dict[f'col_{excluded_role}'].append(pixel_dict[excluded_role][1])
+        else:
+            # If excluded role isn't in filename (rare), append placeholders or skip
+            # For now, we continue, but this might misalign columns if not careful.
+            pass
+
+        # Append results for all columns found in the dataframe
+        for val_name, stats in file_results.items():
+            # Add coordinates for this specific board if we have them
+            if val_name in pixel_dict:
+                final_dict[f'row_{val_name}'].append(pixel_dict[val_name][0])
+                final_dict[f'col_{val_name}'].append(pixel_dict[val_name][1])
+
+            final_dict[f'res_{val_name}'].append(stats['mu'])
+            final_dict[f'err_{val_name}'].append(stats['sigma'])
+
+    # 5. Save Output
+    if final_dict:
+        out_filename = f"{input_dir.name}_resolution{args.tag}.csv"
+        out_path = output_dir / out_filename
+
+        pd.DataFrame(final_dict).to_csv(out_path, index=False)
+        print(f"  Saved: {out_path}")
     else:
-        df.reset_index(drop=True, inplace=True)
-        for col_name in df.columns:
-            mu, sigma, unbinned_check = fit_unbinned(df[col_name])
-            if not unbinned_check:
-                # If unbinned fit fails, use the more robust binned fit
-                mu, sigma, _ = fit_binned(df[col_name])
-            file_results[col_name] = {'mu': mu, 'sigma': sigma}
+        print(f"  No valid data merged for {input_dir.name}.")
 
-    # --- This block now handles appending for all successful cases ---
-    if len(pixel_dict.keys()) == 4:
-        final_dict[f'row_{excluded_role}'].append(pixel_dict[excluded_role][0])
-        final_dict[f'col_{excluded_role}'].append(pixel_dict[excluded_role][1])
+# --- Main ---
 
-        for val_name, results in file_results.items():
-            final_dict[f'row_{val_name}'].append(pixel_dict[val_name][0])
-            final_dict[f'col_{val_name}'].append(pixel_dict[val_name][1])
-            final_dict[f'res_{val_name}'].append(results['mu'])
-            final_dict[f'err_{val_name}'].append(results['sigma'])
+def main():
+    parser = argparse.ArgumentParser(description='Merge individual bootstrap results into a summary CSV.')
+
+    parser.add_argument('-d', '--inputdir', required=True, dest='inputdir',
+                        help='Mother directory containing bootstrap output folders')
+    parser.add_argument('-o', '--outputdir', required=True, dest='outputdir',
+                        help='Output directory name')
+
+    parser.add_argument('--minimum', type=int, default=50, help='Min bootstrap samples for fit')
+    parser.add_argument('--hist_bins', type=int, default=35, help='Bins for binned fit')
+    parser.add_argument('--tag', default='', help='Tag for output filename')
+
+    args = parser.parse_args()
+
+    # 1. Identify Groups
+    mother_dir = Path(args.inputdir)
+
+    # Check if user pointed directly to a bootstrap folder or a mother folder
+    if mother_dir.name.startswith('bootstrap'):
+        group_dirs = [mother_dir]
     else:
-         for val_name, results in file_results.items():
-            final_dict[f'row_{val_name}'].append(pixel_dict[val_name][0])
-            final_dict[f'col_{val_name}'].append(pixel_dict[val_name][1])
-            final_dict[f'res_{val_name}'].append(results['mu'])
-            final_dict[f'err_{val_name}'].append(results['sigma'])
+        # Scan for subfolders starting with "bootstrap"
+        group_dirs = sorted([d for d in mother_dir.iterdir() if d.is_dir() and d.name.startswith('bootstrap')])
 
-pd.DataFrame(final_dict).to_csv(outname, index=False)
+    if not group_dirs:
+        sys.exit(f"No 'bootstrap*' directories found in {mother_dir}")
+
+    # 2. Setup Output
+    base_out_dir = Path(args.outputdir)
+    base_out_dir.mkdir(parents=True, exist_ok=True)
+
+    print(f"Found {len(group_dirs)} groups to merge.")
+    print(f"Output Directory: {base_out_dir}\n")
+
+    # 3. Process Each Group
+    for group in group_dirs:
+        process_group(group, base_out_dir, args)
+
+    print("\nDone.")
+
+if __name__ == "__main__":
+    main()
