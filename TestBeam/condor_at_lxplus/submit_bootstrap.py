@@ -1,356 +1,315 @@
+import argparse
+import subprocess
+import sys
 from pathlib import Path
 from jinja2 import Template
 from natsort import natsorted
+from typing import List, Dict, Optional
 
-def load_bash_script(args):
+# --- Configuration & Templates ---
 
-    #### Make python command
-    bash_command = "python bootstrap.py -f {{ filename }} -n {{ num_bootstrap_output }} -s {{ sampling }} \
-    --minimum_nevt {{ minimum_nevt }} --iteration_limit {{ iteration_limit }}"
+WORKER_SCRIPT_NAME = "bootstrap.py"
 
-    conditional_args = {
-        'reproducible': args.reproducible,
-        'twc_coeffs': args.twc_coeffs,
-        'force-twc': args.force_twc,
-        'single': args.single,
-    }
-
-    for arg, value in conditional_args.items():
-        # Skip arguments that are not set (i.e., value is False or None)
-        if not value:
-            continue
-
-        # If the value is a boolean (and we already know it's True), just add the flag.
-        if isinstance(value, bool):
-            bash_command += f" --{arg}"
-        # Otherwise, add the flag and its value.
-        else:
-            bash_command += f" --{arg} {value}"
-
-    # Define the bash script template
-    bash_template = """#!/bin/bash
+BASH_TEMPLATE = """#!/bin/bash
 
 ls -ltrh
 echo ""
 pwd
 
-xrdcp root://eosuser.cern.ch/{1} ./
+# Note: Input file path is passed as argument 2 ($2).
+# If absolute (local/EOS), we might need to handle it.
+# However, standard Condor vanilla universe with input lists usually
+# handles the logic either via TransferInput or manual xrdcp in the bash script.
+# Below assumes the 'path' argument is an EOS path to copy.
 
 # Load python environment from work node
 source /cvmfs/sft.cern.ch/lcg/views/LCG_104a/x86_64-el9-gcc13-opt/setup.sh
 
-echo "{0}"
-{0}
+# Copy input data from EOS to local work node
+xrdcp root://eosuser.cern.ch/{{ input_file }} ./
 
-# Delete input file so condor will not return
-rm {2}
+# Run Bootstrap Analysis
+echo "Running: {{ command }}"
+{{ command }}
+
+# Cleanup: Delete the local copy of the input file
+if [ -f {{ filename }} ]; then
+    rm {{ filename }}
+fi
 
 ls -ltrh
 echo ""
+"""
 
-""".format(bash_command, '${2}', '${1}.pkl')
-
-    # Prepare the data for the template
-    options = {
-        'filename': '${1}.pkl',
-        'num_bootstrap_output': args.num_bootstrap_output,
-        'sampling': args.sampling,
-        'minimum_nevt': args.minimum_nevt,
-        'iteration_limit': args.iteration_limit,
-    }
-
-    # Render the template with the data
-    return Template(bash_template).render(options)
-
-
-def load_jdl_script(args, log_dir, condor_scripts_dir, outdir, runAppend):
-
-    # Start with the base file and add twc_coeffs if it exists
-    transfer_files = "bootstrap.py"
-    if args.twc_coeffs:
-        transfer_files += f", {args.twc_coeffs}"
-
-    jdl = """universe              = vanilla
-executable            = {2}/run_bootstrap{3}.sh
+JDL_TEMPLATE = """universe              = vanilla
+executable            = {{ script_dir }}/run_bootstrap{{ unique_tag }}.sh
 should_Transfer_Files = YES
 whenToTransferOutput  = ON_EXIT
 arguments             = $(ifile) $(path)
-transfer_Input_Files  = {4}
-TransferOutputRemaps = "$(ifile)_resolution.pkl={1}/$(ifile)_resolution.pkl; $(ifile)_gmmInfo.pkl={1}/$(ifile)_gmmInfo.pkl"
-output                = {0}/$(ClusterId).$(ProcId).bootstrap.stdout
-error                 = {0}/$(ClusterId).$(ProcId).bootstrap.stderr
-log                   = {0}/$(ClusterId).$(ProcId).bootstrap.log
+transfer_Input_Files  = {{ transfer_files }}
+TransferOutputRemaps  = "$(ifile)_resolution.pkl={{ out_dir }}/$(ifile)_resolution.pkl; $(ifile)_gmmInfo.pkl={{ out_dir }}/$(ifile)_gmmInfo.pkl"
+output                = {{ log_dir }}/$(ClusterId).$(ProcId).bootstrap.stdout
+error                 = {{ log_dir }}/$(ClusterId).$(ProcId).bootstrap.stderr
+log                   = {{ log_dir }}/$(ClusterId).$(ProcId).bootstrap.log
 MY.WantOS             = "el9"
 +JobFlavour           = "workday"
-Queue ifile,path from {2}/input_list_for_bootstrap{3}.txt
-""".format(log_dir, outdir, condor_scripts_dir, runAppend, transfer_files)
+Queue ifile,path from {{ script_dir }}/input_list_for_bootstrap{{ unique_tag }}.txt
+"""
 
-    return jdl
+# --- Helper Functions ---
 
-def make_jobs(args, log_dir, condor_scripts_dir, outdir, runAppend):
+def build_python_command(args: argparse.Namespace) -> str:
+    """Constructs the python command string dynamically."""
+    cmd_parts = [
+        f"python {WORKER_SCRIPT_NAME}",
+        "-f {{ filename }}",
+        f"-n {args.num_bootstrap_output}",
+        f"-s {args.sampling}",
+        f"--minimum_nevt {args.minimum_nevt}",
+        f"--iteration_limit {args.iteration_limit}"
+    ]
 
-    files = natsorted(Path(args.dirname).glob('*.pkl'))
-    listfile = condor_scripts_dir / f'input_list_for_bootstrap{runAppend}.txt'
-    if listfile.is_file():
-        listfile.unlink()
+    if args.reproducible: cmd_parts.append("--reproducible")
+    if args.force_twc:    cmd_parts.append("--force-twc")
+    if args.single:       cmd_parts.append("--single")
+    if args.twc_coeffs:   cmd_parts.append(f"--twc_coeffs {args.twc_coeffs}")
 
-    with open(listfile, 'a') as base_txt:
-        for ifile in files:
-            name = ifile.name.split('.')[0]
-            save_string = f"{name}, {ifile}"
-            base_txt.write(save_string + '\n')
+    return " ".join(cmd_parts)
 
-    bash_template = load_bash_script(args)
-    with open(condor_scripts_dir / f'run_bootstrap{runAppend}.sh','w') as bashfile:
-        bashfile.write(bash_template)
+def create_submission_files(
+    args: argparse.Namespace,
+    paths: Dict[str, Path],
+    unique_tag: str,
+    input_dir: Path,
+    group_out_dir: Path,
+    group_log_dir: Path
+):
+    """
+    Generates the input list, bash script, and JDL file using relative paths.
+    """
 
-    jdl_templalte = load_jdl_script(args, log_dir, condor_scripts_dir, outdir, runAppend)
-    with open(condor_scripts_dir / f'condor_bootstrap{runAppend}.jdl','w') as jdlfile:
-        jdlfile.write(jdl_templalte)
+    # 1. Generate Input List
+    input_list_path = paths['scripts'] / f'input_list_for_bootstrap{unique_tag}.txt'
+    if input_list_path.exists():
+        input_list_path.unlink()
 
-## --------------------------------------
+    files = natsorted(input_dir.glob('*.pkl'))
+    if not files:
+        print(f"Warning: No pickle files found in {input_dir.name}. Skipping group.")
+        return None, None, None
+
+    with open(input_list_path, 'a') as f:
+        for file_path in files:
+            name = file_path.stem
+            # We still resolve the INPUT DATA path to absolute,
+            # because xrdcp needs the full path to find the source on EOS/Disk.
+            f.write(f"{name}, {file_path.resolve()}\n")
+
+    # 2. Generate Bash Script
+    command = build_python_command(args)
+    bash_content = Template(BASH_TEMPLATE).render({
+        'input_file': '${2}',
+        'filename': '${1}.pkl',
+        'command': command
+    })
+
+    bash_script_name = f'run_bootstrap{unique_tag}.sh'
+    bash_path = paths['scripts'] / bash_script_name
+    with open(bash_path, 'w') as f:
+        f.write(bash_content)
+
+    # 3. Generate JDL File
+    transfer_list = [WORKER_SCRIPT_NAME]
+    if args.twc_coeffs:
+        transfer_list.append(args.twc_coeffs)
+
+    # Render with RELATIVE paths (converting Path objects to string)
+    jdl_content = Template(JDL_TEMPLATE).render({
+        'script_dir': str(paths['scripts']), # e.g. condor_scripts/job_tag
+        'unique_tag': unique_tag,
+        'out_dir': str(group_out_dir),       # e.g. bootstrap_out/time_group1
+        'log_dir': str(group_log_dir),       # e.g. condor_logs/bootstrap/...
+        'transfer_files': ", ".join(transfer_list)
+    })
+
+    jdl_path = paths['scripts'] / f'condor_bootstrap{unique_tag}.jdl'
+    with open(jdl_path, 'w') as f:
+        f.write(jdl_content)
+
+    return jdl_path, bash_script_name, input_list_path
+
+def handle_resubmission(
+    mode: str,
+    script_name: str,
+    list_path: Path,
+    log_dir: Path
+):
+    """
+    Handles logic for --resubmit (kill & rerun) and --resubmit_with_stderr (retry failed).
+    """
+    condor_cmd = ['condor_q', '-nobatch']
+    res = subprocess.run(condor_cmd, capture_output=True, text=True)
+    active_jobs = [l for l in res.stdout.splitlines() if script_name in l]
+
+    if mode == 'stderr':
+        if active_jobs:
+            print(f"Skipping {script_name}: Cannot resubmit while jobs are running.")
+            return
+
+        failed_indices = []
+        for log in log_dir.glob('*.stderr'):
+            if log.stat().st_size > 0:
+                try:
+                    proc_id = int(log.name.split('.')[1])
+                    failed_indices.append(proc_id)
+                except IndexError:
+                    pass
+
+        if not failed_indices:
+            print("No failed jobs found.")
+            return
+
+        with open(list_path, 'r') as f:
+            all_lines = f.readlines()
+
+        with open(list_path, 'w') as f:
+            for idx in sorted(failed_indices):
+                if idx < len(all_lines):
+                    f.write(all_lines[idx])
+
+        print(f"Resubmitting {len(failed_indices)} failed jobs.")
+
+    elif mode == 'kill_and_rerun':
+        requeue_lines = []
+        jobs_to_kill = set()
+
+        for line in active_jobs:
+            parts = line.split()
+            if len(parts) >= 10:
+                job_id = parts[0].split('.')[0]
+                status = parts[5]
+                args = parts[-2:]
+                requeue_lines.append(f"{args[0]}, {args[1]}")
+                if status != 'X':
+                    jobs_to_kill.add(job_id)
+
+        if jobs_to_kill:
+            for jid in jobs_to_kill:
+                subprocess.run(['condor_rm', jid])
+
+            with open(list_path, 'w') as f:
+                for l in requeue_lines:
+                    f.write(l + '\n')
+            print(f"Killed {len(jobs_to_kill)} clusters. Resubmitting {len(requeue_lines)} jobs.")
+        else:
+            print("No active jobs found to kill/resubmit.")
+
+# --- Main ---
+
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Submit Bootstrap Analysis to Condor')
 
-    import subprocess
-    import argparse
+    # Required
+    parser.add_argument('-d', '--inputdir', required=True, dest='dirname', help='Mother directory containing time/time_group folders')
+    parser.add_argument('-o', '--outputdir', required=True, dest='outputdir', help='Output directory name (Local relative path)')
 
-    parser = argparse.ArgumentParser(
-            prog='PlaceHolder',
-            description='offline translate script',
-        )
+    # Bootstrap Params
+    parser.add_argument('-n', '--num_bootstrap_output', type=int, default=100)
+    parser.add_argument('-s', '--sampling', type=int, default=75)
+    parser.add_argument('--minimum_nevt', type=int, default=1000)
+    parser.add_argument('--iteration_limit', type=int, default=7500)
 
-    parser.add_argument(
-        '-d',
-        '--inputdir',
-        metavar = 'DIRNAME',
-        type = str,
-        help = 'input directory name',
-        required = True,
-        dest = 'dirname',
-    )
+    # Options
+    parser.add_argument('--condor_tag', dest='condor_tag', help='Tag for filenames')
+    parser.add_argument('--twc_coeffs', help='Pre-calculated TWC coeffs file')
+    parser.add_argument('--reproducible', action='store_true')
+    parser.add_argument('--force-twc', action='store_true')
+    parser.add_argument('--single', action='store_true', help='Single shot mode')
 
-    parser.add_argument(
-        '-o',
-        '--outputdir',
-        metavar = 'DIRNAME',
-        type = str,
-        help = 'output directory name',
-        required = True,
-        dest = 'outputdir',
-    )
-
-    parser.add_argument(
-        '-n',
-        '--num_bootstrap_output',
-        metavar = 'NUM',
-        type = int,
-        help = 'Number of outputs after bootstrap',
-        default = 100,
-        dest = 'num_bootstrap_output',
-    )
-
-    parser.add_argument(
-        '-s',
-        '--sampling',
-        metavar = 'SAMPLING',
-        type = int,
-        help = 'Random sampling fraction',
-        default = 75,
-        dest = 'sampling',
-    )
-
-    parser.add_argument(
-        '--minimum_nevt',
-        metavar = 'NUM',
-        type = int,
-        help = 'Minimum number of events for bootstrap',
-        default = 1000,
-        dest = 'minimum_nevt',
-    )
-
-    parser.add_argument(
-        '--iteration_limit',
-        metavar = 'NUM',
-        type = int,
-        help = 'Maximum iteration of sampling',
-        default = 7500,
-        dest = 'iteration_limit',
-    )
-
-    parser.add_argument(
-        '--condor_tag',
-        metavar = 'NAME',
-        type = str,
-        help = 'Tag of the run to process on condor. If given, the tag will be used to avoid file collisions',
-        dest = 'condor_tag',
-    )
-
-    parser.add_argument(
-        '--twc_coeffs',
-        metavar = 'FILE',
-        type = str,
-        help = 'pre-calculated TWC coefficients, it has to be pickle file',
-        dest = 'twc_coeffs',
-    )
-
-    parser.add_argument(
-        '--reproducible',
-        action = 'store_true',
-        help = 'If set, random seed will be set by counter and save random seed in the final output',
-        dest = 'reproducible',
-    )
-
-    parser.add_argument(
-        '--force-twc',
-        action='store_true',
-        help='Force use of provided TWC file for all samples.',
-        dest='force_twc'
-    )
-
-    parser.add_argument(
-        '--single',
-        action='store_true',
-        help='Perform a single calculation with full statistics instead of bootstrapping.',
-        dest='single'
-    )
-
-    parser.add_argument(
-        '--dryrun',
-        action = 'store_true',
-        help = 'If set, condor submission will not happen',
-        dest = 'dryrun',
-    )
-
-    parser.add_argument(
-        '--resubmit',
-        action = 'store_true',
-        help = 'If set, condor resubmission for jobs in Running and IDLE. Will kill the old jobs.',
-        dest = 'resubmit',
-    )
-
-    parser.add_argument(
-        '--resubmit_with_stderr',
-        action = 'store_true',
-        help = 'If set, condor resubmission for jobs when stderr is not empty.',
-        dest = 'resubmit_with_stderr',
-    )
+    # Execution Modes
+    parser.add_argument('--dryrun', action='store_true')
+    parser.add_argument('--resubmit', action='store_true', help='Kill & Rerun active jobs')
+    parser.add_argument('--resubmit_with_stderr', action='store_true', help='Rerun failed jobs')
 
     args = parser.parse_args()
 
-    tag_for_condor = args.condor_tag
-    if tag_for_condor is None:
-        runAppend = ""
+    # --- 1. Identify Groups ---
+    # We resolve inputdir just to find the folders, but we don't force absolute paths in JDL unless needed.
+    mother_dir = Path(args.dirname).resolve()
+
+    if mother_dir.name.find('time') != -1:
+        time_dirs = [mother_dir]
     else:
-        runAppend = "_" + tag_for_condor
+        time_dirs = sorted([d for d in mother_dir.iterdir() if d.is_dir() and 'time' in d.name])
 
-    condor_scripts_dir = Path('./') / 'condor_scripts' / f'bootstrap_job{runAppend}'
-    condor_scripts_dir.mkdir(exist_ok=True, parents=True)
+    if not time_dirs:
+        sys.exit(f"No directories containing 'time' found in {mother_dir}")
 
-    log_dir = Path('./') / 'condor_logs' / 'bootstrap' / f'bootstrap_job{runAppend}'
-    log_dir.mkdir(exist_ok=True, parents=True)
+    print(f"Found {len(time_dirs)} groups: {[d.name for d in time_dirs]}")
 
-    outdir = Path('./') / f'bootstrap_{args.outputdir}'
-    if not args.dryrun and not args.resubmit and not args.resubmit_with_stderr:
-        outdir.mkdir(exist_ok = False)
+    # --- 2. Setup Base Paths (Relative) ---
+    run_append = f"_{args.condor_tag}" if args.condor_tag else ""
 
-    print('\n========= Run option =========')
-    print(f'Input dataset: {args.dirname}')
-    print(f'Output direcotry: resolution_{args.outputdir}')
-    if not args.single:
-        print(f'Bootstrap iteration limit: {args.iteration_limit}')
-        print(f'Number of bootstrap outputs: {args.num_bootstrap_output}')
-        print(f'{args.sampling}% of random sampling')
-        print(f'Number of events larger than {args.minimum_nevt} will be considered')
-        if args.reproducible:
-            print('Random seed will be set by counter. The final output will have a seed information together')
-        if args.twc_coeffs is not None:
-            print('Pre-calculated TWC coeffs will be used')
-    else:
-        print('No boostrap, single output will be calculated')
+    # Define paths relative to CWD
+    paths = {
+        'scripts': Path('condor_scripts') / f'bootstrap_job{run_append}',
+        'logs':    Path('condor_logs') / 'bootstrap' / f'bootstrap_job{run_append}',
+        'output':  Path(f'bootstrap_{args.outputdir}')
+    }
 
-    print('========= Run option =========\n')
+    # Create Base Directories
+    for p in paths.values():
+        p.mkdir(parents=True, exist_ok=True)
 
-    make_jobs(args=args, log_dir=log_dir, condor_scripts_dir=condor_scripts_dir, outdir=outdir, runAppend=runAppend)
-    input_txt_path = condor_scripts_dir / f"input_list_for_bootstrap{runAppend}.txt"
+    if not Path(WORKER_SCRIPT_NAME).is_file():
+        sys.exit(f"Error: Worker script '{WORKER_SCRIPT_NAME}' not found.")
 
-    if args.dryrun:
+    # --- 3. Process Each Group ---
+    for group_dir in time_dirs:
+        group_name = group_dir.name
 
-        print('\n=========== Input text file ===========')
-        subprocess.run(f"head -n 10 {input_txt_path}", shell=True)
-        subprocess.run(f"tail -n 10 {input_txt_path}", shell=True)
-        print()
-        print('=========== Bash file ===========')
-        with open(condor_scripts_dir / f"run_bootstrap{runAppend}.sh") as f:
-            print(f.read(), '\n')
-        print('=========== Condor Job Description file ===========')
-        with open(condor_scripts_dir / f'condor_bootstrap{runAppend}.jdl') as f:
-            print(f.read(), '\n')
-        print()
+        unique_group_tag = f"{run_append}_{group_name}"
 
-    elif args.resubmit:
-        condor_output = subprocess.run(['condor_q', '-nobatch'], capture_output=True, text=True)
+        # 1. Separate Output Directory per Group
+        group_out_dir = paths['output'] / group_name
+        group_out_dir.mkdir(parents=True, exist_ok=True)
 
-        # Filter lines containing the target script
-        filtered_lines = [line for line in condor_output.stdout.splitlines() if f'run_bootstrap{runAppend}.sh' in line]
+        # 2. Separate Log Directory per Group
+        group_log_dir = paths['logs'] / group_name
+        group_log_dir.mkdir(parents=True, exist_ok=True)
 
-        if len(filtered_lines) == 0:
-            print('No condor job found.')
-            import sys
-            sys.exit(1)
+        print(f"\n>>> Processing Group: {group_name}")
+        print(f"    Out: {group_out_dir}")
+        print(f"    Log: {group_log_dir}")
 
-        with open(input_txt_path, 'w') as f:
-            for line in filtered_lines:
-                fields = line.split()
-                if len(fields) == 11:
-                    if fields[5] == 'X':
-                        old_condor_job_id = -1
-                        continue
-                    old_condor_job_id = fields[0].split('.')[0]
-                    last_three = fields[-2:]
-                    sentence = ' '.join(last_three)
-                    f.write(sentence + '\n')
+        jdl, bash, list_file = create_submission_files(
+            args, paths, unique_group_tag, group_dir, group_out_dir, group_log_dir
+        )
 
-        if not old_condor_job_id == -1:
-            ## Kill old jobs before submit new one
-            subprocess.run(['condor_rm', f'{old_condor_job_id}'])
+        if not jdl: continue
 
-            if input_txt_path.stat().st_size > 0:
-                subprocess.run(['condor_submit', f'{condor_scripts_dir}/condor_bootstrap{runAppend}.jdl'])
+        # --- Submission Logic ---
+        if args.dryrun:
+            print(f"    [Dry Run] JDL: {jdl}")
+
+        elif args.resubmit:
+            handle_resubmission('kill_and_rerun', bash, list_file, group_log_dir)
+            if list_file.stat().st_size > 0:
+                print("    Resubmitting...")
+                subprocess.run(['condor_submit', str(jdl)])
+
+        elif args.resubmit_with_stderr:
+            handle_resubmission('stderr', bash, list_file, group_log_dir)
+            if list_file.stat().st_size > 0:
+                print("    Resubmitting failed jobs...")
+                subprocess.run(['condor_submit', str(jdl)])
+
+        else:
+            # Standard Submit
+            if list_file.stat().st_size > 0:
+                print(f"    Submitting jobs...")
+                subprocess.run(['condor_submit', str(jdl)])
             else:
-                print("No jobs to submit — input list is empty.")
+                print("    Input list empty.")
 
-    elif args.resubmit_with_stderr:
-        condor_output = subprocess.run(['condor_q', '-nobatch'], capture_output=True, text=True)
-        filtered_lines = [line for line in condor_output.stdout.splitlines() if f'run_bootstrap{runAppend}.sh' in line]
-
-        if filtered_lines:
-            print('Found running jobs. This option is only allowed when no job with the same condor tag is running on condor')
-            exit()
-
-        print('No running jobs found. Checking stderr files...')
-        stderr_files = log_dir.glob('*.stderr')
-
-        line_numbers = []
-        for ifile in stderr_files:
-            if ifile.stat().st_size > 0:
-                line_numbers.append(ifile.name.split('.')[1])
-
-        with open(input_txt_path, 'r') as f:
-            all_lines = f.readlines()
-
-        selected_data = []
-        for line_num in line_numbers:
-            data = all_lines[int(line_num)].strip()
-            selected_data.append(data)
-        del all_lines
-
-        print(f'Found {len(selected_data)} jobs to resubmit')
-        with open(input_txt_path, 'w') as f:
-            for item in selected_data:
-                f.write(item + '\n')
-
-        if input_txt_path.stat().st_size > 0:
-            subprocess.run(['condor_submit', f'{condor_scripts_dir}/condor_bootstrap{runAppend}.jdl'])
-
-    else:
-        subprocess.run(['condor_submit', f'{condor_scripts_dir}/condor_bootstrap{runAppend}.jdl'])
+    print("\nDone.")
