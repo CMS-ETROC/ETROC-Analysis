@@ -16,6 +16,9 @@ ls -ltrh
 echo ""
 pwd
 
+# Note: Input file path is passed as argument 2 ($2).
+# Assumes the 'path' argument is an EOS path to copy.
+
 # Load python environment from work node
 source /cvmfs/sft.cern.ch/lcg/views/LCG_104a/x86_64-el9-gcc13-opt/setup.sh
 
@@ -52,11 +55,14 @@ Queue ifile,path from {{ script_dir }}/input_list_for_bootstrap{{ unique_tag }}.
 
 # --- Helper Functions ---
 
-def build_python_command(args: argparse.Namespace) -> str:
-    """Constructs the python command string dynamically."""
+def build_python_command(args: argparse.Namespace, filename_val: str) -> str:
+    """
+    Constructs the python command string dynamically.
+    NOW accepts filename_val to insert directly (e.g., '${1}.pkl')
+    """
     cmd_parts = [
         f"python {WORKER_SCRIPT_NAME}",
-        "-f {{ filename }}",
+        f"-f {filename_val}", # <--- Fixed: Directly use the bash variable
         f"-n {args.num_bootstrap_output}",
         f"-s {args.sampling}",
         f"--minimum_nevt {args.minimum_nevt}",
@@ -99,11 +105,16 @@ def create_submission_files(
             f.write(f"{name}, {file_path.resolve()}\n")
 
     # 2. Generate Bash Script
-    command = build_python_command(args)
+    # Define the bash variable for filename
+    filename_var = '${1}.pkl'
+
+    # Build command using that variable
+    command = build_python_command(args, filename_var)
+
     bash_content = Template(BASH_TEMPLATE).render({
         'input_file': '${2}',
-        'filename': '${1}.pkl',
-        'command': command
+        'filename': filename_var, # Passed for cleanup logic
+        'command': command        # Passed for execution line
     })
 
     bash_script_name = f'run_bootstrap{unique_tag}.sh'
@@ -116,12 +127,11 @@ def create_submission_files(
     if args.twc_coeffs:
         transfer_list.append(args.twc_coeffs)
 
-    # Render with RELATIVE paths for portability
     jdl_content = Template(JDL_TEMPLATE).render({
         'script_dir': str(paths['scripts']),
         'unique_tag': unique_tag,
-        'out_dir': str(group_out_dir),       # Top-level separate output dir
-        'log_dir': str(group_log_dir),       # Top-level separate log dir
+        'out_dir': str(group_out_dir),
+        'log_dir': str(group_log_dir),
         'transfer_files': ", ".join(transfer_list)
     })
 
@@ -242,14 +252,15 @@ if __name__ == "__main__":
     # --- 2. Setup Base Paths ---
     run_append = f"_{args.condor_tag}" if args.condor_tag else ""
 
-    # Only script paths are global; Output/Log paths are calculated per group
-    script_dir = Path('condor_scripts') / f'bootstrap_job{run_append}'
-    base_log_dir = Path('condor_logs') / 'bootstrap' / f'bootstrap_job{run_append}'
+    paths = {
+        'scripts': Path('condor_scripts') / f'bootstrap_job{run_append}',
+        'logs':    Path('condor_logs') / 'bootstrap' / f'bootstrap_job{run_append}',
+        'output':  Path(f'bootstrap_{args.outputdir}')
+    }
 
-    script_dir.mkdir(parents=True, exist_ok=True)
-    base_log_dir.mkdir(parents=True, exist_ok=True)
-
-    paths = {'scripts': script_dir} # Wrapper for create_submission_files
+    # Create Base Directories
+    for p in paths.values():
+        p.mkdir(parents=True, exist_ok=True)
 
     if not Path(WORKER_SCRIPT_NAME).is_file():
         sys.exit(f"Error: Worker script '{WORKER_SCRIPT_NAME}' not found.")
@@ -259,7 +270,6 @@ if __name__ == "__main__":
         group_name = group_dir.name
 
         # Calculate Suffix: time -> "", time_group1 -> _group1
-        # Use simple replace to handle complex names like "cut_v1_time_group1"
         group_suffix = group_name.replace('time', '')
 
         # 1. Output Directory: bootstrap_OutName_group1
@@ -267,9 +277,8 @@ if __name__ == "__main__":
         group_out_dir = Path(unique_out_name)
 
         # 2. Log Directory: condor_logs/.../time_group1
-        group_log_dir = base_log_dir / group_name
+        group_log_dir = paths['logs'] / group_name
 
-        # Create directories (unless dryrun/resubmit)
         if not (args.dryrun or args.resubmit or args.resubmit_with_stderr):
             try:
                 group_out_dir.mkdir(parents=True, exist_ok=True)
