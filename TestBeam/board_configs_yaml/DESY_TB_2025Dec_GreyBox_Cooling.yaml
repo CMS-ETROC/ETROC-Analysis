@@ -240,3 +240,76 @@ run07:
         y: 0
         z: 1
   3: *PT_IH22
+
+run08:
+  0:
+    <<: *PT_NH47
+    transformation:
+      rotation:
+        x: 0
+        y: -60
+        z: 0
+      translation:
+        x: 0
+        y: 0
+        z: 4
+  1:
+    <<: *PT_IH18
+    transformation:
+      rotation:
+        x: 180
+        y: 0
+        z: 0
+      translation:
+        x: 0
+        y: 0
+        z: 2
+  2:
+    <<: *PT_IH21
+    transformation:
+      rotation:
+        x: 180
+        y: 0
+        z: 0
+      translation:
+        x: 0
+        y: 0
+        z: 1
+  3: *PT_IH22
+
+run09:
+  0:
+    <<: *PT_NH47
+    HV: 180
+    transformation:
+      rotation:
+        x: 0
+        y: -60
+        z: 0
+      translation:
+        x: 0
+        y: 0
+        z: 4
+  1:
+    <<: *PT_IH18
+    transformation:
+      rotation:
+        x: 180
+        y: 0
+        z: 0
+      translation:
+        x: 0
+        y: 0
+        z: 2
+  2:
+    <<: *PT_IH21
+    transformation:
+      rotation:
+        x: 180
+        y: 0
+        z: 0
+      translation:
+        x: 0
+        y: 0
+        z: 1
+  3: *PT_IH22
