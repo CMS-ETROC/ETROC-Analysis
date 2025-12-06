@@ -1,6 +1,7 @@
 import argparse
 import subprocess
 import sys
+import re
 from pathlib import Path
 from jinja2 import Template
 from natsort import natsorted
@@ -56,13 +57,10 @@ Queue ifile,path from {{ script_dir }}/input_list_for_bootstrap{{ unique_tag }}.
 # --- Helper Functions ---
 
 def build_python_command(args: argparse.Namespace, filename_val: str) -> str:
-    """
-    Constructs the python command string dynamically.
-    NOW accepts filename_val to insert directly (e.g., '${1}.pkl')
-    """
+    """Constructs the python command string dynamically."""
     cmd_parts = [
         f"python {WORKER_SCRIPT_NAME}",
-        f"-f {filename_val}", # <--- Fixed: Directly use the bash variable
+        f"-f {filename_val}",
         f"-n {args.num_bootstrap_output}",
         f"-s {args.sampling}",
         f"--minimum_nevt {args.minimum_nevt}",
@@ -101,20 +99,25 @@ def create_submission_files(
     with open(input_list_path, 'a') as f:
         for file_path in files:
             name = file_path.stem
-            # Write absolute path for xrdcp to find it on EOS
-            f.write(f"{name}, {file_path.resolve()}\n")
+
+            # --- PATH FIX: Enforce /eos/user/ instead of /eos/home-X/ ---
+            abs_path = str(file_path.resolve())
+
+            # Regex match: start of string, /eos/home-, one alphanumeric char (group 1), /
+            # Replace with: /eos/user/, group 1, /
+            # Example: /eos/home-j/jongho -> /eos/user/j/jongho
+            logical_path = re.sub(r'^/eos/home-([a-z0-9])/', r'/eos/user/\1/', abs_path)
+
+            f.write(f"{name}, {logical_path}\n")
 
     # 2. Generate Bash Script
-    # Define the bash variable for filename
     filename_var = '${1}.pkl'
-
-    # Build command using that variable
     command = build_python_command(args, filename_var)
 
     bash_content = Template(BASH_TEMPLATE).render({
         'input_file': '${2}',
-        'filename': filename_var, # Passed for cleanup logic
-        'command': command        # Passed for execution line
+        'filename': filename_var,
+        'command': command
     })
 
     bash_script_name = f'run_bootstrap{unique_tag}.sh'
@@ -252,6 +255,8 @@ if __name__ == "__main__":
     # --- 2. Setup Base Paths ---
     run_append = f"_{args.condor_tag}" if args.condor_tag else ""
 
+    # Only script paths are global; Output/Log paths are calculated per group
+    # Note: Using relative paths here to keep JDL portable
     paths = {
         'scripts': Path('condor_scripts') / f'bootstrap_job{run_append}',
         'logs':    Path('condor_logs') / 'bootstrap' / f'bootstrap_job{run_append}',
