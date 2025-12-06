@@ -94,19 +94,25 @@ def main():
     output_path = Path(args.outputdir)
     output_path.mkdir(exist_ok=True, parents=True)
 
-    # 1. Identify Input Groups
+    # 1. Identify Input Groups and Base Dir Name
     if mother_dir.name.find('time') != -1:
-        # User pointed directly to a specific time folder
+        # User pointed directly to a specific time folder (e.g., .../Angle30.../time_group1)
         time_dirs = [mother_dir]
+        raw_dirname = mother_dir.parent.name
     else:
-        # User pointed to mother dir; scan for subfolders
+        # User pointed to mother dir; scan for subfolders (e.g., .../Angle30.../)
         time_dirs = sorted([d for d in mother_dir.iterdir() if d.is_dir() and 'time' in d.name])
+        raw_dirname = mother_dir.name
 
     if not time_dirs:
         print(f"Error: No directories containing 'time' found in {mother_dir}")
         sys.exit(1)
 
-    print(f"Found {len(time_dirs)} input groups: {[d.name for d in time_dirs]}\n")
+    # Clean the dirname: remove '_AfterCuts' if present
+    dirname_part = raw_dirname.replace('_AfterCuts', '')
+
+    print(f"Found {len(time_dirs)} input groups in base: {dirname_part}")
+    print(f"Groups: {[d.name for d in time_dirs]}\n")
 
     # 2. Loop through each group independently
     for group_dir in time_dirs:
@@ -140,8 +146,19 @@ def main():
             df = pd.DataFrame(data=group_dict)
             df.sort_values(by=['nevt'], ascending=False, inplace=True)
 
-            # Construct filename: time_group1_nevt_per_track.csv
-            out_filename = f"{group_name}_nevt_per_track{args.tag}.csv"
+            # --- Modified Filename Logic ---
+            # 1. dirname_part is already calculated (e.g., Angle30Deg_HV160_os10)
+            # 2. Determine suffix based on group name (e.g., time_group1 -> _group1)
+            group_match = re.search(r'(group\d+)', group_name)
+            if group_match:
+                # If "group1" exists in the folder name, append "_group1"
+                group_suffix = f"_{group_match.group(1)}"
+            else:
+                # If folder is just "time", no suffix
+                group_suffix = ""
+
+            # Final name: nevt_<dirname_part>_<group_suffix>.csv
+            out_filename = f"nevt_{dirname_part}{group_suffix}{args.tag}.csv"
             final_out_path = output_path / out_filename
 
             print(f"    Saving to: {final_out_path}")
