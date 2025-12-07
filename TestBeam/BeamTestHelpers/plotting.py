@@ -6,7 +6,7 @@ import matplotlib.colors as colors
 import mplhep as hep
 hep.style.use('CMS')
 
-from utils import load_fig_title
+from .utils import load_fig_title
 from lmfit.models import GaussianModel
 from lmfit.lineshapes import gaussian
 from natsort import natsorted
@@ -33,7 +33,7 @@ def save_plot(fig, save_dir, file_name):
     fig.savefig(save_dir / f"{file_name}.pdf")
     plt.close(fig)
 
-d
+
 ## --------------------------------------
 def plot_TWC(
         input_df: pd.DataFrame,
