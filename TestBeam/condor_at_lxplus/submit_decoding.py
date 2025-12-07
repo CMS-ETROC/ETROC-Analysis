@@ -248,10 +248,10 @@ if __name__ == "__main__":
     if args.dryrun:
         input_txt_path = condor_scripts_dir / f"input_list_for_decoding{runAppend}.txt"
         print('\n=========== Input text file ===========')
-        print('First 10 lines:')
-        subprocess.run(f"head -n 10 {input_txt_path}", shell=True)
-        print('Last 10 lines:')
-        subprocess.run(f"tail -n 10 {input_txt_path}", shell=True)
+        print('First 3 lines:')
+        subprocess.run(f"head -n 3 {input_txt_path}", shell=True)
+        print('Last 3 lines:')
+        subprocess.run(f"tail -n 3 {input_txt_path}", shell=True)
         print()
         print('=========== Bash file ===========')
         with open(condor_scripts_dir / f"run_decode{runAppend}.sh") as f:
