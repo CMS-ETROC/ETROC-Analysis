@@ -4,8 +4,8 @@ import hist
 
 from pathlib import Path
 
-
 __all__ = [
+    'load_fig_title',
     'efficiency_with_single_board',
     'efficiency_with_two_boards',
     'singlehit_event_clear',
@@ -23,6 +23,74 @@ __all__ = [
     'return_resolution_four_board_fromFWHM',
     'return_board_resolution',
 ]
+
+def load_fig_title(
+    tb_loc:str
+):
+    """Load figure title (beam info and testing location)
+
+    Parameters
+    ----------
+    tb_loc: str,
+        Location of the test beam.
+        Input argument for test beam facility
+            1. 'desy',
+            2. 'cern',
+            3. 'fnal',
+        Input argument for SEU test facility
+            1. 'northwestern',
+            2. 'louvain-{ion type}'
+                - ion type: C, Ne, Al, Ar, Cr, Ni, Kr, Rh, Xe
+    """
+    if tb_loc == 'desy':
+        plot_title = r'4 GeV $e^{-}$ at DESY TB'
+    elif tb_loc == 'cern':
+        plot_title = r'120 GeV (1/3 p; 2/3 $\pi^{+}$) at CERN SPS H6'
+    elif tb_loc == 'cern_mu':
+        plot_title = r'$\mu^{\pm}$ at CERN SPS H6'
+    elif tb_loc == 'cern_h8':
+        plot_title = r'180 GeV ($\pi^{+}$) at CERN SPS H8'
+    elif tb_loc == 'fnal':
+        plot_title = r'120 GeV p at Fermilab TB'
+    elif tb_loc == 'northwestern':
+        plot_title = r'217 MeV p at Northwestern Medicine Proton Center'
+    elif tb_loc == 'wh14':
+        plot_title = 'Wilson Hall 14th floor lab'
+    elif tb_loc == 'irrad':
+        plot_title = 'CERN IRRAD'
+    # The assumption for louvain is the the tb_loc will specify location and ion with the following format:
+    # louvain-Kr  - for example for louvain with Krypton ion beam
+    # louvain-Xe  - for example for louvain with Xenon ion beam
+    elif tb_loc[:7] == 'louvain':
+        ion = tb_loc[8:]
+        energy = "xx"
+        if ion == "C":
+            energy = 131
+        elif ion == "Ne":
+            energy = 238
+        elif ion == "Al":
+            energy = 250
+        elif ion == "Ar":
+            energy = 353
+        elif ion == "Cr":
+            energy = 505
+        elif ion == "Ni":
+            energy = 582
+        elif ion == "Kr":
+            energy = 769
+        elif ion == "Rh":
+            energy = 957
+        elif ion == "Xe":
+            energy = 995
+        plot_title = rf'{energy} MeV {ion} at Heavy Ion Facility'
+    else:
+        print('Unknown location. Please add info into the function. Return empty string')
+        plot_title = ""
+
+    return plot_title
+
+
+
 
 ## --------------- Modify DataFrame -----------------------
 ## --------------------------------------
