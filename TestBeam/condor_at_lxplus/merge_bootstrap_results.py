@@ -164,7 +164,6 @@ def process_group(
             final_dict[f'col_{excluded_role}'].append(pixel_dict[excluded_role][1])
         else:
             # If excluded role isn't in filename (rare), append placeholders or skip
-            # For now, we continue, but this might misalign columns if not careful.
             pass
 
         # Append results for all columns found in the dataframe
@@ -193,7 +192,7 @@ def main():
     parser = argparse.ArgumentParser(description='Merge individual bootstrap results into a summary CSV.')
 
     parser.add_argument('-d', '--inputdir', required=True, dest='inputdir',
-                        help='Mother directory containing bootstrap output folders')
+                        help='Specific bootstrap directory (merges it + siblings) OR Mother directory (merges all)')
     parser.add_argument('-o', '--outputdir', required=True, dest='outputdir',
                         help='Output directory name')
 
@@ -204,23 +203,49 @@ def main():
     args = parser.parse_args()
 
     # 1. Identify Groups
-    mother_dir = Path(args.inputdir)
+    # Resolve the path to handle relative paths (like '.') correctly
+    mother_dir = Path(args.inputdir).resolve()
 
-    # Check if user pointed directly to a bootstrap folder or a mother folder
+    if not mother_dir.exists():
+        sys.exit(f"Error: Input directory {mother_dir} does not exist.")
+
+    group_dirs = []
+
+    # CASE A: User points to a specific bootstrap folder (e.g. bootstrap_Angle30Deg_HV230_os20)
+    # We want to process this folder AND any split groups (e.g. ..._group1, ..._group2)
+    # but NOT other runs (e.g. ..._HV220).
     if mother_dir.name.startswith('bootstrap'):
-        group_dirs = [mother_dir]
+        parent_dir = mother_dir.parent
+        base_name = mother_dir.name
+
+        # Scan parent directory for matching groups
+        for candidate in parent_dir.iterdir():
+            if not candidate.is_dir():
+                continue
+
+            # Match if it is the base directory exactly
+            # OR if it starts with base_name + "_group"
+            # (The "_group" check ensures we don't match substrings like HV2 matching HV20)
+            if candidate.name == base_name or candidate.name.startswith(base_name + "_group"):
+                group_dirs.append(candidate)
+
+        # Sort naturally to ensure group1, group2, group3 order
+        group_dirs = natsorted(group_dirs)
+
+    # CASE B: User points to a mother directory (e.g. "./" or "results/")
+    # We process ALL bootstrap folders found inside.
     else:
-        # Scan for subfolders starting with "bootstrap"
-        group_dirs = sorted([d for d in mother_dir.iterdir() if d.is_dir() and d.name.startswith('bootstrap')])
+        group_dirs = natsorted([d for d in mother_dir.iterdir() if d.is_dir() and d.name.startswith('bootstrap')])
 
     if not group_dirs:
-        sys.exit(f"No 'bootstrap*' directories found in {mother_dir}")
+        sys.exit(f"No valid 'bootstrap*' directories found based on input: {mother_dir}")
 
     # 2. Setup Output
     base_out_dir = Path(args.outputdir)
     base_out_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"Found {len(group_dirs)} groups to merge.")
+    print(f"Target Groups: {[d.name for d in group_dirs]}")
     print(f"Output Directory: {base_out_dir}\n")
 
     # 3. Process Each Group
