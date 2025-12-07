@@ -124,3 +124,15 @@ run09:
   1: { <<: *PT_IH3, angle: 30, HV: 210 }
   2: { <<: *PT_IH5, angle: 30, HV: 210 }
   3: { <<: *PT_IH24, angle: 30, HV: 210 }
+
+run10:
+  0: { <<: *PT_IH2, angle: 30, HV: 190 }
+  1: { <<: *PT_IH3, angle: 30, HV: 190 }
+  2: { <<: *PT_IH5, angle: 30, HV: 190 }
+  3: { <<: *PT_IH24, angle: 30, HV: 190 }
+
+run11:
+  0: { <<: *PT_IH2, angle: 30, HV: 170, offset: 10 }
+  1: { <<: *PT_IH3, angle: 30, HV: 170, offset: 10 }
+  2: { <<: *PT_IH5, angle: 30, HV: 170, offset: 10 }
+  3: { <<: *PT_IH24, angle: 30, HV: 170, offset: 10 }
