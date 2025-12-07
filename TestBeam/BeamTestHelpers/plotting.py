@@ -7,6 +7,8 @@ import matplotlib.ticker as ticker
 import mplhep as hep
 hep.style.use('CMS')
 
+from lmfit.models import GaussianModel
+from lmfit.lineshapes import gaussian
 from natsort import natsorted
 from pathlib import Path
 from matplotlib import rcParams
@@ -15,6 +17,8 @@ rcParams["axes.formatter.use_mathtext"] = False
 
 __all__ = [
     'load_fig_title',
+    'fit_resolution_data',
+    'calculate_weighted_mean_std_for_every_pixel',
     'return_hist',
     'return_event_hist',
     'return_crc_hist',
@@ -1438,269 +1442,203 @@ def plot_TWC(
         fig.savefig(save_dir / f"twc_fit.pdf")
         plt.close(fig)
 
+
 ## --------------------------------------
-def plot_resolution_with_pulls(
-        input_df: pd.DataFrame,
-        list_of_boards: list[str],
-        tb_loc: str,
-        fig_config: dict,
-        hist_range: list[int] = [20, 75],
-        hist_bins: int = 15,
-        slides_friendly: bool = False,
-        print_fit_results: bool = False,
-        constraint_ylim: bool = False,
-        save_mother_dir: Path | None = None,
-    ):
-    """Make summary plot of the board resolution plot with a gaussian fit.
-
-    Parameters
-    ----------
-    input_df: pd.DataFrame
-        Pandas dataframe includes bootstrap results.
-    board_ids: list[int]
-        A list of board IDs to make plots.
-    tb_loc: str,
-        Test Beam location for the title. Available argument: desy, cern, fnal.
+def fit_resolution_data(
+    input_df: pd.DataFrame,
+    list_of_boards: list[str],
     fig_config: dict,
-        Dictionary with board ID as a dict key. It contains a figure title.
-    hist_range: list[int], optional
-        Set the histogram range. Default value is [20, 75].
-    hist_bins: int, optional
-        Adjust the histogram bins. Default value is 15.
-    slide_friendly: bool, optional
-        If it is True, draw plots in a single figure. Recommend this option, when you try to add plots on the slides.
-    save_mother_dir: Path, optional
-        Plot will be saved at save_mother_dir/'time_resolution_results'.
+    hist_range: list[int] = [20, 75],
+    hist_bins: int = 15,
+) -> dict:
     """
+    Performs Gaussian fits on board resolution data.
 
-    import matplotlib.gridspec as gridspec
-    from lmfit.models import GaussianModel
-    from lmfit.lineshapes import gaussian
-
-    plot_title = load_fig_title(tb_loc)
+    Returns
+    -------
+    dict
+        A dictionary containing fit results keyed by board_id.
+        Structure: { board_id: {'hist': ..., 'fit_result': ..., 'pulls': ..., 'config': ...} }
+    """
     mod = GaussianModel(nan_policy='omit')
+    results = {}
 
-    hists = {}
-    fit_params = {}
-    pulls_dict = {}
-    means = {}
-
-    for board_id, board_info in fig_config.items():
+    for _, board_info in fig_config.items():
         role = board_info.get('role')
 
+        # validation checks
         column_to_check = f'res_{role}'
-        if not column_to_check in input_df.columns:
+        if column_to_check not in input_df.columns:
             continue
-
-        if not role in list_of_boards:
+        if role not in list_of_boards:
             continue
 
         data_to_hist = input_df[f'res_{role}'].dropna().values
 
-        hists[board_id] = hist.Hist(hist.axis.Regular(hist_bins, hist_range[0], hist_range[1], name="time_resolution", label='Time Resolution [ps]'))
-        hists[board_id].fill(data_to_hist)
-        means[board_id] = np.mean(data_to_hist)
+        # 1. Create Histogram
+        h = hist.Hist(hist.axis.Regular(hist_bins, hist_range[0], hist_range[1],
+                                        name="time_resolution", label='Time Resolution [ps]'))
+        h.fill(data_to_hist)
 
-        ### ADD THIS CHECK ###
-        # Check if the histogram has any entries. If not, skip to the next board.
-        if hists[board_id].sum() == 0:
-            print(f"WARNING: Histogram for board_id '{board_id}' (role: {role}) is empty. Skipping fit.")
+        # Check if empty
+        if h.sum() == 0:
+            print(f"WARNING: Histogram for role: {role} is empty. Skipping fit.")
             continue
 
-        centers = hists[board_id].axes[0].centers
+        centers = h.axes[0].centers
 
-        ### OPTIONAL BUT RECOMMENDED: IMPROVE SLICING LOGIC ###
-        # This makes your slice robust, preventing errors if the peak is near an edge.
-        peak_bin_index = np.argmax(hists[board_id].values())
-        fit_window_half_width = 5 # Your original value was 5
-
-        # Calculate start and end indices for the slice, ensuring they are within bounds
+        # 2. Slice Data for Fitting
+        peak_bin_index = np.argmax(h.values())
+        fit_window_half_width = 5
         start_index = max(0, peak_bin_index - fit_window_half_width)
-        end_index   = min(len(centers), peak_bin_index + fit_window_half_width + 1) # +1 because slicing is exclusive on the end
+        end_index   = min(len(centers), peak_bin_index + fit_window_half_width + 1)
 
         fit_range = centers[start_index:end_index]
-        fit_vals = hists[board_id].values()[start_index:end_index]
+        fit_vals = h.values()[start_index:end_index]
 
-        # Check if the resulting slice is still empty (can happen in edge cases)
         if len(fit_vals) == 0:
-            print(f"WARNING: Could not create a valid fit slice for board_id '{board_id}'. Skipping fit.")
+            print(f"WARNING: Could not create a valid fit slice for role: {role}. Skipping fit.")
             continue
 
+        # 3. Perform Fit
         pars = mod.guess(fit_vals, x=fit_range)
         out = mod.fit(fit_vals, pars, x=fit_range, weights=1/np.sqrt(fit_vals))
-        fit_params[board_id] = out
 
-        if print_fit_results:
-            print(role, f'mu: {out.params['center'].value:.2f}', f'sigma: {abs(out.params['sigma'].value):.2f}')
-
-        ### Calculate pull
-        pulls = (hists[board_id].values() - out.eval(x=centers))/np.sqrt(out.eval(x=centers))
+        # 4. Calculate Pulls
+        # Note: We evaluate the model over all centers for the pull plot, not just the fit range
+        model_vals = out.eval(x=centers)
+        pulls = (h.values() - model_vals) / np.sqrt(model_vals)
         pulls[np.isnan(pulls) | np.isinf(pulls)] = 0
-        pulls_dict[board_id] = pulls
+
+        # 5. Store Results
+        results[role] = {
+            'hist': h,
+            'fit_result': out,
+            'pulls': pulls,
+            'config': board_info, # Store config here for easy access in plotter
+            'centers': centers
+        }
+
+    return results
 
 
-    if slides_friendly:
+## --------------------------------------
+def plot_resolution_with_pulls(
+    fit_results: dict,
+    tb_loc: str,
+    constraint_ylim: bool = False,
+    save_mother_dir: Path | None = None,
+):
+    """
+    Plots the resolution fit results generated by fit_resolution_data.
+    """
 
-        # Create a figure with a 2x2 grid
-        fig = plt.figure(figsize=(24, 16))
-        gs = fig.add_gridspec(2, 2)
+    # Assuming load_fig_title is a helper function defined elsewhere in your scope
+    # If not, you might need to pass the full title string instead of tb_loc
+    try:
+        plot_title = load_fig_title(tb_loc)
+    except NameError:
+        plot_title = f"Test Beam: {tb_loc}"
 
-        for i, plot in enumerate(gs):
-            global_ax = fig.add_subplot(plot)
-            inner_plot = gridspec.GridSpecFromSubplotSpec(2, 1, subplot_spec=global_ax, hspace=0, height_ratios=[3, 1])
-            main_ax = fig.add_subplot(inner_plot[0])
-            sub_ax = fig.add_subplot(inner_plot[1], sharex=main_ax)
-            global_ax.xaxis.set_visible(False)
-            global_ax.yaxis.set_visible(False)
-            main_ax.xaxis.set_visible(False)
+    for board_id, data in fit_results.items():
+        h = data['hist']
+        fit_out = data['fit_result']
+        pulls = data['pulls']
+        config = data['config']
+        centers = data['centers']
 
-            if i not in hists:
-                global_ax.set_axis_off()
-                main_ax.set_axis_off()
-                sub_ax.set_axis_off()
-                continue
+        # Setup Canvas
+        fig = plt.figure(figsize=(11.5, 10))
+        grid = fig.add_gridspec(2, 1, hspace=0, height_ratios=[3, 1])
 
-            sup_title = fig_config[idx]['title']
-            centers = hists[i].axes[0].centers
-            hep.cms.text(loc=0, ax=main_ax, text="ETL ETROC Test Beam", fontsize=20)
-            main_ax.set_title(f'{plot_title} {sup_title}', loc="right", size=18)
+        main_ax = fig.add_subplot(grid[0])
+        sub_ax = fig.add_subplot(grid[1], sharex=main_ax)
+        plt.setp(main_ax.get_xticklabels(), visible=False)
 
-            main_ax.errorbar(centers, hists[i].values(), np.sqrt(hists[i].variances()),
-                            ecolor="steelblue", mfc="steelblue", mec="steelblue", fmt="o",
-                            ms=6, capsize=1, capthick=2, alpha=0.8)
+        # ---------------------
+        # MAIN PLOT
+        # ---------------------
+        hep.cms.text(loc=0, ax=main_ax, text="ETL ETROC Test Beam", fontsize=18)
+        main_ax.set_title(f'{plot_title}\n{config['title']}', loc="right", size=14)
 
-            main_ax.set_ylabel('Counts', fontsize=18)
+        # Plot Data Points
+        main_ax.errorbar(centers, h.values(), np.sqrt(h.variances()),
+                        ecolor="steelblue", mfc="steelblue", mec="steelblue", fmt="o",
+                        ms=6, capsize=1, capthick=2, alpha=0.8)
+
+        # Plot Fit Line and Uncertainty Band
+        x_min, x_max = centers[0], centers[-1]
+        x_range = np.linspace(x_min, x_max, 500)
+
+        # Calculate fit uncertainty band
+        popt = [par for name, par in fit_out.best_values.items()]
+        pcov = fit_out.covar
+
+        if pcov is not None and np.isfinite(pcov).all():
+            n_samples = 100
+            vopts = np.random.multivariate_normal(popt, pcov, n_samples)
+            # Reconstruct gaussian function manually or use model eval
+            # Using manual gaussian import from lmfit.lineshapes
+            sampled_ydata = np.vstack([gaussian(x_range, *vopt).T for vopt in vopts])
+            model_uncert = np.nanstd(sampled_ydata, axis=0)
+        else:
+            # Fallback if covariance is bad
+            model_uncert = np.zeros_like(x_range)
+
+        main_ax.plot(x_range, fit_out.eval(x=x_range), color="hotpink", ls="-", lw=2, alpha=0.8,
+                    label=fr"$\mu$:{fit_out.params['center'].value:.2f} $\pm$ {fit_out.params['center'].stderr:.2f} ps")
+
+        # Dummy plot for Sigma label
+        main_ax.plot(np.NaN, np.NaN, color='none',
+                    label=fr"$\sigma$: {abs(fit_out.params['sigma'].value):.2f} $\pm$ {abs(fit_out.params['sigma'].stderr):.2f} ps")
+
+        main_ax.fill_between(
+            x_range,
+            fit_out.eval(x=x_range) - model_uncert,
+            fit_out.eval(x=x_range) + model_uncert,
+            color="hotpink",
+            alpha=0.2,
+            label='Fit Uncertainty'
+        )
+
+        main_ax.set_ylabel('Counts', fontsize=25)
+        main_ax.tick_params(axis='x', labelsize=20)
+        main_ax.tick_params(axis='y', labelsize=20)
+        main_ax.legend(fontsize=18, loc='best')
+
+        if constraint_ylim:
             main_ax.set_ylim(-5, 190)
-            main_ax.tick_params(axis='x', labelsize=18)
-            main_ax.tick_params(axis='y', labelsize=18)
 
-            x_min = centers[0]
-            x_max = centers[-1]
+        # ---------------------
+        # PULL PLOT
+        # ---------------------
+        width = (x_max - x_min) / len(pulls)
+        sub_ax.axhline(1, c='black', lw=0.75)
+        sub_ax.axhline(0, c='black', lw=1.2)
+        sub_ax.axhline(-1, c='black', lw=0.75)
+        sub_ax.bar(centers, pulls, width=width, fc='royalblue')
 
-            x_range = np.linspace(x_min, x_max, 200)
-            popt = [par for name, par in fit_params[i].best_values.items()]
-            pcov = fit_params[i].covar
-
-            if np.isfinite(pcov).all():
-                n_samples = 100
-                vopts = np.random.multivariate_normal(popt, pcov, n_samples)
-                sampled_ydata = np.vstack([gaussian(x_range, *vopt).T for vopt in vopts])
-                model_uncert = np.nanstd(sampled_ydata, axis=0)
-            else:
-                model_uncert = np.zeros_like(np.sqrt(hists[i].variances()))
-
-            main_ax.plot(x_range, fit_params[i].eval(x=x_range), color="hotpink", ls="-", lw=2, alpha=0.8,
-                        label=fr"$\mu$:{fit_params[i].params['center'].value:.2f} $\pm$ {fit_params[i].params['center'].stderr:.2f} ps")
-            main_ax.plot(np.NaN, np.NaN, color='none',
-                        label=fr"$\sigma$: {abs(fit_params[i].params['sigma'].value):.2f} $\pm$ {abs(fit_params[i].params['sigma'].stderr):.2f} ps")
-
-            main_ax.fill_between(
-                x_range,
-                fit_params[i].eval(x=x_range) - model_uncert,
-                fit_params[i].eval(x=x_range) + model_uncert,
-                color="hotpink",
-                alpha=0.2,
-                label='Fit Uncertainty'
-            )
-            main_ax.legend(fontsize=18, loc='best', title=fig_config[idx]['title'], title_fontsize=18)
-
-            width = (x_max - x_min) / len(pulls_dict[i])
-            sub_ax.axhline(1, c='black', lw=0.75)
-            sub_ax.axhline(0, c='black', lw=1.2)
-            sub_ax.axhline(-1, c='black', lw=0.75)
-            sub_ax.bar(centers, pulls_dict[i], width=width, fc='royalblue')
-            sub_ax.set_ylim(-2, 2)
-            sub_ax.set_yticks(ticks=np.arange(-1, 2), labels=[-1, 0, 1], fontsize=20)
-            sub_ax.set_xlabel('Pixel Time Resolution [ps]', fontsize=20)
-            sub_ax.tick_params(axis='x', which='both', labelsize=20)
-            sub_ax.set_ylabel('Pulls', fontsize=20, loc='center')
+        sub_ax.set_ylim(-2, 2)
+        sub_ax.set_yticks(ticks=np.arange(-1, 2), labels=[-1, 0, 1])
+        sub_ax.tick_params(axis='y', labelsize=20)
+        sub_ax.set_xlabel('Pixel Time Resolution [ps]', fontsize=25)
+        sub_ax.tick_params(axis='x', which='both', labelsize=20)
+        sub_ax.set_ylabel('Pulls', fontsize=20, loc='center')
 
         fig.tight_layout()
 
+        # ---------------------
+        # SAVING
+        # ---------------------
         if save_mother_dir is not None:
             save_dir = save_mother_dir / 'time_resolution_results'
-            save_dir.mkdir(exist_ok=True)
-            fig.savefig(save_dir / f"board_res.png")
-            fig.savefig(save_dir / f"board_res.pdf")
+            save_dir.mkdir(exist_ok=True, parents=True)
+            # Using 'short' key from config if available, otherwise board_id
+            name_tag = config.get('short', board_id)
+            fig.savefig(save_dir / f"board_res_{name_tag}.png")
+            fig.savefig(save_dir / f"board_res_{name_tag}.pdf")
             plt.close(fig)
 
-        del hists, fit_params, pulls_dict, mod
-
-    else:
-        for idx in hists.keys():
-            fig = plt.figure(figsize=(11, 10))
-            grid = fig.add_gridspec(2, 1, hspace=0, height_ratios=[3, 1])
-
-            main_ax = fig.add_subplot(grid[0])
-            sub_ax = fig.add_subplot(grid[1], sharex=main_ax)
-            plt.setp(main_ax.get_xticklabels(), visible=False)
-
-            centers = hists[idx].axes[0].centers
-            hep.cms.text(loc=0, ax=main_ax, text="ETL ETROC Test Beam", fontsize=18)
-            main_ax.set_title(f'{plot_title}', loc="right", size=16)
-
-            main_ax.errorbar(centers, hists[idx].values(), np.sqrt(hists[idx].variances()),
-                            ecolor="steelblue", mfc="steelblue", mec="steelblue", fmt="o",
-                            ms=6, capsize=1, capthick=2, alpha=0.8)
-
-            main_ax.set_ylabel('Counts', fontsize=25)
-            main_ax.tick_params(axis='x', labelsize=20)
-            main_ax.tick_params(axis='y', labelsize=20)
-            if constraint_ylim:
-                main_ax.set_ylim(-5, 190)
-
-            x_min = centers[0]
-            x_max = centers[-1]
-
-            x_range = np.linspace(x_min, x_max, 500)
-            popt = [par for name, par in fit_params[idx].best_values.items()]
-            pcov = fit_params[idx].covar
-
-            # if np.isfinite(pcov).all():
-            if pcov is not None and np.isfinite(pcov).all():
-                n_samples = 100
-                vopts = np.random.multivariate_normal(popt, pcov, n_samples)
-                sampled_ydata = np.vstack([gaussian(x_range, *vopt).T for vopt in vopts])
-                model_uncert = np.nanstd(sampled_ydata, axis=0)
-            else:
-                model_uncert = np.zeros_like(np.sqrt(hists[idx].variances()))
-
-            main_ax.plot(x_range, fit_params[idx].eval(x=x_range), color="hotpink", ls="-", lw=2, alpha=0.8,
-                        label=fr"$\mu$:{fit_params[idx].params['center'].value:.2f} $\pm$ {fit_params[idx].params['center'].stderr:.2f} ps")
-            main_ax.plot(np.NaN, np.NaN, color='none',
-                        label=fr"$\sigma$: {abs(fit_params[idx].params['sigma'].value):.2f} $\pm$ {abs(fit_params[idx].params['sigma'].stderr):.2f} ps")
-
-            main_ax.fill_between(
-                x_range,
-                fit_params[idx].eval(x=x_range) - model_uncert,
-                fit_params[idx].eval(x=x_range) + model_uncert,
-                color="hotpink",
-                alpha=0.2,
-                label='Fit Uncertainty'
-            )
-            main_ax.legend(fontsize=18, loc='best', title=fig_config[idx]['title'], title_fontsize=18)
-
-            width = (x_max - x_min) / len(pulls_dict[idx])
-            sub_ax.axhline(1, c='black', lw=0.75)
-            sub_ax.axhline(0, c='black', lw=1.2)
-            sub_ax.axhline(-1, c='black', lw=0.75)
-            sub_ax.bar(centers, pulls_dict[idx], width=width, fc='royalblue')
-            sub_ax.set_ylim(-2, 2)
-            sub_ax.set_yticks(ticks=np.arange(-1, 2), labels=[-1, 0, 1], fontsize=20)
-            sub_ax.set_xlabel('Pixel Time Resolution [ps]', fontsize=25)
-            sub_ax.tick_params(axis='x', which='both', labelsize=20)
-            sub_ax.set_ylabel('Pulls', fontsize=20, loc='center')
-
-            fig.tight_layout()
-
-            if save_mother_dir is not None:
-                save_dir = save_mother_dir / 'time_resolution_results'
-                save_dir.mkdir(exist_ok=True)
-                fig.savefig(save_dir / f"board_res_{fig_config[idx]['short']}.png")
-                fig.savefig(save_dir / f"board_res_{fig_config[idx]['short']}.pdf")
-                plt.close(fig)
-
-        del hists, fit_params, pulls_dict, mod
 
 ## --------------------------------------
 def plot_resolution_table(
@@ -1710,7 +1648,6 @@ def plot_resolution_table(
         min_resolution: float = 25.0,
         max_resolution: float = 75.0,
         missing_pixel_info: dict | None = None,
-        slides_friendly: bool = False,
         show_number: bool = False,
         save_mother_dir: Path | None = None,
     ):
@@ -1747,107 +1684,55 @@ def plot_resolution_table(
 
         tables[board_id] = [res_table, err_table]
 
-    if slides_friendly:
-        fig = plt.figure(figsize=(35, 35))
-        gs = fig.add_gridspec(2, 2)
+    for idx in tables.keys():
+        # Create a heatmap to visualize the count of hits
+        fig, ax = plt.subplots(dpi=100, figsize=(15, 15))
+        ax.cla()
+        im = ax.imshow(tables[idx][0], cmap=cmap, interpolation="nearest", vmin=min_resolution, vmax=max_resolution)
 
-        for idx, plot in enumerate(gs):
-            ax = fig.add_subplot(plot)
+        # Add color bar
+        cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+        cbar.set_label('Time Resolution (ps)', fontsize=18)
+        cbar.ax.tick_params(labelsize=18)
 
-            if idx not in tables:
-                ax.set_axis_off()
-                continue
-            im = ax.imshow(tables[idx][0], cmap=cmap, interpolation="nearest", vmin=min_resolution, vmax=max_resolution)
+        if show_number:
+            for i in range(16):
+                for j in range(16):
+                    value = tables[idx][0].iloc[i, j]
+                    error = tables[idx][1].iloc[i, j]
+                    if value == -1: continue
+                    text_color = 'black' if value > 0.66*(min_resolution + max_resolution) else 'white'
+                    text = str(rf"{value:.1f}""\n"fr"$\pm$ {error:.1f}")
+                    plt.text(j, i, text, va='center', ha='center', color=text_color, fontsize=15, rotation=45)
 
-            # Add color bar
-            cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-            cbar.set_label('Time Resolution (ps)', fontsize=20)
-            cbar.ax.tick_params(labelsize=18)
+        if missing_pixel_info is not None:
+            for jdx in range(len(missing_pixel_info[idx]['res'])):
+                text = str(rf"{float(missing_pixel_info[idx]['res'][jdx]):.1f}""\n"fr"$\pm$ {float(missing_pixel_info[idx]['err'][jdx]):.1f}")
+                plt.text(int(missing_pixel_info[idx]['col'][jdx]), int(missing_pixel_info[idx]['row'][jdx]), text, va='center', ha='center', color='black', fontsize=15 , rotation=45)
 
-            if show_number:
-                for i in range(16):
-                    for j in range(16):
-                        value = tables[idx][0].iloc[i, j]
-                        error = tables[idx][1].iloc[i, j]
-                        if value == -1: continue
-                        text_color = 'black' if value > 0.66*(min_resolution + max_resolution) else 'white'
-                        text = str(rf"{value:.1f}""\n"fr"$\pm$ {error:.1f}")
-                        plt.text(j, i, text, va='center', ha='center', color=text_color, fontsize=18, rotation=45)
-
-            hep.cms.text(loc=0, ax=ax, text="ETL ETROC Test Beam", fontsize=18)
-            ax.set_xlabel('Column (col)', fontsize=18)
-            ax.set_ylabel('Row (row)', fontsize=18)
-            ticks = range(0, 16)
-            ax.set_xticks(ticks)
-            ax.set_yticks(ticks)
-            sup_title = fig_config[idx]['title']
-            ax.set_title(f"{plot_title} | {sup_title}", loc="right", size=18)
-            ax.tick_params(axis='x', which='both', length=5, labelsize=18)
-            ax.tick_params(axis='y', which='both', length=5, labelsize=18)
-            ax.invert_xaxis()
-            ax.invert_yaxis()
-            plt.minorticks_off()
-
+        hep.cms.text(loc=0, ax=ax, text="ETL ETROC Test Beam", fontsize=18)
+        ax.set_xlabel('Column', fontsize=25)
+        ax.set_ylabel('Row', fontsize=25)
+        ticks = range(0, 16)
+        ax.set_xticks(ticks)
+        ax.set_yticks(ticks)
+        sup_title = fig_config[idx]['title']
+        ax.set_title(f"{plot_title}\n{sup_title}", loc="right", size=16)
+        ax.tick_params(axis='x', which='both', length=5, labelsize=18)
+        ax.tick_params(axis='y', which='both', length=5, labelsize=18)
+        ax.invert_xaxis()
+        ax.invert_yaxis()
+        plt.minorticks_off()
         plt.tight_layout()
 
         if save_mother_dir is not None:
             save_dir = save_mother_dir / 'time_resolution_results'
             save_dir.mkdir(exist_ok=True)
-            fig.savefig(save_dir / f"resolution_map.png")
-            fig.savefig(save_dir / f"resolution_map.pdf")
+            fig.savefig(save_dir / f"resolution_map_{fig_config[idx]['short']}.png")
+            fig.savefig(save_dir / f"resolution_map_{fig_config[idx]['short']}.pdf")
             plt.close(fig)
-        del tables
 
-    else:
-        for idx in tables.keys():
-            # Create a heatmap to visualize the count of hits
-            fig, ax = plt.subplots(dpi=100, figsize=(15, 15))
-            ax.cla()
-            im = ax.imshow(tables[idx][0], cmap=cmap, interpolation="nearest", vmin=min_resolution, vmax=max_resolution)
-
-            # Add color bar
-            cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-            cbar.set_label('Time Resolution (ps)', fontsize=18)
-            cbar.ax.tick_params(labelsize=18)
-
-            if show_number:
-                for i in range(16):
-                    for j in range(16):
-                        value = tables[idx][0].iloc[i, j]
-                        error = tables[idx][1].iloc[i, j]
-                        if value == -1: continue
-                        text_color = 'black' if value > 0.66*(min_resolution + max_resolution) else 'white'
-                        text = str(rf"{value:.1f}""\n"fr"$\pm$ {error:.1f}")
-                        plt.text(j, i, text, va='center', ha='center', color=text_color, fontsize=15, rotation=45)
-
-            if missing_pixel_info is not None:
-                for jdx in range(len(missing_pixel_info[idx]['res'])):
-                    text = str(rf"{float(missing_pixel_info[idx]['res'][jdx]):.1f}""\n"fr"$\pm$ {float(missing_pixel_info[idx]['err'][jdx]):.1f}")
-                    plt.text(int(missing_pixel_info[idx]['col'][jdx]), int(missing_pixel_info[idx]['row'][jdx]), text, va='center', ha='center', color='black', fontsize=15 , rotation=45)
-
-            hep.cms.text(loc=0, ax=ax, text="ETL ETROC Test Beam", fontsize=18)
-            ax.set_xlabel('Column', fontsize=25)
-            ax.set_ylabel('Row', fontsize=25)
-            ticks = range(0, 16)
-            ax.set_xticks(ticks)
-            ax.set_yticks(ticks)
-            sup_title = fig_config[idx]['title']
-            ax.set_title(f"{plot_title}\n{sup_title}", loc="right", size=16)
-            ax.tick_params(axis='x', which='both', length=5, labelsize=18)
-            ax.tick_params(axis='y', which='both', length=5, labelsize=18)
-            ax.invert_xaxis()
-            ax.invert_yaxis()
-            plt.minorticks_off()
-            plt.tight_layout()
-
-            if save_mother_dir is not None:
-                save_dir = save_mother_dir / 'time_resolution_results'
-                save_dir.mkdir(exist_ok=True)
-                fig.savefig(save_dir / f"resolution_map_{fig_config[idx]['short']}.png")
-                fig.savefig(save_dir / f"resolution_map_{fig_config[idx]['short']}.pdf")
-                plt.close(fig)
-
-        del tables
+    del tables
 
 ## --------------------------------------
 def preprocess_ranking_data(
@@ -2011,6 +1896,7 @@ def plot_avg_resolution_per_row(
     board_role: str,
     tb_loc: str,
     fig_config: dict,
+    ylims: list[float] = [None, None],
 ):
 
     row_col = f'row_{board_role}'
@@ -2039,7 +1925,7 @@ def plot_avg_resolution_per_row(
         thres_df = df_proc.loc[(df_proc['category'] == 'Path 1') & (df_proc[row_col] == irow)]
 
         if thres_df.empty:
-            summary_array.append(irow, np.NaN, np.NaN)
+            summary_array.append((irow, np.NaN, np.NaN))
         else:
             summary_array.append((irow, np.average(thres_df[res_col], weights=1/thres_df[err_col]**2), np.sqrt(1/(np.sum(1/thres_df[err_col]**2)))))
 
