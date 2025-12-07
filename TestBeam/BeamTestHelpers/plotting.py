@@ -1951,8 +1951,45 @@ def plot_avg_resolution_per_row(
     ax.set_ylabel('Avg. time resolution [ps]')
     ax.grid(axis='y')
     ax.xaxis.set_minor_locator(plt.NullLocator())
+    ax.set_ylim(ylims[0], ylims[1])
 
     fig.tight_layout()
+
+## --------------------------------------
+def calculate_weighted_mean_std_for_every_pixel(
+        input_df: pd.DataFrame,
+        board_role: str,
+):
+
+    row_col = f'row_{board_role}'
+    col_col = f'col_{board_role}'
+    res_col = f'res_{board_role}'
+    err_col = f'err_{board_role}'
+
+    ranked_df, _, _ = preprocess_ranking_data(input_df, row_col, col_col)
+    ranked_df = ranked_df[[row_col, col_col, res_col, err_col, 'nevt']].reset_index(drop=True)
+
+    # Calculate weight
+    ranked_df['weight'] = 1 / (ranked_df['err_dut'] ** 2)
+
+    # Formula: value * weight
+    ranked_df['weighted_res'] = ranked_df['res_dut'] * ranked_df['weight']
+
+    # 2. Group by row and col, then sum the components
+    grouped = ranked_df.groupby([row_col, col_col])[['weighted_res', 'weight']].sum()
+
+    # 3. Calculate final metrics from the sums
+    # Mean = Sum(val * w) / Sum(w)
+    grouped['weighted_mean'] = grouped['weighted_res'] / grouped['weight']
+
+    # Error = sqrt(1 / Sum(w))
+    grouped['weighted_error'] = np.sqrt(1 / grouped['weight'])
+
+    # 4. Clean up result
+    final_df = grouped[['weighted_mean', 'weighted_error']].reset_index()
+    final_df.columns = [row_col, col_col, res_col, err_col]
+
+    return final_df
 
 ## --------------------------------------
 # def plot_TDC_correlation_scatter_matrix(
