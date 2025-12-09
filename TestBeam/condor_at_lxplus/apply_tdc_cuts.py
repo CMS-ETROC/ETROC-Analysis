@@ -293,7 +293,7 @@ def main():
                 res = process_single_file(f, args, all_roles, cut_roles, output_group_dir)
                 print(res)
         else:
-            with ProcessPoolExecutor() as exe:
+            with ProcessPoolExecutor(max_workers=6) as exe:
                 futures = {
                     exe.submit(process_single_file, f, args, all_roles, cut_roles, output_group_dir): f
                     for f in files
