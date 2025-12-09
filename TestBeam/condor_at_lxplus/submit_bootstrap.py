@@ -275,7 +275,6 @@ if __name__ == "__main__":
     paths = {
         'scripts': Path('condor_scripts') / f'bootstrap_job{run_append}',
         'logs':    Path('condor_logs') / 'bootstrap' / f'bootstrap_job{run_append}',
-        'output':  Path(f'bootstrap_{args.outputdir}')
     }
 
     # Create Base Directories
