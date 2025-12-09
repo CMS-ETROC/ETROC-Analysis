@@ -4,6 +4,7 @@ PT_NH47: &PT_NH47
   offset: 20
   HV: 220
   role: dut
+  angle: 60
   transformation:
     rotation:
       x: 0
@@ -562,7 +563,7 @@ run22:
         y: 0
         z: 1
   3: *PT_IH22
-run23: &run23
+run24: &run24
   0:
     <<: *PT_NH47
     HV: 220
@@ -599,12 +600,89 @@ run23: &run23
         y: 0.02
         z: 1
   3: *PT_IH22
-run24: *run23
-run25: *run23
-run26:
+run25: *run24
+run26: *run24
+
+run27:
   0:
     <<: *PT_NH47
     HV: 180
+    temp: 17C
+    transformation:
+      rotation:
+        x: 0
+        y: -60
+        z: 0
+      translation:
+        x: 0
+        y: 0
+        z: 4
+  1:
+    <<: *PT_IH18
+    transformation:
+      rotation:
+        x: 180
+        y: 0
+        z: 0
+      translation:
+        x: 0
+        y: 0
+        z: 2
+  2:
+    <<: *PT_IH21
+    transformation:
+      rotation:
+        x: 180
+        y: 0
+        z: 0
+      translation:
+        x: 0
+        y: 0
+        z: 1
+  3: *PT_IH22
+
+run28:
+  0:
+    <<: *PT_NH47
+    HV: 200
+    temp: 17C
+    transformation:
+      rotation:
+        x: 0
+        y: -60
+        z: 0
+      translation:
+        x: 0
+        y: 0
+        z: 4
+  1:
+    <<: *PT_IH18
+    transformation:
+      rotation:
+        x: 180
+        y: 0
+        z: 0
+      translation:
+        x: 0
+        y: 0
+        z: 2
+  2:
+    <<: *PT_IH21
+    transformation:
+      rotation:
+        x: 180
+        y: 0
+        z: 0
+      translation:
+        x: 0
+        y: 0
+        z: 1
+  3: *PT_IH22
+
+run28:
+  0:
+    <<: *PT_NH47
+    HV: 160
     temp: 17C
     transformation:
       rotation:
