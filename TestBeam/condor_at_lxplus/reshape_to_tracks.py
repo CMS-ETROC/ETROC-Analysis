@@ -89,13 +89,14 @@ def process_and_save_track(
 def determine_file_batches(files: List[Path]) -> List[List[Path]]:
     """
     Splits files into batches based on the logic:
-    - If < 100 files: 1 batch.
-    - If >= 100 files: Split into 2-5 groups.
+    - If < size_threshold files: 1 batch.
+    - If >= size_threshold files: Split into 2-5 groups.
       Choose min groups such that batch size < 100 (if possible).
     """
     n_files = len(files)
 
-    if n_files < 100:
+    size_threshold = 120
+    if n_files < size_threshold:
         return [files]
 
     # Logic: Try groups 2, 3, 4, 5.
@@ -105,7 +106,7 @@ def determine_file_batches(files: List[Path]) -> List[List[Path]]:
     for g in range(2, 6):
         # Ceiling division equivalent for roughly equal chunks
         chunk_size = (n_files + g - 1) // g
-        if chunk_size < 100:
+        if chunk_size < size_threshold:
             num_groups = g
             break
 
