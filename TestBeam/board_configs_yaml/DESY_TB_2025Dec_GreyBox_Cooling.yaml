@@ -602,7 +602,6 @@ run24: &run24
   3: *PT_IH22
 run25: *run24
 run26: *run24
-
 run27:
   0:
     <<: *PT_NH47
@@ -640,7 +639,6 @@ run27:
         y: 0
         z: 1
   3: *PT_IH22
-
 run28:
   0:
     <<: *PT_NH47
@@ -678,7 +676,6 @@ run28:
         y: 0
         z: 1
   3: *PT_IH22
-
 run29:
   0:
     <<: *PT_NH47
@@ -716,7 +713,6 @@ run29:
         y: 0
         z: 1
   3: *PT_IH22
-
 run30:
   0:
     <<: *PT_NH47
@@ -727,8 +723,8 @@ run30:
         y: -60
         z: 0
       translation:
-        x: 0
-        y: 0
+        x: -0.93
+        y: -0.09
         z: 4
   1:
     <<: *PT_IH18
@@ -738,8 +734,8 @@ run30:
         y: 0
         z: 0
       translation:
-        x: 0
-        y: 0
+        x: -0.02
+        y: 0.02
         z: 2
   2:
     <<: *PT_IH21
@@ -749,11 +745,10 @@ run30:
         y: 0
         z: 0
       translation:
-        x: 0
-        y: 0
+        x: -0.02
+        y: 0.02
         z: 1
   3: *PT_IH22
-
 run31:
   0:
     <<: *PT_NH47
@@ -791,7 +786,6 @@ run31:
         y: 0
         z: 1
   3: *PT_IH22
-
 run32:
   0:
     <<: *PT_NH47
