@@ -106,13 +106,15 @@ def apply_raw_tdc_cuts(
     if filtered_df.empty: return filtered_df
 
     ids_for_corr = sorted([all_roles[r] for r in cut_roles])
+
+    ### Need to fix
     if len(ids_for_corr) >= 2:
         pairs = list(combinations(ids_for_corr, 2))
         corr_mask = pd.Series(True, index=filtered_df.index)
 
         for bid1, bid2 in pairs:
-            x = filtered_df['toa'][bid1]
-            y = filtered_df['toa'][bid2]
+            x = pd.to_numeric(filtered_df['toa'][bid1])
+            y = pd.to_numeric(filtered_df['toa'][bid2])
             m, c = np.polyfit(x, y, 1)
             dist = (x * m - y + c) / np.sqrt(m**2 + 1)
             limit = args.distance_factor * np.nanstd(dist)
