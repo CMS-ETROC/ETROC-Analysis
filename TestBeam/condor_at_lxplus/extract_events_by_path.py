@@ -264,7 +264,8 @@ def main():
             table['file'] = table['file'].astype('uint16')
 
             ## Add board level neighbor column
-            neighbor_columns = [col for col in table.columns if col.startswith('HasNeighbor')]
+            ## Columns of table are multiIndex
+            neighbor_columns = [col for col in table.columns if col[0].startswith('HasNeighbor')]
             table['trackNeighbor'] = table[neighbor_columns].any(axis=1)
 
             track_pivots[itrack] = table
