@@ -15,6 +15,60 @@ from scipy.signal import argrelextrema
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%H:%M:%S')
 
 # --- Helper Functions ---
+def find_neighbor_hits(
+        input_df: pd.DataFrame,
+        search_method: str,
+):
+
+    # Initialize the new column as False
+    input_df['HasNeighbor'] = False
+
+    if search_method == "":
+        return input_df
+    elif search_method == 'cross':
+        offsets = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+    elif search_method == 'row_only':
+        offsets = [(1, 0), (-1, 0)]
+    elif search_method == 'col_only':
+        offsets = [(0, 1), (0, -1)]
+    elif search_method == 'square':
+        offsets = [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (1, -1), (-1, 1), (-1, -1)]
+    else:
+        raise ValueError(f'Unknown method: {search_method}')
+
+    # Save index to keep track of rows after merge
+    input_df = input_df.reset_index()
+
+    # 3. Iterate through offsets and merge
+    for r_off, c_off in offsets:
+        # Create a temporary copy of the potential neighbors
+        # We shift the coordinates of the copy. If the copy matches a real row
+        # after shifting, it means the real row has a neighbor at that distance.
+        temp_df = input_df[['evt', 'board', 'row', 'col', 'index']].copy()
+
+        # "Look" at the position where a neighbor would be
+        temp_df['row'] = temp_df['row'] + r_off
+        temp_df['col'] = temp_df['col'] + c_off
+
+        # Merge original DF with the shifted temp DF
+        # We match on Evt, bd, and the *shifted* R and C
+        matches = input_df.merge(
+            temp_df,
+            on=['evt', 'board', 'row', 'col'],
+            how='inner',
+            suffixes=('', '_neighbor')
+        )
+
+        # matches['index_neighbor'] contains the indices of rows that HAVE a neighbor
+        # at this specific offset.
+        if not matches.empty:
+            input_df.loc[input_df['index'].isin(matches['index_neighbor']), 'HasNeighbor'] = True
+
+    # Clean up
+    final_df = input_df.set_index('index').rename_axis(None)
+
+    return final_df
+
 
 def determine_tot_cut_range_for_trig(input_df: pd.DataFrame, trig_id: int) -> List[float]:
     """Calculates Time-over-Threshold (ToT) cuts based on the valley after the first peak."""
@@ -117,7 +171,7 @@ def extract_events_for_track(
     pivot_table = isolated_df.pivot(
         index="evt",
         columns="board",
-        values=["row", "col", "toa", "tot", "cal"]
+        values=["row", "col", "toa", "tot", "cal", "HasNeighbor"]
     ).reset_index(drop=True)
 
     return pivot_table
@@ -129,6 +183,8 @@ def main():
     parser.add_argument('-f', '--inputfile', required=True, dest='inputfile', help='Input feather file')
     parser.add_argument('-r', '--runinfo', required=True, dest='runinfo', help='Run info string for output name')
     parser.add_argument('-t', '--track', required=True, dest='track', help='CSV file with track candidates')
+    parser.add_argument('--neighbor_search_method', default="", dest='search_method',
+                        help="Search method for neighbor hit checking, default is ''. possible argument: 'row_only', 'col_only', 'cross', 'square'")
     parser.add_argument('--cal_table', required=True, dest='cal_table', help='CSV file with CAL mode values')
     parser.add_argument('--trigID', type=int, required=True, dest='trigID', help='Trigger board ID')
 
@@ -161,6 +217,9 @@ def main():
 
     # 4. Optimization: Pre-filter Main Data
     run_df = run_df.loc[run_df['board'].isin(present_boards)].reset_index(drop=True)
+
+    logging.info(f"Determine neighbor hits in track file: {present_boards}")
+    run_df = find_neighbor_hits(run_df, args.search_method)
 
     # 5. Build Fast Lookups (Optimization)
 
@@ -203,6 +262,11 @@ def main():
         if not table.empty:
             table['file'] = file_indicator
             table['file'] = table['file'].astype('uint16')
+
+            ## Add board level neighbor column
+            neighbor_columns = [col for col in table.columns if col.startswith('HasNeighbor')]
+            table['trackNeighbor'] = table[neighbor_columns].any(axis=1)
+
             track_pivots[itrack] = table
 
     # 8. Save Output
