@@ -23,7 +23,7 @@ def find_neighbor_hits(
     # Initialize the new column as False
     input_df['HasNeighbor'] = False
 
-    if search_method == "":
+    if search_method == "none":
         return input_df
     elif search_method == 'cross':
         offsets = [(0, 1), (0, -1), (1, 0), (-1, 0)]
@@ -183,8 +183,8 @@ def main():
     parser.add_argument('-f', '--inputfile', required=True, dest='inputfile', help='Input feather file')
     parser.add_argument('-r', '--runinfo', required=True, dest='runinfo', help='Run info string for output name')
     parser.add_argument('-t', '--track', required=True, dest='track', help='CSV file with track candidates')
-    parser.add_argument('--neighbor_search_method', default="", dest='search_method',
-                        help="Search method for neighbor hit checking, default is ''. possible argument: 'row_only', 'col_only', 'cross', 'square'")
+    parser.add_argument('--neighbor_search_method', default="none", dest='search_method',
+                        help="Search method for neighbor hit checking, default is 'none'. possible argument: 'row_only', 'col_only', 'cross', 'square'")
     parser.add_argument('--cal_table', required=True, dest='cal_table', help='CSV file with CAL mode values')
     parser.add_argument('--trigID', type=int, required=True, dest='trigID', help='Trigger board ID')
 
