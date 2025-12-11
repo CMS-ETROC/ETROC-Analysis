@@ -28,8 +28,8 @@ xrdcp -r root://eosuser.cern.ch/{{ path }} ./
 echo "Will process input file from {{ runname }} {{ filename }}"
 
 # Run the python script
-echo "python extract_events_by_path.py -f {{ filename }} -r {{ runname }} -t {{ track }} --trigID {{ trigID }} --cal_table {{ cal_table }}"
-python extract_events_by_path.py -f {{ filename }} -r {{ runname }} -t {{ track }} --trigID {{ trigID }} --cal_table {{ cal_table }}
+echo "python extract_events_by_path.py -f {{ filename }} -r {{ runname }} -t {{ track }} --trigID {{ trigID }} --cal_table {{ cal_table }} --neighbor_search_method {{ search_method }}"
+python extract_events_by_path.py -f {{ filename }} -r {{ runname }} -t {{ track }} --trigID {{ trigID }} --cal_table {{ cal_table }} --neighbor_search_method {{ search_method }}
 
 ls -ltrh
 echo ""
@@ -107,6 +107,7 @@ def create_submission_files(
         'track': args.track,
         'cal_table': Path(args.cal_table).name,
         'trigID': trig_id,
+        'search_method': args.search_method
     })
 
     bash_script_path = paths['scripts_dir'] / f'run_extract_events{run_append}.sh'
@@ -186,6 +187,8 @@ if __name__ == "__main__":
     parser.add_argument('-r', '--runName', required=True, dest='runName', help='Run name in YAML config')
     parser.add_argument('--cal_table', required=True, dest='cal_table', help='CSV file with CAL mode values')
     parser.add_argument('-o', '--outdir', default='extractEvents_outputs', dest='outname', help='Output directory on EOS')
+    parser.add_argument('--neighbor_search_method', default="none", dest='search_method',
+                        help="Search method for neighbor hit checking, default is 'none'. possible argument: 'row_only', 'col_only', 'cross', 'square'")
     parser.add_argument('--condor_tag', dest='condor_tag', help='Tag appended to filenames to avoid collisions')
     parser.add_argument('--dryrun', action='store_true', help='Generate files but do not submit')
     parser.add_argument('--resubmit', action='store_true', help='Kill matching jobs and re-submit them')
