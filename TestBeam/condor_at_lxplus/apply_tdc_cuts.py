@@ -185,6 +185,17 @@ def process_single_file(
             if not cut_df.empty:
                 final_df = convert_to_time(cut_df, all_roles)
 
+                #### Add neighbor columns
+                for role, board_id in all_roles.items():
+                    try:
+                        final_df[f'HasNeighbor_{role}'] = cut_df['HasNeighbor'][board_id]
+                    except:
+                        final_df[f'HasNeighbor_{role}'] = False
+
+                ## Add board level neighbor column
+                neighbor_columns = [col for col in final_df.columns if col.startswith('HasNeighbor')]
+                final_df['trackNeighbor'] = final_df[neighbor_columns].any(axis=1)
+
         if not final_df.empty:
             prefix = f'exclude_{args.exclude_role}_'
             out_name = f"{prefix}{filepath.stem}.pkl"
