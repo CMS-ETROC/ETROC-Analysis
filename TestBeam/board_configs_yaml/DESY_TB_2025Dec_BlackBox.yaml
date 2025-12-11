@@ -206,3 +206,38 @@ run30:
   1: { <<: *PT_IH3, angle: 15, HV: 200 }
   2: { <<: *PT_IH5, angle: 15, HV: 200 }
   3: { <<: *PT_IH24, angle: 15, HV: 200 }
+run31:
+  0: { <<: *PT_IH2, angle: 15, HV: 240 }
+  1: { <<: *PT_IH3, angle: 15, HV: 240 }
+  2: { <<: *PT_IH5, angle: 15, HV: 240 }
+  3: { <<: *PT_IH24, angle: 15, HV: 240 }
+run32:
+  0: { <<: *PT_IH2, angle: 15, HV: 180 }
+  1: { <<: *PT_IH3, angle: 15, HV: 180 }
+  2: { <<: *PT_IH5, angle: 15, HV: 180 }
+  3: { <<: *PT_IH24, angle: 15, HV: 180 }
+run33:
+  0: { <<: *PT_IH2, angle: 15, HV: 170 }
+  1: { <<: *PT_IH3, angle: 15, HV: 170 }
+  2: { <<: *PT_IH5, angle: 15, HV: 170 }
+  3: { <<: *PT_IH24, angle: 15, HV: 170 }
+run34:
+  0: { <<: *PT_IH2, angle: 15, HV: 250 }
+  1: { <<: *PT_IH3, angle: 15, HV: 250 }
+  2: { <<: *PT_IH5, angle: 15, HV: 250 }
+  3: { <<: *PT_IH24, angle: 15, HV: 250 }
+run35:
+  0: { <<: *PT_IH2, angle: 15, HV: 230 }
+  1: { <<: *PT_IH3, angle: 15, HV: 230 }
+  2: { <<: *PT_IH5, angle: 15, HV: 230 }
+  3: { <<: *PT_IH24, angle: 15, HV: 230 }
+run36:
+  0: { <<: *PT_IH2, angle: 15, HV: 210 }
+  1: { <<: *PT_IH3, angle: 15, HV: 210 }
+  2: { <<: *PT_IH5, angle: 15, HV: 210 }
+  3: { <<: *PT_IH24, angle: 15, HV: 210 }
+run37:
+  0: { <<: *PT_IH2, angle: 15, HV: 190 }
+  1: { <<: *PT_IH3, angle: 15, HV: 190 }
+  2: { <<: *PT_IH5, angle: 15, HV: 190 }
+  3: { <<: *PT_IH24, angle: 15, HV: 190 }
