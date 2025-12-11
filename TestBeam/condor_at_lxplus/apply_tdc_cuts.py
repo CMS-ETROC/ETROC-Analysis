@@ -188,7 +188,7 @@ def process_single_file(
                 #### Add neighbor columns
                 for role, board_id in all_roles.items():
                     try:
-                        final_df[f'HasNeighbor_{role}'] = cut_df['HasNeighbor'][board_id]
+                        final_df[f'HasNeighbor_{role}'] = cut_df['HasNeighbor'][board_id].astype(bool)
                     except:
                         final_df[f'HasNeighbor_{role}'] = False
 
