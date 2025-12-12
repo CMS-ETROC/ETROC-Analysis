@@ -95,7 +95,22 @@ def create_submission_files(
     if input_list_path.exists():
         input_list_path.unlink()
 
-    files = natsorted(input_dir.glob('*.pkl'))
+    pkl_files = list(input_dir.glob('*.pkl'))
+    parquet_files = list(input_dir.glob('*.parquet'))
+
+    files: List[Path] = []
+
+    if pkl_files:
+        print(f"    Found {len(pkl_files)} PKL files. Ignoring any Parquet files.")
+        files = pkl_files
+    elif parquet_files:
+        print(f"    Found {len(parquet_files)} Parquet files. Proceeding with Parquet.")
+        files = parquet_files
+    else:
+        # files list remains empty
+        pass
+
+    files = natsorted(files)
     if not files:
         print(f"Warning: No pickle files found in {input_dir.name}. Skipping group.")
         return None, None, None
