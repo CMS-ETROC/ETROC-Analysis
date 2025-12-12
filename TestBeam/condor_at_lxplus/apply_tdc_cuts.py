@@ -222,6 +222,19 @@ def process_single_file(
                 cut_df = pd.concat(chunks, ignore_index=True) if chunks else pd.DataFrame()
                 raw_df_to_use = cut_df
 
+                if not raw_df_to_use.empty:
+                    # 3. Convert the surviving raw data to the time domain for final output
+                    final_df = convert_to_time(raw_df_to_use, all_roles)
+
+                    print(final_df)
+
+                    ## Special case
+                    board_mask = (
+                        final_df['tot_dut'].between(3800, 8000)
+                    )
+                    final_df = final_df.loc[board_mask].reset_index(drop=True)
+                    print(final_df)
+
         if not final_df.empty and not raw_df_to_use.empty:
             for role, board_id in all_roles.items():
                 try:
