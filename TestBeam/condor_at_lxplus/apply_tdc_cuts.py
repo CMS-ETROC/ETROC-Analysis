@@ -81,14 +81,31 @@ def apply_raw_tdc_cuts(
 
     dut_id = all_roles.get('dut', all_roles.get('extra'))
     trig_id = all_roles.get('trig', all_roles.get('ref'))
-    dut_pct = [args.dutTOTlower * 0.01, args.dutTOTupper * 0.01]
+
+    # 1. Determine DUT TOT cut bounds (Absolute or Quantile)
+    if args.dutTOTlowerVal != -1 or args.dutTOTupperVal != -1:
+        # Use absolute values if provided
+        dut_low_val = args.dutTOTlowerVal
+        dut_high_val = args.dutTOTupperVal
+        use_abs_tot = True
+    else:
+        # Use quantile percentiles if absolute values are default
+        dut_pct = [args.dutTOTlower * 0.01, args.dutTOTupper * 0.01]
+        use_abs_tot = False
 
     mask = pd.Series(True, index=df.index)
 
     for role, bid in all_roles.items():
+
         if bid == dut_id:
-            low, high = df['tot'][bid].quantile(dut_pct)
+            if use_abs_tot:
+                # Use absolute values
+                low, high = dut_low_val, dut_high_val
+            else:
+                # Use quantile percentiles
+                low, high = df['tot'][bid].quantile(dut_pct)
         else:
+            # Use default 1st and 96th percentile for other boards
             low, high = df['tot'][bid].quantile([0.01, 0.96])
 
         toa_low = args.TOALower if bid == trig_id else 0
@@ -137,13 +154,31 @@ def apply_time_domain_cuts(
     if df.empty: return df
 
     mask = pd.Series(True, index=df.index)
-    dut_pct = [args.dutTOTlower * 0.01, args.dutTOTupper * 0.01]
+
+    if args.dutTOTlowerTime != -1 or args.dutTOTupperTime != -1:
+        # Use absolute nanosecond values if provided
+        dut_low_val = args.dutTOTlowerTime * 1e3 # Convert ns to ps (since data is in ps)
+        dut_high_val = args.dutTOTupperTime * 1e3
+        use_abs_tot = True
+    else:
+        # Fallback to quantile cut
+        dut_pct = [args.dutTOTlower * 0.01, args.dutTOTupper * 0.01]
+        use_abs_tot = False
+
 
     for col in [c for c in df.columns if c.startswith('tot')]:
+
         if 'dut' in col:
-            low, high = df[col].quantile(dut_pct)
+            if use_abs_tot:
+                # Use absolute nanosecond values (now in picoseconds)
+                low = dut_low_val
+                high = dut_high_val
+            else:
+                # Fallback: Use 0th and 100th percentile (as defined in original logic)
+                low, high = df[col].quantile(dut_pct)
         else:
             low, high = df[col].quantile([0.01, 0.96])
+
         mask &= df[col].between(low, high)
 
     df = df.loc[mask].reset_index(drop=True)
@@ -228,6 +263,11 @@ def main():
     parser.add_argument('--TOAUpperTime', type=float, default=10)
     parser.add_argument('--dutTOTlower', type=int, default=1)
     parser.add_argument('--dutTOTupper', type=int, default=96)
+    parser.add_argument('--dutTOTlowerVal', type=float, default=-1, help='Absolute TOT in code for lower boundary')
+    parser.add_argument('--dutTOTupperVal', type=float, default=-1, help='Absolute TOT in code for upper boundary')
+    parser.add_argument('--dutTOTlowerTime', type=float, default=-1, help='Absolute TOT in time (ns) for lower boundary')
+    parser.add_argument('--dutTOTupperTime', type=float, default=-1, help='Absolute TOT in time (ns) for upper boundary')
+
 
     # Flags
     parser.add_argument('--exclude_role', default='trig')

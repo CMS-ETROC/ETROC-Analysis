@@ -109,6 +109,10 @@ def build_python_command_args(args: argparse.Namespace) -> str:
         f'--dutTOTupper {args.dutTOTupper}',
         f'--TOALowerTime {args.TOALowerTime}',
         f'--TOAUpperTime {args.TOAUpperTime}',
+        f'--dutTOTlowerVal {args.dutTOTlowerVal}',
+        f'--dutTOTupperVal {args.dutTOTupperVal}',
+        f'--dutTOTlowerTime {args.dutTOTlowerTime}',
+        f'--dutTOTupperTime {args.dutTOTupperTime}',
         f"--exclude_role {args.exclude_role}",
     ]
     if args.convert_first: cmd_parts.append("--convert-first")
@@ -182,6 +186,10 @@ if __name__ == "__main__":
     parser.add_argument('--TOAUpperTime', type=float, default=10, help='Time ToA Upper (ns)')
     parser.add_argument('--dutTOTlower', type=int, default=1, help='DUT ToT Lower Percentile')
     parser.add_argument('--dutTOTupper', type=int, default=96, help='DUT ToT Upper Percentile')
+    parser.add_argument('--dutTOTlowerVal', type=float, default=-1, help='Absolute TOT values for lower boundary')
+    parser.add_argument('--dutTOTupperVal', type=float, default=-1, help='Absolute TOT values for upper boundary')
+    parser.add_argument('--dutTOTlowerTime', type=float, default=-1, help='Absolute TOT in time (ns) for lower boundary')
+    parser.add_argument('--dutTOTupperTime', type=float, default=-1, help='Absolute TOT in time (ns) for upper boundary')
 
     # Flags
     parser.add_argument('--exclude_role', default='trig', help='Role to exclude from CUT calculations')
