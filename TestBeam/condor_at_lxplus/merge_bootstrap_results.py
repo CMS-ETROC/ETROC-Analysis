@@ -130,14 +130,21 @@ def process_group(
 
     for ifile in tqdm(files, desc=f"  Merging {input_dir.name}"):
         # 1. Load Data
-        try:
+
+        if '.pkl' in ifile.name:
             df = pd.read_pickle(ifile)
             # Filter rows that are all zeros (failed bootstraps often return 0s)
             df = df.loc[(df != 0).all(axis=1)].reset_index(drop=True)
-
-            if df.empty: continue
-        except Exception as e:
-            print(f"Error reading {ifile.name}: {e}")
+            if df.empty:
+                continue
+        elif '.parquet' in ifile.name:
+            df = pd.read_parquet(ifile)
+            # Filter rows that are all zeros (failed bootstraps often return 0s)
+            df = df.loc[(df != 0).all(axis=1)].reset_index(drop=True)
+            if df.empty:
+                continue
+        else:
+            print(f"Error reading {ifile.name}")
             continue
 
         # 2. Parse Coordinates
