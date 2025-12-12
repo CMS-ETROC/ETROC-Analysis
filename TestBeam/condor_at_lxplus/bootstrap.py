@@ -179,19 +179,19 @@ def run_bootstrap_loop(
 
     n_success = 0
     consecutive_fails = 0
-    current_sampling = args.sampling
+    current_sampling = args.sampling * 0.01
     fail_threshold = int(args.iteration_limit * 0.025)
 
     for i in range(args.iteration_limit):
         if n_success >= args.num_bootstrap_output: break
 
         # 1. Sample Data
-        if args.reproducible: np.random.seed(i)
+        if args.reproducible:
+            sample_df = df.sample(frac=current_sampling, random_state=i, ignore_index=True)
+        else:
+            sample_df = df.sample(frac=current_sampling, ignore_index=True)
 
-        n_sample = int(0.01 * current_sampling * len(df))
-        n_sample = min(n_sample, 5000) # Cap sample size for speed
-
-        sample_df = df.sample(n=n_sample)
+        n_sample = sample_df.shape[0]
 
         # 2. Determine Logic
         # Dynamic threshold based on sample size
@@ -217,8 +217,8 @@ def run_bootstrap_loop(
             print(f"Success: {n_success}/{args.num_bootstrap_output}", end='\r')
         else:
             consecutive_fails += 1
-            if consecutive_fails >= fail_threshold and current_sampling < 95:
-                current_sampling += 10
+            if consecutive_fails >= fail_threshold and current_sampling < 0.95:
+                current_sampling += 0.1
                 consecutive_fails = 0
                 print(f"\nIncreasing sampling to {current_sampling}%")
 
