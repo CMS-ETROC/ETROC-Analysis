@@ -159,7 +159,6 @@ def process_single_file(
     args: argparse.Namespace,
     all_roles: Dict[str, int],
     cut_roles: List[str],
-    output_dir: Path
 ) -> str:
     """Worker function."""
     try:
@@ -198,8 +197,8 @@ def process_single_file(
 
         if not final_df.empty:
             prefix = f'exclude_{args.exclude_role}_'
-            out_name = f"{prefix}{filepath.stem}.pkl"
-            final_df.to_pickle(output_dir / out_name)
+            out_name = f"{prefix}{filepath.stem}.parquet"
+            final_df.to_parquet(out_name)
             return f"Saved: {out_name}"
         else:
             return f"Empty: {filepath.name}"
@@ -209,58 +208,44 @@ def process_single_file(
 
 # --- Main ---
 
+# --- Main ---
+
 def main():
     parser = argparse.ArgumentParser(description="Apply cuts to track files and save final output.")
 
     # Paths
     parser.add_argument('-d', '--inputdir', required=True, dest='inputdir',
-                        help='Mother directory containing "tracks" or "tracks_groupX" folders')
+                        help='Directory containing track files (passed by Condor)')
 
-    # Naming Logic
-    parser.add_argument('--prefix', default='', help='Add a prefix to the output folder name')
-    parser.add_argument('--suffix', default='', help='Add a suffix to the output folder name')
-
-    # Config
+    # Config (REQUIRED for Roles)
     parser.add_argument('-c', '--config', required=True, help='YAML config file')
-    parser.add_argument('-r', '--runName', required=True, help='Run name')
+    parser.add_argument('-r', '--runName', required=True, help='Run name in config')
 
-    # Cuts
-    parser.add_argument('--distance_factor', type=float, default=3.0, help='Correlation cut sigma')
-    parser.add_argument('--TOALower', type=int, default=100, help='Raw ToA Lower')
-    parser.add_argument('--TOAUpper', type=int, default=500, help='Raw ToA Upper')
-    parser.add_argument('--TOALowerTime', type=float, default=2, help='Time ToA Lower (ns)')
-    parser.add_argument('--TOAUpperTime', type=float, default=10, help='Time ToA Upper (ns)')
-    parser.add_argument('--dutTOTlower', type=int, default=1, help='DUT ToT Lower Percentile')
-    parser.add_argument('--dutTOTupper', type=int, default=96, help='DUT ToT Upper Percentile')
+    # Cuts (simplified for worker)
+    parser.add_argument('--distance_factor', type=float, default=3.0)
+    parser.add_argument('--TOALower', type=int, default=100)
+    parser.add_argument('--TOAUpper', type=int, default=500)
+    parser.add_argument('--TOALowerTime', type=float, default=2)
+    parser.add_argument('--TOAUpperTime', type=float, default=10)
+    parser.add_argument('--dutTOTlower', type=int, default=1)
+    parser.add_argument('--dutTOTupper', type=int, default=96)
 
     # Flags
-    parser.add_argument('--exclude_role', default='trig', help='Role to exclude from CUT calculations')
-    parser.add_argument('--convert-first', action='store_true', help='Convert to time before cutting')
-    parser.add_argument('--debug', action='store_true', help='Run serial mode for debugging')
+    parser.add_argument('--exclude_role', default='trig')
+    parser.add_argument('--convert-first', action='store_true')
 
     args = parser.parse_args()
 
-    # --- 1. Identify Input/Output Groups ---
-    mother_dir = Path(args.inputdir)
+    # 1. Load Config & Roles
+    try:
+        with open(args.config) as f:
+            config = yaml.safe_load(f)
+    except FileNotFoundError:
+        print(f"Error: Config file {args.config} not found locally on worker node.")
+        sys.exit(1)
 
-    # Find directories starting with "tracks" inside the mother directory
-    track_dirs = sorted([d for d in mother_dir.iterdir() if d.is_dir() and d.name.startswith('tracks')])
-
-    if not track_dirs:
-        if mother_dir.name.startswith('tracks'):
-            track_dirs = [mother_dir]
-            mother_dir = mother_dir.parent
-        else:
-            sys.exit(f"No 'tracks*' directories found in {mother_dir}")
-
-    print(f"\nScanning: {mother_dir}")
-    print(f"Found {len(track_dirs)} track groups: {[d.name for d in track_dirs]}")
-
-    # --- 2. Load Config ---
-    with open(args.config) as f:
-        config = yaml.safe_load(f)
     if args.runName not in config:
-        sys.exit(f"Run {args.runName} not found in config.")
+        sys.exit(f"Error: Run {args.runName} not found in {args.config}")
 
     all_roles = {}
     cut_roles = []
@@ -271,54 +256,24 @@ def main():
             if r != args.exclude_role:
                 cut_roles.append(r)
 
-    # --- 3. Process Each Group ---
-    for input_group_dir in track_dirs:
-        dir_name = input_group_dir.name
-        core_name = dir_name.replace('tracks', 'time')
+    # 2. Find Files
+    input_path = Path(args.inputdir)
+    # Condor will have transferred the directory contents, so input_path is now local.
+    files = natsorted(input_path.glob('track_*.pkl'))
 
-        # --- NEW LOGIC: Intelligent Underscore Insertion ---
-        folder_parts = []
-        if args.prefix:
-            folder_parts.append(args.prefix)
+    if not files:
+        print(f"Warning: No track files found in {input_path}. Exit.")
+        # Exit 0 means successful completion, even if no files were found (prevents Condor errors)
+        sys.exit(0)
 
-        folder_parts.append(core_name)
+    print(f"Processing {len(files)} files from {input_path}...")
 
-        if args.suffix:
-            folder_parts.append(args.suffix)
+    # 3. Loop sequentially on the worker node
+    for f in tqdm(files, desc="Processing"):
+        print(process_single_file(f, args, all_roles, cut_roles))
+        gc.collect()
 
-        final_dirname = "_".join(folder_parts)
-        # ---------------------------------------------------
-
-        output_group_dir = mother_dir / final_dirname
-        output_group_dir.mkdir(parents=True, exist_ok=True)
-
-        print(f"\n>>> Processing Group: {dir_name}")
-        print(f"    Output: {output_group_dir.name}")
-
-        files = natsorted(input_group_dir.glob('track_*.pkl'))
-
-        if not files:
-            print(f"    Warning: No track files found in {dir_name}. Skipping.")
-            continue
-
-        if args.debug:
-            for f in files:
-                res = process_single_file(f, args, all_roles, cut_roles, output_group_dir)
-                print(res)
-        else:
-            with ProcessPoolExecutor(max_workers=6) as exe:
-                futures = {
-                    exe.submit(process_single_file, f, args, all_roles, cut_roles, output_group_dir): f
-                    for f in files
-                }
-
-                for future in tqdm(as_completed(futures), total=len(files), desc=f"    Converting {dir_name}"):
-                    try:
-                        future.result()
-                    except Exception as e:
-                        print(f"Critical Worker Error: {e}")
-
-    print("\nAll groups processed.")
+    print("\nAll files processed.")
 
 if __name__ == "__main__":
     main()
