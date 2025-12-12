@@ -78,7 +78,7 @@ def process_and_save_track(
             return f"Skipped empty dataframe: {track_key}"
 
         out_name = generate_track_filename(full_df, id_map, nicknames)
-        save_path = output_dir / f"{out_name}.pickle"
+        save_path = output_dir / f"{out_name}.pkl"
         full_df.to_pickle(save_path)
 
         return f"Saved: {save_path.name}"
