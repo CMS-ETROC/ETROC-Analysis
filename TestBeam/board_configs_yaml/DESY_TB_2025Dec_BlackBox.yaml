@@ -3,7 +3,7 @@ PT_IH2: &PT_IH2
   short: PT_IH2
   offset: 20
   HV: 220
-  role: trig
+  role: extra
   transformation:
     rotation:
       x: 0
@@ -48,7 +48,7 @@ PT_IH24: &PT_IH24
   short: PT_IH24
   offset: 20
   HV: 220
-  role: extra
+  role: trig
   transformation:
     rotation:
       x: 0
@@ -66,40 +66,40 @@ run0: &run0
   3: *PT_IH24
 
 run1:
-  0: { <<: *PT_IH2, HV: 200 }
+  0: { <<: *PT_IH2, HV: 200, role: trig }
   1: { <<: *PT_IH3, HV: 200 }
   2: { <<: *PT_IH5, HV: 200 }
-  3: { <<: *PT_IH24, HV: 200 }
+  3: { <<: *PT_IH24, HV: 200, role: extra }
 
 run2:
-  0: { <<: *PT_IH2, HV: 180 }
+  0: { <<: *PT_IH2, HV: 180, role: trig }
   1: { <<: *PT_IH3, HV: 180 }
   2: { <<: *PT_IH5, HV: 180 }
-  3: { <<: *PT_IH24, HV: 180 }
+  3: { <<: *PT_IH24, HV: 180, role: extra }
 
 run02:
-  0: { <<: *PT_IH2, angle: 30 }
+  0: { <<: *PT_IH2, angle: 30, role: trig }
   1: { <<: *PT_IH3, angle: 30 }
   2: { <<: *PT_IH5, angle: 30 }
-  3: { <<: *PT_IH24, angle: 30 }
+  3: { <<: *PT_IH24, angle: 30, role: extra }
 
 run03:
-  0: { <<: *PT_IH2, angle: 30, HV: 180 }
+  0: { <<: *PT_IH2, angle: 30, HV: 180, role: trig }
   1: { <<: *PT_IH3, angle: 30, HV: 180 }
   2: { <<: *PT_IH5, angle: 30, HV: 180 }
-  3: { <<: *PT_IH24, angle: 30, HV: 180 }
+  3: { <<: *PT_IH24, angle: 30, HV: 180, role: extra }
 
 run04:
-  0: { <<: *PT_IH2, angle: 30, HV: 230 }
+  0: { <<: *PT_IH2, angle: 30, HV: 230, role: trig }
   1: { <<: *PT_IH3, angle: 30, HV: 230 }
   2: { <<: *PT_IH5, angle: 30, HV: 230 }
-  3: { <<: *PT_IH24, angle: 30, HV: 230 }
+  3: { <<: *PT_IH24, angle: 30, HV: 230, role: extra }
 
 run05:
-  0: { <<: *PT_IH2, angle: 30, HV: 200 }
+  0: { <<: *PT_IH2, angle: 30, HV: 200, role: trig }
   1: { <<: *PT_IH3, angle: 30, HV: 200 }
   2: { <<: *PT_IH5, angle: 30, HV: 200 }
-  3: { <<: *PT_IH24, angle: 30, HV: 200 }
+  3: { <<: *PT_IH24, angle: 30, HV: 200, role: extra }
 
 run06:
   0: { <<: *PT_IH2, angle: 30, offset: 10 }
