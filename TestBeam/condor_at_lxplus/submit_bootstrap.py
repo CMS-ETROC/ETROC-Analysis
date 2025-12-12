@@ -48,7 +48,7 @@ error                 = {{ log_dir }}/$(ClusterId).$(ProcId).bootstrap.stderr
 log                   = {{ log_dir }}/$(ClusterId).$(ProcId).bootstrap.log
 MY.WantOS             = "el9"
 +JobFlavour           = "workday"
-Queue stem,path from {{ master_list_file_name }}
+Queue stem, path from {{ script_dir }}/{{ master_list_file_name }}
 """
 
 def build_python_command(args: argparse.Namespace) -> str:
