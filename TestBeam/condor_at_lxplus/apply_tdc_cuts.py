@@ -21,8 +21,8 @@ def calculate_toa_correlation(
     col2: str
 ) -> Tuple[np.ndarray, pd.Series]:
     """Calculates linear fit and perpendicular distance for correlation cut."""
-    x = df[col1]
-    y = df[col2]
+    x = pd.to_numeric(df[col1])
+    y = pd.to_numeric(df[col2])
 
     slope, intercept = np.polyfit(x, y, 1)
     dist = (x * slope - y + intercept) / np.sqrt(slope**2 + 1)
@@ -80,13 +80,10 @@ def apply_raw_tdc_cuts(
 ) -> pd.DataFrame:
 
     dut_id = all_roles.get('dut', all_roles.get('extra'))
-    trig_id = all_roles.get('trig', all_roles.get('ref'))
+    trig_id = all_roles.get('ref', all_roles.get('trig'))
 
     # 1. Determine DUT TOT cut bounds (Absolute or Quantile)
     if args.dutTOTlowerVal != -1 or args.dutTOTupperVal != -1:
-        # Use absolute values if provided
-        dut_low_val = args.dutTOTlowerVal
-        dut_high_val = args.dutTOTupperVal
         use_abs_tot = True
     else:
         # Use quantile percentiles if absolute values are default
@@ -97,20 +94,29 @@ def apply_raw_tdc_cuts(
 
     for role, bid in all_roles.items():
 
+        # --- FIX: Skip all cuts if the board is not in cut_roles ---
+        if role not in cut_roles:
+            # Mask remains True for this board's events.
+            continue
+        # -----------------------------------------------------------
+
+        # Determine TOT cut bounds for the current board (bid)
         if bid == dut_id:
             if use_abs_tot:
-                # Use absolute values
-                low, high = dut_low_val, dut_high_val
+                low = args.dutTOTlowerVal if args.dutTOTlowerVal != -1 else -np.inf
+                high = args.dutTOTupperVal if args.dutTOTupperVal != -1 else np.inf
             else:
                 # Use quantile percentiles
                 low, high = df['tot'][bid].quantile(dut_pct)
         else:
-            # Use default 1st and 96th percentile for other boards
+            # Use default 1st and 96th percentile for other boards (which are in cut_roles)
             low, high = df['tot'][bid].quantile([0.01, 0.96])
 
+        # Determine TOA cut bounds (only special for the board designated as the trigger)
         toa_low = args.TOALower if bid == trig_id else 0
         toa_high = args.TOAUpper if bid == trig_id else 1100
 
+        # Apply all cuts for the current board
         board_mask = (
             df['cal'][bid].between(0, 1100) &
             df['toa'][bid].between(toa_low, toa_high) &
@@ -146,7 +152,7 @@ def apply_time_domain_cuts(
     args: argparse.Namespace
 ) -> pd.DataFrame:
 
-    ref_col = 'toa_ref' if 'toa_ref' in df else ('toa_extra' if 'toa_extra' in df else 'toa_trig')
+    ref_col = 'toa_ref' if 'toa_ref' in df else 'toa_trig'
     low_ns = args.TOALowerTime * 1e3
     high_ns = args.TOAUpperTime * 1e3
 
@@ -157,22 +163,19 @@ def apply_time_domain_cuts(
 
     if args.dutTOTlowerTime != -1 or args.dutTOTupperTime != -1:
         # Use absolute nanosecond values if provided
-        dut_low_val = args.dutTOTlowerTime * 1e3 # Convert ns to ps (since data is in ps)
-        dut_high_val = args.dutTOTupperTime * 1e3
         use_abs_tot = True
     else:
         # Fallback to quantile cut
         dut_pct = [args.dutTOTlower * 0.01, args.dutTOTupper * 0.01]
         use_abs_tot = False
 
-
     for col in [c for c in df.columns if c.startswith('tot')]:
 
         if 'dut' in col:
             if use_abs_tot:
                 # Use absolute nanosecond values (now in picoseconds)
-                low = dut_low_val
-                high = dut_high_val
+                low = args.dutTOTlowerTime * 1e3 if args.dutTOTlowerTime != -1 else -np.inf
+                high = args.dutTOTupperTime * 1e3 if args.dutTOTupperTime != -1 else np.inf
             else:
                 # Fallback: Use 0th and 100th percentile (as defined in original logic)
                 low, high = df[col].quantile(dut_pct)
@@ -203,9 +206,12 @@ def process_single_file(
             time_df = convert_to_time(df, all_roles)
             if not time_df.empty:
                 final_df = apply_time_domain_cuts(time_df, cut_roles, args)
+                if not final_df.empty:
+                    raw_df_to_use = df.loc[final_df.index]
         else:
             if df.shape[0] < 1000:
                 cut_df = apply_raw_tdc_cuts(df, all_roles, cut_roles, args)
+                raw_df_to_use = cut_df
             else:
                 chunks = []
                 for fid in df['file'].unique():
@@ -214,20 +220,18 @@ def process_single_file(
                     if not sub_cut.empty:
                         chunks.append(sub_cut)
                 cut_df = pd.concat(chunks, ignore_index=True) if chunks else pd.DataFrame()
+                raw_df_to_use = cut_df
 
-            if not cut_df.empty:
-                final_df = convert_to_time(cut_df, all_roles)
+        if not final_df.empty and not raw_df_to_use.empty:
+            for role, board_id in all_roles.items():
+                try:
+                    final_df[f'HasNeighbor_{role}'] = raw_df_to_use['HasNeighbor'][board_id].astype(bool)
+                except:
+                    final_df[f'HasNeighbor_{role}'] = False
 
-                #### Add neighbor columns
-                for role, board_id in all_roles.items():
-                    try:
-                        final_df[f'HasNeighbor_{role}'] = cut_df['HasNeighbor'][board_id].astype(bool)
-                    except:
-                        final_df[f'HasNeighbor_{role}'] = False
-
-                ## Add board level neighbor column
-                neighbor_columns = [col for col in final_df.columns if col.startswith('HasNeighbor')]
-                final_df['trackNeighbor'] = final_df[neighbor_columns].any(axis=1)
+            ## Add board level neighbor column
+            neighbor_columns = [col for col in final_df.columns if col.startswith('HasNeighbor')]
+            final_df['trackNeighbor'] = final_df[neighbor_columns].any(axis=1)
 
         if not final_df.empty:
             prefix = f'exclude_{args.exclude_role}_'
@@ -239,8 +243,6 @@ def process_single_file(
 
     except Exception as e:
         return f"Error processing {filepath.name}: {str(e)}"
-
-# --- Main ---
 
 # --- Main ---
 
