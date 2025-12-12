@@ -111,7 +111,7 @@ def process_group(
     Processes all pickle files in a specific directory (group) and saves a CSV.
     """
     # Find files (exclude_... resolution.pkl)
-    files = natsorted(input_dir.glob('*_resolution.pkl'))
+    files = natsorted(input_dir.glob('*track*'))
 
     if not files:
         print(f"Warning: No resolution files found in {input_dir.name}. Skipping.")
