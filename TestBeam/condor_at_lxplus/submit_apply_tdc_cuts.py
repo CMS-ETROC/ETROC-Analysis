@@ -35,6 +35,15 @@ echo "Processing lines from $START_LINE to $END_LINE"
 # 'sed -n "${START_LINE},${END_LINE}p"' prints only lines between START_LINE and END_LINE
 BATCH_FILENAMES=$(sed -n "${START_LINE},${END_LINE}p" "$INPUT_LIST_FILE")
 
+echo "--- Print ---"
+ls -ltrh .
+
+# Check if any files were extracted (for the last, possibly partial, batch)
+if [ -z "$BATCH_FILENAMES" ]; then
+    echo "No files found in range $START_LINE-$END_LINE. Exiting gracefully."
+    exit 0
+fi
+
 # Check if any files were extracted (for the last, possibly partial, batch)
 if [ -z "$BATCH_FILENAMES" ]; then
     echo "No files found in range $START_LINE-$END_LINE. Exiting gracefully."
@@ -131,7 +140,7 @@ def create_jdl_file(args, master_list_path, run_append, group_name, njobs):
         'script_dir': script_dir.as_posix(),
         'bash_script_name': f'applyTDC_job{run_append}_{group_name}.sh',
         'master_list_file_name': f'{master_list_path.name}',
-        'transfer_files': f"apply_tdc_cuts.py, {Path(args.config).as_posix()}",
+        'transfer_files': f"apply_tdc_cuts.py, {Path(args.config).as_posix()}, f'{master_list_path.name}'",
         'output_dir': f"{args.inputdir}/{group_name.replace('tracks','time')}",
         'log_dir': log_dir.as_posix(),
         'batch_size': args.batch_size,
