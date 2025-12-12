@@ -7,62 +7,59 @@ from jinja2 import Template
 from natsort import natsorted
 from typing import List, Dict, Optional
 
-# --- Configuration & Templates ---
-
 WORKER_SCRIPT_NAME = "bootstrap.py"
 
 BASH_TEMPLATE = """#!/bin/bash
 
-ls -ltrh
-echo ""
-pwd
-
-# Note: Input file path is passed as argument 2 ($2).
-# Assumes the 'path' argument is an EOS path to copy.
+# $1: The full EOS path of the input file (e.g., /path/to/time/data_01.pkl)
+INPUT_FILE_EOS="$1"
 
 # Load python environment from work node
 source /cvmfs/sft.cern.ch/lcg/views/LCG_104a/x86_64-el9-gcc13-opt/setup.sh
 
-# Copy input data from EOS to local work node
-xrdcp root://eosuser.cern.ch/{{ input_file }} ./{{ filename }}
+# 1. Determine local file name
+LOCAL_FILENAME=$(basename "$INPUT_FILE_EOS")
 
-# Run Bootstrap Analysis
-echo "Running: {{ command }}"
-{{ command }}
+# 2. Copy input data from EOS to local work node
+echo "Transferring: $INPUT_FILE_EOS"
+xrdcp root://eosuser.cern.ch/$INPUT_FILE_EOS ./$LOCAL_FILENAME
 
-# Cleanup: Delete the local copy of the input file
-if [ -f {{ filename }} ]; then
-    rm {{ filename }}
+# 3. Construct and Run Bootstrap Analysis
+echo "\nRunning: {{ command }} -f $LOCAL_FILENAME"
+{{ command }} -f $LOCAL_FILENAME
+
+# 4. Cleanup: Delete the local copy of the input file
+if [ -f $LOCAL_FILENAME ]; then
+    rm $LOCAL_FILENAME
 fi
 
-ls -ltrh
-echo ""
+echo "\n--- Job finished successfully ---"
 """
 
 JDL_TEMPLATE = """universe              = vanilla
-executable            = {{ script_dir }}/run_bootstrap{{ unique_tag }}.sh
+executable            = {{ script_dir }}/{{ bash_script_name }}
 should_Transfer_Files = YES
 whenToTransferOutput  = ON_EXIT
-arguments             = $(ifile) $(path)
 transfer_Input_Files  = {{ transfer_files }}
-TransferOutputRemaps  = "$(ifile)_resolution.pkl={{ out_dir }}/$(ifile)_resolution.pkl; $(ifile)_gmmInfo.pkl={{ out_dir }}/$(ifile)_gmmInfo.pkl"
+Arguments             = $(path)
+TransferOutputRemaps  = "$(stem)_boot.parquet={{ out_dir }}/$(stem)_boot.parquet"
 output                = {{ log_dir }}/$(ClusterId).$(ProcId).bootstrap.stdout
 error                 = {{ log_dir }}/$(ClusterId).$(ProcId).bootstrap.stderr
 log                   = {{ log_dir }}/$(ClusterId).$(ProcId).bootstrap.log
 MY.WantOS             = "el9"
 +JobFlavour           = "workday"
-Queue ifile,path from {{ script_dir }}/input_list_for_bootstrap{{ unique_tag }}.txt
+Queue stem,path from {{ master_list_file_name }}
 """
 
-# --- Helper Functions ---
-
-def build_python_command(args: argparse.Namespace, filename_val: str) -> str:
-    """Constructs the python command string dynamically."""
+def build_python_command(args: argparse.Namespace) -> str:
+    """
+    Constructs the python command string dynamically using a placeholder for the filename.
+    The bash script will substitute 'FILENAME_PLACEHOLDER' with the local filename.
+    """
     neighbor_cut_str = " ".join(args.neighbor_cut)
 
     cmd_parts = [
         f"python {WORKER_SCRIPT_NAME}",
-        f"-f {filename_val}",
         f"-n {args.num_bootstrap_output}",
         f"-s {args.sampling}",
         f"--minimum_nevt {args.minimum_nevt}",
@@ -87,59 +84,54 @@ def create_submission_files(
     group_log_dir: Path
 ):
     """
-    Generates the input list, bash script, and JDL file using relative paths.
+    Generates the input list (stem, full EOS path), bash script, and JDL file.
     """
 
-    # 1. Generate Input List
-    input_list_path = paths['scripts'] / f'input_list_for_bootstrap{unique_tag}.txt'
+    # 1. Generate Input List (stem, full EOS path)
+    master_list_file_name = f'input_list_for_bootstrap{unique_tag}.txt'
+    input_list_path = paths['scripts'] / master_list_file_name
     if input_list_path.exists():
         input_list_path.unlink()
 
+    # File discovery (PKL or PARQUET exclusive)
     pkl_files = list(input_dir.glob('*.pkl'))
     parquet_files = list(input_dir.glob('*.parquet'))
 
     files: List[Path] = []
-
     if pkl_files:
         print(f"    Found {len(pkl_files)} PKL files. Ignoring any Parquet files.")
         files = pkl_files
     elif parquet_files:
         print(f"    Found {len(parquet_files)} Parquet files. Proceeding with Parquet.")
         files = parquet_files
-    else:
-        # files list remains empty
-        pass
 
     files = natsorted(files)
     if not files:
-        print(f"Warning: No pickle files found in {input_dir.name}. Skipping group.")
+        print(f"Warning: No pickle or parquet files found in {input_dir.name}. Skipping group.")
         return None, None, None
 
+    # Write: stem_name, logical_path
     with open(input_list_path, 'a') as f:
         for file_path in files:
-            name_with_ext = file_path.name
+            stem_name = file_path.stem
 
             # --- PATH FIX: Enforce /eos/user/ instead of /eos/home-X/ ---
             abs_path = str(file_path.resolve())
-
-            # Regex match: start of string, /eos/home-, one alphanumeric char (group 1), /
-            # Replace with: /eos/user/, group 1, /
-            # Example: /eos/home-j/jongho -> /eos/user/j/jongho
             logical_path = re.sub(r'^/eos/home-([a-z0-9])/', r'/eos/user/\1/', abs_path)
 
-            f.write(f"{name_with_ext}, {logical_path}\n")
+            # JDL arguments will be: stem, path
+            f.write(f"{stem_name},{logical_path}\n")
 
     # 2. Generate Bash Script
-    filename_var = '${1}'
-    command = build_python_command(args, filename_var)
+    bash_script_name = f'run_bootstrap{unique_tag}.sh'
+
+    # MODIFICATION: build_python_command no longer takes filename_val
+    command = build_python_command(args)
 
     bash_content = Template(BASH_TEMPLATE).render({
-        'input_file': '${2}',
-        'filename': filename_var,
         'command': command
     })
 
-    bash_script_name = f'run_bootstrap{unique_tag}.sh'
     bash_path = paths['scripts'] / bash_script_name
     with open(bash_path, 'w') as f:
         f.write(bash_content)
@@ -151,10 +143,12 @@ def create_submission_files(
 
     jdl_content = Template(JDL_TEMPLATE).render({
         'script_dir': str(paths['scripts']),
-        'unique_tag': unique_tag,
+        'bash_script_name': bash_script_name, # Pass bash script name for JDL execution
+        'master_list_file_name': master_list_file_name, # Pass master list name for Queue
         'out_dir': str(group_out_dir),
         'log_dir': str(group_log_dir),
-        'transfer_files': ", ".join(transfer_list)
+        'transfer_files': ", ".join(transfer_list),
+        'unique_tag': unique_tag,
     })
 
     jdl_path = paths['scripts'] / f'condor_bootstrap{unique_tag}.jdl'
@@ -162,74 +156,6 @@ def create_submission_files(
         f.write(jdl_content)
 
     return jdl_path, bash_script_name, input_list_path
-
-def handle_resubmission(
-    mode: str,
-    script_name: str,
-    list_path: Path,
-    log_dir: Path
-):
-    """
-    Handles logic for --resubmit (kill & rerun) and --resubmit_with_stderr (retry failed).
-    """
-    condor_cmd = ['condor_q', '-nobatch']
-    res = subprocess.run(condor_cmd, capture_output=True, text=True)
-    active_jobs = [l for l in res.stdout.splitlines() if script_name in l]
-
-    if mode == 'stderr':
-        if active_jobs:
-            print(f"Skipping {script_name}: Cannot resubmit while jobs are running.")
-            return
-
-        failed_indices = []
-        for log in log_dir.glob('*.stderr'):
-            if log.stat().st_size > 0:
-                try:
-                    proc_id = int(log.name.split('.')[1])
-                    failed_indices.append(proc_id)
-                except IndexError:
-                    pass
-
-        if not failed_indices:
-            print("No failed jobs found.")
-            return
-
-        with open(list_path, 'r') as f:
-            all_lines = f.readlines()
-
-        with open(list_path, 'w') as f:
-            for idx in sorted(failed_indices):
-                if idx < len(all_lines):
-                    f.write(all_lines[idx])
-
-        print(f"Resubmitting {len(failed_indices)} failed jobs.")
-
-    elif mode == 'kill_and_rerun':
-        requeue_lines = []
-        jobs_to_kill = set()
-
-        for line in active_jobs:
-            parts = line.split()
-            if len(parts) >= 10:
-                job_id = parts[0].split('.')[0]
-                status = parts[5]
-                args = parts[-2:]
-                requeue_lines.append(f"{args[0]}, {args[1]}")
-                if status != 'X':
-                    jobs_to_kill.add(job_id)
-
-        if jobs_to_kill:
-            for jid in jobs_to_kill:
-                subprocess.run(['condor_rm', jid])
-
-            with open(list_path, 'w') as f:
-                for l in requeue_lines:
-                    f.write(l + '\n')
-            print(f"Killed {len(jobs_to_kill)} clusters. Resubmitting {len(requeue_lines)} jobs.")
-        else:
-            print("No active jobs found to kill/resubmit.")
-
-# --- Main ---
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Submit Bootstrap Analysis to Condor')
@@ -348,17 +274,17 @@ if __name__ == "__main__":
         if args.dryrun:
             print(f"    [Dry Run] JDL: {jdl}")
 
-        elif args.resubmit:
-            handle_resubmission('kill_and_rerun', bash, list_file, group_log_dir)
-            if list_file.stat().st_size > 0:
-                print("    Resubmitting...")
-                subprocess.run(['condor_submit', str(jdl)])
+        # elif args.resubmit:
+        #     handle_resubmission('kill_and_rerun', bash, list_file, group_log_dir)
+        #     if list_file.stat().st_size > 0:
+        #         print("    Resubmitting...")
+        #         # subprocess.run(['condor_submit', str(jdl)])
 
-        elif args.resubmit_with_stderr:
-            handle_resubmission('stderr', bash, list_file, group_log_dir)
-            if list_file.stat().st_size > 0:
-                print("    Resubmitting failed jobs...")
-                subprocess.run(['condor_submit', str(jdl)])
+        # elif args.resubmit_with_stderr:
+        #     handle_resubmission('stderr', bash, list_file, group_log_dir)
+        #     if list_file.stat().st_size > 0:
+        #         print("    Resubmitting failed jobs...")
+        #         # subprocess.run(['condor_submit', str(jdl)])
 
         else:
             if list_file.stat().st_size > 0:
