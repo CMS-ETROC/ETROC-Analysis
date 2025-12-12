@@ -114,7 +114,7 @@ def apply_timewalk_correction(
                 coeff = twc_coeffs[iter_key][r]
             else:
                 # Fit New
-                coeff = np.polyfit(tots[r], delta_toas[r], 2) # Poly order 2
+                coeff = np.polyfit(pd.to_numeric(tots[r]), pd.to_numeric(delta_toas[r]), 2) # Poly order 2
 
             correction = np.poly1d(coeff)(tots[r])
             toas[r] += correction
