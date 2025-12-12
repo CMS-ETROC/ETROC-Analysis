@@ -24,7 +24,7 @@ pwd
 source /cvmfs/sft.cern.ch/lcg/views/LCG_104a/x86_64-el9-gcc13-opt/setup.sh
 
 # Copy input data from EOS to local work node
-xrdcp root://eosuser.cern.ch/{{ input_file }} ./
+xrdcp root://eosuser.cern.ch/{{ input_file }} ./{{ filename }}
 
 # Run Bootstrap Analysis
 echo "Running: {{ command }}"
@@ -117,7 +117,7 @@ def create_submission_files(
 
     with open(input_list_path, 'a') as f:
         for file_path in files:
-            name = file_path.stem
+            name_with_ext = file_path.name
 
             # --- PATH FIX: Enforce /eos/user/ instead of /eos/home-X/ ---
             abs_path = str(file_path.resolve())
@@ -127,10 +127,10 @@ def create_submission_files(
             # Example: /eos/home-j/jongho -> /eos/user/j/jongho
             logical_path = re.sub(r'^/eos/home-([a-z0-9])/', r'/eos/user/\1/', abs_path)
 
-            f.write(f"{name}, {logical_path}\n")
+            f.write(f"{name_with_ext}, {logical_path}\n")
 
     # 2. Generate Bash Script
-    filename_var = '${1}.pkl'
+    filename_var = '${1}'
     command = build_python_command(args, filename_var)
 
     bash_content = Template(BASH_TEMPLATE).render({
