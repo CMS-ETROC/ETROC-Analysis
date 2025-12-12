@@ -299,11 +299,19 @@ def main():
     parser.add_argument('--reproducible', action='store_true')
     parser.add_argument('--single', action='store_true', help='Run single shot instead of bootstrap')
     parser.add_argument('--force-twc', action='store_true', help='Force use of TWC file')
+    parser.add_argument('--neighbor_cut', dest='neighbor_cut', default=['none'], nargs='+',
+                        help='Specify one or more **space-separated** board columns to be used for neighbor cuts. '
+                        'The argument collects all values into a list. '
+                        'Possible columns: HasNeighbor_dut, HasNeighbor_ref, HasNeighbor_extra, HasNeighbor_trig, trackNeighbor. '
+                        'Default value is a list containing only "none".')
+    parser.add_argument('--neighbor_logic', dest='neighbor_logic', default='OR',
+                        help='Logic for multiple neighbor cuts on board. Default is OR. AND is possble.')
 
     args = parser.parse_args()
 
     # 1. Setup
     input_path = str(args.file)
+
     # Extract metadata from filename convention: ...exclude_ROLE_track_NAME...
     try:
         parts = input_path.split('/')[-1].split('_')
@@ -331,10 +339,82 @@ def main():
             twc_data = next(iter(full_twc.values()))
 
     # 3. Load Data
-    try:
+    if '.pkl' in input_path:
         df = pd.read_pickle(input_path)
-    except Exception as e:
-        sys.exit(f"Failed to load dataframe: {e}")
+    elif '.parquet' in input_path:
+        df = pd.read_parquet(input_path)
+    else:
+        sys.exit(f"Failed to load dataframe")
+
+    # --- Apply neighbor logic ---
+    neighbor_cols_requested = set(args.neighbor_cut)
+
+    if 'none' in neighbor_cols_requested:
+        print("No neighbor cut applied (requested 'none').")
+        # df remains unchanged
+
+    else:
+        # Check for invalid column names
+        valid_cols = {'HasNeighbor_dut', 'HasNeighbor_ref', 'HasNeighbor_extra',
+                      'HasNeighbor_trig', 'trackNeighbor'}
+
+        # Determine the columns to actually use for the cut
+        cols_to_use = neighbor_cols_requested.intersection(df.columns)
+
+        # Check if all requested columns (minus 'none') are in the DataFrame and are valid
+        invalid_cols = neighbor_cols_requested - valid_cols
+        missing_cols = neighbor_cols_requested - set(df.columns) - {'none'}
+
+        if invalid_cols:
+            sys.exit(f"Error: Invalid column names requested for neighbor cut: {invalid_cols}")
+
+        if missing_cols:
+            sys.exit(f"Error: Requested neighbor cut columns not found in DataFrame: {missing_cols}")
+
+        if not cols_to_use:
+             # This should only happen if the user passed something odd like ['none'] but we handled that
+             # or if the df columns are unexpected, but we already checked for missing_cols
+             print("Warning: Neighbor cut requested, but no valid columns found/used.")
+
+        else:
+            logic = args.neighbor_logic.upper()
+
+            # --- Build the Boolean Mask ---
+            if logic == 'OR':
+                # The cut is applied if *any* of the columns are TRUE (1)
+                # Initial mask is FALSE for all rows
+                mask = pd.Series(False, index=df.index)
+                for col in cols_to_use:
+                    # Update mask: if current mask is False AND col is True, set to True
+                    mask = mask | (df[col] == 1)
+
+                # We want to KEEP the events that have the neighbor, so the cut is applied
+                # to the *inverse* of the mask.
+                # However, usually a "neighbor cut" means REMOVING events with neighbors.
+                # Assuming the columns (HasNeighbor_X) are 1 if a neighbor IS present.
+
+                # If HasNeighbor_X == 1 means 'Has Neighbor', we CUT those events.
+
+                # Mask: TRUE if event HAS a neighbor (should be removed)
+                print(f"Applying Neighbor Cut (Logic: OR) on columns: {cols_to_use}")
+                df = df[~mask] # Keep rows where the mask is FALSE (no neighbor)
+
+            elif logic == 'AND':
+                # The cut is applied only if *all* of the columns are TRUE (1)
+                # Initial mask is TRUE for all rows
+                mask = pd.Series(True, index=df.index)
+                for col in cols_to_use:
+                    # Update mask: only TRUE if mask was already TRUE AND col is TRUE
+                    mask = mask & (df[col] == 1)
+
+                # Mask: TRUE only if ALL columns indicate a neighbor (should be removed)
+                print(f"Applying Neighbor Cut (Logic: AND) on columns: {cols_to_use}")
+                df = df[~mask] # Keep rows where the mask is FALSE (at least one column does not indicate neighbor)
+
+            else:
+                sys.exit(f"Error: Invalid neighbor_logic '{args.neighbor_logic}'. Must be 'OR' or 'AND'.")
+
+            print(f"Neighbor cut applied. Remaining events: {len(df)}")
 
     # 4. Run Analysis
     if args.single:
