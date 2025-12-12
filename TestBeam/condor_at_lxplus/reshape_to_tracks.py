@@ -78,8 +78,8 @@ def process_and_save_track(
             return f"Skipped empty dataframe: {track_key}"
 
         out_name = generate_track_filename(full_df, id_map, nicknames)
-        save_path = output_dir / f"{out_name}.parquet"
-        full_df.to_parquet(save_path)
+        save_path = output_dir / f"{out_name}.pickle"
+        full_df.to_pickle(save_path)
 
         return f"Saved: {save_path.name}"
 
@@ -185,6 +185,9 @@ def main():
         print(f"Saving to: {current_out_dir}")
 
         track_data = defaultdict(list)
+
+        if args.debug:
+            batch_files = batch_files[:5]
 
         # A. Read Files into Memory
         for f in tqdm(batch_files, desc=f"Reading Group {batch_idx + 1}"):
