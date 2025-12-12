@@ -140,7 +140,7 @@ def create_jdl_file(args, master_list_path, run_append, group_name, njobs):
         'script_dir': script_dir.as_posix(),
         'bash_script_name': f'applyTDC_job{run_append}_{group_name}.sh',
         'master_list_file_name': f'{master_list_path.name}',
-        'transfer_files': f"apply_tdc_cuts.py, {Path(args.config).as_posix()}, f'{master_list_path.as_posix()}'",
+        'transfer_files': f"apply_tdc_cuts.py, {Path(args.config).as_posix()}, {master_list_path.as_posix()}",
         'output_dir': f"{args.inputdir}/{group_name.replace('tracks','time')}",
         'log_dir': log_dir.as_posix(),
         'batch_size': args.batch_size,
