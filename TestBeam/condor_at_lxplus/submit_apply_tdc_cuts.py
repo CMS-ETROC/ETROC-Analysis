@@ -15,6 +15,9 @@ procid="$2"
 INPUT_LIST_FILE="$3"
 BATCH_SIZE="$4"
 
+# Load python environment from work node
+source /cvmfs/sft.cern.ch/lcg/views/LCG_104a/x86_64-el9-gcc13-opt/setup.sh
+
 LOCAL_DIR="./input_chunk_${clusterid}_${procid}"
 mkdir -p $LOCAL_DIR
 
@@ -35,7 +38,7 @@ echo "Processing lines from $START_LINE to $END_LINE"
 # 'sed -n "${START_LINE},${END_LINE}p"' prints only lines between START_LINE and END_LINE
 BATCH_FILENAMES=$(sed -n "${START_LINE},${END_LINE}p" "$INPUT_LIST_FILE")
 
-echo "--- Print ---"
+echo "\n--- Print ---\n"
 ls -ltrh .
 
 # Check if any files were extracted (for the last, possibly partial, batch)
@@ -62,19 +65,19 @@ do
 done
 
 # 4. Print input files
-echo "--- Copied Files ---"
+echo "\n--- Copied Files ---"
 ls -ltrh ${LOCAL_DIR}
 
-echo "Running: {{ command }}"
+echo "\nRunning: {{ command }}"
 {{ command }}
 
-echo "Cleanup: Removing local input files."
+echo "\nCleanup: Removing local input files."
 rm -rf $LOCAL_DIR
 
 echo "Job Finished."
 ls -ltrh
 
-echo "--- Job ${procid} finished successfully ---"
+echo "\n--- Job ${procid} finished successfully ---"
 """
 
 # Template for the Condor JDL file
