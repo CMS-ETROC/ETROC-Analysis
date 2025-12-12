@@ -6,9 +6,8 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from tqdm import tqdm
-from concurrent.futures import ProcessPoolExecutor, as_completed
 from natsort import natsorted
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple
 from itertools import combinations
 
 # --- Configuration ---
@@ -271,7 +270,6 @@ def main():
     # 3. Loop sequentially on the worker node
     for f in tqdm(files, desc="Processing"):
         print(process_single_file(f, args, all_roles, cut_roles))
-        gc.collect()
 
     print("\nAll files processed.")
 
