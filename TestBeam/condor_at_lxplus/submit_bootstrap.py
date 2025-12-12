@@ -58,13 +58,17 @@ Queue ifile,path from {{ script_dir }}/input_list_for_bootstrap{{ unique_tag }}.
 
 def build_python_command(args: argparse.Namespace, filename_val: str) -> str:
     """Constructs the python command string dynamically."""
+    neighbor_cut_str = " ".join(args.neighbor_cut)
+
     cmd_parts = [
         f"python {WORKER_SCRIPT_NAME}",
         f"-f {filename_val}",
         f"-n {args.num_bootstrap_output}",
         f"-s {args.sampling}",
         f"--minimum_nevt {args.minimum_nevt}",
-        f"--iteration_limit {args.iteration_limit}"
+        f"--iteration_limit {args.iteration_limit}",
+        f"--neighbor_cut {neighbor_cut_str}",
+        f"--neighbor_logic {args.neighbor_logic}",
     ]
 
     if args.reproducible: cmd_parts.append("--reproducible")
@@ -231,6 +235,13 @@ if __name__ == "__main__":
     parser.add_argument('--reproducible', action='store_true')
     parser.add_argument('--force-twc', action='store_true')
     parser.add_argument('--single', action='store_true', help='Single shot mode')
+    parser.add_argument('--neighbor_cut', dest='neighbor_cut', default=['none'], nargs='+',
+                        help='Specify one or more **space-separated** board columns to be used for neighbor cuts. '
+                        'The argument collects all values into a list. '
+                        'Possible columns: HasNeighbor_dut, HasNeighbor_ref, HasNeighbor_extra, HasNeighbor_trig, trackNeighbor. '
+                        'Default value is a list containing only "none".')
+    parser.add_argument('--neighbor_logic', dest='neighbor_logic', default='OR',
+                        help='Logic for multiple neighbor cuts on board. Default is OR. AND is possble.')
 
     # Execution Modes
     parser.add_argument('--dryrun', action='store_true')
