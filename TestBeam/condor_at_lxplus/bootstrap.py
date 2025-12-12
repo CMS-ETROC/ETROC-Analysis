@@ -175,7 +175,6 @@ def run_bootstrap_loop(
     """Main bootstrap loop logic."""
 
     results = defaultdict(list)
-    diagnostics = defaultdict(list)
 
     n_success = 0
     consecutive_fails = 0
@@ -205,10 +204,6 @@ def run_bootstrap_loop(
             sample_df, roles, twc_coeffs, use_fixed_coeffs, quality_cut
         )
 
-        # 4. Handle Result
-        diagnostics['nevt'].append(n_sample)
-        diagnostics['success'].append(success)
-
         if success:
             n_success += 1
             consecutive_fails = 0
@@ -222,7 +217,7 @@ def run_bootstrap_loop(
                 consecutive_fails = 0
                 print(f"\nIncreasing sampling to {current_sampling}%")
 
-    return pd.DataFrame(results), pd.DataFrame(diagnostics)
+    return pd.DataFrame(results)
 
 def run_single_shot(
     df: pd.DataFrame,
@@ -419,17 +414,13 @@ def main():
     # 4. Run Analysis
     if args.single:
         res_df = run_single_shot(df, active_roles, twc_data, args.force_twc)
-        diag_df = None
     else:
-        res_df, diag_df = run_bootstrap_loop(df, active_roles, twc_data, args)
+        res_df = run_bootstrap_loop(df, active_roles, twc_data, args)
 
     # 5. Save
     if not res_df.empty:
-        res_df.to_pickle(f'{output_base}_resolution.pkl')
-        print(f"\nSaved resolution to {output_base}_resolution.pkl")
-
-    if diag_df is not None and not diag_df.empty:
-        diag_df.to_pickle(f'{output_base}_gmmInfo.pkl')
+        res_df.to_parquet(f'{output_base}_boot.parquet')
+        print(f"\nSaved resolution to {output_base}_boot.parquet")
 
 if __name__ == "__main__":
     main()
