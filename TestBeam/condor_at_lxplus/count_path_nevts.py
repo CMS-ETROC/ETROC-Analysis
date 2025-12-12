@@ -37,12 +37,16 @@ def process_single_file(filepath: Path) -> dict:
             file_data[f'col_{full_role}'].append(int(col))
 
     # 2. Open Pickle to get Event Count
-    try:
+    if '.pkl' in filepath.name:
         df = pd.read_pickle(filepath)
         nevt = len(df)
         del df
-    except Exception as e:
-        print(f"Error reading {filepath.name}: {e}")
+    elif '.parquet' in filepath.name:
+        df = pd.read_parquet(filepath)
+        nevt = len(df)
+        del df
+    else:
+        print(f"Error reading {filepath.name}")
         nevt = 0
 
     file_data['nevt'].append(nevt)
@@ -122,10 +126,10 @@ def main():
         # A. Find Files
         files = natsorted(group_dir.glob('exclude*.pkl'))
         if not files:
-            files = natsorted(group_dir.glob('*.pkl'))
+            files = natsorted(group_dir.glob('*.parquet'))
 
         if not files:
-            print(f"    Warning: No .pkl files found in {group_name}. Skipping.")
+            print(f"    Warning: No .pkl or .parquet files found in {group_name}. Skipping.")
             continue
 
         # B. Process Files in Parallel
