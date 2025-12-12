@@ -68,8 +68,8 @@ done
 echo "\n--- Copied Files ---"
 ls -ltrh ${LOCAL_DIR}
 
-echo "\nRunning: {{ command }}"
-{{ command }}
+echo "\nRunning: {{ command }} -d ${LOCAL_DIR}"
+{{ command }} -d ${LOCAL_DIR}
 
 echo "\nCleanup: Removing local input files."
 rm -rf $LOCAL_DIR
