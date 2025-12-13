@@ -7,7 +7,7 @@ import matplotlib.ticker as ticker
 import mplhep as hep
 hep.style.use('CMS')
 
-from utils import load_fig_title
+from .utils import load_fig_title
 from pathlib import Path
 from matplotlib import rcParams
 rcParams["axes.formatter.useoffset"] = False
@@ -21,7 +21,6 @@ __all__ = [
     'return_crc_hist',
     'return_hist_pivot',
     'return_time_hist_pivot',
-    'preprocess_ranking_data',
     'plot_BL_and_NW',
     'plot_number_of_fired_board',
     'plot_number_of_hits_per_event',
