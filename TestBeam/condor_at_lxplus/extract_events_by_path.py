@@ -1,8 +1,8 @@
 import argparse
-import pickle
 import sys
 import logging
 from collections import defaultdict
+from pathlib import Path
 from functools import reduce
 from typing import List, Dict, Tuple, Optional
 
@@ -238,7 +238,7 @@ def main():
 
     # 7. Process Tracks
     track_pivots = defaultdict(pd.DataFrame)
-    file_indicator = int(args.inputfile.split('.')[0].split('_')[1])
+    file_indicator = int(Path(args.inputfile).stem.split('_')[1])
 
     logging.info(f"Processing {len(track_df)} tracks...")
 
@@ -260,17 +260,43 @@ def main():
         )
 
         if not table.empty:
+            table['track_id'] = itrack
             table['file'] = file_indicator
-            table['file'] = table['file'].astype('uint16')
             track_pivots[itrack] = table
 
     # 8. Save Output
-    fname = args.inputfile.split('.')[0]
-    out_name = f'{args.runinfo}_{fname}.pickle'
+    fname = Path(args.inputfile).stem
+    out_name = f'{args.runinfo}_{fname}.parquet'
 
-    logging.info(f"Saving {len(track_pivots)} tracks to {out_name}")
-    with open(out_name, 'wb') as output:
-        pickle.dump(track_pivots, output, protocol=pickle.HIGHEST_PROTOCOL)
+    if track_pivots:
+        logging.info(f"Concatenating {len(track_pivots)} tracks...")
+
+        # 1. Flatten: Merge all small DataFrames into one massive DataFrame
+        # If track_pivots is a dict, values() gives the DFs.
+        final_df = pd.concat(track_pivots.values(), ignore_index=True)
+
+        # 2. Flatten MultiIndex Columns (Parquet doesn't like Tuple columns)
+        # Your pivot table created columns like ('row', 0), ('row', 1).
+        # We flatten them to 'row_0', 'row_1'.
+        final_df.columns = [f'{c[0]}_{c[1]}' if isinstance(c, tuple) and str(c[1]) != '' else c[0] for c in final_df.columns]
+
+        # 3. Downcast Types (Final Check)
+        # Example: columns containing 'row', 'col' can be uint16 usually
+        for col in final_df.columns:
+            if 'row' in col or 'col' in col:
+                final_df[col] = final_df[col].astype('uint8')
+            elif 'toa' in col or 'tot' in col or 'cal' in col:
+                final_df[col] = final_df[col].astype('uint16')
+            elif 'HasNeighbor' in col:
+                final_df[col] = final_df[col].astype(bool)
+            elif 'track_id' in col or 'file' in col:
+                final_df[col] = final_df[col].astype('uint16')
+
+        logging.info(f"Saving to {out_name} with compression...")
+
+        # 4. Save to Parquet with ZSTD compression (high compression ratio)
+        final_df.to_parquet(out_name, index=False, compression='zstd')
+
 
 if __name__ == "__main__":
     main()
