@@ -295,7 +295,7 @@ def main():
         logging.info(f"Saving to {out_name} with compression...")
 
         # 4. Save to Parquet with ZSTD compression (high compression ratio)
-        final_df.to_parquet(out_name, index=False, compression='zstd')
+        final_df.to_parquet(out_name, index=False, compression='lz4')
 
 
 if __name__ == "__main__":
