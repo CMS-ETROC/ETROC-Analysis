@@ -1233,3 +1233,160 @@ run43:
         y: 0.02
         z: 1
   3: *PT_IH22
+run44:
+  0:
+    <<: *PT_NH47
+    HV: 180
+    temp: -28C
+    transformation:
+      rotation:
+        x: 0
+        y: -60
+        z: 0
+      translation:
+        x: 1.01
+        y: -0.09
+        z: 4
+  1:
+    <<: *PT_IH18
+    transformation:
+      rotation:
+        x: 180
+        y: 0
+        z: 0
+      translation:
+        x: -0.02
+        y: 0.02
+        z: 2
+  2:
+    <<: *PT_IH21
+    transformation:
+      rotation:
+        x: 180
+        y: 0
+        z: 0
+      translation:
+        x: 0.02
+        y: 0.02
+        z: 1
+  3: *PT_IH22
+run45:
+  0:
+    <<: *PT_NH47
+    HV: 160
+    temp: -28C
+    transformation:
+      rotation:
+        x: 0
+        y: -60
+        z: 0
+      translation:
+        x: 1.01
+        y: -0.09
+        z: 4
+  1:
+    <<: *PT_IH18
+    transformation:
+      rotation:
+        x: 180
+        y: 0
+        z: 0
+      translation:
+        x: -0.02
+        y: 0.02
+        z: 2
+  2:
+    <<: *PT_IH21
+    transformation:
+      rotation:
+        x: 180
+        y: 0
+        z: 0
+      translation:
+        x: 0.02
+        y: 0.02
+        z: 1
+  3: *PT_IH22
+
+run47:
+  0:
+    <<: *PT_NH47
+    HV: 200
+    temp: -28C
+    role: trig
+    transformation:
+      rotation:
+        x: 0
+        y: -60
+        z: 0
+      translation:
+        x: 1.01
+        y: -0.09
+        z: 4
+  1:
+    <<: *PT_IH18
+    transformation:
+      rotation:
+        x: 180
+        y: 0
+        z: 0
+      translation:
+        x: -0.02
+        y: 0.02
+        z: 2
+  2:
+    <<: *PT_IH21
+    transformation:
+      rotation:
+        x: 180
+        y: 0
+        z: 0
+      translation:
+        x: 0.02
+        y: 0.02
+        z: 1
+  3:
+    <<: *PT_IH22
+    role: dut
+
+run48:
+  0:
+    <<: *PT_NH47
+    HV: 200
+    temp: -28C
+    role: trig
+    offset: 40
+    transformation:
+      rotation:
+        x: 0
+        y: -60
+        z: 0
+      translation:
+        x: 1.01
+        y: -0.09
+        z: 4
+  1:
+    <<: *PT_IH18
+    transformation:
+      rotation:
+        x: 180
+        y: 0
+        z: 0
+      translation:
+        x: -0.02
+        y: 0.02
+        z: 2
+  2:
+    <<: *PT_IH21
+    transformation:
+      rotation:
+        x: 180
+        y: 0
+        z: 0
+      translation:
+        x: 0.02
+        y: 0.02
+        z: 1
+  3:
+    <<: *PT_IH22
+    role: dut
