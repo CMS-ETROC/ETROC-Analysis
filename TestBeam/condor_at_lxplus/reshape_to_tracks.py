@@ -15,35 +15,10 @@ from typing import List, Dict, Any, Tuple
 warnings.filterwarnings("ignore")
 
 # --- Helper Functions ---
-
-def rename_parquet_columns(df: pd.DataFrame, rename_map: Dict[str, str]) -> pd.DataFrame:
+def load_config_and_roles(config_path: str, run_name: str) -> Tuple[Dict[int, str], Dict[str, str]]:
     """
-    Renames columns in a flat Parquet DataFrame from index suffix (e.g., 'row_0')
-    to role suffix (e.g., 'row_trig') using the provided dynamic rename_map.
-    """
-    rename_dict = {}
-
-    # Iterate through the provided map (e.g., '_0' : '_trig')
-    for old_suffix, new_suffix in rename_map.items():
-        # Find columns ending with the old suffix
-        for col in df.columns:
-            # We check if the column name ends with the old suffix
-            if col.endswith(old_suffix):
-                # Ensure the column isn't one of the track-level metadata columns (e.g., 'track_id')
-                if not col.startswith('track_') and not col.startswith('file'):
-                    new_col = col.replace(old_suffix, new_suffix)
-                    rename_dict[col] = new_col
-
-    if rename_dict:
-        # Perform the renaming and return the modified DataFrame
-        return df.rename(columns=rename_dict)
-
-    return df
-
-def load_config_and_roles(config_path: str, run_name: str) -> Tuple[Dict[int, str], Dict[str, str], Dict[str, str]]:
-    """
-    Loads YAML config and builds the board ID to Role mapping and the dynamic
-    positional index -> role mapping for Parquet file renaming.
+    Loads YAML config and builds the board ID to Role mapping.
+    REMOVED: parquet_positional_role_map from return.
     """
     with open(config_path) as f:
         config = yaml.safe_load(f)
@@ -54,10 +29,7 @@ def load_config_and_roles(config_path: str, run_name: str) -> Tuple[Dict[int, st
     # Map ID -> Role (for PKL/MultiIndex filename generation)
     id_role_map = {}
 
-    # Map Positional Index -> Role (for Parquet renaming)
-    # The order of iteration over config[run_name] defines the positional index (0, 1, 2, 3...)
-    parquet_positional_role_map = {}
-    index = 0
+    # REMOVED: Positional Index -> Role map creation logic
 
     for board_id, board_info in config[run_name].items():
         role = board_info.get('role', 'unknown')
@@ -69,23 +41,16 @@ def load_config_and_roles(config_path: str, run_name: str) -> Tuple[Dict[int, st
         except ValueError:
             id_role_map[str(board_id)] = role
 
-        # 2. Build the Positional Index -> Role map (used for Parquet renaming)
-        # We only need the first 4 (0-3) since the flat Parquet files currently only go up to _3.
-        if index < 4 and role != 'unknown':
-            # The rename map needs to map the old suffix (e.g., _0) to the new suffix (e.g., _trig)
-            parquet_positional_role_map[f'_{index}'] = f'_{role}'
-            index += 1
-
     # Nickname mapping (used for filename prefixes)
     nickname_dict = {'trig': '_t-', 'dut': '_d-', 'ref': '_r-', 'extra': '_e-'}
 
     # Add the roles found in the config to nickname_dict if they aren't standard
     for role in id_role_map.values():
         if role not in nickname_dict:
-            # Use first 3 letters as prefix if not standard
             nickname_dict[role] = f'_{role[:3]}-'
 
-    return id_role_map, nickname_dict, parquet_positional_role_map
+    # REMOVED: parquet_positional_role_map from return
+    return id_role_map, nickname_dict
 
 def generate_track_filename(df: pd.DataFrame, id_map: Dict[int, str], nicknames: Dict[str, str]) -> str:
     """Generates a descriptive filename based on the track's coordinates."""
@@ -113,13 +78,13 @@ def generate_track_filename(df: pd.DataFrame, id_map: Dict[int, str], nicknames:
             except KeyError:
                 continue
 
-    # --- Logic for Parquet (Flat Index/Renamed) Format ---
+    # --- Logic for Parquet (Flat Index/Role-based Columns) Format ---
     else:
-        # CORRECTED: Iterate over the keys (roles) of the nickname dictionary for simplicity
+        # Columns are assumed to be pre-renamed (e.g., 'row_trig')
         known_roles = nicknames.keys()
 
         for role in known_roles:
-            # Construct the expected column names based on the role (e.g., 'row_trig')
+            # Construct the expected column names based on the role
             row_col = f'row_{role}'
             col_col = f'col_{role}'
 
@@ -133,8 +98,9 @@ def generate_track_filename(df: pd.DataFrame, id_map: Dict[int, str], nicknames:
                     r_val = df[row_col].unique()[0]
                     c_val = df[col_col].unique()[0]
                     filename_parts.append(f"{prefix}R{r_val}C{c_val}")
+
                 except KeyError:
-                    # Should not happen if columns exist, but kept for robustness
+                    # Columns were present but values were empty/missing (should not happen with unique()[0])
                     continue
 
     return "".join(filename_parts)
@@ -159,15 +125,12 @@ def process_and_save_track(
 
         out_name = generate_track_filename(full_df, id_map, nicknames)
 
-        # Save as Parquet if it originated from a Parquet file, otherwise save as Pickle (PKL)
         ext = ".parquet" if is_parquet_format else ".pkl"
         save_path = output_dir / f"{out_name}{ext}"
 
         if is_parquet_format:
-            # Using to_parquet for the Parquet case
             full_df.to_parquet(save_path)
         else:
-            # Using to_pickle for the PKL case
             full_df.to_pickle(save_path)
 
         return f"Saved: {save_path.name}"
@@ -176,7 +139,10 @@ def process_and_save_track(
         return f"Error saving track {track_key}: {e}"
 
 def determine_file_batches(files: List[Path]) -> List[List[Path]]:
-    # ... (function body remains the same)
+    """
+    Splits files into batches based on the logic:
+    ... (function body remains the same)
+    """
     n_files = len(files)
 
     size_threshold = 120
@@ -184,11 +150,8 @@ def determine_file_batches(files: List[Path]) -> List[List[Path]]:
         return [files]
 
     # Logic: Try groups 2, 3, 4, 5.
-    # Pick the first one (minimum) that results in a chunk size < 100.
-    # If none do (e.g. 1000 files), cap at 5 groups.
     num_groups = 5 # Default max
     for g in range(2, 6):
-        # Ceiling division equivalent for roughly equal chunks
         chunk_size = (n_files + g - 1) // g
         if chunk_size < size_threshold:
             num_groups = g
@@ -199,7 +162,6 @@ def determine_file_batches(files: List[Path]) -> List[List[Path]]:
     batches = []
     start_idx = 0
     for i in range(num_groups):
-        # Distribute remainder to first few groups
         batch_size = k + 1 if i < m else k
         end_idx = start_idx + batch_size
         batches.append(files[start_idx:end_idx])
@@ -228,8 +190,8 @@ def main():
 
     # 1. Setup paths and config
     try:
-        # CORRECT: Unpack three values, including the new parquet_rename_map
-        id_role_map, nickname_dict, parquet_rename_map = load_config_and_roles(args.config, args.runName)
+        # REMOVED: parquet_rename_map from unpacking
+        id_role_map, nickname_dict = load_config_and_roles(args.config, args.runName)
     except Exception as e:
         sys.exit(f"Config Error: {e}")
     base_out_path = Path(args.outdir)
@@ -267,7 +229,7 @@ def main():
         print(f"Saving to: {current_out_dir}")
 
         track_data_pkl = defaultdict(list)
-        track_data_pqt = [] # List to hold all DataFrames from Parquet files
+        track_data_pqt_aggregated = defaultdict(list)
 
         pkl_flag = False
         pqt_flag = False
@@ -283,9 +245,11 @@ def main():
             elif '.parquet' in f.name:
                 initial_df = pd.read_parquet(f)
                 if not initial_df.empty:
-                    # FIX: CALL RENAME FUNCTION HERE
-                    renamed_df = rename_parquet_columns(initial_df, parquet_rename_map)
-                    track_data_pqt.append(renamed_df)
+                    # PERFORMANCE IMPROVEMENT (Bullet 3): Group by track_id immediately after reading a file
+                    grouped = initial_df.groupby('track_id')
+                    for track_id, track_df in grouped:
+                        # Append each track's DataFrame to the aggregated dictionary
+                        track_data_pqt_aggregated[track_id].append(track_df)
                 pqt_flag = True
             else:
                 print(f"Warning: Failed to read {f.name}")
@@ -324,24 +288,17 @@ def main():
                 ]
                 all_futures.extend(pkl_futures)
 
-        # 2. Process PARQUET files (New Logic)
+        # 2. Process PARQUET files (Optimized Logic)
         if pqt_flag:
-            if track_data_pqt:
-                # i. Concatenate all parquet DataFrames from the batch
-                print("  PARQUET: Concatenating all DataFrames in the batch...")
-                full_pqt_df = pd.concat(track_data_pqt, ignore_index=True)
-
-                # ii. Group by track_id
-                grouped_pqt_df = full_pqt_df.groupby('track_id')
-                total_tracks = len(grouped_pqt_df)
+            total_tracks = len(track_data_pqt_aggregated)
+            if total_tracks > 0:
                 print(f"  PARQUET: Found {total_tracks} unique tracks to process.")
                 tracks_to_process += total_tracks
 
-                # iii. Create track parts and submit
                 if args.debug:
                     print("(Debug Mode: PARQUET processing sequentially)")
-                    for track_id, track_df in grouped_pqt_df:
-                        res = process_and_save_track(track_id, [track_df], current_out_dir, id_role_map, nickname_dict, is_parquet_format=True)
+                    for track_id, parts in track_data_pqt_aggregated.items():
+                        res = process_and_save_track(track_id, parts, current_out_dir, id_role_map, nickname_dict, is_parquet_format=True)
                         print(res)
                         if "Saved" in res: break
                 else:
@@ -349,15 +306,11 @@ def main():
                     pqt_futures = [
                         executor_pqt.submit(
                             process_and_save_track,
-                            track_id, [track_df], current_out_dir, id_role_map, nickname_dict, is_parquet_format=True
+                            track_id, parts, current_out_dir, id_role_map, nickname_dict, is_parquet_format=True
                         )
-                        for track_id, track_df in grouped_pqt_df
+                        for track_id, parts in track_data_pqt_aggregated.items()
                     ]
                     all_futures.extend(pqt_futures)
-
-                # Cleanup Parquet DataFrames in memory
-                del full_pqt_df
-                del grouped_pqt_df
 
         # 3. Wait for all futures to complete (if not in debug mode)
         if not args.debug and all_futures:
