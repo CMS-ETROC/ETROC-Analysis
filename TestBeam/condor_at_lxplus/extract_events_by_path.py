@@ -16,7 +16,7 @@ from scipy.signal import argrelextrema
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%H:%M:%S')
 
 # --- Helper Functions ---
-def get_parquet_rename_map_from_config(config_path: str, run_name: str) -> Dict[str, str]:
+def get_parquet_rename_map_from_config(config_path: str, run_key: str) -> Dict[str, str]:
     """
     Loads the YAML config and dynamically builds the positional index -> role mapping
     for Parquet file renaming.
@@ -24,11 +24,11 @@ def get_parquet_rename_map_from_config(config_path: str, run_name: str) -> Dict[
     with open(config_path) as f:
         config_data = yaml.safe_load(f)
 
-    if run_name not in config_data:
-        raise ValueError(f"Run config '{run_name}' not found in {config_path}")
+    if run_key not in config_data:
+        raise ValueError(f"Run config '{run_key}' not found in {config_path}")
 
     positional_role_map = {}
-    for board_id, board_info in config_data[run_name].items():
+    for board_id, board_info in config_data[run_key].items():
         role = board_info.get('role', 'unknown')
         if role != 'unknown':
             # Map old suffix '_0' to new suffix '_trig'
@@ -215,7 +215,7 @@ def main():
 
     # NEW: Dynamically load the rename map from the config file
     try:
-        rename_map = get_parquet_rename_map_from_config(args.config, args.runName)
+        rename_map = get_parquet_rename_map_from_config(args.config, args.runinfo)
     except Exception as e:
         logging.error(f"Failed to load or process config file '{args.config}': {e}")
         sys.exit(1)
