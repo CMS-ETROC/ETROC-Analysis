@@ -45,7 +45,7 @@ JDL_TEMPLATE = """universe              = vanilla
 executable            = {{ script_dir }}/run_extract_events{{ run_append }}.sh
 should_Transfer_Files = YES
 whenToTransferOutput  = ON_EXIT
-arguments             = $(fname) $(run) $(path)
+arguments             = $(fname) $(path)
 transfer_Input_Files  = extract_events_by_path.py,{{ track_file }},{{ cal_table }},{{ config_file }}
 output                = {{ log_dir }}/$(ClusterId).$(ProcId).extractEvents.stdout
 error                 = {{ log_dir }}/$(ClusterId).$(ProcId).extractEvents.stderr
@@ -54,7 +54,7 @@ MY.WantOS             = "el9"
 MY.XRDCP_CREATE_DIR   = True
 output_destination    = root://eosuser.cern.ch/{{ eos_base }}/{{ out_dir }}
 +JobFlavour           = "microcentury"
-Queue fname,run,path from {{ script_dir }}/input_list_for_extractEvents{{ run_append }}.txt
+Queue fname,path from {{ script_dir }}/input_list_for_extractEvents{{ run_append }}.txt
 """
 
 # --- Helper Functions ---
@@ -93,15 +93,14 @@ def create_submission_files(
         print(f"Warning: No feather files found in {args.dirname}")
 
     with open(input_list_path, 'a') as f:
-        run_identifier = Path(args.dirname).name.split('_feather')[0]
         for file_path in feather_files:
             # Format: filename, run_identifier, full_path
-            f.write(f"{file_path.name}, {run_identifier}, {file_path}\n")
+            f.write(f"{file_path.name}, {file_path}\n")
 
     # 2. Generate Bash Script
     bash_content = Template(BASH_TEMPLATE).render({
-        'path': '${3}',          # Condor Argument 3
-        'runname': '${2}',       # Condor Argument 2
+        'path': '${2}',          # Condor Argument 2
+        'runname': args.runName,
         'filename': '${1}',      # Condor Argument 1
         'track': args.track,
         'cal_table': Path(args.cal_table).name,
