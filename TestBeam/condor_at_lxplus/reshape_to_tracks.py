@@ -129,7 +129,7 @@ def process_and_save_track(
         save_path = output_dir / f"{out_name}{ext}"
 
         if is_parquet_format:
-            full_df.to_parquet(save_path)
+            full_df.to_parquet(save_path, compression='lz4')
         else:
             full_df.to_pickle(save_path)
 
