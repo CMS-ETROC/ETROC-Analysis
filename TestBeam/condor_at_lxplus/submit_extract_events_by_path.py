@@ -1,10 +1,9 @@
 import argparse
 import getpass
-import logging
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict
 
 import yaml
 from jinja2 import Template
@@ -28,8 +27,8 @@ xrdcp -r root://eosuser.cern.ch/{{ path }} ./
 echo "Will process input file from {{ runname }} {{ filename }}"
 
 # Run the python script
-echo "python extract_events_by_path.py -f {{ filename }} -r {{ runname }} -t {{ track }} --trigID {{ trigID }} --cal_table {{ cal_table }} --neighbor_search_method {{ search_method }}"
-python extract_events_by_path.py -f {{ filename }} -r {{ runname }} -t {{ track }} --trigID {{ trigID }} --cal_table {{ cal_table }} --neighbor_search_method {{ search_method }}
+echo "python extract_events_by_path.py -f {{ filename }} -r {{ runname }} -t {{ track }} -c {{ config }} --trigID {{ trigID }} --cal_table {{ cal_table }} --neighbor_search_method {{ search_method }}"
+python extract_events_by_path.py -f {{ filename }} -r {{ runname }} -t {{ track }} -c {{ config }} --trigID {{ trigID }} --cal_table {{ cal_table }} --neighbor_search_method {{ search_method }}
 
 ls -ltrh
 echo ""
@@ -47,7 +46,7 @@ executable            = {{ script_dir }}/run_extract_events{{ run_append }}.sh
 should_Transfer_Files = YES
 whenToTransferOutput  = ON_EXIT
 arguments             = $(fname) $(run) $(path)
-transfer_Input_Files  = extract_events_by_path.py,{{ track_file }},{{ cal_table }}
+transfer_Input_Files  = extract_events_by_path.py,{{ track_file }},{{ cal_table }},{{ config_file }}
 output                = {{ log_dir }}/$(ClusterId).$(ProcId).extractEvents.stdout
 error                 = {{ log_dir }}/$(ClusterId).$(ProcId).extractEvents.stderr
 log                   = {{ log_dir }}/$(ClusterId).$(ProcId).extractEvents.log
@@ -107,7 +106,8 @@ def create_submission_files(
         'track': args.track,
         'cal_table': Path(args.cal_table).name,
         'trigID': trig_id,
-        'search_method': args.search_method
+        'search_method': args.search_method,
+        'config': Path(args.config).name,
     })
 
     bash_script_path = paths['scripts_dir'] / f'run_extract_events{run_append}.sh'
@@ -122,7 +122,8 @@ def create_submission_files(
         'cal_table': args.cal_table,
         'log_dir': paths['log_dir'],
         'eos_base': eos_base,
-        'out_dir': args.outname
+        'out_dir': args.outname,
+        'config_file': args.config,
     })
 
     jdl_path = paths['scripts_dir'] / f'condor_extract_events{run_append}.jdl'
@@ -216,6 +217,8 @@ if __name__ == "__main__":
         sys.exit(f"Error: Track file '{args.track}' not found.")
     if not Path(args.cal_table).is_file():
         sys.exit(f"Error: Cal table '{args.cal_table}' not found.")
+    if not Path(args.config).is_file():
+        sys.exit(f"Error: Config file '{args.config}' not found.")
 
     # --- Logic ---
     try:

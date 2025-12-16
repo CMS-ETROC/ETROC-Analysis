@@ -1,6 +1,7 @@
 import argparse
 import sys
 import logging
+import yaml
 from collections import defaultdict
 from pathlib import Path
 from functools import reduce
@@ -15,6 +16,27 @@ from scipy.signal import argrelextrema
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%H:%M:%S')
 
 # --- Helper Functions ---
+def get_parquet_rename_map_from_config(config_path: str, run_name: str) -> Dict[str, str]:
+    """
+    Loads the YAML config and dynamically builds the positional index -> role mapping
+    for Parquet file renaming.
+    """
+    with open(config_path) as f:
+        config_data = yaml.safe_load(f)
+
+    if run_name not in config_data:
+        raise ValueError(f"Run config '{run_name}' not found in {config_path}")
+
+    positional_role_map = {}
+    for board_id, board_info in config_data[run_name].items():
+        role = board_info.get('role', 'unknown')
+        if role != 'unknown':
+            # Map old suffix '_0' to new suffix '_trig'
+            positional_role_map[f'_{board_id}'] = f'_{role}'
+
+    return positional_role_map
+
+
 def find_neighbor_hits(
         input_df: pd.DataFrame,
         search_method: str,
@@ -182,6 +204,7 @@ def main():
     parser = argparse.ArgumentParser(description='Select detailed event data based on track candidates.')
     parser.add_argument('-f', '--inputfile', required=True, dest='inputfile', help='Input feather file')
     parser.add_argument('-r', '--runinfo', required=True, dest='runinfo', help='Run info string for output name')
+    parser.add_argument('-c', '--config', required=True, dest='config', help='YAML file with run config')
     parser.add_argument('-t', '--track', required=True, dest='track', help='CSV file with track candidates')
     parser.add_argument('--neighbor_search_method', default="none", dest='search_method',
                         help="Search method for neighbor hit checking, default is 'none'. possible argument: 'row_only', 'col_only', 'cross', 'square'")
@@ -189,6 +212,13 @@ def main():
     parser.add_argument('--trigID', type=int, required=True, dest='trigID', help='Trigger board ID')
 
     args = parser.parse_args()
+
+    # NEW: Dynamically load the rename map from the config file
+    try:
+        rename_map = get_parquet_rename_map_from_config(args.config, args.runName)
+    except Exception as e:
+        logging.error(f"Failed to load or process config file '{args.config}': {e}")
+        sys.exit(1)
 
     # 1. Load Main Data
     try:
@@ -280,6 +310,19 @@ def main():
         # We flatten them to 'row_0', 'row_1'.
         final_df.columns = [f'{c[0]}_{c[1]}' if isinstance(c, tuple) and str(c[1]) != '' else c[0] for c in final_df.columns]
 
+        logging.info("Applying column role renaming...")
+        rename_dict = {}
+        # Iterate through the columns and apply the map to the index part
+        for col in final_df.columns:
+            # Check if column ends with a positional index we need to replace
+            for old_suffix, new_suffix in rename_map.items():
+                if col.endswith(old_suffix):
+                    rename_dict[col] = col.replace(old_suffix, new_suffix)
+                    break
+
+        if rename_dict:
+            final_df = final_df.rename(columns=rename_dict)
+
         # 3. Downcast Types (Final Check)
         # Example: columns containing 'row', 'col' can be uint16 usually
         for col in final_df.columns:
@@ -294,7 +337,7 @@ def main():
 
         logging.info(f"Saving to {out_name} with compression...")
 
-        # 4. Save to Parquet with ZSTD compression (high compression ratio)
+        # 4. Save to Parquet with LZ4 compression (high compression ratio)
         final_df.to_parquet(out_name, index=False, compression='lz4')
 
 
