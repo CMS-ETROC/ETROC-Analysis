@@ -331,8 +331,10 @@ def main():
         print(f"Cleaning up memory for Group {batch_idx + 1}...")
         track_data_pkl.clear()
         del track_data_pkl
-        track_data_pqt.clear()
-        del track_data_pqt
+
+        # Cleanup the aggregated Parquet data structure
+        track_data_pqt_aggregated.clear()
+        del track_data_pqt_aggregated
         gc.collect()
 
     print(f"\nDone. All groups processed.")
