@@ -16,47 +16,126 @@ warnings.filterwarnings("ignore")
 
 # --- Helper Functions ---
 
-def load_config_and_roles(config_path: str, run_name: str) -> Tuple[Dict[int, str], Dict[str, str]]:
-    """Loads YAML config and builds the board ID to Role mapping."""
+def rename_parquet_columns(df: pd.DataFrame, rename_map: Dict[str, str]) -> pd.DataFrame:
+    """
+    Renames columns in a flat Parquet DataFrame from index suffix (e.g., 'row_0')
+    to role suffix (e.g., 'row_trig') using the provided dynamic rename_map.
+    """
+    rename_dict = {}
+
+    # Iterate through the provided map (e.g., '_0' : '_trig')
+    for old_suffix, new_suffix in rename_map.items():
+        # Find columns ending with the old suffix
+        for col in df.columns:
+            # We check if the column name ends with the old suffix
+            if col.endswith(old_suffix):
+                # Ensure the column isn't one of the track-level metadata columns (e.g., 'track_id')
+                if not col.startswith('track_') and not col.startswith('file'):
+                    new_col = col.replace(old_suffix, new_suffix)
+                    rename_dict[col] = new_col
+
+    if rename_dict:
+        # Perform the renaming and return the modified DataFrame
+        return df.rename(columns=rename_dict)
+
+    return df
+
+def load_config_and_roles(config_path: str, run_name: str) -> Tuple[Dict[int, str], Dict[str, str], Dict[str, str]]:
+    """
+    Loads YAML config and builds the board ID to Role mapping and the dynamic
+    positional index -> role mapping for Parquet file renaming.
+    """
     with open(config_path) as f:
         config = yaml.safe_load(f)
 
     if run_name not in config:
         raise ValueError(f"Run config '{run_name}' not found in {config_path}")
 
-    # Map ID -> Role
+    # Map ID -> Role (for PKL/MultiIndex filename generation)
     id_role_map = {}
-    for board_id, board_info in config[run_name].items():
-        role = board_info.get('role')
-        if role:
-            id_role_map[board_id] = role
 
-    # Nickname mapping
+    # Map Positional Index -> Role (for Parquet renaming)
+    # The order of iteration over config[run_name] defines the positional index (0, 1, 2, 3...)
+    parquet_positional_role_map = {}
+    index = 0
+
+    for board_id, board_info in config[run_name].items():
+        role = board_info.get('role', 'unknown')
+
+        # 1. Build the ID -> Role map (used for PKL/MultiIndex naming)
+        try:
+            board_id_int = int(board_id)
+            id_role_map[board_id_int] = role
+        except ValueError:
+            id_role_map[str(board_id)] = role
+
+        # 2. Build the Positional Index -> Role map (used for Parquet renaming)
+        # We only need the first 4 (0-3) since the flat Parquet files currently only go up to _3.
+        if index < 4 and role != 'unknown':
+            # The rename map needs to map the old suffix (e.g., _0) to the new suffix (e.g., _trig)
+            parquet_positional_role_map[f'_{index}'] = f'_{role}'
+            index += 1
+
+    # Nickname mapping (used for filename prefixes)
     nickname_dict = {'trig': '_t-', 'dut': '_d-', 'ref': '_r-', 'extra': '_e-'}
 
-    return id_role_map, nickname_dict
+    # Add the roles found in the config to nickname_dict if they aren't standard
+    for role in id_role_map.values():
+        if role not in nickname_dict:
+            # Use first 3 letters as prefix if not standard
+            nickname_dict[role] = f'_{role[:3]}-'
+
+    return id_role_map, nickname_dict, parquet_positional_role_map
 
 def generate_track_filename(df: pd.DataFrame, id_map: Dict[int, str], nicknames: Dict[str, str]) -> str:
     """Generates a descriptive filename based on the track's coordinates."""
-    # We look for level 'board' in columns
-    board_ids = [
-        b for b in df.columns.get_level_values('board').unique()
-        if isinstance(b, int)
-    ]
 
     filename_parts = ["track"]
 
-    for bid in board_ids:
-        role = id_map.get(bid, 'unknown')
-        prefix = nicknames.get(role, f'_{bid}-')
+    # --- Logic for PKL (MultiIndex) Format ---
+    if isinstance(df.columns, pd.MultiIndex):
 
-        try:
-            # unique()[0] assumes the track is static across the event
-            r_val = df['row'][bid].unique()[0]
-            c_val = df['col'][bid].unique()[0]
-            filename_parts.append(f"{prefix}R{r_val}C{c_val}")
-        except KeyError:
-            continue
+        # We look for level 'board' in columns
+        board_ids = [
+            b for b in df.columns.get_level_values('board').unique()
+            if isinstance(b, int)
+        ]
+
+        for bid in board_ids:
+            role = id_map.get(bid, 'unknown')
+            prefix = nicknames.get(role, f'_{bid}-')
+
+            try:
+                # unique()[0] assumes the track is static across the event
+                r_val = df['row'][bid].unique()[0]
+                c_val = df['col'][bid].unique()[0]
+                filename_parts.append(f"{prefix}R{r_val}C{c_val}")
+            except KeyError:
+                continue
+
+    # --- Logic for Parquet (Flat Index/Renamed) Format ---
+    else:
+        # CORRECTED: Iterate over the keys (roles) of the nickname dictionary for simplicity
+        known_roles = nicknames.keys()
+
+        for role in known_roles:
+            # Construct the expected column names based on the role (e.g., 'row_trig')
+            row_col = f'row_{role}'
+            col_col = f'col_{role}'
+
+            # Determine the prefix using the role
+            prefix = nicknames.get(role, f'_{role}-')
+
+            if row_col in df.columns and col_col in df.columns:
+
+                try:
+                    # unique()[0] assumes the track is static across the event
+                    r_val = df[row_col].unique()[0]
+                    c_val = df[col_col].unique()[0]
+                    filename_parts.append(f"{prefix}R{r_val}C{c_val}")
+                except KeyError:
+                    # Should not happen if columns exist, but kept for robustness
+                    continue
 
     return "".join(filename_parts)
 
@@ -65,7 +144,8 @@ def process_and_save_track(
     df_parts: List[pd.DataFrame],
     output_dir: Path,
     id_map: Dict[int, str],
-    nicknames: Dict[str, str]
+    nicknames: Dict[str, str],
+    is_parquet_format: bool = False
 ) -> str:
     """Worker function: Concatenates data parts for one track and saves to disk."""
     if not df_parts:
@@ -78,8 +158,17 @@ def process_and_save_track(
             return f"Skipped empty dataframe: {track_key}"
 
         out_name = generate_track_filename(full_df, id_map, nicknames)
-        save_path = output_dir / f"{out_name}.pkl"
-        full_df.to_pickle(save_path)
+
+        # Save as Parquet if it originated from a Parquet file, otherwise save as Pickle (PKL)
+        ext = ".parquet" if is_parquet_format else ".pkl"
+        save_path = output_dir / f"{out_name}{ext}"
+
+        if is_parquet_format:
+            # Using to_parquet for the Parquet case
+            full_df.to_parquet(save_path)
+        else:
+            # Using to_pickle for the PKL case
+            full_df.to_pickle(save_path)
 
         return f"Saved: {save_path.name}"
 
@@ -87,12 +176,7 @@ def process_and_save_track(
         return f"Error saving track {track_key}: {e}"
 
 def determine_file_batches(files: List[Path]) -> List[List[Path]]:
-    """
-    Splits files into batches based on the logic:
-    - If < size_threshold files: 1 batch.
-    - If >= size_threshold files: Split into 2-5 groups.
-      Choose min groups such that batch size < 100 (if possible).
-    """
+    # ... (function body remains the same)
     n_files = len(files)
 
     size_threshold = 120
@@ -137,17 +221,17 @@ def main():
     parser.add_argument('-o', '--outdir', required=True, dest='outdir', help='Output directory')
     parser.add_argument('-r', '--runName', required=True, dest='runName', help='Run name')
     parser.add_argument('-c', '--config', required=True, dest='config', help='YAML config file')
-    parser.add_argument('--file_pattern', default='*.pickle', help="Glob pattern for input files")
+    parser.add_argument('--file_pattern', default='*.pickle', help="Glob pattern for input files (e.g. '*.pkl *.parquet')")
     parser.add_argument('--debug', action='store_true', help='Run sequentially for debugging')
 
     args = parser.parse_args()
 
     # 1. Setup paths and config
     try:
-        id_role_map, nickname_dict = load_config_and_roles(args.config, args.runName)
+        # CORRECT: Unpack three values, including the new parquet_rename_map
+        id_role_map, nickname_dict, parquet_rename_map = load_config_and_roles(args.config, args.runName)
     except Exception as e:
         sys.exit(f"Config Error: {e}")
-
     base_out_path = Path(args.outdir)
 
     print(f'\nInput:  {args.dirname}')
@@ -171,8 +255,6 @@ def main():
     for batch_idx, batch_files in enumerate(batches):
 
         # --- Update Output Directory ---
-        # If multiple groups: tracks_group1, tracks_group2...
-        # If single group: tracks
         if is_multi_group:
             subdir_name = f'tracks_group{batch_idx + 1}'
         else:
@@ -184,53 +266,120 @@ def main():
         print(f'\n====== Processing Group {batch_idx + 1}/{len(batches)} ({len(batch_files)} files) ======')
         print(f"Saving to: {current_out_dir}")
 
-        track_data = defaultdict(list)
+        track_data_pkl = defaultdict(list)
+        track_data_pqt = [] # List to hold all DataFrames from Parquet files
 
-        if args.debug:
-            batch_files = batch_files[:5]
+        pkl_flag = False
+        pqt_flag = False
 
         # A. Read Files into Memory
         for f in tqdm(batch_files, desc=f"Reading Group {batch_idx + 1}"):
-            try:
+            if '.pkl' in f.name:
                 data_dict = pd.read_pickle(f)
                 for key, df in data_dict.items():
                     if not df.empty:
-                        track_data[key].append(df)
-            except Exception as e:
-                print(f"Warning: Failed to read {f.name}: {e}")
+                        track_data_pkl[key].append(df)
+                pkl_flag = True
+            elif '.parquet' in f.name:
+                initial_df = pd.read_parquet(f)
+                if not initial_df.empty:
+                    # FIX: CALL RENAME FUNCTION HERE
+                    renamed_df = rename_parquet_columns(initial_df, parquet_rename_map)
+                    track_data_pqt.append(renamed_df)
+                pqt_flag = True
+            else:
+                print(f"Warning: Failed to read {f.name}")
 
-        total_tracks = len(track_data)
-        print(f"Group {batch_idx + 1}: Found {total_tracks} unique tracks.")
+        # --- Handle input file type conflict ---
+        if pkl_flag and pqt_flag:
+            # We allow mixing input types but process them separately, so we just warn
+            print('Warning: Input directory contains both .pkl and .parquet files. Both formats will be processed.')
 
         # B. Save Tracks
         print(f'Saving tracks for Group {batch_idx + 1}...')
 
-        if args.debug:
-            print("(Debug Mode: Processing sequentially)")
-            for key, parts in track_data.items():
-                res = process_and_save_track(key, parts, current_out_dir, id_role_map, nickname_dict)
-                print(res)
-                if "Saved" in res: break
-        else:
-            with ProcessPoolExecutor() as executor:
-                futures = [
-                    executor.submit(
-                        process_and_save_track,
-                        key, parts, current_out_dir, id_role_map, nickname_dict
-                    )
-                    for key, parts in track_data.items()
-                ]
+        all_futures = []
+        tracks_to_process = 0
 
-                for future in tqdm(as_completed(futures), total=total_tracks, desc="Saving"):
-                    try:
-                        future.result()
-                    except Exception as e:
-                        print(f"Worker Error: {e}")
+        # 1. Process PKL files (Old Logic)
+        if pkl_flag:
+            total_tracks = len(track_data_pkl)
+            print(f"  PKL: Found {total_tracks} unique tracks to process.")
+            tracks_to_process += total_tracks
+
+            if args.debug:
+                print("(Debug Mode: PKL processing sequentially)")
+                for key, parts in track_data_pkl.items():
+                    res = process_and_save_track(key, parts, current_out_dir, id_role_map, nickname_dict, is_parquet_format=False)
+                    print(res)
+                    if "Saved" in res: break
+            else:
+                executor_pkl = ProcessPoolExecutor()
+                pkl_futures = [
+                    executor_pkl.submit(
+                        process_and_save_track,
+                        key, parts, current_out_dir, id_role_map, nickname_dict, is_parquet_format=False
+                    )
+                    for key, parts in track_data_pkl.items()
+                ]
+                all_futures.extend(pkl_futures)
+
+        # 2. Process PARQUET files (New Logic)
+        if pqt_flag:
+            if track_data_pqt:
+                # i. Concatenate all parquet DataFrames from the batch
+                print("  PARQUET: Concatenating all DataFrames in the batch...")
+                full_pqt_df = pd.concat(track_data_pqt, ignore_index=True)
+
+                # ii. Group by track_id
+                grouped_pqt_df = full_pqt_df.groupby('track_id')
+                total_tracks = len(grouped_pqt_df)
+                print(f"  PARQUET: Found {total_tracks} unique tracks to process.")
+                tracks_to_process += total_tracks
+
+                # iii. Create track parts and submit
+                if args.debug:
+                    print("(Debug Mode: PARQUET processing sequentially)")
+                    for track_id, track_df in grouped_pqt_df:
+                        res = process_and_save_track(track_id, [track_df], current_out_dir, id_role_map, nickname_dict, is_parquet_format=True)
+                        print(res)
+                        if "Saved" in res: break
+                else:
+                    executor_pqt = ProcessPoolExecutor()
+                    pqt_futures = [
+                        executor_pqt.submit(
+                            process_and_save_track,
+                            track_id, [track_df], current_out_dir, id_role_map, nickname_dict, is_parquet_format=True
+                        )
+                        for track_id, track_df in grouped_pqt_df
+                    ]
+                    all_futures.extend(pqt_futures)
+
+                # Cleanup Parquet DataFrames in memory
+                del full_pqt_df
+                del grouped_pqt_df
+
+        # 3. Wait for all futures to complete (if not in debug mode)
+        if not args.debug and all_futures:
+            print(f"  Starting parallel saving for a total of {tracks_to_process} tracks...")
+            for future in tqdm(as_completed(all_futures), total=tracks_to_process, desc="Saving All Tracks"):
+                try:
+                    future.result()
+                except Exception as e:
+                    print(f"Worker Error: {e}")
+
+            # Close the executor for this batch
+            if 'executor_pkl' in locals():
+                executor_pkl.shutdown(wait=True)
+            if 'executor_pqt' in locals():
+                executor_pqt.shutdown(wait=True)
 
         # C. Memory Cleanup
         print(f"Cleaning up memory for Group {batch_idx + 1}...")
-        track_data.clear()
-        del track_data
+        track_data_pkl.clear()
+        del track_data_pkl
+        track_data_pqt.clear()
+        del track_data_pqt
         gc.collect()
 
     print(f"\nDone. All groups processed.")
