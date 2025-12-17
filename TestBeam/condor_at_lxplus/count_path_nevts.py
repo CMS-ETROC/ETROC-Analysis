@@ -2,6 +2,7 @@ import pandas as pd
 import argparse
 import re
 import sys
+import pyarrow.parquet as pq
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from natsort import natsorted
@@ -36,17 +37,16 @@ def process_single_file(filepath: Path) -> dict:
             file_data[f'row_{full_role}'].append(int(row))
             file_data[f'col_{full_role}'].append(int(col))
 
-    # 2. Open Pickle to get Event Count
-    if '.pkl' in filepath.name:
+    # 2. Optimized Row Counting
+    if filepath.suffix == '.parquet':
+        # ONLY read metadata, do not load columns!
+        meta = pq.read_metadata(filepath)
+        nevt = meta.num_rows
+    elif filepath.suffix == '.pkl':
+        # Pickle has no metadata, must read fully
         df = pd.read_pickle(filepath)
         nevt = len(df)
-        del df
-    elif '.parquet' in filepath.name:
-        df = pd.read_parquet(filepath)
-        nevt = len(df)
-        del df
     else:
-        print(f"Error reading {filepath.name}")
         nevt = 0
 
     file_data['nevt'].append(nevt)
