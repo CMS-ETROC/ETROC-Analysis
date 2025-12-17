@@ -126,7 +126,12 @@ def create_master_file_list(input_group_dir: Path, output_dir: Path) -> Optional
     Returns the path to the temporary list file.
     """
     # 1. Identify all track files (e.g., .root files)
-    all_files = natsorted([f for f in input_group_dir.iterdir() if f.suffix == '.pkl'])
+    allowed_extensions = {'.pkl', '.parquet'}
+    all_files = natsorted([
+        f for f in input_group_dir.iterdir()
+        if f.suffix in allowed_extensions
+    ])
+
     absolute_filenames = [f.name for f in all_files]
 
     if not all_files:
