@@ -96,10 +96,10 @@ MY.WantOS             = "el9"
 Queue {{ num_of_jobs }}
 """
 
-def build_python_command_args(args: argparse.Namespace) -> str:
+def build_python_command_args(args: argparse.Namespace, script_to_run: str) -> str:
     """Constructs the python command arguments string dynamically."""
     cmd_parts = [
-        'python apply_tdc_cuts.py',
+        f'python {script_to_run}',
         f'-c {Path(args.config).name}', # Condor transfers the config, use only the filename
         f'-r {args.runName}',
         f'--distance_factor {args.distance_factor}',
@@ -142,12 +142,12 @@ def create_master_file_list(input_group_dir: Path, output_dir: Path) -> Optional
     print(f"    Generated master list with {len(absolute_filenames)} files: {list_file_path.name}")
     return list_file_path, len(absolute_filenames)
 
-def create_jdl_file(args, master_list_path, run_append, group_name, njobs):
+def create_jdl_file(args, master_list_path, run_append, group_name, njobs, script_to_run):
     jdl_content = Template(JDL_TEMPLATE).render({
         'script_dir': script_dir.as_posix(),
         'bash_script_name': f'applyTDC_job{run_append}_{group_name}.sh',
         'master_list_file_name': f'{master_list_path.name}',
-        'transfer_files': f"apply_tdc_cuts.py, {Path(args.config).as_posix()}, {master_list_path.as_posix()}",
+        'transfer_files': f"{script_to_run}, {Path(args.config).as_posix()}, {master_list_path.as_posix()}",
         'output_dir': f"{args.inputdir}/{group_name.replace('tracks','time')}",
         'log_dir': log_dir.as_posix(),
         'batch_size': args.batch_size,
@@ -229,14 +229,21 @@ if __name__ == "__main__":
         else:
             sys.exit(f"No 'tracks*' directories found in {mother_dir}")
 
-    python_cmd = build_python_command_args(args)
-
     # --- 3. Process Each Group ---
     print(f"\nScanning: {mother_dir}")
     print(f"Found {len(track_dirs)} track groups: {[d.name for d in track_dirs]}")
 
     for input_group_dir in track_dirs:
         dir_name = input_group_dir.name
+
+        # Check the first file in the directory to determine the extension
+        first_file = next(input_group_dir.glob('*'), None)
+        if first_file and first_file.suffix == '.parquet':
+            script_to_run = "apply_tdc_cuts.py"
+        else:
+            script_to_run = "apply_tdc_cuts_pkl.py"
+
+        python_cmd = build_python_command_args(args, script_to_run)
 
         # Generate the master file list for this group
         list_info = create_master_file_list(input_group_dir, script_dir)
@@ -259,7 +266,7 @@ if __name__ == "__main__":
         with open(bash_path, 'w') as f:
             f.write(Template(BASH_TEMPLATE).render({'command': python_cmd, 'remote_path': f'{args.inputdir}/{dir_name}'}))
 
-        jdl_file = create_jdl_file(args, master_list_path, run_append, dir_name, num_of_jobs)
+        jdl_file = create_jdl_file(args, master_list_path, run_append, dir_name, num_of_jobs, script_to_run)
         print(f"\n>>> Preparing Group: {dir_name}")
 
         # --- Submission ---
