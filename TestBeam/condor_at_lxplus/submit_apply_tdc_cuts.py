@@ -272,11 +272,13 @@ if __name__ == "__main__":
             f.write(Template(BASH_TEMPLATE).render({'command': python_cmd, 'remote_path': f'{args.inputdir}/{dir_name}'}))
 
         jdl_file = create_jdl_file(args, master_list_path, run_append, dir_name, num_of_jobs, script_to_run)
-        print(f"\n>>> Preparing Group: {dir_name}")
+        print(f">>> Preparing Group: {dir_name}")
 
         # --- Submission ---
         if args.dryrun:
             print(f"    [Dry Run] Generated JDL: {jdl_file}")
+            print(f"    [Dry Run] Generated Bash: {bash_path}")
+            print(f"    [Dry Run] Generated Input text: {master_list_path}\n")
         else:
             # Standard Submission
             print(f"    Submitting {jdl_file}...")
