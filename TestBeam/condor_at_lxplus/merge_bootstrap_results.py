@@ -111,7 +111,7 @@ def process_group(
     Processes all pickle files in a specific directory (group) and saves a CSV.
     """
     # Find files (exclude_... resolution.pkl)
-    files = natsorted(input_dir.glob('*track*'))
+    files = natsorted(input_dir.glob('*_boot.parquet'))
 
     if not files:
         print(f"Warning: No resolution files found in {input_dir.name}. Skipping.")
@@ -124,7 +124,7 @@ def process_group(
     except IndexError:
         excluded_role = 'trig' # Default fallback
 
-    final_dict = defaultdict(list)
+    boot_dict = defaultdict(list)
 
     print(f"Processing {len(files)} files in {input_dir.name}...")
 
@@ -139,8 +139,6 @@ def process_group(
                 continue
         elif '.parquet' in ifile.name:
             df = pd.read_parquet(ifile)
-            # Filter rows that are all zeros (failed bootstraps often return 0s)
-            df = df.loc[(df != 0).all(axis=1)].reset_index(drop=True)
             if df.empty:
                 continue
         else:
@@ -148,27 +146,25 @@ def process_group(
             continue
 
         # 2. Parse Coordinates
-        pixel_dict = parse_filename_metadata(str(ifile))
+        pixel_dict = parse_filename_metadata(ifile.name)
 
         # 3. Calculate Results
         file_results = {}
 
-        if df.shape[0] == 1:
-            # Single-shot result
-            row = df.iloc[0]
-            for col in df.columns:
-                file_results[col] = {'mu': row[col], 'sigma': 0.0}
-        else:
-            # Bootstrap distribution
-            for col in df.columns:
-                file_results[col] = calculate_statistics(df[col], args.hist_bins)
+        boot_df = df.loc[df['is_bootstrap'] == True]
+        anchor_df = df.loc[df['is_bootstrap'] == False]
+
+        # Bootstrap distribution
+        for col in boot_df.columns:
+            if col == 'is_bootstrap': continue
+            file_results[col] = calculate_statistics(boot_df[col], args.hist_bins)
 
         # 4. Append to Final Dictionary
         # We always want the coordinates of the 'excluded' board as the primary key
         # if it exists in the filename metadata.
         if excluded_role in pixel_dict:
-            final_dict[f'row_{excluded_role}'].append(pixel_dict[excluded_role][0])
-            final_dict[f'col_{excluded_role}'].append(pixel_dict[excluded_role][1])
+            boot_dict[f'row_{excluded_role}'].append(pixel_dict[excluded_role][0])
+            boot_dict[f'col_{excluded_role}'].append(pixel_dict[excluded_role][1])
         else:
             # If excluded role isn't in filename (rare), append placeholders or skip
             pass
@@ -177,18 +173,22 @@ def process_group(
         for val_name, stats in file_results.items():
             # Add coordinates for this specific board if we have them
             if val_name in pixel_dict:
-                final_dict[f'row_{val_name}'].append(pixel_dict[val_name][0])
-                final_dict[f'col_{val_name}'].append(pixel_dict[val_name][1])
+                boot_dict[f'row_{val_name}'].append(pixel_dict[val_name][0])
+                boot_dict[f'col_{val_name}'].append(pixel_dict[val_name][1])
 
-            final_dict[f'res_{val_name}'].append(stats['mu'])
-            final_dict[f'err_{val_name}'].append(stats['sigma'])
+            boot_dict[f'res_{val_name}'].append(stats['mu'])
+            boot_dict[f'err_{val_name}'].append(stats['sigma'])
+
+        for col in anchor_df.columns:
+            if col == 'is_bootstrap': continue
+            boot_dict[f'single_shot_res_{col}'].append(anchor_df[col].iloc[0])
 
     # 5. Save Output
-    if final_dict:
+    if boot_dict:
         out_filename = f"{input_dir.name}_resolution{args.tag}.csv"
         out_path = output_dir / out_filename
 
-        pd.DataFrame(final_dict).to_csv(out_path, index=False)
+        pd.DataFrame(boot_dict).to_csv(out_path, index=False)
         print(f"  Saved: {out_path}")
     else:
         print(f"  No valid data merged for {input_dir.name}.")
