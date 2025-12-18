@@ -69,9 +69,6 @@ def build_python_command(args: argparse.Namespace) -> str:
     ]
 
     if args.reproducible: cmd_parts.append("--reproducible")
-    if args.force_twc:    cmd_parts.append("--force-twc")
-    if args.single:       cmd_parts.append("--single")
-    if args.twc_coeffs:   cmd_parts.append(f"--twc_coeffs {args.twc_coeffs}")
 
     return " ".join(cmd_parts)
 
@@ -172,10 +169,7 @@ if __name__ == "__main__":
 
     # Options
     parser.add_argument('--condor_tag', dest='condor_tag', help='Tag for filenames')
-    parser.add_argument('--twc_coeffs', help='Pre-calculated TWC coeffs file')
     parser.add_argument('--reproducible', action='store_true')
-    parser.add_argument('--force-twc', action='store_true')
-    parser.add_argument('--single', action='store_true', help='Single shot mode')
     parser.add_argument('--neighbor_cut', dest='neighbor_cut', default=['none'], nargs='+',
                         help='Specify one or more **space-separated** board columns to be used for neighbor cuts. '
                         'The argument collects all values into a list. '
@@ -273,18 +267,8 @@ if __name__ == "__main__":
         # --- Submission Logic ---
         if args.dryrun:
             print(f"    [Dry Run] JDL: {jdl}")
-
-        # elif args.resubmit:
-        #     handle_resubmission('kill_and_rerun', bash, list_file, group_log_dir)
-        #     if list_file.stat().st_size > 0:
-        #         print("    Resubmitting...")
-        #         # subprocess.run(['condor_submit', str(jdl)])
-
-        # elif args.resubmit_with_stderr:
-        #     handle_resubmission('stderr', bash, list_file, group_log_dir)
-        #     if list_file.stat().st_size > 0:
-        #         print("    Resubmitting failed jobs...")
-        #         # subprocess.run(['condor_submit', str(jdl)])
+            print(f"    [Dry Run] Bash: {bash}")
+            print(f"    [Dry Run] Input: {list_file}")
 
         else:
             if list_file.stat().st_size > 0:
