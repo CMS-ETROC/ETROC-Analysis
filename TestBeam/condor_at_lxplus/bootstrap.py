@@ -106,21 +106,33 @@ def calculate_resolution_from_fit(fit_params: dict, roles: list[str]):
         results[target] = np.sqrt(val_sq) if val_sq > 0 else 0.0
     return results
 
-def run_sample_analysis(sample_df: pd.DataFrame, roles: list[str], threshold: float):
+def run_sample_analysis(sample_df: pd.DataFrame, roles: list[str], threshold: float, is_boot: bool):
     """Single pipeline run for a data sample."""
+    label = "Bootstrap" if is_boot else "SINGLE-SHOT"
+
     corr_toas = apply_timewalk_correction(sample_df, roles)
     diffs = {f"{r1}-{r2}": corr_toas[r1] - corr_toas[r2] for r1, r2 in combinations(roles, 2)}
 
     fit_sigmas = {}
     for pair, data in diffs.items():
         fwhm, ks = fit_gmm_and_get_fwhm(data)
-        if ks > threshold or fwhm == 0:
+        if ks > threshold:
+            logger.info(f"    [{label}] Rejecting pair {pair}: KS score {ks:.4f} > {threshold}")
             return None, False
+
+        if fwhm == 0:
+            logger.info(f"    [{label}] Rejecting pair {pair}: FWHM fit failed.")
+            return None, False
+
         fit_sigmas[pair] = fwhm / 2.355
 
     res = calculate_resolution_from_fit(fit_sigmas, roles)
-    if any(val <= 0 for val in res.values()):
-        return None, False
+
+    for role, val in res.items():
+        if val <= 0:
+            logger.warning(f"    [{label}] Physics Failure: Result for {role} is imaginary/zero ({val}).")
+            return None, False
+
     return res, True
 
 # --- Main Workflow ---
@@ -170,7 +182,7 @@ def main():
         while n_success < target and attempts < args.iteration_limit:
             attempts += 1
             sample = df.sample(frac=fraction) if fraction < 1.0 else df
-            res, success = run_sample_analysis(sample, active_roles, threshold=0.03)
+            res, success = run_sample_analysis(sample, active_roles, threshold=0.03, is_boot=is_boot)
 
             if success:
                 res['is_bootstrap'] = is_boot
