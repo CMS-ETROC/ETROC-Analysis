@@ -7,7 +7,6 @@ import pandas as pd
 from pathlib import Path
 from tqdm import tqdm
 from natsort import natsorted
-from typing import Dict, List, Tuple
 from itertools import combinations
 
 # --- Configuration ---
@@ -19,10 +18,10 @@ def calculate_toa_correlation(
     df: pd.DataFrame,
     col1: str,
     col2: str
-) -> Tuple[np.ndarray, pd.Series]:
+) -> tuple[np.ndarray, pd.Series]:
     """Calculates linear fit and perpendicular distance for correlation cut."""
-    x = pd.to_numeric(df[col1])
-    y = pd.to_numeric(df[col2])
+    x = df[col1]
+    y = df[col2]
 
     # Fit a line to the TOA correlation between two boards
     slope, intercept = np.polyfit(x, y, 1)
@@ -34,7 +33,7 @@ def calculate_toa_correlation(
 def apply_correlation_cut(
     df: pd.DataFrame,
     factor: float,
-    active_roles: List[str],
+    active_roles: list[str],
 ) -> pd.DataFrame:
     """Removes events that fall outside the TOA correlation distance factor."""
     if df.empty or len(active_roles) < 2:
@@ -50,13 +49,19 @@ def apply_correlation_cut(
 
         _, dist = calculate_toa_correlation(df, c1, c2)
 
-        # Limit is based on the standard deviation of distances multiplied by a factor
-        limit = factor * np.nanstd(dist)
-        mask &= (dist.abs() < limit)
+        # Median of the absolute deviations from the median
+        median_val = np.nanmedian(dist)
+        mad = np.nanmedian(np.abs(dist - median_val))
+
+        # Convert MAD to a sigma-equivalent
+        limit = factor * mad * 1.4826
+
+        # Center the mask on the median, not zero, for robustness
+        mask &= (np.abs(dist - median_val) < limit)
 
     return df.loc[mask].reset_index(drop=True)
 
-def convert_to_time(df: pd.DataFrame, all_roles: Dict[str, int]) -> pd.DataFrame:
+def convert_to_time(df: pd.DataFrame, all_roles: dict[str, int]) -> pd.DataFrame:
     """Calculates physical time units, ensuring bin_size is calculated per-file."""
     processed_chunks = []
 
@@ -82,8 +87,8 @@ def convert_to_time(df: pd.DataFrame, all_roles: Dict[str, int]) -> pd.DataFrame
 
 def apply_raw_tdc_cuts(
     df: pd.DataFrame,
-    all_roles: Dict[str, int],
-    cut_roles: List[str],
+    all_roles: dict[str, int],
+    cut_roles: list[str],
     args: argparse.Namespace
 ) -> pd.DataFrame:
     """Filters raw TDC values using file-specific thresholds and config roles."""
@@ -129,7 +134,7 @@ def apply_raw_tdc_cuts(
 
 def apply_time_domain_cuts(
     df: pd.DataFrame,
-    cut_roles: List[str],
+    cut_roles: list[str],
     args: argparse.Namespace
 ) -> pd.DataFrame:
     """Applies cuts in the physical time domain (picoseconds)."""
@@ -166,8 +171,8 @@ def apply_time_domain_cuts(
 def process_single_file(
     filepath: Path,
     args: argparse.Namespace,
-    all_roles: Dict[str, int],
-    cut_roles: List[str],
+    all_roles: dict[str, int],
+    cut_roles: list[str],
 ) -> str:
     """Worker function for Parquet-only processing."""
     try:
