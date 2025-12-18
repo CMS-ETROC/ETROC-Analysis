@@ -135,8 +135,6 @@ def create_submission_files(
 
     # 3. Generate JDL File
     transfer_list = [WORKER_SCRIPT_NAME]
-    if args.twc_coeffs:
-        transfer_list.append(args.twc_coeffs)
 
     jdl_content = Template(JDL_TEMPLATE).render({
         'script_dir': str(paths['scripts']),
