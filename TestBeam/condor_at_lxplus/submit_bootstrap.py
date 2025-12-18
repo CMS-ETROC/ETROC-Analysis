@@ -94,7 +94,7 @@ def create_submission_files(
     pkl_files = list(input_dir.glob('*.pkl'))
     parquet_files = list(input_dir.glob('*.parquet'))
 
-    files: List[Path] = []
+    files: list[Path] = []
     if pkl_files:
         print(f"    Found {len(pkl_files)} PKL files. Ignoring any Parquet files.")
         files = pkl_files
@@ -150,7 +150,7 @@ def create_submission_files(
     with open(jdl_path, 'w') as f:
         f.write(jdl_content)
 
-    return jdl_path, bash_script_name, input_list_path
+    return jdl_path, bash_path, input_list_path
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Submit Bootstrap Analysis to Condor')
