@@ -188,7 +188,8 @@ def process_single_file(
             raw_df_to_use = df.loc[final_df.index] if not final_df.empty else pd.DataFrame()
         else:
             cut_df = apply_raw_tdc_cuts(df, all_roles, cut_roles, args)
-            final_df = convert_to_time(cut_df, all_roles)
+            correlated_df = apply_correlation_cut(cut_df, args.distance_factor, cut_roles)
+            final_df = convert_to_time(correlated_df, all_roles)
             raw_df_to_use = cut_df
 
         # 2. Add Neighbor tracking
