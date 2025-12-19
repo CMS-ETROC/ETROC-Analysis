@@ -72,7 +72,7 @@ def apply_timewalk_correction(df: pd.DataFrame, roles: list[str]):
 def fit_gmm_and_get_fwhm(data: np.ndarray):
     """Fits GMM and returns FWHM and KS score."""
     data_reshaped = data.reshape(-1, 1)
-    gmm = GaussianMixture(n_components=3).fit(data_reshaped)
+    gmm = GaussianMixture(n_components=3, n_init=3).fit(data_reshaped)
     data_sorted = np.sort(data)
 
     def gmm_cdf(x):
