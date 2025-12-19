@@ -117,11 +117,11 @@ def run_sample_analysis(sample_df: pd.DataFrame, roles: list[str], threshold: fl
     for pair, data in diffs.items():
         fwhm, ks = fit_gmm_and_get_fwhm(data)
         if ks > threshold:
-            logger.info(f"    [{label}] Rejecting pair {pair}: KS score {ks:.4f} > {threshold}")
+            logger.info(f"{label}] Rejecting pair {pair}: KS score {ks:.4f} > {threshold}")
             return None, False
 
         if fwhm == 0:
-            logger.info(f"    [{label}] Rejecting pair {pair}: FWHM fit failed.")
+            logger.info(f"[{label}] Rejecting pair {pair}: FWHM fit failed.")
             return None, False
 
         fit_sigmas[pair] = fwhm / 2.355
@@ -130,7 +130,7 @@ def run_sample_analysis(sample_df: pd.DataFrame, roles: list[str], threshold: fl
 
     for role, val in res.items():
         if val <= 0:
-            logger.warning(f"    [{label}] Physics Failure: Result for {role} is imaginary/zero ({val}).")
+            logger.warning(f"[{label}] Physics Failure: Result for {role} is imaginary/zero ({val}).")
             return None, False
 
     return res, True
