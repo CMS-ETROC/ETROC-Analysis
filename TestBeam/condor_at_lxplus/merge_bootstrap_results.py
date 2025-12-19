@@ -212,10 +212,6 @@ def main():
     # 1. Identify Groups
     # Resolve the path to handle relative paths (like '.') correctly
     mother_dir = Path(args.inputdir).resolve()
-
-    if not mother_dir.exists():
-        sys.exit(f"Error: Input directory {mother_dir} does not exist.")
-
     group_dirs = []
 
     # CASE A: User points to a specific bootstrap folder (e.g. bootstrap_Angle30Deg_HV230_os20)
