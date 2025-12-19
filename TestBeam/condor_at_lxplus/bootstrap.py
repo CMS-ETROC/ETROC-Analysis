@@ -177,17 +177,25 @@ def main():
 
     for fraction, target, is_boot in phases:
         n_success, attempts = 0, 0
+        current_threshold = 0.03
         logger.info(f"Starting Phase: {'Bootstrap' if is_boot else 'Single-Shot'}")
 
         while n_success < target and attempts < args.iteration_limit:
             attempts += 1
+
+            if attempts % 100 == 0 and n_success == 0 and current_threshold < 0.05:
+                current_threshold += 0.001
+                logger.warning(f"[Relaxation] Low success rate. Increasing threshold to {current_threshold:.4f}")
+
             sample = df.sample(frac=fraction) if fraction < 1.0 else df
-            res, success = run_sample_analysis(sample, active_roles, threshold=0.03, is_boot=is_boot)
+            res, success = run_sample_analysis(sample, active_roles, threshold=current_threshold, is_boot=is_boot)
 
             if success:
                 res['is_bootstrap'] = is_boot
                 final_results.append(res)
                 n_success += 1
+                if is_boot and n_success == 1:
+                    logger.info(f"[Stability] Found first success at {current_threshold:.3f}. Locking threshold.")
                 if is_boot and n_success % 20 == 0:
                     logger.info(f"Success: {n_success}/{target}")
 
