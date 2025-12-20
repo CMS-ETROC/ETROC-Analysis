@@ -229,11 +229,13 @@ def main():
                 break
 
         # --- ADDED LOGIC FOR SINGLE-SHOT FAILURE ---
-        if not is_boot and n_success == 0:
-            logger.error(f"FAILED to find Single-Shot anchor after {attempts} attempts. Appending -1 placeholders.")
-            # Create a dictionary with -1.0 for all active roles
+        if n_success == 0:
+            label = "Bootstrap" if is_boot else "Single-Shot"
+            logger.error(f"FAILED {label} phase after {attempts} attempts. Appending -1 placeholders.")
+
+            # For Bootstrap failure, we only add 1 row of -1.0 to signify the failure
             fail_res = {role: -1.0 for role in active_roles}
-            fail_res['is_bootstrap'] = False
+            fail_res['is_bootstrap'] = is_boot
             final_results.append(fail_res)
 
     # 4. Save Output
