@@ -90,8 +90,7 @@ def fit_gmm_and_get_fwhm(data: np.ndarray):
     for n_comp in components_to_try:
         try:
             gmm = GaussianMixture(n_components=n_comp, n_init=3).fit(data_reshaped)
-            y_theoretical = calculate_gmm_cdf(data_sorted, gmm.weights_, gmm.means_, gmm.covariances_)
-            ks_score, _ = kstest(data_sorted, y_theoretical)
+            ks_score, _ = kstest(data_sorted, lambda x: calculate_gmm_cdf(x, gmm.weights_, gmm.means_, gmm.covariances_))
 
             x_range = np.linspace(data.min(), data.max(), 1000).reshape(-1, 1)
             pdf_range = np.exp(gmm.score_samples(x_range))
