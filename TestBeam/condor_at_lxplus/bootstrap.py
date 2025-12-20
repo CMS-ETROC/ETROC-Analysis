@@ -195,12 +195,10 @@ def main():
         current_threshold = 0.03
         logger.info(f"Starting Phase: {'Bootstrap' if is_boot else 'Single-Shot'}")
 
-        while n_success < target and attempts < args.iteration_limit:
-            attempts += 1
+        max_attempts = args.iteration_limit if is_boot else 30
 
-            if attempts % 100 == 0 and n_success == 0 and current_threshold < 0.05:
-                current_threshold += 0.001
-                logger.warning(f"[Relaxation] Low success rate. Increasing threshold to {current_threshold:.4f}")
+        while n_success < target and attempts < max_attempts:
+            attempts += 1
 
             sample = df.sample(frac=fraction) if fraction < 1.0 else df
             res, success = run_sample_analysis(sample, active_roles, threshold=current_threshold, is_boot=is_boot)
@@ -209,10 +207,34 @@ def main():
                 res['is_bootstrap'] = is_boot
                 final_results.append(res)
                 n_success += 1
+
                 if is_boot and n_success == 1:
-                    logger.info(f"[Stability] Found first success at {current_threshold:.3f}. Locking threshold.")
+                    logger.info(f"[Stability] Found first bootstrap success at {current_threshold:.4f}. Locking threshold.")
+
                 if is_boot and n_success % 20 == 0:
                     logger.info(f"Success: {n_success}/{target}")
+
+            if not is_boot:
+                # Relax threshold every attempt for the fixed 100% dataset
+                if n_success == 0 and current_threshold < 0.05:
+                    current_threshold += 0.001
+            else:
+                # Standard relaxation for Bootstrap resamples
+                if attempts % 100 == 0 and n_success == 0 and current_threshold < 0.05:
+                    current_threshold += 0.001
+                    logger.warning(f"[Relaxation] Increasing threshold to {current_threshold:.4f}")
+
+            # For Single-Shot, if we hit the threshold cap and still fail, exit the while loop
+            if not is_boot and current_threshold >= 0.05 and n_success == 0:
+                break
+
+        # --- ADDED LOGIC FOR SINGLE-SHOT FAILURE ---
+        if not is_boot and n_success == 0:
+            logger.error(f"FAILED to find Single-Shot anchor after {attempts} attempts. Appending -1 placeholders.")
+            # Create a dictionary with -1.0 for all active roles
+            fail_res = {role: -1.0 for role in active_roles}
+            fail_res['is_bootstrap'] = False
+            final_results.append(fail_res)
 
     # 4. Save Output
     if final_results:
