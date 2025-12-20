@@ -69,30 +69,45 @@ def apply_timewalk_correction(df: pd.DataFrame, roles: list[str]):
             toas[r] += np.poly1d(coeff)(tots[r])
     return toas
 
+def calculate_gmm_cdf(x: np.ndarray, weights: np.ndarray, means: np.ndarray, covariances: np.ndarray):
+    """Standalone vectorized GMM CDF calculation to avoid re-definition in loops."""
+    cdf_val = np.zeros_like(x)
+    stds = np.sqrt(covariances.flatten())
+    means = means.flatten()
+
+    for w, m, s in zip(weights, means, stds):
+        cdf_val += w * norm.cdf(x, m, s)
+    return cdf_val
+
 def fit_gmm_and_get_fwhm(data: np.ndarray):
     """Fits GMM and returns FWHM and KS score."""
     data_reshaped = data.reshape(-1, 1)
-    gmm = GaussianMixture(n_components=3, n_init=3).fit(data_reshaped)
     data_sorted = np.sort(data)
+    n_events = len(data)
+    components_to_try = [1, 2, 3] if n_events < 1500 else [3]
+    best_fwhm, best_ks = 0.0, 1.0
 
-    def gmm_cdf(x):
-        means, stds, weights = gmm.means_.flatten(), np.sqrt(gmm.covariances_.flatten()), gmm.weights_
-        cdf_val = np.zeros_like(x)
-        for w, m, s in zip(weights, means, stds):
-            cdf_val += w * norm.cdf(x, m, s)
-        return cdf_val
+    for n_comp in components_to_try:
+        try:
+            gmm = GaussianMixture(n_components=n_comp, n_init=3).fit(data_reshaped)
+            y_theoretical = calculate_gmm_cdf(data_sorted, gmm.weights_, gmm.means_, gmm.covariances_)
+            ks_score, _ = kstest(data_sorted, y_theoretical)
 
-    ks_score, _ = kstest(data_sorted, gmm_cdf)
-    x_range = np.linspace(data.min(), data.max(), 1000).reshape(-1, 1)
-    pdf_range = np.exp(gmm.score_samples(x_range))
+            x_range = np.linspace(data.min(), data.max(), 1000).reshape(-1, 1)
+            pdf_range = np.exp(gmm.score_samples(x_range))
+            peak_val = np.max(pdf_range)
+            half_max_indices = np.where(pdf_range >= peak_val / 2.0)[0]
 
-    peak_val = np.max(pdf_range)
-    half_max_indices = np.where(pdf_range >= peak_val / 2.0)[0]
+            if len(half_max_indices) > 1:
+                fwhm = float(x_range[half_max_indices[-1], 0] - x_range[half_max_indices[0], 0])
 
-    if len(half_max_indices) > 1:
-        fwhm = float(x_range[half_max_indices[-1], 0] - x_range[half_max_indices[0], 0])
-        return fwhm, ks_score
-    return 0.0, 1.0
+            if ks_score < best_ks:
+                    best_ks, best_fwhm = ks_score, fwhm
+
+        except Exception:
+            continue
+
+    return best_fwhm, best_ks
 
 def calculate_resolution_from_fit(fit_params: dict, roles: list[str]):
     """Solves 3-board resolution equations."""
