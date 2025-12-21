@@ -9,6 +9,7 @@ hep.style.use('CMS')
 from .utils import load_fig_title
 from lmfit.models import GaussianModel
 from lmfit.lineshapes import gaussian
+from scipy.stats import gaussian_kde
 from natsort import natsorted
 from pathlib import Path
 from matplotlib import rcParams
@@ -16,7 +17,7 @@ rcParams["axes.formatter.useoffset"] = False
 rcParams["axes.formatter.use_mathtext"] = False
 
 __all__ = [
-    'fit_resolution_data',
+    'fit_board_resolution',
     'calculate_weighted_mean_std_for_every_pixel',
     'preprocess_ranking_data',
     'plot_resolution_with_pulls',
@@ -156,88 +157,74 @@ def plot_TWC(
 
 
 ## --------------------------------------
-def fit_resolution_data(
+def fit_board_resolution(
     input_df: pd.DataFrame,
-    list_of_boards: list[str],
-    fig_config: dict,
-    hist_range: list[int] = [20, 75],
-    hist_bins: int = 15,
+    role: list,
+    fit_range: list[int] = [20, 75],
 ) -> dict:
     """
-    Performs Gaussian fits on board resolution data.
-
-    Returns
-    -------
-    dict
-        A dictionary containing fit results keyed by board_id.
-        Structure: { board_id: {'hist': ..., 'fit_result': ..., 'pulls': ..., 'config': ...} }
+    Trial function to test KDE-seeded Gaussian fitting on a single board.
     """
     mod = GaussianModel(nan_policy='omit')
-    results = {}
+    column_name = f'res_{role}'
 
-    for _, board_info in fig_config.items():
-        role = board_info.get('role')
+    # 1. Prepare Data
+    if column_name not in input_df.columns:
+        return {"error": f"Column {column_name} not found"}
 
-        # validation checks
-        column_to_check = f'res_{role}'
-        if column_to_check not in input_df.columns:
-            continue
-        if role not in list_of_boards:
-            continue
+    raw_data = input_df[column_name].dropna().values
+    mask = (raw_data >= fit_range[0]) & (raw_data <= fit_range[1])
+    data_to_fit = raw_data[mask]
 
-        data_to_hist = input_df[f'res_{role}'].dropna().values
+    if len(data_to_fit) < 10:
+        return {"error": "Not enough data points in range"}
 
-        # 1. Create Histogram
-        h = hist.Hist(hist.axis.Regular(hist_bins, hist_range[0], hist_range[1],
-                                        name="time_resolution", label='Time Resolution [ps]'))
-        h.fill(data_to_hist)
+    # 2. KDE Seeding (The "Guess")
+    # This replaces the sensitive histogram-based .guess()
+    kde = gaussian_kde(data_to_fit)
+    x_grid = np.linspace(fit_range[0], fit_range[1], 1000)
+    kde_vals = kde.evaluate(x_grid)
 
-        # Check if empty
-        if h.sum() == 0:
-            print(f"WARNING: Histogram for role: {role} is empty. Skipping fit.")
-            continue
+    seed_mu = x_grid[np.argmax(kde_vals)]
+    seed_sigma = np.std(data_to_fit)
 
-        centers = h.axes[0].centers
+    # 3. Define the Fit Window (3-sigma around the KDE peak)
+    # This ensures we fit the peak, not the tails/noise
+    low, high = seed_mu - 3*seed_sigma, seed_mu + 3*seed_sigma
+    window_mask = (data_to_fit >= low) & (data_to_fit <= high)
+    final_data = data_to_fit[window_mask]
 
-        # 2. Slice Data for Fitting
-        peak_bin_index = np.argmax(h.values())
-        fit_window_half_width = 5
-        start_index = max(0, peak_bin_index - fit_window_half_width)
-        end_index   = min(len(centers), peak_bin_index + fit_window_half_width + 1)
+    # 4. Perform the Fit (Unbinned-style using internal fine histogram)
+    # We use 100 bins internally just for the fit math to be ultra-stable
+    counts, edges = np.histogram(final_data, bins=100)
+    centers = (edges[1:] + edges[:-1]) / 2
 
-        fit_range = centers[start_index:end_index]
-        fit_vals = h.values()[start_index:end_index]
+    pars = mod.make_params(
+        amplitude=len(final_data),
+        center=seed_mu,
+        sigma=seed_sigma
+    )
 
-        if len(fit_vals) == 0:
-            print(f"WARNING: Could not create a valid fit slice for role: {role}. Skipping fit.")
-            continue
+    # Weights handle the Poisson uncertainty of the counts
+    out = mod.fit(counts, pars, x=centers, weights=1/np.sqrt(counts + 1))
 
-        # 3. Perform Fit
-        pars = mod.guess(fit_vals, x=fit_range)
-        out = mod.fit(fit_vals, pars, x=fit_range, weights=1/np.sqrt(fit_vals))
-
-        # 4. Calculate Pulls
-        # Note: We evaluate the model over all centers for the pull plot, not just the fit range
-        model_vals = out.eval(x=centers)
-        pulls = (h.values() - model_vals) / np.sqrt(model_vals)
-        pulls[np.isnan(pulls) | np.isinf(pulls)] = 0
-
-        # 5. Store Results
-        results[role] = {
-            'hist': h,
-            'fit_result': out,
-            'pulls': pulls,
-            'config': board_info, # Store config here for easy access in plotter
-            'centers': centers
-        }
-
-    return results
+    return {
+        "success": True,
+        "seed_mu": seed_mu,
+        "seed_sigma": seed_sigma,
+        "lmfit_obj": out
+    }
 
 
 ## --------------------------------------
 def plot_resolution_with_pulls(
     fit_results: dict,
+    input_df: pd.DataFrame,
+    role: str,
     tb_loc: str,
+    fig_config: dict,
+    hist_range: list[int] = [20, 75],
+    hist_bins: int = 30,
     constraint_ylim: bool = False,
     save_mother_dir: Path | None = None,
 ):
@@ -245,111 +232,111 @@ def plot_resolution_with_pulls(
     Plots the resolution fit results generated by fit_resolution_data.
     """
 
-    # Assuming load_fig_title is a helper function defined elsewhere in your scope
-    # If not, you might need to pass the full title string instead of tb_loc
-    try:
-        plot_title = load_fig_title(tb_loc)
-    except NameError:
-        plot_title = f"Test Beam: {tb_loc}"
+    plot_title = load_fig_title(tb_loc)
 
-    for board_id, data in fit_results.items():
-        h = data['hist']
-        fit_out = data['fit_result']
-        pulls = data['pulls']
-        config = data['config']
-        centers = data['centers']
+    if not fit_results.get("success"):
+        return
 
-        # Setup Canvas
-        fig = plt.figure(figsize=(11.5, 10))
-        grid = fig.add_gridspec(2, 1, hspace=0, height_ratios=[3, 1])
+    fit_out = fit_results['lmfit_obj']
+    raw_vals = input_df[f'res_{role}'].dropna().values
 
-        main_ax = fig.add_subplot(grid[0])
-        sub_ax = fig.add_subplot(grid[1], sharex=main_ax)
-        plt.setp(main_ax.get_xticklabels(), visible=False)
+    h = hist.Hist(hist.axis.Regular(hist_bins, *hist_range))
+    h.fill(raw_vals)
+    centers = h.axes[0].centers
+    counts = h.values()
+    total_entries = len(raw_vals)
 
-        # ---------------------
-        # MAIN PLOT
-        # ---------------------
-        hep.cms.text(loc=0, ax=main_ax, text="ETL ETROC Test Beam", fontsize=18)
-        main_ax.set_title(f'{plot_title}\n{config['title']}', loc="right", size=14)
+    # Scaling Math
+    plot_bin_width = (hist_range[1] - hist_range[0]) / hist_bins
 
-        # Plot Data Points
-        main_ax.errorbar(centers, h.values(), np.sqrt(h.variances()),
-                        ecolor="steelblue", mfc="steelblue", mec="steelblue", fmt="o",
-                        ms=6, capsize=1, capthick=2, alpha=0.8)
+    # Pulls
+    model_pdf_at_centers = fit_out.eval(x=centers) / fit_out.params['amplitude'].value
+    model_vals = model_pdf_at_centers * (total_entries * plot_bin_width)
+    pulls = (counts - model_vals) / np.sqrt(np.where(model_vals > 0, model_vals, 1))
 
-        # Plot Fit Line and Uncertainty Band
-        x_min, x_max = centers[0], centers[-1]
-        x_range = np.linspace(x_min, x_max, 500)
+    # --- CANVAS SETUP ---
+    fig = plt.figure(figsize=(12, 10))
+    grid = fig.add_gridspec(2, 1, hspace=0, height_ratios=[3, 1])
+    main_ax = fig.add_subplot(grid[0])
+    sub_ax = fig.add_subplot(grid[1], sharex=main_ax)
+    plt.setp(main_ax.get_xticklabels(), visible=False)
 
-        # Calculate fit uncertainty band
-        popt = [par for name, par in fit_out.best_values.items()]
-        pcov = fit_out.covar
+    # --- MAIN PLOT ---
+    hep.cms.text(loc=0, ax=main_ax, text="ETL ETROC Test Beam", fontsize=18)
+    main_ax.set_title(f"{plot_title}\n{fig_config.get('title', role)}", loc="right", size=14)
 
-        if pcov is not None and np.isfinite(pcov).all():
-            n_samples = 100
-            vopts = np.random.multivariate_normal(popt, pcov, n_samples)
-            # Reconstruct gaussian function manually or use model eval
-            # Using manual gaussian import from lmfit.lineshapes
-            sampled_ydata = np.vstack([gaussian(x_range, *vopt).T for vopt in vopts])
-            model_uncert = np.nanstd(sampled_ydata, axis=0)
-        else:
-            # Fallback if covariance is bad
-            model_uncert = np.zeros_like(x_range)
+    # Plot Data Points
+    main_ax.errorbar(centers, counts, np.sqrt(counts),
+                    ecolor="steelblue", mfc="steelblue", mec="steelblue", fmt="o",
+                    ms=6, capsize=1, capthick=2, alpha=0.8, label="Data")
 
-        main_ax.plot(x_range, fit_out.eval(x=x_range), color="hotpink", ls="-", lw=2, alpha=0.8,
-                    label=fr"$\mu$:{fit_out.params['center'].value:.2f} $\pm$ {fit_out.params['center'].stderr:.2f} ps")
+    # Fit Line and Uncertainty Band
+    x_range = np.linspace(hist_range[0], hist_range[1], 500)
+    model_pdf = fit_out.eval(x=x_range) / fit_out.params['amplitude'].value
+    y_fit = model_pdf * total_entries * plot_bin_width
 
-        # Dummy plot for Sigma label
-        main_ax.plot(np.NaN, np.NaN, color='none',
-                    label=fr"$\sigma$: {abs(fit_out.params['sigma'].value):.2f} $\pm$ {abs(fit_out.params['sigma'].stderr):.2f} ps")
+    varying_params = [p for p in fit_out.params.values() if p.vary]
+    popt = [p.value for p in varying_params] # Length will be 3
+    pcov = fit_out.covar # Shape is (3, 3)
 
-        main_ax.fill_between(
-            x_range,
-            fit_out.eval(x=x_range) - model_uncert,
-            fit_out.eval(x=x_range) + model_uncert,
-            color="hotpink",
-            alpha=0.2,
-            label='Fit Uncertainty'
-        )
+    if pcov is not None and np.isfinite(pcov).all():
+        n_samples = 100
+        vopts = np.random.multivariate_normal(popt, pcov, n_samples)
 
-        main_ax.set_ylabel('Counts', fontsize=25)
-        main_ax.tick_params(axis='x', labelsize=20)
-        main_ax.tick_params(axis='y', labelsize=20)
-        main_ax.legend(fontsize=18, loc='best')
+        # We define the target plot area to scale every sample to the same histogram
+        target_area = total_entries * plot_bin_width
 
-        if constraint_ylim:
-            main_ax.set_ylim(-5, 190)
+        sampled_ydata = []
+        for v in vopts:
+            # v[0]=amplitude, v[1]=center, v[2]=sigma
+            # 1. Generate the raw model for this sample
+            y_sample = fit_out.model.eval(x=x_range, amplitude=v[0], center=v[1], sigma=v[2])
 
-        # ---------------------
-        # PULL PLOT
-        # ---------------------
-        width = (x_max - x_min) / len(pulls)
-        sub_ax.axhline(1, c='black', lw=0.75)
-        sub_ax.axhline(0, c='black', lw=1.2)
-        sub_ax.axhline(-1, c='black', lw=0.75)
-        sub_ax.bar(centers, pulls, width=width, fc='royalblue')
+            # 2. Scale it: (Sample / Sample_Amplitude) * Plot_Area
+            # This ensures the sample is treated as a PDF before scaling
+            y_scaled = (y_sample / v[0]) * target_area
+            sampled_ydata.append(y_scaled)
 
-        sub_ax.set_ylim(-2, 2)
-        sub_ax.set_yticks(ticks=np.arange(-1, 2), labels=[-1, 0, 1])
-        sub_ax.tick_params(axis='y', labelsize=20)
-        sub_ax.set_xlabel('Pixel Time Resolution [ps]', fontsize=25)
-        sub_ax.tick_params(axis='x', which='both', labelsize=20)
-        sub_ax.set_ylabel('Pulls', fontsize=20, loc='center')
+        sampled_ydata = np.vstack(sampled_ydata)
+        model_uncert = np.nanstd(sampled_ydata, axis=0)
 
-        fig.tight_layout()
+        main_ax.fill_between(x_range, y_fit - model_uncert, y_fit + model_uncert,
+                                color="hotpink", alpha=0.2, label='Fit Uncertainty')
 
-        # ---------------------
-        # SAVING
-        # ---------------------
-        if save_mother_dir is not None:
-            save_dir = save_mother_dir / 'time_resolution_results'
-            save_dir.mkdir(exist_ok=True, parents=True)
-            # Using 'short' key from config if available, otherwise board_id
-            name_tag = config.get('short', board_id)
-            fig.savefig(save_dir / f"board_res_{name_tag}.png")
-            fig.savefig(save_dir / f"board_res_{name_tag}.pdf")
-            plt.close(fig)
+    # Final Fit Line
+    main_ax.plot(x_range, y_fit, color="hotpink", ls="-", lw=3, alpha=0.8,
+                label=fr"$\mu$: {fit_out.params['center'].value:.2f} $\pm$ {fit_out.params['center'].stderr:.2f} ps")
+
+    # Extra Legend Entry for Sigma
+    main_ax.plot([], [], ' ', label=fr"$\sigma$: {abs(fit_out.params['sigma'].value):.2f} $\pm$ {abs(fit_out.params['sigma'].stderr):.2f} ps")
+
+    main_ax.set_ylabel('Counts', fontsize=25)
+    main_ax.tick_params(axis='y', labelsize=20)
+    main_ax.legend(fontsize=18, loc='best')
+    if constraint_ylim: main_ax.set_ylim(-5, 190)
+
+    # --- PULL PLOT ---
+    sub_ax.axhline(0, c='black', lw=1.2)
+    sub_ax.axhline(1, c='black', lw=0.75, ls='--')
+    sub_ax.axhline(-1, c='black', lw=0.75, ls='--')
+
+    sub_ax.bar(centers, pulls, width=plot_bin_width, fc='royalblue', alpha=0.7)
+
+    sub_ax.set_ylim(-3, 3)
+    sub_ax.set_yticks([-2, 0, 2])
+    sub_ax.set_ylabel('Pulls', fontsize=20)
+    sub_ax.set_xlabel('Time Resolution [ps]', fontsize=25)
+    sub_ax.tick_params(axis='both', labelsize=20)
+
+    fig.tight_layout()
+
+    # --- SAVING ---
+    if save_mother_dir:
+        save_path = Path(save_mother_dir) / 'time_resolution_results'
+        save_path.mkdir(exist_ok=True, parents=True)
+        name_tag = fig_config.get('short', role)
+        fig.savefig(save_path / f"board_res_{name_tag}.png")
+        plt.close(fig)
 
 
 ## --------------------------------------
