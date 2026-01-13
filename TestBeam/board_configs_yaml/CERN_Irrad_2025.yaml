@@ -57,10 +57,10 @@ run0:
   3: *PT_IH8
 
 run2:
-  0: *PT_IH16
+  0: { <<: *PT_IH16, role: extra }
   1: *PT_IH15
   2: *PT_IH6
-  3: *PT_IH8
+  3: { <<: *PT_IH8, role: trig }
 
 run3:
   0: { <<: *PT_IH16, HV: 180 }
