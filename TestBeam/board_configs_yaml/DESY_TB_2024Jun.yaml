@@ -1,0 +1,85 @@
+defaults:
+  BAR_4: &BAR_4
+    name: Barcelona 4
+    short: BAR_4
+    offset: 20
+    HV: 260
+    role: dut
+  BAR_12: &BAR_12
+    name: Barcelona 12
+    short: BAR_12
+    offset: 20
+    HV: 120
+    role: ref
+  BAR_13: &BAR_13
+    name: Barcelona 13
+    short: BAR_13
+    offset: 20
+    HV: 120
+    role: extra
+  bb_13: &bb_13
+    name: BB 1-3
+    short: bb_13
+    offset: 20
+    HV: 200
+    role: trig
+
+run8:
+  0: *BAR_4
+  1: *BAR_12
+  2: *BAR_13
+  3: *bb_13
+
+run11:
+  0: { <<: *BAR_4, HV: 250 }
+  1: *BAR_12
+  2: *BAR_13
+  3: *bb_13
+
+run13:
+  0: { <<: *BAR_4, HV: 240 }
+  1: *BAR_12
+  2: *BAR_13
+  3: *bb_13
+
+run17:
+  0: { <<: *BAR_4, HV: 220 }
+  1: *BAR_12
+  2: *BAR_13
+  3: *bb_13
+
+run20:
+  0: { <<: *BAR_4, HV: 200 }
+  1: *BAR_12
+  2: *BAR_13
+  3: *bb_13
+
+run23:
+  0: { <<: *BAR_4, HV: 180 }
+  1: *BAR_12
+  2: *BAR_13
+  3: *bb_13
+
+run24:
+  0: { <<: *BAR_4, HV: 270 }
+  1: *BAR_12
+  2: *BAR_13
+  3: *bb_13
+
+run27:
+  0: { <<: *BAR_4, HV: 280 }
+  1: *BAR_12
+  2: *BAR_13
+  3: *bb_13
+
+run29:
+  0: { <<: *BAR_4, HV: 210 }
+  1: *BAR_12
+  2: *BAR_13
+  3: *bb_13
+
+run31:
+  0: { <<: *BAR_4, HV: 160 }
+  1: *BAR_12
+  2: *BAR_13
+  3: *bb_13
