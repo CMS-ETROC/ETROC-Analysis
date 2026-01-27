@@ -327,22 +327,28 @@ def generate_event_rows(unpacked_data_list):
             if elink in pending_packets and len(pending_packets[elink]['data']) > 0:
                 packet = pending_packets.pop(elink)
                 packet_bcid = packet['header'].get('bcid')
+                packet_l1acounter = packet['header'].get('l1counter')
 
                 if packet_bcid is None:
                     continue
 
-                if packet_bcid != current_bcid:
+                # New event if BOTH bcid AND l1acounter don't match
+                if packet_bcid != current_bcid and packet_l1acounter != current_l1acounter:
                     event_counter += 1
                     current_bcid = packet_bcid
+                    current_l1acounter = packet_l1acounter
 
-                l1a_for_event = packet['header'].get('l1counter')
+                # If either matches, update both to current packet values
+                else:
+                    current_bcid = packet_bcid
+                    current_l1acounter = packet_l1acounter
 
                 for data_hit in packet['data']:
                     # YIELD a dictionary for each individual row
                     yield {
                         'evt': event_counter,
                         'bcid': current_bcid,
-                        'l1a_counter': l1a_for_event,
+                        'l1a_counter': current_l1acounter,
                         'ea': data_hit.get('ea'),
                         'row': data_hit.get('row_id'),
                         'col': data_hit.get('col_id'),
