@@ -342,6 +342,7 @@ def generate_event_rows(unpacked_data_list):
     pending_packets = {}
     event_counter = -1
     current_bcid = -1
+    current_l1acounter = -1
 
     for record_type, record_data in unpacked_data_list:
         if not record_type or not record_data:
@@ -362,22 +363,28 @@ def generate_event_rows(unpacked_data_list):
             if elink in pending_packets and len(pending_packets[elink]['data']) > 0:
                 packet = pending_packets.pop(elink)
                 packet_bcid = packet['header'].get('bcid')
+                packet_l1acounter = packet['header'].get('l1counter')
 
                 if packet_bcid is None:
                     continue
 
-                if packet_bcid != current_bcid:
+                # New event if BOTH bcid AND l1acounter don't match
+                if packet_bcid != current_bcid and packet_l1acounter != current_l1acounter:
                     event_counter += 1
                     current_bcid = packet_bcid
+                    current_l1acounter = packet_l1acounter
 
-                l1a_for_event = packet['header'].get('l1counter')
+                # If either matches, update both to current packet values
+                else:
+                    current_bcid = packet_bcid
+                    current_l1acounter = packet_l1acounter
 
                 for data_hit in packet['data']:
                     # YIELD a dictionary for each individual row
                     yield {
                         'evt': event_counter,
                         'bcid': current_bcid,
-                        'l1a_counter': l1a_for_event,
+                        'l1a_counter': current_l1acounter,
                         'ea': data_hit.get('ea'),
                         'row': data_hit.get('row_id'),
                         'col': data_hit.get('col_id'),
@@ -399,6 +406,7 @@ def generate_event_status(unpacked_data_list):
     pending_packets = {}
     event_counter = -1
     current_bcid = -1
+    current_l1acounter = -1
 
     for record_type, record_data in unpacked_data_list:
         if not record_type or not record_data:
@@ -420,21 +428,27 @@ def generate_event_status(unpacked_data_list):
             if elink in pending_packets and len(pending_packets[elink]['data']) > 0:
                 packet = pending_packets.pop(elink)
                 packet_bcid = packet['header'].get('bcid')
+                packet_l1acounter = packet['header'].get('l1counter')
 
                 if packet_bcid is None:
                     continue
 
-                # --- This is the identical event counting logic ---
-                if packet_bcid != current_bcid:
+                # New event if BOTH bcid AND l1acounter don't match
+                if packet_bcid != current_bcid and packet_l1acounter != current_l1acounter:
                     event_counter += 1
                     current_bcid = packet_bcid
-                # --- End of event counting logic ---
+                    current_l1acounter = packet_l1acounter
+
+                # If either matches, update both to current packet values
+                else:
+                    current_bcid = packet_bcid
+                    current_l1acounter = packet_l1acounter
 
                 # YIELD the status dictionary (once per packet)
                 yield {
                     'evt': event_counter,
                     'bcid': current_bcid,
-                    'l1a_counter': packet['header'].get('l1counter'),
+                    'l1a_counter': current_l1acounter,
                     'elink': packet['header'].get('elink'),
                     'sof': record_data.get('sof'),
                     'eof': record_data.get('eof'),
