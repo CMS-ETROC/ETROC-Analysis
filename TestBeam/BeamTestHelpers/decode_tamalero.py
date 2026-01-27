@@ -307,6 +307,7 @@ def generate_event_rows(unpacked_data_list):
     pending_packets = {}
     event_counter = -1
     current_bcid = -1
+    current_l1acounter = -1
 
     for record_type, record_data in unpacked_data_list:
         if not record_type or not record_data:
@@ -418,6 +419,7 @@ def process_tamalero_outputs(input_files: list):
         final_df = final_df.astype(dtype_map)
 
     return final_df
+
 def get_last_complete_event(directory, lines_to_read, hits_per_board):
     """
     Loads data and returns the last complete event that satisfies the hits criteria.
@@ -473,7 +475,7 @@ def get_last_complete_event(directory, lines_to_read, hits_per_board):
 
                 f.seek(-words_to_read * word_size, os.SEEK_END)
                 raw_data = f.read()
-            
+
             if raw_data:
                 raw_data_32bit = struct.unpack(f'<{len(raw_data)//4}I', raw_data)
                 merged_data = merge_words(raw_data_32bit)
