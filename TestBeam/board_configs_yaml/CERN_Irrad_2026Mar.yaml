@@ -55,3 +55,9 @@ run1:
   1: { <<: *PT_IH19, irrad: Pre-irrad (25cm) }
   2: { <<: *PT_IH21, irrad: Pre-irrad (25cm) }
   3: { <<: *PT_IH22, irrad: Pre-irrad (25cm) }
+
+run2:
+  0: { <<: *PT_IH18, irrad: Pre-irrad (17cm) }
+  1: { <<: *PT_IH19, irrad: Pre-irrad (17cm) }
+  2: { <<: *PT_IH21, irrad: Pre-irrad (17cm) }
+  3: { <<: *PT_IH22, irrad: Pre-irrad (17cm) }
