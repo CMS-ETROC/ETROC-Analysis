@@ -1,0 +1,57 @@
+T3:
+  PT_LF7: &PT_LF7
+    name: ET2.01 PacTech LFoundry-7
+    short: PT_LF7
+    offset: 20
+    HV: 160
+    role: trig
+  PT_LF6: &PT_LF6
+    name: ET2.01 PacTech LFoundry-6
+    short: PT_LF6
+    offset: 20
+    HV: 150
+    role: ref
+  PT_LF9: &PT_LF9
+    name: ET2.01 PacTech LFoundry-9
+    short: PT_LF9
+    offset: 20
+    HV: 160
+    role: dut
+  PT_LF8: &PT_LF8
+    name: ET2.01 PacTech LFoundry-8
+    short: PT_LF8
+    offset: 20
+    HV: 140
+    role: extra
+
+H2:
+  PT_IH18: &PT_IH18
+    name: ET2.02 PacTech Irradiated HPK-18
+    short: PT_IH18
+    offset: 20
+    HV: 170
+    role: extra
+  PT_IH19: &PT_IH19
+    name: ET2.02 PacTech Irradiated HPK-19
+    short: PT_IH19
+    offset: 20
+    HV: 170
+    role: ref
+  PT_IH21: &PT_IH21
+    name: ET2.02 PacTech Irradiated HPK-21
+    short: PT_IH21
+    offset: 20
+    HV: 170
+    role: dut
+  PT_IH22: &PT_IH22
+    name: ET2.02 PacTech Irradiated HPK-22
+    short: PT_IH22
+    offset: 20
+    HV: 170
+    role: trig
+
+run1:
+  0: { <<: *PT_IH18, irrad: Pre-irrad (25cm) }
+  1: { <<: *PT_IH19, irrad: Pre-irrad (25cm) }
+  2: { <<: *PT_IH21, irrad: Pre-irrad (25cm) }
+  3: { <<: *PT_IH22, irrad: Pre-irrad (25cm) }
