@@ -138,39 +138,29 @@ def process_and_save_track(
     except Exception as e:
         return f"Error saving track {track_key}: {e}"
 
-def determine_file_batches(files: List[Path]) -> List[List[Path]]:
+
+def determine_file_batches(files: List[Path], num_groups: int = 1) -> List[List[Path]]:
     """
-    Splits files into batches based on the logic:
-    ... (function body remains the same)
+    Equally spaces files into a fixed number of groups.
     """
     n_files = len(files)
 
-    size_threshold = 120
-    if n_files < size_threshold:
-        return [files]
+    # Ensure we don't try to make more groups than there are files
+    num_groups = min(num_groups, n_files)
 
-    # Logic: Try groups 2, 3, 4, 5.
-    num_groups = 5 # Default max
-    for g in range(2, 6):
-        chunk_size = (n_files + g - 1) // g
-        if chunk_size < size_threshold:
-            num_groups = g
-            break
-
-    # Calculate chunk size for the chosen number of groups
+    # Calculate base size (k) and the remainder (m)
     k, m = divmod(n_files, num_groups)
+
     batches = []
     start_idx = 0
     for i in range(num_groups):
+        # Add 1 extra file to the first 'm' groups to handle the remainder
         batch_size = k + 1 if i < m else k
         end_idx = start_idx + batch_size
         batches.append(files[start_idx:end_idx])
         start_idx = end_idx
 
-    print(f"\nLarge dataset detected ({n_files} files). Splitting into {num_groups} processing groups.")
-    for i, b in enumerate(batches):
-        print(f"  Group {i+1}: {len(b)} files")
-
+    print(f"\nSplitting {n_files} files into {num_groups} equal groups.")
     return batches
 
 # --- Main Logic ---
@@ -183,6 +173,7 @@ def main():
     parser.add_argument('-o', '--outdir', required=True, dest='outdir', help='Output directory')
     parser.add_argument('-r', '--runName', required=True, dest='runName', help='Run name')
     parser.add_argument('-c', '--config', required=True, dest='config', help='YAML config file')
+    parser.add_argument('--groups', type=int, default=1, help='Number of processing groups to split files into')
     parser.add_argument('--file_pattern', default='*.pickle', help="Glob pattern for input files (e.g. '*.pkl *.parquet')")
     parser.add_argument('--debug', action='store_true', help='Run sequentially for debugging')
 
@@ -208,7 +199,7 @@ def main():
         sys.exit(f"No files found matching '{args.file_pattern}' in {args.dirname}")
 
     # 3. Determine Batches
-    batches = determine_file_batches(files)
+    batches = determine_file_batches(files, num_groups=args.groups)
 
     # Check if we have multiple batches to decide naming convention
     is_multi_group = len(batches) > 1
