@@ -26,50 +26,56 @@ T3:
 
 H2:
   PT_IH18: &PT_IH18
-    name: ET2.02 PacTech Irradiated HPK-18
+    name: ETROC HPK-18
     short: PT_IH18
     offset: 20
     HV: 170
     role: extra
   PT_IH19: &PT_IH19
-    name: ET2.02 PacTech Irradiated HPK-19
+    name: ETROC HPK-19
     short: PT_IH19
     offset: 20
     HV: 170
     role: ref
   PT_IH21: &PT_IH21
-    name: ET2.02 PacTech Irradiated HPK-21
+    name: ETROC HPK-21
     short: PT_IH21
     offset: 20
     HV: 170
     role: dut
   PT_IH22: &PT_IH22
-    name: ET2.02 PacTech Irradiated HPK-22
+    name: ETROC HPK-22
     short: PT_IH22
     offset: 20
     HV: 170
     role: trig
 
 run1:
-  0: { <<: *PT_IH18, irrad: Pre-irrad (25cm) }
-  1: { <<: *PT_IH19, irrad: Pre-irrad (25cm) }
-  2: { <<: *PT_IH21, irrad: Pre-irrad (25cm) }
-  3: { <<: *PT_IH22, irrad: Pre-irrad (25cm) }
+  0: { <<: *PT_IH18, irrad: pre-irrad, note: 25cm off beam axis }
+  1: { <<: *PT_IH19, irrad: pre-irrad, note: 25cm off beam axis }
+  2: { <<: *PT_IH21, irrad: pre-irrad, note: 25cm off beam axis }
+  3: { <<: *PT_IH22, irrad: pre-irrad, note: 25cm off beam axis }
 
 run2:
-  0: { <<: *PT_IH18, irrad: Pre-irrad (17cm) }
-  1: { <<: *PT_IH19, irrad: Pre-irrad (17cm) }
-  2: { <<: *PT_IH21, irrad: Pre-irrad (17cm) }
-  3: { <<: *PT_IH22, irrad: Pre-irrad (17cm) }
+  0: { <<: *PT_IH18, irrad: pre-irrad, note: 17cm off beam axis }
+  1: { <<: *PT_IH19, irrad: pre-irrad, note: 17cm off beam axis }
+  2: { <<: *PT_IH21, irrad: pre-irrad, note: 17cm off beam axis }
+  3: { <<: *PT_IH22, irrad: pre-irrad, note: 17cm off beam axis }
 
 run4:
-  0: { <<: *PT_IH18, HV: 160, irrad: Pre-irrad (17cm) }
-  1: { <<: *PT_IH19, HV: 160, irrad: Pre-irrad (17cm) }
-  2: { <<: *PT_IH21, HV: 160, irrad: Pre-irrad (17cm) }
-  3: { <<: *PT_IH22, HV: 160, irrad: Pre-irrad (17cm) }
+  0: { <<: *PT_IH18, HV: 160, irrad: pre-irrad, note: 17cm off beam axis }
+  1: { <<: *PT_IH19, HV: 160, irrad: pre-irrad, note: 17cm off beam axis }
+  2: { <<: *PT_IH21, HV: 160, irrad: pre-irrad, note: 17cm off beam axis }
+  3: { <<: *PT_IH22, HV: 160, irrad: pre-irrad, note: 17cm off beam axis }
 
 run5:
-  0: { <<: *PT_IH18, HV: 180, irrad: Pre-irrad (17cm) }
-  1: { <<: *PT_IH19, HV: 180, irrad: Pre-irrad (17cm) }
-  2: { <<: *PT_IH21, HV: 180, irrad: Pre-irrad (17cm) }
-  3: { <<: *PT_IH22, HV: 180, irrad: Pre-irrad (17cm) }
+  0: { <<: *PT_IH18, HV: 180, irrad: pre-irrad, note: 17cm off beam axis }
+  1: { <<: *PT_IH19, HV: 180, irrad: pre-irrad, note: 17cm off beam axis }
+  2: { <<: *PT_IH21, HV: 180, irrad: pre-irrad, note: 17cm off beam axis }
+  3: { <<: *PT_IH22, HV: 180, irrad: pre-irrad, note: 17cm off beam axis }
+
+run6:
+  0: { <<: *PT_IH18, HV: 150, irrad: pre-irrad, note: 17cm off beam axis }
+  1: { <<: *PT_IH19, HV: 150, irrad: pre-irrad, note: 17cm off beam axis }
+  2: { <<: *PT_IH21, HV: 150, irrad: pre-irrad, note: 17cm off beam axis }
+  3: { <<: *PT_IH22, HV: 150, irrad: pre-irrad, note: 17cm off beam axis }
