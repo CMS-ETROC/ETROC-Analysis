@@ -61,3 +61,15 @@ run2:
   1: { <<: *PT_IH19, irrad: Pre-irrad (17cm) }
   2: { <<: *PT_IH21, irrad: Pre-irrad (17cm) }
   3: { <<: *PT_IH22, irrad: Pre-irrad (17cm) }
+
+run4:
+  0: { <<: *PT_IH18, HV: 160, irrad: Pre-irrad (17cm) }
+  1: { <<: *PT_IH19, HV: 160, irrad: Pre-irrad (17cm) }
+  2: { <<: *PT_IH21, HV: 160, irrad: Pre-irrad (17cm) }
+  3: { <<: *PT_IH22, HV: 160, irrad: Pre-irrad (17cm) }
+
+run5:
+  0: { <<: *PT_IH18, HV: 180, irrad: Pre-irrad (17cm) }
+  1: { <<: *PT_IH19, HV: 180, irrad: Pre-irrad (17cm) }
+  2: { <<: *PT_IH21, HV: 180, irrad: Pre-irrad (17cm) }
+  3: { <<: *PT_IH22, HV: 180, irrad: Pre-irrad (17cm) }
