@@ -206,9 +206,9 @@ def tdc_event_selection_pivot(
     masks = {}
     for board, cuts in tdc_cuts_dict.items():
         mask = (
-            input_df['cal'][board].between(cuts[0], cuts[1]) &
-            input_df['toa'][board].between(cuts[2], cuts[3]) &
-            input_df['tot'][board].between(cuts[4], cuts[5])
+            input_df[f'cal_{board}'].between(cuts[0], cuts[1]) &
+            input_df[f'toa_{board}'].between(cuts[2], cuts[3]) &
+            input_df[f'tot_{board}'].between(cuts[4], cuts[5])
         )
         masks[board] = mask
 
@@ -356,12 +356,12 @@ def save_TDC_summary_table(
 ## --------------------------------------
 def return_TOA_correlation_param(
         input_df: pd.DataFrame,
-        board_id1: int,
-        board_id2: int,
+        board_role1: int,
+        board_role2: int,
     ):
 
-    x = input_df['toa'][board_id1]
-    y = input_df['toa'][board_id2]
+    x = input_df[f'toa_{board_role1}']
+    y = input_df[f'toa_{board_role2}']
 
     params = np.polyfit(x, y, 1)
     distance = (x*params[0] - y + params[1])/(np.sqrt(params[0]**2 + 1))

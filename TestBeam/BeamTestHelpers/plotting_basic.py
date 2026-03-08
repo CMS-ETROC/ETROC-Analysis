@@ -122,7 +122,7 @@ def return_crc_hist(
 def return_hist_pivot(
         input_df: pd.DataFrame,
         board_info: dict | None = None,
-        board_ids: list[int] | None = None,
+        board_roles: list[str] | None = None,
         board_names: list[str] | None = None,
         hist_bins: list = [50, 64, 64]
 ):
@@ -135,25 +135,25 @@ def return_hist_pivot(
             )
         for _, val in board_info.items()}
 
-        for ikey, val in board_info.items():
-            h[val['short']].fill(input_df['cal'][ikey].values, input_df['tot'][ikey].values, input_df['toa'][ikey].values)
+        for _, val in board_info.items():
+            h[val['short']].fill(input_df[f'cal_{val["role"]}'].values, input_df[f'tot_{val["role"]}'].values, input_df[f'toa_{val["role"]}'].values)
 
 
-    elif board_ids and board_names:
-        if len(board_ids) != len(board_names):
+    elif board_roles and board_names:
+        if len(board_roles) != len(board_names):
             raise ValueError("The lists 'board_ids' and 'board_names' must have the same length.")
 
         h = {board_names[board_idx]: hist.Hist(hist.axis.Regular(hist_bins[0], 120, 260, name="CAL", label="CAL [LSB]"),
                 hist.axis.Regular(hist_bins[1], 0, 512,  name="TOT", label="TOT [LSB]"),
                 hist.axis.Regular(hist_bins[2], 0, 1024, name="TOA", label="TOA [LSB]"),
             )
-        for board_idx in range(len(board_ids))}
+        for board_idx in range(len(board_roles))}
 
-        for idx, board_id in enumerate(board_ids):
-            h[board_names[idx]].fill(input_df['cal'][board_id].values, input_df['tot'][board_id].values, input_df['toa'][board_id].values)
+        for idx, role in enumerate(board_roles):
+            h[board_names[idx]].fill(input_df[f'cal_{role}'].values, input_df[f'tot_{role}'].values, input_df[f'toa_{role}'].values)
 
     else:
-        raise ValueError("You must provide either 'board_info' or both 'board_ids' and 'board_names'.")
+        raise ValueError("You must provide either 'board_info' or both 'board_roles' and 'board_names'.")
 
     return h
 
@@ -1113,6 +1113,77 @@ def plot_distance(
     return h_dis
 
 ## --------------------------------------
+def plot_TOA_correlation(
+        input_df: pd.DataFrame,
+        board_role1: str,
+        board_role2: str,
+        board_names: list[str],
+        boundary_cut: float,
+        tb_loc: str,
+        draw_boundary: bool = False,
+        save_mother_dir: Path | None = None,
+    ):
+    """Make plot of TOA correlation between selected two boards.
+
+    Parameters
+    ----------
+    input_df: pd.DataFrame,
+        Pandas dataframe of a single track.
+    boundary_cut: float,
+        Size of boundary. boundary_cut * standard devition of distance arrays
+    board_names: list[str],
+        A string list including board names.
+    tb_loc: str,
+        Test Beam location for the title. Available argument: desy, cern, fnal.
+    draw_boundary: bool, optional
+        Draw boundary cut in the plot.
+    save_mother_dir: Path, optional
+        Plot will be saved at save_mother_dir/'temporal_correlation'.
+    """
+
+    plot_title = load_fig_title(tb_loc)
+    x = input_df[f'toa_{board_role1}']
+    y = input_df[f'toa_{board_role2}']
+
+    axis_name1 = board_names[0].replace('_', ' ')
+    axis_name2 = board_names[1].replace('_', ' ')
+
+
+    h = hist.Hist(
+        hist.axis.Regular(128, 0, 1024, name=f'{board_names[0]}', label=f'TOA of {axis_name1} [LSB]'),
+        hist.axis.Regular(128, 0, 1024, name=f'{board_names[1]}', label=f'TOA of {axis_name2} [LSB]'),
+    )
+    h.fill(x, y)
+    params = np.polyfit(x, y, 1)
+    distance = (x*params[0] - y + params[1])/(np.sqrt(params[0]**2 + 1))
+
+    fig, ax = plt.subplots(figsize=(11, 10))
+    hep.cms.text(loc=0, ax=ax, text="ETL ETROC Test Beam", fontsize=18)
+    ax.set_title(plot_title, loc='right', fontsize=16)
+    ax.xaxis.label.set_fontsize(25)
+    ax.yaxis.label.set_fontsize(25)
+    hep.hist2dplot(h, ax=ax, norm=colors.LogNorm())
+
+    # calculate the trendline
+    trendpoly = np.poly1d(params)
+    x_range = np.linspace(x.min(), x.max(), 500)
+
+    # plot the trend line
+    ax.plot(x_range, trendpoly(x_range), 'r-', label='linear fit')
+    if draw_boundary:
+        ax.plot(x_range, trendpoly(x_range)-boundary_cut*np.std(distance), 'r--', label=fr'{boundary_cut}$\sigma$ boundary')
+        ax.plot(x_range, trendpoly(x_range)+boundary_cut*np.std(distance), 'r--')
+        # ax.fill_between(x_range, y1=trendpoly(x_range)-boundary_cut*np.std(distance), y2=trendpoly(x_range)+boundary_cut*np.std(distance),
+        #                 facecolor='red', alpha=0.35, label=fr'{boundary_cut}$\sigma$ boundary')
+    ax.legend()
+    fig.tight_layout()
+
+    save_dir = save_mother_dir / 'temporal_correlation' if save_mother_dir else None
+    if save_dir:
+        save_plot(fig, save_dir, f"toa_correlation_{board_names[board_id1]}_{board_names[board_id2]}")
+
+
+## --------------------------------------
 def plot_TOA_correlation_hit(
         input_df: pd.DataFrame,
         board_id1: int,
@@ -1174,76 +1245,3 @@ def plot_TOA_correlation_hit(
     fig.tight_layout()
 
 
-## --------------------------------------
-def plot_TOA_correlation(
-        input_df: pd.DataFrame,
-        board_id1: int,
-        board_id2: int,
-        boundary_cut: float,
-        board_names: list[str],
-        tb_loc: str,
-        draw_boundary: bool = False,
-        save_mother_dir: Path | None = None,
-    ):
-    """Make plot of TOA correlation between selected two boards.
-
-    Parameters
-    ----------
-    input_df: pd.DataFrame,
-        Pandas dataframe of a single track.
-    board_id1: int,
-        Board 1 ID.
-    board_id2: int,
-        Board 2 ID.
-    boundary_cut: float,
-        Size of boundary. boundary_cut * standard devition of distance arrays
-    board_names: list[str],
-        A string list including board names.
-    tb_loc: str,
-        Test Beam location for the title. Available argument: desy, cern, fnal.
-    draw_boundary: bool, optional
-        Draw boundary cut in the plot.
-    save_mother_dir: Path, optional
-        Plot will be saved at save_mother_dir/'temporal_correlation'.
-    """
-
-    plot_title = load_fig_title(tb_loc)
-    x = input_df['toa'][board_id1]
-    y = input_df['toa'][board_id2]
-
-    axis_name1 = board_names[board_id1].replace('_', ' ')
-    axis_name2 = board_names[board_id2].replace('_', ' ')
-
-    save_dir = save_mother_dir / 'temporal_correlation' if save_mother_dir else None
-
-    h = hist.Hist(
-        hist.axis.Regular(128, 0, 1024, name=f'{board_names[board_id1]}', label=f'TOA of {axis_name1} [LSB]'),
-        hist.axis.Regular(128, 0, 1024, name=f'{board_names[board_id2]}', label=f'TOA of {axis_name2} [LSB]'),
-    )
-    h.fill(x, y)
-    params = np.polyfit(x, y, 1)
-    distance = (x*params[0] - y + params[1])/(np.sqrt(params[0]**2 + 1))
-
-    fig, ax = plt.subplots(figsize=(11, 10))
-    hep.cms.text(loc=0, ax=ax, text="ETL ETROC Test Beam", fontsize=18)
-    ax.set_title(plot_title, loc='right', fontsize=16)
-    ax.xaxis.label.set_fontsize(25)
-    ax.yaxis.label.set_fontsize(25)
-    hep.hist2dplot(h, ax=ax, norm=colors.LogNorm())
-
-    # calculate the trendline
-    trendpoly = np.poly1d(params)
-    x_range = np.linspace(x.min(), x.max(), 500)
-
-    # plot the trend line
-    ax.plot(x_range, trendpoly(x_range), 'r-', label='linear fit')
-    if draw_boundary:
-        ax.plot(x_range, trendpoly(x_range)-boundary_cut*np.std(distance), 'r--', label=fr'{boundary_cut}$\sigma$ boundary')
-        ax.plot(x_range, trendpoly(x_range)+boundary_cut*np.std(distance), 'r--')
-        # ax.fill_between(x_range, y1=trendpoly(x_range)-boundary_cut*np.std(distance), y2=trendpoly(x_range)+boundary_cut*np.std(distance),
-        #                 facecolor='red', alpha=0.35, label=fr'{boundary_cut}$\sigma$ boundary')
-    ax.legend()
-    fig.tight_layout()
-
-    if save_dir:
-        save_plot(fig, save_dir, f"toa_correlation_{board_names[board_id1]}_{board_names[board_id2]}")

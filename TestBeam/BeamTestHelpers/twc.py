@@ -1,14 +1,17 @@
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
-from pathlib import Path
+from sklearn.mixture import GaussianMixture
+from scipy.stats import norm, kstest
+
 
 __all__ = [
     'poly2D',
     'poly3D',
     'three_board_iterative_timewalk_correction',
-    'four_board_iterative_timewalk_correction',
-    'fwhm_based_on_gaussian_mixture_model',
+    'fit_gmm_and_get_fwhm',
+    'calculate_resolution_from_fit',
 ]
 
 ## --------------- Time Walk Correction -----------------------
@@ -54,212 +57,182 @@ def poly3D(max_order, x, y, z, *args):
     return ret_val
 
 ## --------------------------------------
-def three_board_iterative_timewalk_correction(
-    input_df: pd.DataFrame,
-    iterative_cnt: int,
-    poly_order: int,
-    board_ids: list,
-):
+def three_board_iterative_timewalk_correction(df: pd.DataFrame, roles: list[str]):
+    """Iteratively corrects Time Walk."""
+    tots = {r: df[f'tot_{r}'].values for r in roles}
+    toas = {r: df[f'toa_{r}'].values.copy() for r in roles}
 
-    corr_toas = {}
-    corr_b0 = input_df[f'toa_b{board_ids[0]}'].values
-    corr_b1 = input_df[f'toa_b{board_ids[1]}'].values
-    corr_b2 = input_df[f'toa_b{board_ids[2]}'].values
+    def get_deltas(current_toas):
+        d = {}
+        for r in roles:
+            others = [current_toas[o] for o in roles if o != r]
+            d[r] = (0.5 * sum(others)) - current_toas[r]
+        return d
 
-    del_toa_b0 = (0.5*(input_df[f'toa_b{board_ids[1]}'] + input_df[f'toa_b{board_ids[2]}']) - input_df[f'toa_b{board_ids[0]}']).values
-    del_toa_b1 = (0.5*(input_df[f'toa_b{board_ids[0]}'] + input_df[f'toa_b{board_ids[2]}']) - input_df[f'toa_b{board_ids[1]}']).values
-    del_toa_b2 = (0.5*(input_df[f'toa_b{board_ids[0]}'] + input_df[f'toa_b{board_ids[1]}']) - input_df[f'toa_b{board_ids[2]}']).values
-
-    for i in range(iterative_cnt):
-        coeff_b0 = np.polyfit(input_df[f'tot_b{board_ids[0]}'].values, del_toa_b0, poly_order)
-        poly_func_b0 = np.poly1d(coeff_b0)
-
-        coeff_b1 = np.polyfit(input_df[f'tot_b{board_ids[1]}'].values, del_toa_b1, poly_order)
-        poly_func_b1 = np.poly1d(coeff_b1)
-
-        coeff_b2 = np.polyfit(input_df[f'tot_b{board_ids[2]}'].values, del_toa_b2, poly_order)
-        poly_func_b2 = np.poly1d(coeff_b2)
-
-        corr_b0 = corr_b0 + poly_func_b0(input_df[f'tot_b{board_ids[0]}'].values)
-        corr_b1 = corr_b1 + poly_func_b1(input_df[f'tot_b{board_ids[1]}'].values)
-        corr_b2 = corr_b2 + poly_func_b2(input_df[f'tot_b{board_ids[2]}'].values)
-
-        del_toa_b0 = (0.5*(corr_b1 + corr_b2) - corr_b0)
-        del_toa_b1 = (0.5*(corr_b0 + corr_b2) - corr_b1)
-        del_toa_b2 = (0.5*(corr_b0 + corr_b1) - corr_b2)
-
-        if i == iterative_cnt-1:
-            corr_toas[f'toa_b{board_ids[0]}'] = corr_b0
-            corr_toas[f'toa_b{board_ids[1]}'] = corr_b1
-            corr_toas[f'toa_b{board_ids[2]}'] = corr_b2
-
-    return corr_toas
+    for _ in range(2):
+        delta_toas = get_deltas(toas)
+        for r in roles:
+            coeff = np.polyfit(tots[r], delta_toas[r], 2)
+            toas[r] += np.poly1d(coeff)(tots[r])
+    return toas
 
 ## --------------------------------------
-def four_board_iterative_timewalk_correction(
-    input_df: pd.DataFrame,
-    iterative_cnt: int,
-    poly_order: int,
-    ):
+def calculate_gmm_cdf(x: np.ndarray, weights: np.ndarray, means: np.ndarray, covariances: np.ndarray):
+    """Standalone vectorized GMM CDF calculation to avoid re-definition in loops."""
+    cdf_val = np.zeros_like(x)
+    stds = np.sqrt(covariances.flatten())
+    means = means.flatten()
 
-    corr_toas = {}
-    corr_b0 = input_df['toa_b0'].values
-    corr_b1 = input_df['toa_b1'].values
-    corr_b2 = input_df['toa_b2'].values
-    corr_b3 = input_df['toa_b3'].values
-
-    del_toa_b3 = ((1/3)*(input_df['toa_b0'] + input_df['toa_b1'] + input_df['toa_b2']) - input_df['toa_b3']).values
-    del_toa_b2 = ((1/3)*(input_df['toa_b0'] + input_df['toa_b1'] + input_df['toa_b3']) - input_df['toa_b2']).values
-    del_toa_b1 = ((1/3)*(input_df['toa_b0'] + input_df['toa_b3'] + input_df['toa_b2']) - input_df['toa_b1']).values
-    del_toa_b0 = ((1/3)*(input_df['toa_b3'] + input_df['toa_b1'] + input_df['toa_b2']) - input_df['toa_b0']).values
-
-    for i in range(iterative_cnt):
-        coeff_b0 = np.polyfit(input_df['tot_b0'].values, del_toa_b0, poly_order)
-        poly_func_b0 = np.poly1d(coeff_b0)
-
-        coeff_b1 = np.polyfit(input_df['tot_b1'].values, del_toa_b1, poly_order)
-        poly_func_b1 = np.poly1d(coeff_b1)
-
-        coeff_b2 = np.polyfit(input_df['tot_b2'].values, del_toa_b2, poly_order)
-        poly_func_b2 = np.poly1d(coeff_b2)
-
-        coeff_b3 = np.polyfit(input_df['tot_b3'].values, del_toa_b3, poly_order)
-        poly_func_b3 = np.poly1d(coeff_b3)
-
-        corr_b0 = corr_b0 + poly_func_b0(input_df['tot_b0'].values)
-        corr_b1 = corr_b1 + poly_func_b1(input_df['tot_b1'].values)
-        corr_b2 = corr_b2 + poly_func_b2(input_df['tot_b2'].values)
-        corr_b3 = corr_b3 + poly_func_b3(input_df['tot_b3'].values)
-
-        del_toa_b3 = ((1/3)*(corr_b0 + corr_b1 + corr_b2) - corr_b3)
-        del_toa_b2 = ((1/3)*(corr_b0 + corr_b1 + corr_b3) - corr_b2)
-        del_toa_b1 = ((1/3)*(corr_b0 + corr_b3 + corr_b2) - corr_b1)
-        del_toa_b0 = ((1/3)*(corr_b3 + corr_b1 + corr_b2) - corr_b0)
-
-        if i == iterative_cnt-1:
-            corr_toas[f'toa_b0'] = corr_b0
-            corr_toas[f'toa_b1'] = corr_b1
-            corr_toas[f'toa_b2'] = corr_b2
-            corr_toas[f'toa_b3'] = corr_b3
-
-    return corr_toas
+    for w, m, s in zip(weights, means, stds):
+        cdf_val += w * norm.cdf(x, m, s)
+    return cdf_val
 
 ## --------------------------------------
-def fwhm_based_on_gaussian_mixture_model(
-        input_data: np.array,
-        tb_loc: str,
-        tag: str,
-        hist_bins: int = 30,
-        n_components: int = 3,
-        show_plot: bool = False,
-        show_sub_gaussian: bool = False,
-        show_fwhm_guideline: bool = False,
-        show_number: bool = False,
-        save_mother_dir: Path | None = None,
-        fname_tag: str = '',
-    ):
-    """Find the sigma of delta TOA distribution and plot the distribution.
+def fit_gmm_and_get_fwhm(data: np.ndarray, pair: str, plot_result: bool = False, plot_cdf: bool = False):
+    """Fits GMM and returns FWHM and KS score."""
+    data_reshaped = data.reshape(-1, 1)
+    data_sorted = np.sort(data)
+    n_events = len(data)
+    components_to_try = [1, 2, 3] if n_events < 1500 else [3]
+    best_fwhm, best_ks = 0.0, 1.0
+    best_gmm = None
+    best_x_range, best_pdf = None, None
 
-    Parameters
-    ----------
-    input_data: np.array,
-        A numpy array includes delta TOA values.
-    tb_loc: str,
-        Test Beam location for the title. Available argument: desy, cern, fnal.
-    tag: str,
-        Additional string to show which boards are used for delta TOA calculation.
-    hist_bins: int
-        Bins for histogram.
-    n_components: int
-        Number of sub-gaussian to be considered for the Gaussian Mixture Model
-    show_sub_gaussian: bool, optional
-        If it is True, show sub-gaussian in the plot.
-    show_fwhm_guideline: bool, optional
-        If it is True, show horizontal and vertical lines to show how FWHM has been performed.
-    show_number: bool, optional
-        If it is True, FWHM and sigma will be shown in the plot.
-    save_mother_dir: Path, optional
-        Plot will be saved at save_mother_dir/'fwhm'.
-    fname_tag: str, optional
-        Additional tag for the file name.
-    """
+    for n_comp in components_to_try:
+        try:
+            gmm = GaussianMixture(n_components=n_comp, n_init=3).fit(data_reshaped)
+            ks_score, _ = kstest(data_sorted, lambda x: calculate_gmm_cdf(x, gmm.weights_, gmm.means_, gmm.covariances_))
 
-    from sklearn.mixture import GaussianMixture
-    from sklearn.metrics import silhouette_score
-    from scipy.spatial import distance
+            x_range = np.linspace(data.min(), data.max(), 1000).reshape(-1, 1)
+            pdf_range = np.exp(gmm.score_samples(x_range))
+            peak_val = np.max(pdf_range)
+            half_max_indices = np.where(pdf_range >= peak_val / 2.0)[0]
 
+            if len(half_max_indices) > 1:
+                fwhm = float(x_range[half_max_indices[-1], 0] - x_range[half_max_indices[0], 0])
 
-    x_range = np.linspace(input_data.min(), input_data.max(), 1000).reshape(-1, 1)
-    bins, edges = np.histogram(input_data, bins=hist_bins, density=True)
-    centers = 0.5*(edges[1:] + edges[:-1])
-    models = GaussianMixture(n_components=n_components).fit(input_data.reshape(-1, 1))
+            if ks_score < best_ks:
+                best_ks, best_fwhm = ks_score, fwhm
+                best_gmm = gmm
+                best_x_range, best_pdf = x_range, pdf_range
 
-    silhouette_eval_score = silhouette_score(centers.reshape(-1, 1), models.predict(centers.reshape(-1, 1)))
+        except Exception:
+            continue
 
-    logprob = models.score_samples(centers.reshape(-1, 1))
-    pdf = np.exp(logprob)
-    jensenshannon_score = distance.jensenshannon(bins, pdf)
+    # --- Optional Plotting Logic ---
+    if plot_result and best_gmm is not None:
+        plt.figure(figsize=(11, 9))
+        plt.hist(data, bins=50, range=[-1000, 1000], density=True, alpha=0.4, color='teal', label='Data')
+        plt.plot(best_x_range, best_pdf, color='black', lw=2, label=f'Best GMM (subGaussian={best_gmm.n_components})')
 
-    logprob = models.score_samples(x_range)
-    pdf = np.exp(logprob)
-    peak_height = np.max(pdf)
+        # # Plot individual Gaussian components (Sub-distributions)
+        # for i in range(best_gmm.n_components):
+        #     weight = best_gmm.weights_[i]
+        #     mean = best_gmm.means_[i, 0]
+        #     variance = best_gmm.covariances_[i, 0, 0]
+        #     std_dev = np.sqrt(variance)
 
-    # Find the half-maximum points.
-    half_max = peak_height*0.5
-    half_max_indices = np.where(pdf >= half_max)[0]
+        #     # Weighted Gaussian: weight * Normal PDF
+        #     component_pdf = weight * norm.pdf(best_x_range.flatten(), mean, std_dev)
+        #     plt.plot(best_x_range, component_pdf, '--', lw=1.5, label=f'Comp {i+1} (w={weight:.2f})')
 
-    # Calculate the FWHM.
-    fwhm = x_range[half_max_indices[-1]] - x_range[half_max_indices[0]]
-    xval = x_range[np.argmax(pdf)][0]
+        # Visualize FWHM
+        peak_y = np.max(best_pdf)
+        plt.hlines(y=peak_y/2, xmin=best_x_range[np.where(best_pdf >= peak_y/2)[0][0]],
+                   xmax=best_x_range[np.where(best_pdf >= peak_y/2)[0][-1]],
+                   colors='red', linestyles='--', label=f'FWHM: {best_fwhm:.2f}')
 
-    if show_sub_gaussian:
-        # Compute PDF for each component
-        responsibilities = models.predict_proba(x_range)
-        pdf_individual = responsibilities * pdf[:, np.newaxis]
-
-    if show_plot:
-        from .plotting import load_fig_title
-        import matplotlib.pyplot as plt
-        import mplhep as hep
-        hep.style.use('CMS')
-
-        loc_title = load_fig_title(tb_loc)
-        fig, ax = plt.subplots(figsize=(11,10))
-
-        # Plot data histogram
-        bins, _, _ = ax.hist(input_data, bins=hist_bins, density=True, histtype='stepfilled', alpha=0.4, label='Data')
-
-        # Plot PDF of whole model
-        hep.cms.text(loc=0, ax=ax, text="ETL ETROC Test Beam", fontsize=18)
-        ax.set_title(loc_title, loc="right", fontsize=16)
-        ax.set_xlabel(rf'$\Delta \mathrm{{TOA}}_{{{tag}}}$ [ps]', fontsize=25)
-        ax.yaxis.label.set_fontsize(25)
-        if show_number:
-            ax.plot(x_range, pdf, '-k', label=f'Mixture PDF, mean: {xval:.2f}')
-            ax.plot(np.nan, np.nan, linestyle='none', label=f'FWHM:{fwhm[0]:.2f}, sigma:{fwhm[0]/2.355:.2f}')
-        else:
-            ax.plot(x_range, pdf, '-k', label=f'Mixture PDF')
-
-        if show_sub_gaussian:
-            # Plot PDF of each component
-            ax.plot(x_range, pdf_individual, '--', label='Component PDF')
-
-        if show_fwhm_guideline:
-            ax.vlines(x_range[half_max_indices[0]],  ymin=0, ymax=np.max(bins)*0.75, lw=1.5, colors='red')
-            ax.vlines(x_range[half_max_indices[-1]], ymin=0, ymax=np.max(bins)*0.75, lw=1.5, colors='red')
-            ax.hlines(y=peak_height, xmin=x_range[0], xmax=x_range[-1], lw=1.5, colors='crimson', label='Max')
-            ax.hlines(y=half_max, xmin=x_range[0], xmax=x_range[-1], lw=1.5, colors='deeppink', label='Half Max')
-
-        ax.legend(loc='best', fontsize=14)
+        plt.title(f"GMM Fit for {pair}")
+        plt.xlabel(f'$\Delta$ TOA (ps)')
+        plt.ylabel("Density")
+        plt.legend(fontsize=17)
         plt.tight_layout()
 
-        if save_mother_dir is not None:
-            save_dir = save_mother_dir / 'fwhm'
-            save_dir.mkdir(exist_ok=True)
-            fig.savefig(save_dir / f"fwhm_{tag}_{fname_tag}.png")
-            fig.savefig(save_dir / f"fwhm_{tag}_{fname_tag}.pdf")
-            plt.close(fig)
+    if plot_cdf and best_gmm is not None:
+        plt.figure(figsize=(11, 9))
 
-    return fwhm, [silhouette_eval_score, jensenshannon_score]
+        # 1. Empirical CDF - The "Background"
+        # Use a thicker solid line to act as a border for the model line
+        cdf_empirical = np.arange(1, n_events + 1) / n_events
+        plt.step(data_sorted, cdf_empirical, color='black', alpha=0.3, lw=4,
+                label='Empirical (Data)', where='post')
 
-## --------------- Time Walk Correction -----------------------
+        # 2. GMM Theoretical CDF - The "Foreground"
+        # Use a thinner, dashed line in a bright color to cut through the black
+        gmm_cdf_y = calculate_gmm_cdf(best_x_range.flatten(), best_gmm.weights_,
+                                    best_gmm.means_, best_gmm.covariances_)
+        plt.plot(best_x_range, gmm_cdf_y, color='red', lw=2, linestyle='--',
+                dash_capstyle='round', dashes=(5, 2), label='GMM Fit')
+
+        plt.title(f"CDF Comparison: {pair} (KS: {best_ks:.4f})")
+        plt.xlabel(r'$\Delta$ TOA [ps]')
+        plt.ylabel("Cumulative Probability")
+        plt.xlim(-1000, 1000)
+        plt.ylim(-0.05, 1.05)
+        plt.grid(True, linestyle=':', alpha=0.5)
+        plt.legend(loc='lower right')
+        plt.tight_layout()
+
+    return best_fwhm, best_ks
+
+## --------------------------------------
+def calculate_resolution_from_fit(fit_params: dict, roles: list[str]):
+    """Solves 3-board resolution equations."""
+    results = {}
+    for target in roles:
+        others = [r for r in roles if r != target]
+        s_t_o1 = fit_params.get(f"{target}-{others[0]}", fit_params.get(f"{others[0]}-{target}", 0))**2
+        s_t_o2 = fit_params.get(f"{target}-{others[1]}", fit_params.get(f"{others[1]}-{target}", 0))**2
+        s_o1_o2 = fit_params.get(f"{others[0]}-{others[1]}", fit_params.get(f"{others[1]}-{others[0]}", 0))**2
+        val_sq = 0.5 * (s_t_o1 + s_t_o2 - s_o1_o2)
+        results[target] = np.sqrt(val_sq) if val_sq > 0 else 0.0
+    return results
+
+# ## --------------------------------------
+# def four_board_iterative_timewalk_correction(
+#     input_df: pd.DataFrame,
+#     iterative_cnt: int,
+#     poly_order: int,
+#     ):
+
+#     corr_toas = {}
+#     corr_b0 = input_df['toa_b0'].values
+#     corr_b1 = input_df['toa_b1'].values
+#     corr_b2 = input_df['toa_b2'].values
+#     corr_b3 = input_df['toa_b3'].values
+
+#     del_toa_b3 = ((1/3)*(input_df['toa_b0'] + input_df['toa_b1'] + input_df['toa_b2']) - input_df['toa_b3']).values
+#     del_toa_b2 = ((1/3)*(input_df['toa_b0'] + input_df['toa_b1'] + input_df['toa_b3']) - input_df['toa_b2']).values
+#     del_toa_b1 = ((1/3)*(input_df['toa_b0'] + input_df['toa_b3'] + input_df['toa_b2']) - input_df['toa_b1']).values
+#     del_toa_b0 = ((1/3)*(input_df['toa_b3'] + input_df['toa_b1'] + input_df['toa_b2']) - input_df['toa_b0']).values
+
+#     for i in range(iterative_cnt):
+#         coeff_b0 = np.polyfit(input_df['tot_b0'].values, del_toa_b0, poly_order)
+#         poly_func_b0 = np.poly1d(coeff_b0)
+
+#         coeff_b1 = np.polyfit(input_df['tot_b1'].values, del_toa_b1, poly_order)
+#         poly_func_b1 = np.poly1d(coeff_b1)
+
+#         coeff_b2 = np.polyfit(input_df['tot_b2'].values, del_toa_b2, poly_order)
+#         poly_func_b2 = np.poly1d(coeff_b2)
+
+#         coeff_b3 = np.polyfit(input_df['tot_b3'].values, del_toa_b3, poly_order)
+#         poly_func_b3 = np.poly1d(coeff_b3)
+
+#         corr_b0 = corr_b0 + poly_func_b0(input_df['tot_b0'].values)
+#         corr_b1 = corr_b1 + poly_func_b1(input_df['tot_b1'].values)
+#         corr_b2 = corr_b2 + poly_func_b2(input_df['tot_b2'].values)
+#         corr_b3 = corr_b3 + poly_func_b3(input_df['tot_b3'].values)
+
+#         del_toa_b3 = ((1/3)*(corr_b0 + corr_b1 + corr_b2) - corr_b3)
+#         del_toa_b2 = ((1/3)*(corr_b0 + corr_b1 + corr_b3) - corr_b2)
+#         del_toa_b1 = ((1/3)*(corr_b0 + corr_b3 + corr_b2) - corr_b1)
+#         del_toa_b0 = ((1/3)*(corr_b3 + corr_b1 + corr_b2) - corr_b0)
+
+#         if i == iterative_cnt-1:
+#             corr_toas[f'toa_b0'] = corr_b0
+#             corr_toas[f'toa_b1'] = corr_b1
+#             corr_toas[f'toa_b2'] = corr_b2
+#             corr_toas[f'toa_b3'] = corr_b3
+
+#     return corr_toas

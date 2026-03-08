@@ -17,6 +17,7 @@ rcParams["axes.formatter.useoffset"] = False
 rcParams["axes.formatter.use_mathtext"] = False
 
 __all__ = [
+    'plot_TWC',
     'fit_board_resolution',
     'calculate_weighted_mean_std_for_every_pixel',
     'preprocess_ranking_data',
@@ -37,116 +38,74 @@ def save_plot(fig, save_dir, file_name):
 
 ## --------------------------------------
 def plot_TWC(
-        input_df: pd.DataFrame,
-        board_ids: list[int],
-        tb_loc: str,
-        poly_order: int = 2,
-        corr_toas: dict | None = None,
-        save_mother_dir: Path | None = None,
-        print_func: bool = False,
-    ):
-
-    plot_title = load_fig_title(tb_loc)
-
-    if corr_toas is not None:
-        del_toa_b0 = (0.5*(corr_toas[f'toa_b{board_ids[1]}'] + corr_toas[f'toa_b{board_ids[2]}']) - corr_toas[f'toa_b{board_ids[0]}'])
-        del_toa_b1 = (0.5*(corr_toas[f'toa_b{board_ids[0]}'] + corr_toas[f'toa_b{board_ids[2]}']) - corr_toas[f'toa_b{board_ids[1]}'])
-        del_toa_b2 = (0.5*(corr_toas[f'toa_b{board_ids[0]}'] + corr_toas[f'toa_b{board_ids[1]}']) - corr_toas[f'toa_b{board_ids[2]}'])
-    else:
-        del_toa_b0 = (0.5*(input_df[f'toa_b{board_ids[1]}'] + input_df[f'toa_b{board_ids[2]}']) - input_df[f'toa_b{board_ids[0]}']).values
-        del_toa_b1 = (0.5*(input_df[f'toa_b{board_ids[0]}'] + input_df[f'toa_b{board_ids[2]}']) - input_df[f'toa_b{board_ids[1]}']).values
-        del_toa_b2 = (0.5*(input_df[f'toa_b{board_ids[0]}'] + input_df[f'toa_b{board_ids[1]}']) - input_df[f'toa_b{board_ids[2]}']).values
-
+    input_df: pd.DataFrame,
+    board_ids: list[int],
+    tb_loc: str,
+    poly_order: int = 2,
+    corr_toas: dict | None = None,
+    print_func: bool = False,
+    save_mother_dir: Path | None = None,
+):
     def roundup(x):
         return int(np.ceil(x / 100.0)) * 100
 
-    tot_ranges = {}
-    for idx in board_ids:
-        min_value = roundup(input_df[f'tot_b{idx}'].min()) - 500
-        max_value = roundup(input_df[f'tot_b{idx}'].max()) + 500
-        if min_value < 0:
-            min_value = 0
-        tot_ranges[idx] = [min_value, max_value]
+    def make_poly_legend(coeff, order):
+        terms = []
+        for i, c in enumerate(coeff):
+            p = order - i
+            c_str = f"{c:+.2e}" if abs(c) < 0.01 and c != 0 else f"{c:+.2f}"
+            term = rf"{c_str}$x^{p}$" if p > 0 else f"{c_str}"
+            terms.append(term)
+        return "".join(terms)
 
-    h_twc1 = hist.Hist(
-        hist.axis.Regular(50, tot_ranges[board_ids[0]][0], tot_ranges[board_ids[0]][1], name=f'tot_b{board_ids[0]}', label=f'tot_b{board_ids[0]}'),
-        hist.axis.Regular(50, -3000, 3000, name=f'delta_toa{board_ids[0]}', label=f'delta_toa{board_ids[0]}')
-    )
-    h_twc2 = hist.Hist(
-        hist.axis.Regular(50, tot_ranges[board_ids[1]][0], tot_ranges[board_ids[1]][1], name=f'tot_b{board_ids[1]}', label=f'tot_b{board_ids[1]}'),
-        hist.axis.Regular(50, -3000, 3000, name=f'delta_toa{board_ids[1]}', label=f'delta_toa{board_ids[1]}')
-    )
-    h_twc3 = hist.Hist(
-        hist.axis.Regular(50, tot_ranges[board_ids[2]][0], tot_ranges[board_ids[2]][1], name=f'tot_b{board_ids[2]}', label=f'tot_b{board_ids[2]}'),
-        hist.axis.Regular(50, -3000, 3000, name=f'delta_toa{board_ids[2]}', label=f'delta_toa{board_ids[2]}')
-    )
+    # 1. Calculate Delta TOAs
+    # Logic: 0.5 * (sum of others) - current
+    del_toas = []
+    toa_data = corr_toas if corr_toas is not None else input_df
+    toa_prefix = 'toa_' if corr_toas is not None else 'toa_' # Adjust prefix if needed
 
-    h_twc1.fill(input_df[f'tot_b{board_ids[0]}'], del_toa_b0)
-    h_twc2.fill(input_df[f'tot_b{board_ids[1]}'], del_toa_b1)
-    h_twc3.fill(input_df[f'tot_b{board_ids[2]}'], del_toa_b2)
+    for i, current_id in enumerate(board_ids):
+        others = [board_ids[j] for j in range(len(board_ids)) if j != i]
+        # Average of the other boards
+        others_avg = 0.5 * sum(toa_data[f'{toa_prefix}{oid}'] for oid in others)
+        # Difference from current board
+        diff = (others_avg - toa_data[f'{toa_prefix}{current_id}'])
+        del_toas.append(diff.values if hasattr(diff, 'values') else diff)
 
-    b1_xrange = np.linspace(input_df[f'tot_b{board_ids[0]}'].min(), input_df[f'tot_b{board_ids[0]}'].max(), 100)
-    b2_xrange = np.linspace(input_df[f'tot_b{board_ids[1]}'].min(), input_df[f'tot_b{board_ids[1]}'].max(), 100)
-    b3_xrange = np.linspace(input_df[f'tot_b{board_ids[2]}'].min(), input_df[f'tot_b{board_ids[2]}'].max(), 100)
+    # 2. Setup Figure and Histograms
+    fig, axes = plt.subplots(1, 3, figsize=(30, 12))
+    plot_title = load_fig_title(tb_loc)
 
-    coeff_b0 = np.polyfit(input_df[f'tot_b{board_ids[0]}'].values, del_toa_b0, poly_order)
-    poly_func_b0 = np.poly1d(coeff_b0)
+    for i, b_id in enumerate(board_ids):
+        # Determine TOT range
+        tot_min = max(0, roundup(input_df[f'tot_{b_id}'].min()) - 500)
+        tot_max = roundup(input_df[f'tot_{b_id}'].max()) + 500
 
-    coeff_b1 = np.polyfit(input_df[f'tot_b{board_ids[1]}'].values, del_toa_b1, poly_order)
-    poly_func_b1 = np.poly1d(coeff_b1)
+        # Create and Fill Histogram
+        h = hist.Hist(
+            hist.axis.Regular(50, tot_min, tot_max, name='tot', label='TOT [ps]'),
+            hist.axis.Regular(50, -3000, 3000, name='delta', label=r'$\Delta$ TOA [ps]')
+        )
+        h.fill(input_df[f'tot_{b_id}'], del_toas[i])
 
-    coeff_b2 = np.polyfit(input_df[f'tot_b{board_ids[2]}'].values, del_toa_b2, poly_order)
-    poly_func_b2 = np.poly1d(coeff_b2)
+        # Polynomial Fit
+        coeffs = np.polyfit(input_df[f'tot_{b_id}'], del_toas[i], poly_order)
+        poly_fn = np.poly1d(coeffs)
+        if print_func: print(f"Board {b_id} Poly:\n{poly_fn}")
 
-    def make_legend(coeff, poly_order):
-        legend_str = ""
-        for i in range(poly_order + 1):
-            if round(coeff[i], 2) == 0:
-                # Use scientific notation
-                coeff_str = f"{coeff[i]:.2e}"
-            else:
-                # Use fixed-point notation
-                coeff_str = f"{coeff[i]:.2f}"
+        # Plotting
+        hep.hist2dplot(h, ax=axes[i], norm=colors.LogNorm())
+        hep.cms.text(loc=0, ax=axes[i], text="ETL ETROC Test Beam", fontsize=18)
 
-            # Add x
-            coeff_str = rf"{coeff_str}$x^{poly_order-i}$"
+        x_range = np.linspace(input_df[f'tot_{b_id}'].min(), input_df[f'tot_{b_id}'].max(), 100)
+        axes[i].plot(x_range, poly_fn(x_range), 'r-', lw=3, label=make_poly_legend(coeffs, poly_order))
 
-            # Add sign
-            if coeff[i] > 0:
-                coeff_str = f"+{coeff_str}"
-                legend_str += coeff_str
-            else:
-                legend_str += coeff_str
-        return legend_str
-
-    if print_func:
-        print(poly_func_b0)
-        print(poly_func_b1)
-        print(poly_func_b2)
-
-    fig, axes = plt.subplots(1, 3, figsize=(38, 10))
-    hep.hist2dplot(h_twc1, ax=axes[0], norm=colors.LogNorm())
-    hep.cms.text(loc=0, ax=axes[0], text="ETL ETROC Test Beam", fontsize=18)
-    axes[0].plot(b1_xrange, poly_func_b0(b1_xrange), 'r-', lw=3, label=make_legend(coeff_b0, poly_order=poly_order))
-    axes[0].set_xlabel('TOT1 [ps]', fontsize=25)
-    axes[0].set_ylabel('0.5*(TOA2+TOA3)-TOA1 [ps]', fontsize=25)
-    axes[0].set_title(plot_title, fontsize=16, loc='right')
-    hep.hist2dplot(h_twc2, ax=axes[1], norm=colors.LogNorm())
-    hep.cms.text(loc=0, ax=axes[1], text="ETL ETROC Test Beam", fontsize=18)
-    axes[1].plot(b2_xrange, poly_func_b1(b2_xrange), 'r-', lw=3, label=make_legend(coeff_b1, poly_order=poly_order))
-    axes[1].set_xlabel('TOT2 [ps]', fontsize=25)
-    axes[1].set_ylabel('0.5*(TOA1+TOA3)-TOA2 [ps]', fontsize=25)
-    axes[1].set_title(plot_title, fontsize=16, loc='right')
-    hep.hist2dplot(h_twc3, ax=axes[2], norm=colors.LogNorm())
-    hep.cms.text(loc=0, ax=axes[2], text="ETL ETROC Test Beam", fontsize=18)
-    axes[2].plot(b3_xrange, poly_func_b2(b3_xrange), 'r-', lw=3, label=make_legend(coeff_b2, poly_order=poly_order))
-    axes[2].set_xlabel('TOT3 [ps]', fontsize=25)
-    axes[2].set_ylabel('0.5*(TOA1+TOA2)-TOA3 [ps]', fontsize=25)
-    axes[2].set_title(plot_title, fontsize=16, loc='right')
-
-    axes[0].legend(loc='best')
-    axes[1].legend(loc='best')
-    axes[2].legend(loc='best')
+        # Labels
+        others_label = " + ".join([f"{oid} TOA" for oid in board_ids if oid != b_id])
+        axes[i].set_xlabel(f'{b_id} TOT [ps]', fontsize=25)
+        axes[i].set_ylabel(f'0.5 * ({others_label}) - {b_id} TOA [ps]', fontsize=21)
+        axes[i].set_title(plot_title, loc='right', fontsize=16)
+        axes[i].legend(loc='upper right')
 
     if save_mother_dir is not None:
         save_dir = save_mother_dir / 'twc_fit'
@@ -422,7 +381,7 @@ def plot_resolution_table(
         ax.invert_xaxis()
         ax.invert_yaxis()
         plt.minorticks_off()
-        plt.tight_layout()
+        fig.tight_layout()
 
         if save_mother_dir is not None:
             save_dir = save_mother_dir / 'time_resolution_results'
@@ -630,9 +589,22 @@ def plot_avg_resolution_per_row(
 
     summary_df = pd.DataFrame(summary_array, columns=['row', res_col, err_col])
 
-    fig, ax = plt.subplots(figsize=(12, 10))
+    fig, ax = plt.subplots(figsize=(12, 10), layout="constrained")
     hep.cms.text(loc=0, ax=ax, text="ETL ETROC Test Beam", fontsize=20)
-    ax.set_title(f'{loc_title}\n{selected_fig_config['title']}', loc='right', fontsize=17)
+
+    right_text = f"{loc_title}\n{selected_fig_config['title']}"
+    max_line_length = max(len(line) for line in right_text.split('\n'))
+
+    # Proportional Font Size:
+    # Starts at 17; drops as text gets longer.
+    if max_line_length > 50:
+        smart_fs = 13
+    elif max_line_length > 35:
+        smart_fs = 15
+    else:
+        smart_fs = 17
+
+    ax.set_title(right_text, loc='right', fontsize=smart_fs)
 
     ax.errorbar(
         x=summary_df['row'],
@@ -651,8 +623,6 @@ def plot_avg_resolution_per_row(
     ax.grid(axis='y')
     ax.xaxis.set_minor_locator(plt.NullLocator())
     ax.set_ylim(ylims[0], ylims[1])
-
-    fig.tight_layout()
 
 ## --------------------------------------
 def calculate_weighted_mean_std_for_every_pixel(
