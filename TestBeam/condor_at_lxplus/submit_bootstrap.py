@@ -45,7 +45,7 @@ Arguments             = $(path)
 TransferOutputRemaps  = "$(stem)_boot.parquet={{ out_dir }}/$(stem)_boot.parquet"
 output                = {{ log_dir }}/$(ClusterId).$(ProcId).bootstrap.stdout
 error                 = {{ log_dir }}/$(ClusterId).$(ProcId).bootstrap.stderr
-log                   = {{ log_dir }}/$(ClusterId).$(ProcId).bootstrap.log
+log                   = {{ log_dir }}/bootstrap.log
 MY.WantOS             = "el9"
 +JobFlavour           = "workday"
 Queue stem, path from {{ script_dir }}/{{ master_list_file_name }}

@@ -90,7 +90,7 @@ Arguments             = $(ClusterId) $(ProcId) {{ master_list_file_name }} {{ ba
 output_destination    = root://eosuser.cern.ch/{{ output_dir }}
 output                = {{ log_dir }}/$(ClusterId).$(ProcId).tdc.stdout
 error                 = {{ log_dir }}/$(ClusterId).$(ProcId).tdc.stderr
-log                   = {{ log_dir }}/$(ClusterId).$(ProcId).tdc.log
+log                   = {{ log_dir }}/tdc.log
 MY.WantOS             = "el9"
 +JobFlavour           = "workday"
 Queue {{ num_of_jobs }}
