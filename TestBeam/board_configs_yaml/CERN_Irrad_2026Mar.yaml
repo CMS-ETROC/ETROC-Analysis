@@ -1,24 +1,24 @@
 T3:
   PT_LF7: &PT_LF7
-    name: ET2.01 PacTech LFoundry-7
+    name: ET2.01 LFoundry-7
     short: PT_LF7
     offset: 20
     HV: 160
     role: trig
   PT_LF6: &PT_LF6
-    name: ET2.01 PacTech LFoundry-6
+    name: ET2.01 LFoundry-6
     short: PT_LF6
     offset: 20
     HV: 150
     role: ref
   PT_LF9: &PT_LF9
-    name: ET2.01 PacTech LFoundry-9
+    name: ET2.01 LFoundry-9
     short: PT_LF9
     offset: 20
     HV: 160
     role: dut
   PT_LF8: &PT_LF8
-    name: ET2.01 PacTech LFoundry-8
+    name: ET2.01 LFoundry-8
     short: PT_LF8
     offset: 20
     HV: 140
@@ -26,25 +26,25 @@ T3:
 
 F1:
   PT_LF10: &PT_LF10
-    name: ET2.01 PacTech LFoundry-10
+    name: ETROC LFoundry-10
     short: PT_LF10
     offset: 20
     HV: 230
     role: extra
   PT_LF12: &PT_LF12
-    name: ET2.01 PacTech LFoundry-12
+    name: ETROC LFoundry-12
     short: PT_LF12
     offset: 20
     HV: 230
     role: dut
   PT_LF17: &PT_LF17
-    name: ET2.01 PacTech LFoundry-17
+    name: ETROC LFoundry-17
     short: PT_LF17
     offset: 20
     HV: 230
     role: ref
   PT_LF18: &PT_LF18
-    name: ET2.01 PacTech LFoundry-18
+    name: ETROC LFoundry-18
     short: PT_LF18
     offset: 20
     HV: 230
@@ -81,25 +81,25 @@ H1:
     name: ETROC HPK-7
     short: PT_IH7
     offset: 20
-    HV: 170
+    HV: 180
     role: extra
   PT_IH11: &PT_IH11
     name: ETROC HPK-11
     short: PT_IH11
     offset: 20
-    HV: 170
+    HV: 180
     role: ref
   PT_IH12: &PT_IH12
     name: ETROC HPK-12
     short: PT_IH12
     offset: 20
-    HV: 170
+    HV: 180
     role: dut
   PT_IH13: &PT_IH13
     name: ETROC HPK-13
     short: PT_IH13
     offset: 20
-    HV: 170
+    HV: 180
     role: trig
 
 
