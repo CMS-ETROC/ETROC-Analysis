@@ -24,6 +24,32 @@ T3:
     HV: 140
     role: extra
 
+F1:
+  PT_LF10: &PT_LF10
+    name: ET2.01 PacTech LFoundry-10
+    short: PT_LF10
+    offset: 20
+    HV: 230
+    role: extra
+  PT_LF12: &PT_LF12
+    name: ET2.01 PacTech LFoundry-12
+    short: PT_LF12
+    offset: 20
+    HV: 230
+    role: dut
+  PT_LF17: &PT_LF17
+    name: ET2.01 PacTech LFoundry-17
+    short: PT_LF17
+    offset: 20
+    HV: 230
+    role: ref
+  PT_LF18: &PT_LF18
+    name: ET2.01 PacTech LFoundry-18
+    short: PT_LF18
+    offset: 20
+    HV: 230
+    role: trig
+
 H2:
   PT_IH18: &PT_IH18
     name: ETROC HPK-18
@@ -49,6 +75,33 @@ H2:
     offset: 20
     HV: 170
     role: trig
+
+H1:
+  PT_IH7: &PT_IH7
+    name: ETROC HPK-7
+    short: PT_IH7
+    offset: 20
+    HV: 170
+    role: extra
+  PT_IH11: &PT_IH11
+    name: ETROC HPK-11
+    short: PT_IH11
+    offset: 20
+    HV: 170
+    role: ref
+  PT_IH12: &PT_IH12
+    name: ETROC HPK-12
+    short: PT_IH12
+    offset: 20
+    HV: 170
+    role: dut
+  PT_IH13: &PT_IH13
+    name: ETROC HPK-13
+    short: PT_IH13
+    offset: 20
+    HV: 170
+    role: trig
+
 
 run1:
   0: { <<: *PT_IH18, irrad: pre-irrad, note: 25cm off beam axis }
@@ -79,3 +132,15 @@ run6:
   1: { <<: *PT_IH19, HV: 150, irrad: pre-irrad, note: 17cm off beam axis }
   2: { <<: *PT_IH21, HV: 150, irrad: pre-irrad, note: 17cm off beam axis }
   3: { <<: *PT_IH22, HV: 150, irrad: pre-irrad, note: 17cm off beam axis }
+
+h1_run1:
+  0: { <<: *PT_IH7,  irrad: pre-irrad, note: 17cm off beam axis }
+  1: { <<: *PT_IH11, irrad: pre-irrad, note: 17cm off beam axis }
+  2: { <<: *PT_IH12, irrad: pre-irrad, note: 17cm off beam axis }
+  3: { <<: *PT_IH13, irrad: pre-irrad, note: 17cm off beam axis }
+
+f1_run1:
+  0: { <<: *PT_LF10, irrad: pre-irrad, note: 17cm off beam axis }
+  1: { <<: *PT_LF12, irrad: pre-irrad, note: 17cm off beam axis }
+  2: { <<: *PT_LF17, irrad: pre-irrad, note: 17cm off beam axis }
+  3: { <<: *PT_LF18, irrad: pre-irrad, note: 17cm off beam axis }
