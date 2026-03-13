@@ -227,6 +227,8 @@ if __name__ == "__main__":
 
     print('\n========= Submission Details =========')
     print(f'Input:       {args.dirname}')
+    print(f'Input CAL table: {args.cal_table}')
+    print(f'Input track file: {args.track}')
     print(f'Trigger ID:  {trig_id}')
     print(f'Output:      {eos_base_dir}/{args.outname}')
     print('======================================\n')
