@@ -85,6 +85,35 @@ def convert_to_time(df: pd.DataFrame, all_roles: dict[str, int]) -> pd.DataFrame
 
     return pd.concat(processed_chunks).sort_index() if processed_chunks else pd.DataFrame()
 
+def find_tot_lower_bound(series: pd.Series, n_bins: int = 200) -> float:
+    """
+    Finds the valley to the left of the main TOT peak as a lower bound.
+    Returns None if no secondary peak/valley exists (i.e. left side is clean).
+
+    Strategy:
+      1. Histogram the TOT distribution.
+      2. Find the main (tallest) peak.
+      3. Find the minimum bin to the LEFT of the main peak.
+      4. If that minimum is at the leftmost bin, there is no real valley
+         (left side rises monotonically) -> return None, fall back to quantile cut.
+      5. Otherwise return the TOT value at the valley as the new lower bound.
+    """
+    counts, edges = np.histogram(series.dropna(), bins=n_bins)
+    bin_centers = (edges[:-1] + edges[1:]) / 2
+
+    main_peak_idx = np.argmax(counts)
+
+    if main_peak_idx == 0:
+        return None
+
+    valley_idx = np.argmin(counts[:main_peak_idx])
+
+    # If valley is at the leftmost bin, left side is monotonically rising - no secondary peak
+    if valley_idx == 0:
+        return None
+
+    return float(bin_centers[valley_idx])
+
 def apply_raw_tdc_cuts(
     df: pd.DataFrame,
     all_roles: dict[str, int],
@@ -105,15 +134,21 @@ def apply_raw_tdc_cuts(
             if role not in cut_roles:
                 continue
 
+            tot_col = sub[f'tot_{role}']
+
+            # First: strip left-side secondary peak if present, then compute quantile on clean data
+            valley = find_tot_lower_bound(tot_col)
+            tot_col_clean = tot_col[tot_col >= valley] if valley is not None else tot_col
+
             # Determine TOT bounds for DUT vs others
             if role == dut_role:
                 if args.dutTOTlowerVal != -1 or args.dutTOTupperVal != -1:
                     low = args.dutTOTlowerVal if args.dutTOTlowerVal != -1 else -np.inf
                     high = args.dutTOTupperVal if args.dutTOTupperVal != -1 else np.inf
                 else:
-                    low, high = sub[f'tot_{role}'].quantile([args.dutTOTlower * 0.01, args.dutTOTupper * 0.01])
+                    low, high = tot_col_clean.quantile([args.dutTOTlower * 0.01, args.dutTOTupper * 0.01])
             else:
-                low, high = sub[f'tot_{role}'].quantile([0.01, 0.96])
+                low, high = tot_col_clean.quantile([0.01, 0.96])
 
             # Apply TOA window primarily for the trigger-assigned board
             toa_low = args.TOALower if role == trig_role else 0
@@ -154,14 +189,21 @@ def apply_time_domain_cuts(
         if role not in cut_roles:
             continue
 
+        tot_col = df[col]
+
+        # First: strip left-side secondary peak if present, then compute quantile on clean data
+        valley = find_tot_lower_bound(tot_col)
+        tot_col_clean = tot_col[tot_col >= valley] if valley is not None else tot_col
+
+        # Determine TOT bounds for DUT vs others
         if role == 'dut':
             if args.dutTOTlowerTime != -1 or args.dutTOTupperTime != -1:
                 low = args.dutTOTlowerTime * 1e3 if args.dutTOTlowerTime != -1 else -np.inf
                 high = args.dutTOTupperTime * 1e3 if args.dutTOTupperTime != -1 else np.inf
             else:
-                low, high = df[col].quantile([args.dutTOTlower * 0.01, args.dutTOTupper * 0.01])
+                low, high = tot_col_clean.quantile([args.dutTOTlower * 0.01, args.dutTOTupper * 0.01])
         else:
-            low, high = df[col].quantile([0.01, 0.96])
+            low, high = tot_col_clean.quantile([0.01, 0.96])
 
         mask &= df[col].between(low, high)
 
