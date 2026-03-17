@@ -3,6 +3,7 @@ import pandas as pd
 from pathlib import Path
 from natsort import natsorted
 from tqdm import tqdm
+from collections import Counter
 
 def get_balanced_sequential_groups(files, target_size):
     """
@@ -51,6 +52,13 @@ def main():
         help='Target number of files per merge',
     )
 
+    parser.add_argument(
+        '--dryrun',
+        action = 'store_true',
+        help = 'If set, No merge happens',
+        dest = 'dryrun',
+    )
+
     args = parser.parse_args()
     input_path = Path(args.input_dir)
 
@@ -70,7 +78,7 @@ def main():
     groups = get_balanced_sequential_groups(files, args.number_of_merge)
 
     # 3. Improved Group Printing
-    from collections import Counter
+
     counts = Counter(len(g) for g in groups)
     # Sort by size so it reads logically: "3 groups of 11, 7 groups of 10"
     dist_str = ", ".join([f"{count} groups of {size}" for size, count in sorted(counts.items(), reverse=True)])
@@ -78,6 +86,9 @@ def main():
     print(f'Total input files: {len(files)}')
     print(f'Total output files: {len(groups)}')
     print(f'Group distribution: {dist_str}')
+
+    if args.dryrun:
+        return
 
     # 4. Create a temporary output directory
     # Placing it inside input_path ensures it's on the same drive (faster moves)
