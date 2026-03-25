@@ -229,6 +229,12 @@ h1_run17:
   2: { <<: *PT_IH12, HV: 400, irrad: 1.5e15, note: 17cm off beam axis }
   3: { <<: *PT_IH13, HV: 400, irrad: 1.5e15, note: 17cm off beam axis }
 
+h1_run19:
+  0: { <<: *PT_IH7,  HV: 465, irrad: 1.5e15, note: 17cm off beam axis }
+  1: { <<: *PT_IH11, HV: 470, irrad: 1.5e15, note: 17cm off beam axis }
+  2: { <<: *PT_IH12, HV: 470, irrad: 1.5e15, note: 17cm off beam axis }
+  3: { <<: *PT_IH13, HV: 470, irrad: 1.5e15, note: 17cm off beam axis }
+
 f1_run1:
   0: { <<: *PT_LF10, irrad: pre-irrad, note: 17cm off beam axis }
   1: { <<: *PT_LF12, irrad: pre-irrad, note: 17cm off beam axis }
@@ -324,3 +330,9 @@ f1_run17:
   1: { <<: *PT_LF12, HV: 265, irrad: 1.5e15, note: 17cm off beam axis }
   2: { <<: *PT_LF17, HV: 265, irrad: 1.5e15, note: 17cm off beam axis }
   3: { <<: *PT_LF18, HV: 265, irrad: 1.5e15, note: 17cm off beam axis }
+
+f1_run19:
+  0: { <<: *PT_LF10, HV: 350, irrad: 1.5e15, note: 17cm off beam axis }
+  1: { <<: *PT_LF12, HV: 350, irrad: 1.5e15, note: 17cm off beam axis }
+  2: { <<: *PT_LF17, HV: 350, irrad: 1.5e15, note: 17cm off beam axis }
+  3: { <<: *PT_LF18, HV: 350, irrad: 1.5e15, note: 17cm off beam axis }
