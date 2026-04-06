@@ -57,7 +57,32 @@ python utils/reduce_number_of_track_candidates.py -f <FILE> -m <NUMBER> [--ntrk_
 - `-m` option: "new" minimum threshold for track candidates occurence.
 - `--ntrk_table` option: if this argument is included, the script will show the table with the number of paths that survived from pre-defined thresholds.
 
-### 8. Submit event selection by path
+### 8. Submit jobs for event selection by path
 ```
 python submit/submit_extract_events_by_path.py -d <DIRNAME> -t <TRACK> -c <CONFIG> -r <RUNNAME> --cal_table <CAL_TABLE> -o <OUTNAME> --condor_tag <CONDOR_TAG> [--dryrun]
+```
+
+### 9. Reshaping the output from event-based to track-based
+```
+python core/reshape_to_tracks.py -d <DIRNAME> -o <OUTDIR> -r <RUNNAME> -c <CONFIG> --groups <GROUPS>
+```
+
+### 10. Submit jobs for apply TDC cuts
+```
+python submit/submit_apply_tdc_cuts.py -d <INPUTDIR> -c <CONFIG> -r <RUNNAME> --TOALower <TOALOWER> --TOAUpper <TOAUPPER> --dutTOTlower <DUTTOTLOWER> --dutTOTupper <DUTTOTUPPER> --distance_factor <DISTANCE_FACTOR> --condor_tag <CONDOR_TAG> [--dryrun]
+```
+
+### 11. Count the number of events per track
+```
+python core/count_path_nevts.py -d <INPUTDIR> -o <OUTPUTDIR> [--tag <TAG>]
+```
+
+### 12. Submit jobs for bootstrap
+```
+python submit/submit_bootstrap.py -d <DIRNAME> -o <OUTPUTDIR> -n <NUM_BOOTSTRAP_OUTPUT> --minimum_nevt <MINIMUM_NEVT> --iteration_limit <ITERATION_LIMIT> --condor_tag <CONDOR_TAG> [--dryrun]
+```
+
+### 13. Merge bootstrap results
+```
+python core/merge_bootstrap_results.py -d <INPUTDIR> -o <OUTPUTDIR> --minimum <MINIMUM> [--tag <TAG>] [--hist_bins <HIST_BINS>]
 ```
