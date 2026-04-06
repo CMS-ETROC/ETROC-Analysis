@@ -287,8 +287,8 @@ def check_spatial_alignment(df: pd.DataFrame, roles: Dict[str, int], max_diff_pi
 def main():
     parser = argparse.ArgumentParser(description='Find track candidates and Calibrate.')
     parser.add_argument('-p', '--path', required=True, help='Path to directory with feather files')
-    parser.add_argument('--out_calname', required=True, help='Output name for CAL table')
-    parser.add_argument('--out_trackname', required=True, help='Output name for Tracks')
+    parser.add_argument('--cal-label', required=True, help='Output name for CAL table', dest='cal_label')
+    parser.add_argument('--track-label', required=True, help='Output name for Tracks', dest='track_label')
     parser.add_argument('-s', '--sampling', type=float, default=3, help='Sampling fraction (percent)')
     parser.add_argument('-m', '--minimum', type=int, default=1000, dest='ntracks', help='Min tracks')
     parser.add_argument('--max_diff_pixel', type=int, default=1, help='Max pixel diff')
@@ -335,7 +335,7 @@ def main():
         del roles[args.exclude_role]
 
     # 4. Calibration
-    cal_table = generate_cal_table(df, args.out_calname)
+    cal_table = generate_cal_table(df, args.cal_label)
 
     if args.cal_table_only:
         logging.info("Cal table only mode. Exiting.")
@@ -446,7 +446,7 @@ def main():
     coord_cols = [c for c in final_tracks.columns if c.split('_')[0] in ['x', 'y', 'z']]
     final_tracks[coord_cols] = final_tracks[coord_cols].round(2)
 
-    output_file = f'{args.out_trackname}_tracks.csv'
+    output_file = f'{args.track_label}_tracks.csv'
     final_tracks.to_csv(output_file, index=False)
     logging.info(f"Done. Tracks saved to {output_file}")
 
