@@ -147,19 +147,19 @@ def create_master_file_list(input_group_dir: Path, output_dir: Path) -> Optional
     print(f"    Generated master list with {len(absolute_filenames)} files: {list_file_path.name}")
     return list_file_path, len(absolute_filenames)
 
-def create_jdl_file(args, master_list_path, run_append, group_name, njobs, script_to_run):
+def create_jdl_file(args, master_list_path, group_name, njobs, script_to_run):
     jdl_content = Template(JDL_TEMPLATE).render({
         'script_dir': script_dir.as_posix(),
-        'bash_script_name': f'applyTDC_job{run_append}_{group_name}.sh',
+        'bash_script_name': f'run_applyTDC_{group_name}.sh',
         'master_list_file_name': f'{master_list_path.name}',
-        'transfer_files': f"{script_to_run}, {Path(args.config).as_posix()}, {master_list_path.as_posix()}",
+        'transfer_files': f"core/{script_to_run}, {Path(args.config).as_posix()}, {master_list_path.as_posix()}",
         'output_dir': f"{args.inputdir}/{group_name.replace('tracks','time')}",
         'log_dir': log_dir.as_posix(),
         'batch_size': args.batch_size,
         'num_of_jobs': njobs,
     })
 
-    jdl_path = script_dir / f'condor_tdccuts_{group_name}.jdl'
+    jdl_path = script_dir / f'condor_applyTDC_{group_name}.jdl'
     with open(jdl_path, 'w') as f:
         f.write(jdl_content)
 
@@ -216,10 +216,8 @@ if __name__ == "__main__":
     eos_base_dir = Path(f'/eos/user/{username[0]}/{username}')
     run_append = f"_{args.condor_tag}" if args.condor_tag else ""
 
-    tag = f"applyTDC{run_append}"
-
-    script_dir = Path('condor_scripts') / tag
-    log_dir_base = Path('condor_logs') / tag
+    script_dir =  Path('.') / 'condor_scripts' / 'apply_TDC' / f'applyTDC{run_append}'
+    log_dir_base = Path ('.') / 'condor_logs' / 'apply_TDC' / f'applyTDC{run_append}'
 
     script_dir.mkdir(parents=True, exist_ok=True)
 
@@ -267,7 +265,7 @@ if __name__ == "__main__":
         log_dir = log_dir_base / dir_name
         log_dir.mkdir(parents=True, exist_ok=True)
 
-        bash_path = script_dir / f'applyTDC_job{run_append}_{dir_name}.sh'
+        bash_path = script_dir / f'run_applyTDC_{dir_name}.sh'
         with open(bash_path, 'w') as f:
             f.write(Template(BASH_TEMPLATE).render({'command': python_cmd, 'remote_path': f'{args.inputdir}/{dir_name}'}))
 

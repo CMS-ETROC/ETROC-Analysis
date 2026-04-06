@@ -42,11 +42,11 @@ echo ""
 
 # Template for the Condor JDL file
 JDL_TEMPLATE = """universe              = vanilla
-executable            = {{ script_dir }}/run_extract_events{{ run_append }}.sh
+executable            = {{ script_dir }}/run_extract_events.sh
 should_Transfer_Files = YES
 whenToTransferOutput  = ON_EXIT
 arguments             = $(fname) $(path)
-transfer_Input_Files  = extract_events_by_path.py,{{ track_file }},{{ cal_table }},{{ config_file }}
+transfer_Input_Files  = core/extract_events_by_path.py,{{ track_file }},{{ cal_table }},{{ config_file }}
 output                = {{ log_dir }}/$(ClusterId).$(ProcId).extractEvents.stdout
 error                 = {{ log_dir }}/$(ClusterId).$(ProcId).extractEvents.stderr
 log                   = {{ log_dir }}/extractEvents.log
@@ -54,7 +54,7 @@ MY.WantOS             = "el9"
 MY.XRDCP_CREATE_DIR   = True
 output_destination    = root://eosuser.cern.ch/{{ eos_base }}/{{ out_dir }}
 +JobFlavour           = "microcentury"
-Queue fname,path from {{ script_dir }}/input_list_for_extractEvents{{ run_append }}.txt
+Queue fname,path from {{ script_dir }}/input_list.txt
 """
 
 # --- Helper Functions ---
@@ -77,14 +77,13 @@ def create_submission_files(
     args: argparse.Namespace,
     trig_id: int,
     paths: Dict[str, Path],
-    run_append: str,
     eos_base: str
 ):
     """Generates the Input List, Bash Script, and JDL file."""
 
     # 1. Generate Input List
     # Finds all feather files and writes them to a text file
-    input_list_path = paths['scripts_dir'] / f'input_list_for_extractEvents{run_append}.txt'
+    input_list_path = paths['scripts_dir'] / f'input_list.txt'
     if input_list_path.exists():
         input_list_path.unlink()
 
@@ -109,14 +108,13 @@ def create_submission_files(
         'config': Path(args.config).name,
     })
 
-    bash_script_path = paths['scripts_dir'] / f'run_extract_events{run_append}.sh'
+    bash_script_path = paths['scripts_dir'] / f'run_extract_events.sh'
     with open(bash_script_path, 'w') as f:
         f.write(bash_content)
 
     # 3. Generate JDL File
     jdl_content = Template(JDL_TEMPLATE).render({
         'script_dir': paths['scripts_dir'],
-        'run_append': run_append,
         'track_file': args.track,
         'cal_table': args.cal_table,
         'log_dir': paths['log_dir'],
@@ -125,7 +123,7 @@ def create_submission_files(
         'config_file': args.config,
     })
 
-    jdl_path = paths['scripts_dir'] / f'condor_extract_events{run_append}.jdl'
+    jdl_path = paths['scripts_dir'] / f'condor_extract_events.jdl'
     with open(jdl_path, 'w') as f:
         f.write(jdl_content)
 
@@ -202,8 +200,8 @@ if __name__ == "__main__":
 
     # Directory setup
     paths = {
-        'scripts_dir': Path('./condor_scripts') / f'extractEvents_job{run_append}',
-        'log_dir': Path('./condor_logs') / 'extract_events' / f'extractEvents_job{run_append}'
+        'scripts_dir': Path('.') / 'condor_scripts' / 'extract_events' / f'extractEvents_job{run_append}',
+        'log_dir': Path('.') / 'condor_logs' / 'extract_events' / f'extractEvents_job{run_append}'
     }
 
     for p in paths.values():
@@ -234,7 +232,7 @@ if __name__ == "__main__":
     print('======================================\n')
 
     jdl_file, bash_file, list_file = create_submission_files(
-        args, trig_id, paths, run_append, eos_base_dir
+        args, trig_id, paths, eos_base_dir
     )
 
     # --- Submission ---

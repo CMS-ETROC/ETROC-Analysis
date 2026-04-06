@@ -85,7 +85,7 @@ def create_submission_files(
     """
 
     # 1. Generate Input List (stem, full EOS path)
-    master_list_file_name = f'input_list_for_bootstrap{unique_tag}.txt'
+    master_list_file_name = f'input_list{unique_tag}.txt'
     input_list_path = paths['scripts'] / master_list_file_name
     if input_list_path.exists():
         input_list_path.unlink()
@@ -217,8 +217,8 @@ if __name__ == "__main__":
     # Only script paths are global; Output/Log paths are calculated per group
     # Note: Using relative paths here to keep JDL portable
     paths = {
-        'scripts': Path('condor_scripts') / f'bootstrap_job{run_append}',
-        'logs':    Path('condor_logs') / 'bootstrap' / f'bootstrap_job{run_append}',
+        'scripts': Path('.') / 'condor_scripts' / 'bootstrap' / f'bootstrap_job{run_append}',
+        'logs':    Path('.') / 'condor_logs' / 'bootstrap' / f'bootstrap_job{run_append}',
     }
 
     # Create Base Directories
@@ -250,7 +250,7 @@ if __name__ == "__main__":
                 print(f"Error creating directories for {group_name}: {e}")
                 continue
 
-        unique_group_tag = f"{run_append}_{group_name}"
+        unique_group_tag = f"_{group_name}"
 
         print(f"\n>>> Processing Group: {group_name}")
         print(f"    Out: {group_out_dir}")

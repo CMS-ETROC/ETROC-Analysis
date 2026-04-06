@@ -67,18 +67,18 @@ rm -r job_{{ ClusterID }}_{{ idx }}
     # Render the template with the data
     return Template(bash_template).render(options)
 
-def load_jdl_template(condor_log_dir, output_dir, runName, condor_scripts_dir):
+def load_jdl_template(condor_log_dir, output_dir, condor_scripts_dir):
 
     import getpass
     username = getpass.getuser()
     eos_base_dir = f'/eos/user/{username[0]}/{username}'
 
     jdl = """universe              = vanilla
-executable            = {4}/run_decode{3}.sh
+executable            = {3}/run_decode.sh
 should_Transfer_Files = YES
 whenToTransferOutput  = ON_EXIT
 arguments             = $(start) $(end) $(index) $(ClusterId)
-transfer_Input_Files  = decoding.py, python_lib.tar
+transfer_Input_Files  = core/decoding.py, utils/python_lib.tar
 output                = {0}/$(ClusterId).$(ProcId).decoding.stdout
 error                 = {0}/$(ClusterId).$(ProcId).decoding.stderr
 log                   = {0}/decoding.log
@@ -86,8 +86,8 @@ output_destination    = root://eosuser.cern.ch/{1}/{2}
 MY.XRDCP_CREATE_DIR   = True
 MY.WantOS             = "el9"
 +JobFlavour           = "workday"
-Queue start, end, index from {4}/input_list_for_decoding{3}.txt
-""".format(condor_log_dir, eos_base_dir, output_dir, runName, condor_scripts_dir)
+Queue start, end, index from {3}/input_list.txt
+""".format(condor_log_dir, eos_base_dir, output_dir, condor_scripts_dir)
 
     return jdl
 
@@ -138,7 +138,7 @@ def make_jobs(args, log_dir, condor_scripts_dir, runAppend):
         print(f"\nNumber of jobs: {num_jobs}")
         print(f"Each job gets {files_per_job} files, with some jobs getting 1 extra file.\n")
 
-    listfile = condor_scripts_dir / f'input_list_for_decoding{runAppend}.txt'
+    listfile = condor_scripts_dir / f'input_list.txt'
     if listfile.is_file():
         listfile.unlink()
 
@@ -160,12 +160,12 @@ def make_jobs(args, log_dir, condor_scripts_dir, runAppend):
         file_suffix=file_suffix
     )
 
-    with open(condor_scripts_dir / f'run_decode{runAppend}.sh','w') as bashfile:
+    with open(condor_scripts_dir / f'run_decode.sh','w') as bashfile:
         bashfile.write(bash_script)
 
     outdir = f'{args.output}'
-    jdl_script = load_jdl_template(condor_log_dir=log_dir, output_dir=outdir, runName=runAppend, condor_scripts_dir=condor_scripts_dir)
-    with open(condor_scripts_dir / f'condor_decoding{runAppend}.jdl','w') as jdlfile:
+    jdl_script = load_jdl_template(condor_log_dir=log_dir, output_dir=outdir, condor_scripts_dir=condor_scripts_dir)
+    with open(condor_scripts_dir / f'condor_decoding.jdl','w') as jdlfile:
         jdlfile.write(jdl_script)
 
 
@@ -240,13 +240,13 @@ if __name__ == "__main__":
     log_dir = Path('./') / 'condor_logs' / 'decoding' / f'decoding_job{runAppend}'
     log_dir.mkdir(exist_ok=True, parents=True)
 
-    condor_scripts_dir = Path('./') / 'condor_scripts' / f'decoding_job{runAppend}'
+    condor_scripts_dir = Path('./') / 'condor_scripts' / 'decoding' / f'decoding_job{runAppend}'
     condor_scripts_dir.mkdir(exist_ok=True, parents=True)
 
     make_jobs(args=args, log_dir=log_dir, condor_scripts_dir=condor_scripts_dir, runAppend=runAppend)
 
     if args.dryrun:
-        input_txt_path = condor_scripts_dir / f"input_list_for_decoding{runAppend}.txt"
+        input_txt_path = condor_scripts_dir / f"input_list.txt"
         print('\n=========== Input text file ===========')
         print('First 3 lines:')
         subprocess.run(f"head -n 3 {input_txt_path}", shell=True)
@@ -254,19 +254,19 @@ if __name__ == "__main__":
         subprocess.run(f"tail -n 3 {input_txt_path}", shell=True)
         print()
         print('=========== Bash file ===========')
-        with open(condor_scripts_dir / f"run_decode{runAppend}.sh") as f:
+        with open(condor_scripts_dir / f"run_decode.sh") as f:
             print(f.read(), '\n')
         print('=========== Condor Job Description file ===========')
-        with open(condor_scripts_dir / f'condor_decoding{runAppend}.jdl') as f:
+        with open(condor_scripts_dir / f'condor_decoding.jdl') as f:
             print(f.read(), '\n')
         print()
 
     elif args.resubmit:
-        input_txt_path = condor_scripts_dir / f"input_list_for_decoding{runAppend}.txt"
+        input_txt_path = condor_scripts_dir / f"input_list.txt"
         condor_output = subprocess.run(['condor_q', '-nobatch'], capture_output=True, text=True)
 
         # Filter lines containing the target script
-        filtered_lines = [line for line in condor_output.stdout.splitlines() if f'run_decode{runAppend}.sh' in line]
+        filtered_lines = [line for line in condor_output.stdout.splitlines() if f'run_decode.sh' in line]
 
         if len(filtered_lines) == 0:
             print('No condor job found.')
@@ -289,9 +289,9 @@ if __name__ == "__main__":
             subprocess.run(['condor_rm', f'{old_condor_job_id}'])
 
             if input_txt_path.stat().st_size > 0:
-                subprocess.run(['condor_submit', f'{condor_scripts_dir}/condor_decoding{runAppend}.jdl'])
+                subprocess.run(['condor_submit', f'{condor_scripts_dir}/condor_decoding.jdl'])
             else:
                 print("No jobs to submit — input list is empty.")
 
     else:
-        subprocess.run(['condor_submit', f'{condor_scripts_dir}/condor_decoding{runAppend}.jdl'])
+        subprocess.run(['condor_submit', f'{condor_scripts_dir}/condor_decoding.jdl'])
