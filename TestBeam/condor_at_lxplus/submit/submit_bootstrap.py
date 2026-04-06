@@ -134,7 +134,7 @@ def create_submission_files(
         f.write(bash_content)
 
     # 3. Generate JDL File
-    transfer_list = [WORKER_SCRIPT_NAME]
+    transfer_list = [f'core/{WORKER_SCRIPT_NAME}']
 
     jdl_content = Template(JDL_TEMPLATE).render({
         'script_dir': str(paths['scripts']),
