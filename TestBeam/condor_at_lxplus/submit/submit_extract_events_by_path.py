@@ -208,7 +208,7 @@ if __name__ == "__main__":
         p.mkdir(parents=True, exist_ok=True)
 
     # --- Validation ---
-    if not Path('extract_events_by_path.py').is_file():
+    if not Path('core/extract_events_by_path.py').is_file():
         sys.exit(f"Error: Worker script extract_events_by_path.py not found in current directory.")
     if not Path(args.track).is_file():
         sys.exit(f"Error: Track file '{args.track}' not found.")
