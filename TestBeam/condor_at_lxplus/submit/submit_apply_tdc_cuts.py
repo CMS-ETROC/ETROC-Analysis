@@ -269,7 +269,7 @@ if __name__ == "__main__":
         with open(bash_path, 'w') as f:
             f.write(Template(BASH_TEMPLATE).render({'command': python_cmd, 'remote_path': f'{args.inputdir}/{dir_name}'}))
 
-        jdl_file = create_jdl_file(args, master_list_path, run_append, dir_name, num_of_jobs, script_to_run)
+        jdl_file = create_jdl_file(args, master_list_path, dir_name, num_of_jobs, script_to_run)
         print(f">>> Preparing Group: {dir_name}")
 
         # --- Submission ---
