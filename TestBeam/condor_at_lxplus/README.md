@@ -76,13 +76,21 @@ python submit/submit_apply_tdc_cuts.py -d <INPUTDIR> -c <CONFIG> -r <RUNNAME> --
 ```
 python core/count_path_nevts.py -d <INPUTDIR> -o <OUTPUTDIR> [--tag <TAG>]
 ```
+- `-d` option: path to the directory including the step 10 outputs.
+- `-o` option: path to the output directory.
+- `--tag` option: addtional string if needed.
 
 ### 12. Submit jobs for bootstrap
 ```
 python submit/submit_bootstrap.py -d <DIRNAME> -o <OUTPUTDIR> -n <NUM_BOOTSTRAP_OUTPUT> --minimum_nevt <MINIMUM_NEVT> --iteration_limit <ITERATION_LIMIT> --condor_tag <CONDOR_TAG> [--dryrun]
 ```
 
-### 13. Merge bootstrap results
+### 13. Merge bootstrap results (unbinned gaussian fit)
 ```
 python core/merge_bootstrap_results.py -d <INPUTDIR> -o <OUTPUTDIR> --minimum <MINIMUM> [--tag <TAG>] [--hist_bins <HIST_BINS>]
 ```
+- `-d` option: path to the directory including boostrap output files.
+- `-o` option: path to the output directory. **Recommend to use the same output directory in step 11.**
+- `--minimum` option: the threshold for number of bootstrap results. If number of results is less than the threshold, the path is ignored for the final result.
+- `--tag` option: addtional string if needed.
+- `--hist_bins` option: number of histogram for binned fit. If unbinned fit is failed.
