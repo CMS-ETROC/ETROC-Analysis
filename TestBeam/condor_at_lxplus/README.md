@@ -6,6 +6,8 @@ source envs/load_python39.sh
 ```
 
 ### 2. Locate binary files in your EOS
+Copy from DAQ PC to CernBox. Use `scp`, `rsync`, `xrdcp`.
+
 ### 3. Check condor server
 ```
 condor_q
@@ -42,7 +44,20 @@ python core/path_finder.py -p <PATH> --cal-label <CAL_LABEL> --track-label <TRAC
 - `--track-label` option: output name for track candidates csv file.
 - `-c` option: path to the board config yaml file.
 - `-r` option: "key" of dictionary in yaml file (usually run identifier).
-- `-s` option: fraction of
+- `-s` option: determine the fraction of data to read from each file.
 - `-m` opiton: minimum threshold for track candidates occurence.
 - `--cal_table_only` option: if this argument is included, the script will stop right after finding the cal code table.
 - `--exclude_role` option: if this argument is included, the script will discard the board in the path finding. Possible argument: `trig, dut, ref, extra`
+
+### 7. Check path finding output
+```
+python utils/reduce_number_of_track_candidates.py -f <FILE> -m <NUMBER> [--ntrk_table]
+```
+- `-f` option: path to "track-label" file from step 6.
+- `-m` option: "new" minimum threshold for track candidates occurence.
+- `--ntrk_table` option: if this argument is included, the script will show the table with the number of paths that survived from pre-defined thresholds.
+
+### 8. Submit event selection by path
+```
+python submit/submit_extract_events_by_path.py -d <DIRNAME> -t <TRACK> -c <CONFIG> -r <RUNNAME> --cal_table <CAL_TABLE> -o <OUTNAME> --condor_tag <CONDOR_TAG> [--dryrun]
+```
