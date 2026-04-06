@@ -174,7 +174,7 @@ def main():
     parser.add_argument('-r', '--runName', required=True, dest='runName', help='Run name')
     parser.add_argument('-c', '--config', required=True, dest='config', help='YAML config file')
     parser.add_argument('--groups', type=int, default=1, help='Number of processing groups to split files into')
-    parser.add_argument('--file_pattern', default='*.pickle', help="Glob pattern for input files (e.g. '*.pkl *.parquet')")
+    parser.add_argument('--file_pattern', default='*.parquet', help="Glob pattern for input files (e.g. '*.pkl *.parquet')")
     parser.add_argument('--debug', action='store_true', help='Run sequentially for debugging')
 
     args = parser.parse_args()
