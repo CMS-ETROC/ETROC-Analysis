@@ -128,7 +128,7 @@ def load_and_sample_data(file_paths: List[Path], sampling_rate: float) -> pd.Dat
     check_files = file_paths if len(file_paths) < 10 else random.sample(file_paths, 10)
     sum_use = 0
 
-    for f in check_files:
+    for f in tqdm(check_files):
         temp_df = pd.read_feather(f, columns=columns_to_read)
         # Simulate sampling
         n = int(portion * temp_df['evt'].nunique())
