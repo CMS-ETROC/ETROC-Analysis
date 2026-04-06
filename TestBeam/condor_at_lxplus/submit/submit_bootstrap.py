@@ -225,7 +225,7 @@ if __name__ == "__main__":
     for p in paths.values():
         p.mkdir(parents=True, exist_ok=True)
 
-    if not Path(WORKER_SCRIPT_NAME).is_file():
+    if not Path(f'core/{WORKER_SCRIPT_NAME}').is_file():
         sys.exit(f"Error: Worker script '{WORKER_SCRIPT_NAME}' not found.")
 
     # --- 3. Process Each Group ---
