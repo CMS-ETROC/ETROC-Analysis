@@ -137,8 +137,9 @@ def apply_raw_tdc_cuts(
             tot_col = sub[f'tot_{role}']
 
             # First: strip left-side secondary peak if present, then compute quantile on clean data
-            valley = find_tot_lower_bound(tot_col)
-            tot_col_clean = tot_col[tot_col >= valley] if valley is not None else tot_col
+            # valley = find_tot_lower_bound(tot_col)
+            # tot_col_clean = tot_col[tot_col >= valley] if valley is not None else tot_col
+            tot_col_clean = tot_col
 
             # Determine TOT bounds for DUT vs others
             if role == dut_role:
