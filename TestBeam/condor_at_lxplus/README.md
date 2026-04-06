@@ -24,7 +24,7 @@ python submit/submit_decoding.py -d <absolute path to input directory> -o <relat
 - `-d` option: absolute path to the input directory. e.g. `/eos/user/n/name/directory`
 - `-o` option: relative path to the output directory. The script knows the base path `/eos/user/n/name/`, so only need to specify the path after the base path.
 - `--range N1 N2` option: Must be integers and `N1 < N2`. Determine the best number of files to merge in a given range.
-- `--condor_tag` option: String to separate the job submission.
+- `--condor_tag` option: String to identify the job submission.
 - `--dryrun` option: if this argument is included, actual submission will not happen. But still making the list, bash script, and condor jdl files.
 
 ### 5. (Optional) Merge output feather files
@@ -49,7 +49,7 @@ python core/path_finder.py -p <PATH> --cal-label <CAL_LABEL> --track-label <TRAC
 - `--cal_table_only` option: if this argument is included, the script will stop right after finding the cal code table.
 - `--exclude_role` option: if this argument is included, the script will discard the board in the path finding. Possible argument: `trig, dut, ref, extra`
 
-### 7. Check path finding output
+### 7. Check path finding output (recommended if number of paths in step 6 output is over 1.5k)
 ```
 python utils/reduce_number_of_track_candidates.py -f <FILE> -m <NUMBER> [--ntrk_table]
 ```
@@ -59,24 +59,47 @@ python utils/reduce_number_of_track_candidates.py -f <FILE> -m <NUMBER> [--ntrk_
 
 ### 8. Submit jobs for event selection by path
 ```
-python submit/submit_extract_events_by_path.py -d <DIRNAME> -t <TRACK> -c <CONFIG> -r <RUNNAME> --cal_table <CAL_TABLE> -o <OUTNAME> --condor_tag <CONDOR_TAG> [--dryrun]
+python submit/submit_extract_events_by_path.py -d <DIRNAME> -t <TRACK> -o <OUTNAME> -c <CONFIG> -r <RUNNAME> --cal_table <CAL_TABLE> --condor_tag <CONDOR_TAG> [--dryrun]
 ```
+- `-d` option: path to the directory of step 6 output.
+- `-t` option: "new" track candidates csv file from step 7.
+- `-o` option: relative path to the output directory. The script knows the base path `/eos/user/n/name/`, so only need to specify the path after the base path.
+- `-c` option: path to the board config yaml file.
+- `-r` option: "key" of dictionary in yaml file (usually run identifier).
+- `--cal_table` option: cal table csv file from step 6.
+- `--condor_tag` option: String to identify the job submission.
+- `--dryrun` option: if this argument is included, actual submission will not happen. But still making the list, bash script, and condor jdl files.
 
 ### 9. Reshaping the output from event-based to track-based
 ```
-python core/reshape_to_tracks.py -d <DIRNAME> -o <OUTDIR> -r <RUNNAME> -c <CONFIG> --groups <GROUPS>
+python core/reshape_to_tracks.py -d <DIRNAME> -o <OUTDIR> -c <CONFIG> -r <RUNNAME> [--groups <GROUPS>]
 ```
+- `-d` option: path to the directory of step 8.
+- `-o` option: path to the output directory.
+- `-c` option: path to the board config yaml file.
+- `-r` option: "key" of dictionary in yaml file (usually run identifier).
+- `--groups` option: In case that want to divide the run into a multiple groups, add the integer. Default is 1.
 
 ### 10. Submit jobs for apply TDC cuts
 ```
 python submit/submit_apply_tdc_cuts.py -d <INPUTDIR> -c <CONFIG> -r <RUNNAME> --TOALower <TOALOWER> --TOAUpper <TOAUPPER> --dutTOTlower <DUTTOTLOWER> --dutTOTupper <DUTTOTUPPER> --distance_factor <DISTANCE_FACTOR> --condor_tag <CONDOR_TAG> [--dryrun]
 ```
+- `-d` option:
+- `-c` option: path to the board config yaml file.
+- `-r` option: "key" of dictionary in yaml file (usually run identifier).
+- `--TOALower` option: lower boundary TOA cut in code.
+- `--TOAUpper` option: upper boundary TOA cut in code.
+- `--dutTOTlower` option: lower boundary for TOT cut. TOT cut is quantile cut.
+- `--dutTOTupper` option: upper boundary for TOT cut. TOT cut is quantile cut.
+- `--distance_factor` option: The size of spread allowing in TOA correlation. Default is 3.
+- `--condor_tag` option: String to identify the job submission.
+- `--dryrun` option: if this argument is included, actual submission will not happen. But still making the list, bash script, and condor jdl files.
 
 ### 11. Count the number of events per track
 ```
 python core/count_path_nevts.py -d <INPUTDIR> -o <OUTPUTDIR> [--tag <TAG>]
 ```
-- `-d` option: path to the directory including the step 10 outputs.
+- `-d` option: path to the directory including the outputs from step 10.
 - `-o` option: path to the output directory.
 - `--tag` option: addtional string if needed.
 
@@ -84,6 +107,13 @@ python core/count_path_nevts.py -d <INPUTDIR> -o <OUTPUTDIR> [--tag <TAG>]
 ```
 python submit/submit_bootstrap.py -d <DIRNAME> -o <OUTPUTDIR> -n <NUM_BOOTSTRAP_OUTPUT> --minimum_nevt <MINIMUM_NEVT> --iteration_limit <ITERATION_LIMIT> --condor_tag <CONDOR_TAG> [--dryrun]
 ```
+- `-d` option: path to the directory including the outputs from step 10.
+- `-o` option: path to the output directory.
+- `-n` option: targer number of bootstrap results.
+- `--minimum_nevt` option: Threshold as a number of events to determine running boostrap.
+- `--iteration_limit` option: Maximum number of boostrap trial.
+- `--condor_tag` option: String to identify the job submission.
+- `--dryrun` option: if this argument is included, actual submission will not happen. But still making the list, bash script, and condor jdl files.
 
 ### 13. Merge bootstrap results (unbinned gaussian fit)
 ```
