@@ -1,0 +1,42 @@
+PT_NH41: &PT_NH41
+    name: ET2.02 PacTech NH41
+    short: PT_NH41
+    offset: 20
+    HV: 210
+    role: extra
+PT_NH34: &PT_NH34
+    name: ET2.01 PacTech NH34
+    short: PT_NH34
+    offset: 20
+    HV: 210
+    role: ref
+PT_NH36: &PT_NH36
+    name: ET2.01 PacTech NH36
+    short: PT_NH36
+    offset: 20
+    HV: 210
+    role: extra
+PT_NH37: &PT_NH37
+    name: ET2.01 PacTech NH37
+    short: PT_NH37
+    offset: 20
+    HV: 230
+    role: trig
+PT_NH56: &PT_NH56
+    name: ET2.03 PacTech NH56
+    short: PT_NH56
+    offset: 20
+    HV: 230
+    role: dut
+
+run16:
+  0: { <<: *PT_NH41, role: dut }
+  1: *PT_NH34
+  2: *PT_NH36
+  3: *PT_NH37
+
+run24:
+  0: *PT_NH56
+  1: { <<: *PT_NH34, HV: 230 }
+  2: { <<: *PT_NH36, HV: 230 }
+  3: *PT_NH37
