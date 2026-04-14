@@ -28,6 +28,12 @@ PT_NH56: &PT_NH56
     offset: 20
     HV: 230
     role: dut
+PT_NH57: &PT_NH57
+    name: ET2.03 PacTech NH57
+    short: PT_NH57
+    offset: 20
+    HV: 230
+    role: dut
 
 run16:
   0: { <<: *PT_NH41, role: dut }
@@ -37,6 +43,12 @@ run16:
 
 run24:
   0: *PT_NH56
+  1: { <<: *PT_NH34, HV: 230 }
+  2: { <<: *PT_NH36, HV: 230 }
+  3: *PT_NH37
+
+run27:
+  0: *PT_NH57
   1: { <<: *PT_NH34, HV: 230 }
   2: { <<: *PT_NH36, HV: 230 }
   3: *PT_NH37
