@@ -82,6 +82,7 @@ transfer_Input_Files  = core/decoding.py, utils/python_lib.tar
 output                = {0}/$(ClusterId).$(ProcId).decoding.stdout
 error                 = {0}/$(ClusterId).$(ProcId).decoding.stderr
 log                   = {0}/decoding.log
+transfer_Output_Files = hits, status
 output_destination    = root://eosuser.cern.ch/{1}/{2}
 MY.XRDCP_CREATE_DIR   = True
 MY.WantOS             = "el9"

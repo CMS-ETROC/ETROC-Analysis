@@ -1174,11 +1174,17 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"An error occurred during 'ce' processing: {e}")
 
+        dir1 = Path('./hits')
+        dir2 = Path('./status')
+
+        dir1.mkdir(exist_ok=True)
+        dir2.mkdir(exist_ok=True)
+
         if not hit_df.empty:
-            hit_df.to_feather(output_path)
+            hit_df.to_feather(dir1 / output_path)
 
         if not status_df.empty:
-            status_df.to_feather(status_output_path)
+            status_df.to_feather(dir2 / status_output_path)
 
     # 4. Centralized and non-repetitive saving logic.
     print("\n--- Saving Results ---")
