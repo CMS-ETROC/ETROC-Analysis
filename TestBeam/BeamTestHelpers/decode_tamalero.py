@@ -306,6 +306,16 @@ def merge_words(res):
     # Return as a standard python list to feed the generator nicely
     return (arr0[empty_frame_mask] | (arr1[empty_frame_mask] << 32)).tolist()
 
+## --------------------------------------
+def to_columnar(hits_list):
+    """Converts a list of dictionaries into a single dictionary of lists."""
+    columnar_dict = {}
+    for hit in hits_list:
+        for key, value in hit.items():
+            columnar_dict.setdefault(key, []).append(value)
+    return columnar_dict
+
+## --------------------------------------
 def extract_event_data(unpacked_data_list):
     """
     Single-pass columnar accumulator that builds BOTH hit and status data simultaneously.
@@ -323,7 +333,15 @@ def extract_event_data(unpacked_data_list):
         'chipid': [], 'status': [], 'hits': [], 'crc': []
     }
 
+    anomaly_log = {
+        'orphaned_trailers': {},  # Trailers that arrived without a header
+        'missing_bcid': {},       # Complete packets that had no BCID
+        'incomplete_packets': {}, # Headers (and data) that never got a trailer
+        'orphaned_data': {},      # Data that never got a header OR a trailer
+    }
+
     pending_packets = {}
+    orphaned_data_buffer = {}
     event_counter = -1
     current_bcid = -1
     current_l1acounter = -1
@@ -339,9 +357,19 @@ def extract_event_data(unpacked_data_list):
         if record_type == 'header':
             pending_packets[elink] = {'header': record_data, 'data': []}
 
+            if elink in orphaned_data_buffer:
+                popped_hits = orphaned_data_buffer.pop(elink)
+                # Just extend the normal list here
+                anomaly_log['orphaned_data'].setdefault(elink, []).extend(popped_hits)
+
         elif record_type == 'data':
             if elink in pending_packets:
                 pending_packets[elink]['data'].append(record_data)
+            else:
+                # --> NEW: No header exists! Save this data in the orphaned buffer instead of losing it.
+                if elink not in orphaned_data_buffer:
+                    orphaned_data_buffer[elink] = []
+                orphaned_data_buffer[elink].append(record_data)
 
         elif record_type == 'trailer':
             if elink in pending_packets:
@@ -351,6 +379,7 @@ def extract_event_data(unpacked_data_list):
                 packet_l1acounter = packet['header'].get('l1counter')
 
                 if packet_bcid is None:
+                    anomaly_log['missing_bcid'].setdefault(elink, []).append(packet)
                     continue
 
                 # Event counter logic
@@ -392,7 +421,36 @@ def extract_event_data(unpacked_data_list):
                 status_cols['hits'].append(record_data.get('hits'))
                 status_cols['crc'].append(record_data.get('crc'))
 
-    return hit_cols, status_cols
+            else:
+                recovered_hits = orphaned_data_buffer.pop(elink, [])
+                anomaly_log['orphaned_trailers'].setdefault(elink, []).append({
+                    'trailer': record_data,
+                    'recovered_hits': recovered_hits # <-- Keep as normal list for now
+                })
+
+    # --> NEW: Group incomplete packets by elink
+    for remaining_elink, remaining_packet in pending_packets.items():
+        anomaly_log['incomplete_packets'].setdefault(remaining_elink, []).append(remaining_packet)
+
+    # Catch any remaining orphaned data in the buffer
+    for remaining_elink, remaining_hits in orphaned_data_buffer.items():
+        anomaly_log['orphaned_data'].setdefault(remaining_elink, []).extend(remaining_hits)
+
+    # --> NEW: THE FINAL FORMATTING SWEEP <--
+    # 1. Convert all orphaned_data to columnar
+    for e_id, hits_list in anomaly_log['orphaned_data'].items():
+        anomaly_log['orphaned_data'][e_id] = to_columnar(hits_list)
+
+    # 2. Convert all recovered_hits inside orphaned_trailers to columnar
+    for e_id, trailer_list in anomaly_log['orphaned_trailers'].items():
+        for trailer_event in trailer_list:
+            if 'recovered_hits' in trailer_event:
+                trailer_event['recovered_hits'] = to_columnar(trailer_event['recovered_hits'])
+
+    pending_packets.clear()
+    orphaned_data_buffer.clear()
+
+    return hit_cols, status_cols, anomaly_log
 
 ## --------------------------------------
 def process_tamalero_outputs(input_files: list):
@@ -423,7 +481,7 @@ def process_tamalero_outputs(input_files: list):
 
     print("\n[3/5] Decoding stream and accumulating columns...")
     unpacked_data_gen = (fast_read_func(x) for x in all_merged_data)
-    hit_cols, status_cols = extract_event_data(unpacked_data_gen)
+    hit_cols, status_cols, incomplete_data = extract_event_data(unpacked_data_gen)
 
     # Clean up the master list to free massive amounts of RAM
     del all_merged_data
@@ -475,4 +533,4 @@ def process_tamalero_outputs(input_files: list):
     print(f"Processing complete in {elapsed_time:.2f} seconds.")
     print("="*35 + "\n")
 
-    return hit_df, status_df
+    return hit_df, status_df, incomplete_data
