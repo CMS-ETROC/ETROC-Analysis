@@ -200,8 +200,8 @@ if __name__ == "__main__":
 
     # Directory setup
     paths = {
-        'scripts_dir': Path('.') / 'condor_scripts' / 'extract_events' / f'extractEvents_job{run_append}',
-        'log_dir': Path('.') / 'condor_logs' / 'extract_events' / f'extractEvents_job{run_append}'
+        'scripts_dir': Path('.') / 'condor_scripts' / 'extract_events' / f'{run_append}',
+        'log_dir': Path('.') / 'condor_logs' / 'extract_events' / f'{run_append}'
     }
 
     for p in paths.values():

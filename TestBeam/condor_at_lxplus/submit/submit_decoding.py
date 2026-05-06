@@ -238,10 +238,10 @@ if __name__ == "__main__":
     else:
         runAppend = "_" + tag_for_condor
 
-    log_dir = Path('./') / 'condor_logs' / 'decoding' / f'decoding_job{runAppend}'
+    log_dir = Path('./') / 'condor_logs' / 'decoding' / f'{runAppend}'
     log_dir.mkdir(exist_ok=True, parents=True)
 
-    condor_scripts_dir = Path('./') / 'condor_scripts' / 'decoding' / f'decoding_job{runAppend}'
+    condor_scripts_dir = Path('./') / 'condor_scripts' / 'decoding' / f'{runAppend}'
     condor_scripts_dir.mkdir(exist_ok=True, parents=True)
 
     make_jobs(args=args, log_dir=log_dir, condor_scripts_dir=condor_scripts_dir, runAppend=runAppend)
