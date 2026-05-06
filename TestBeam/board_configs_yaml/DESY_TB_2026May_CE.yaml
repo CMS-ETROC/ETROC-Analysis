@@ -1,37 +1,37 @@
 defaults: &defaults
   PT-IH27: &PT-IH27
-    name: ET2.02 PacTech New HPK-27
+    name: ET2.02 PacTech IH-27
     short: PT-IH27
     offset: 20
     HV: 220
     role: ref
   PT-IH5: &PT-IH5
-    name: ET2.02 PacTech New HPK-5
+    name: ET2.02 PacTech IH-5
     short: PT-IH5
     offset: 20
     HV: 220
     role: trig
   PT-IH3: &PT-IH3
-    name: ET2.02 PacTech New HPK-3
+    name: ET2.02 PacTech IH-3
     short: PT-IH3
     offset: 20
     HV: 220
     role: extra
   PT-IH2: &PT-IH2
-    name: ET2.02 PacTech New HPK-2
+    name: ET2.02 PacTech IH-2
     short: PT-IH2
     offset: 20
     HV: 190
     role: dut
 
-run_start: &run_start
+run1:
   0: *PT-IH27
   1: *PT-IH5
   2: *PT-IH3
   3: *PT-IH2
 
-run0:
-  <<: *run_start
-
-run1:
-  <<: *run_start
+run2:
+  0: *PT-IH27
+  1: *PT-IH5
+  2: *PT-IH3
+  3: *PT-IH2
