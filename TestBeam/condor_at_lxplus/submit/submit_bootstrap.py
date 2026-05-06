@@ -210,7 +210,7 @@ if __name__ == "__main__":
     print(f"Found {len(time_dirs)} groups: {[d.name for d in time_dirs]}")
 
     # --- 2. Setup Base Paths ---
-    run_append = f"_{args.condor_tag}" if args.condor_tag else ""
+    run_append = f"{args.condor_tag}" if args.condor_tag else "subdir"
 
     # Only script paths are global; Output/Log paths are calculated per group
     # Note: Using relative paths here to keep JDL portable
