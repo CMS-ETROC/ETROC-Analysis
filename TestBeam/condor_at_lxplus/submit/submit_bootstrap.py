@@ -5,7 +5,6 @@ import re
 from pathlib import Path
 from jinja2 import Template
 from natsort import natsorted
-from typing import List, Dict, Optional
 
 WORKER_SCRIPT_NAME = "bootstrap.py"
 
@@ -41,14 +40,14 @@ executable            = {{ script_dir }}/{{ bash_script_name }}
 should_Transfer_Files = YES
 whenToTransferOutput  = ON_EXIT
 transfer_Input_Files  = {{ transfer_files }}
-Arguments             = $(path)
+Arguments             = {{ logical_dir }}/$(stem){{ ext }}
 TransferOutputRemaps  = "$(stem)_boot.parquet={{ out_dir }}/$(stem)_boot.parquet"
 output                = {{ log_dir }}/$(ClusterId).$(ProcId).bootstrap.stdout
 error                 = {{ log_dir }}/$(ClusterId).$(ProcId).bootstrap.stderr
 log                   = {{ log_dir }}/bootstrap.log
 MY.WantOS             = "el9"
 +JobFlavour           = "workday"
-Queue stem, path from {{ script_dir }}/{{ master_list_file_name }}
+Queue stem from {{ script_dir }}/{{ master_list_file_name }}
 """
 
 def build_python_command(args: argparse.Namespace) -> str:
@@ -74,55 +73,52 @@ def build_python_command(args: argparse.Namespace) -> str:
 
 def create_submission_files(
     args: argparse.Namespace,
-    paths: Dict[str, Path],
+    paths: dict[str, Path],
     unique_tag: str,
     input_dir: Path,
     group_out_dir: Path,
     group_log_dir: Path
 ):
     """
-    Generates the input list (stem, full EOS path), bash script, and JDL file.
+    Generates the input list (stem), bash script, and JDL file.
     """
 
-    # 1. Generate Input List (stem, full EOS path)
-    master_list_file_name = f'input_list{unique_tag}.txt'
+    master_list_file_name = f'input_list.txt'
     input_list_path = paths['scripts'] / master_list_file_name
     if input_list_path.exists():
         input_list_path.unlink()
 
-    # File discovery (PKL or PARQUET exclusive)
     pkl_files = list(input_dir.glob('*.pkl'))
     parquet_files = list(input_dir.glob('*.parquet'))
 
     files: list[Path] = []
+    ext = "" # Store the extension for the JDL
+
     if pkl_files:
         print(f"    Found {len(pkl_files)} PKL files. Ignoring any Parquet files.")
         files = pkl_files
+        ext = ".pkl"
     elif parquet_files:
         print(f"    Found {len(parquet_files)} Parquet files. Proceeding with Parquet.")
         files = parquet_files
+        ext = ".parquet"
 
     files = natsorted(files)
     if not files:
         print(f"Warning: No pickle or parquet files found in {input_dir.name}. Skipping group.")
         return None, None, None
 
-    # Write: stem_name, logical_path
+    # --- PATH FIX: Calculate the base directory ONLY ONCE ---
+    abs_dir = str(input_dir.resolve())
+    logical_dir = re.sub(r'^/eos/home-([a-z0-9])/', r'/eos/user/\1/', abs_dir)
+
+    # Write ONLY the stem_name
     with open(input_list_path, 'a') as f:
         for file_path in files:
-            stem_name = file_path.stem
+            f.write(f"{file_path.stem}\n")
 
-            # --- PATH FIX: Enforce /eos/user/ instead of /eos/home-X/ ---
-            abs_path = str(file_path.resolve())
-            logical_path = re.sub(r'^/eos/home-([a-z0-9])/', r'/eos/user/\1/', abs_path)
-
-            # JDL arguments will be: stem, path
-            f.write(f"{stem_name},{logical_path}\n")
-
-    # 2. Generate Bash Script
-    bash_script_name = f'run_bootstrap{unique_tag}.sh'
-
-    # MODIFICATION: build_python_command no longer takes filename_val
+    # Generate Bash Script
+    bash_script_name = f'run_bootstrap.sh'
     command = build_python_command(args)
 
     bash_content = Template(BASH_TEMPLATE).render({
@@ -133,20 +129,22 @@ def create_submission_files(
     with open(bash_path, 'w') as f:
         f.write(bash_content)
 
-    # 3. Generate JDL File
+    # Generate JDL File
     transfer_list = [f'core/{WORKER_SCRIPT_NAME}']
 
     jdl_content = Template(JDL_TEMPLATE).render({
         'script_dir': str(paths['scripts']),
-        'bash_script_name': bash_script_name, # Pass bash script name for JDL execution
-        'master_list_file_name': master_list_file_name, # Pass master list name for Queue
+        'bash_script_name': bash_script_name,
+        'master_list_file_name': master_list_file_name,
         'out_dir': str(group_out_dir),
         'log_dir': str(group_log_dir),
         'transfer_files': ", ".join(transfer_list),
         'unique_tag': unique_tag,
+        'logical_dir': logical_dir, # Pass the directory to Jinja
+        'ext': ext                  # Pass the extension to Jinja
     })
 
-    jdl_path = paths['scripts'] / f'condor_bootstrap{unique_tag}.jdl'
+    jdl_path = paths['scripts'] / f'condor_bootstrap.jdl'
     with open(jdl_path, 'w') as f:
         f.write(jdl_content)
 
@@ -217,8 +215,8 @@ if __name__ == "__main__":
     # Only script paths are global; Output/Log paths are calculated per group
     # Note: Using relative paths here to keep JDL portable
     paths = {
-        'scripts': Path('.') / 'condor_scripts' / 'bootstrap' / f'bootstrap_job{run_append}',
-        'logs':    Path('.') / 'condor_logs' / 'bootstrap' / f'bootstrap_job{run_append}',
+        'scripts': Path('.') / 'condor_scripts' / 'bootstrap' / f'{run_append}',
+        'logs':    Path('.') / 'condor_logs' / 'bootstrap' / f'{run_append}',
     }
 
     # Create Base Directories
