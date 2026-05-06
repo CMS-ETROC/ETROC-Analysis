@@ -214,10 +214,10 @@ if __name__ == "__main__":
     # Determine the user's EOS base directory structure (e.g., /eos/user/j/jongho)
     # This assumes the input directory path is under this root.
     eos_base_dir = Path(f'/eos/user/{username[0]}/{username}')
-    run_append = f"_{args.condor_tag}" if args.condor_tag else ""
+    run_append = f"{args.condor_tag}" if args.condor_tag else "subdir"
 
-    script_dir =  Path('.') / 'condor_scripts' / 'apply_TDC' / f'applyTDC{run_append}'
-    log_dir_base = Path ('.') / 'condor_logs' / 'apply_TDC' / f'applyTDC{run_append}'
+    script_dir =  Path('.') / 'condor_scripts' / 'apply_TDC' / f'{run_append}'
+    log_dir_base = Path ('.') / 'condor_logs' / 'apply_TDC' / f'{run_append}'
 
     script_dir.mkdir(parents=True, exist_ok=True)
 
