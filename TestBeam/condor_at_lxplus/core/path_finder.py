@@ -357,8 +357,6 @@ def main():
     tdc_cuts = {}
     for idx in ids_to_process:
         if idx == roles.get('trig'):
-            tdc_cuts[idx] = [0, 1100, 100, 500, 50, 250]
-        elif idx == roles.get('ref'):
             tdc_cuts[idx] = [0, 1100, 0, 1100, 50, 250]
         else:
             tdc_cuts[idx] = [0, 1100, 0, 1100, 0, 600]
@@ -407,7 +405,7 @@ def main():
     if args.find_alignment:
         shift_df = track_candidates.copy(deep=True)
         trig_id = roles['trig']
-        for bid in range(4):
+        for bid in ids_to_process:
             if bid == trig_id:
                 continue
 
