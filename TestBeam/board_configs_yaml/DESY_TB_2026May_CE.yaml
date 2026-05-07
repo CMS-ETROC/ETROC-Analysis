@@ -35,3 +35,59 @@ run2:
   1: *PT-IH5
   2: *PT-IH3
   3: *PT-IH2
+
+run3:
+  0: *PT-IH27
+  1: { <<: *PT-IH5, HV: 230 }
+  2: *PT-IH3
+  3: *PT-IH2
+
+run7:
+  0:
+    <<: *PT-IH27
+    role: extra
+    transformation:
+      rotation:
+        x: 0
+        y: -60
+        z: 0
+      translation:
+        x: 0
+        y: 0
+        z: 0
+  1:
+    <<: *PT-IH5
+    HV: 230
+    role: ref
+    transformation:
+      rotation:
+        x: 0
+        y: -60
+        z: 0
+      translation:
+        x: 0
+        y: 0
+        z: 0
+  2:
+    <<: *PT-IH3
+    role: trig
+    transformation:
+      rotation:
+        x: 0
+        y: -60
+        z: 0
+      translation:
+        x: 0
+        y: 0
+        z: 0
+  3:
+    <<: *PT-IH2
+    transformation:
+      rotation:
+        x: 0
+        y: -60
+        z: 0
+      translation:
+        x: 0
+        y: 0
+        z: 0
