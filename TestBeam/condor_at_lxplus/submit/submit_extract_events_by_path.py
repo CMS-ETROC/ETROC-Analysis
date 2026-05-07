@@ -229,6 +229,8 @@ if __name__ == "__main__":
     print(f'Input track file: {args.track}')
     print(f'Trigger ID:  {trig_id}')
     print(f'Output:      {eos_base_dir}/{args.outname}')
+    if args.search_method != 'none':
+        print(f'Neighbor search method: {args.search_method}')
     print('======================================\n')
 
     jdl_file, bash_file, list_file = create_submission_files(
