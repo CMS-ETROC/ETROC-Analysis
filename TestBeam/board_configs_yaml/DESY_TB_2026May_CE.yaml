@@ -1,4 +1,4 @@
-defaults: &defaults
+defaults:
   PT-IH27: &PT-IH27
     name: ET2.02 PacTech IH-27
     short: PT-IH27
@@ -23,25 +23,21 @@ defaults: &defaults
     offset: 20
     HV: 190
     role: dut
-
 run1:
   0: *PT-IH27
   1: *PT-IH5
   2: *PT-IH3
   3: *PT-IH2
-
 run2:
   0: *PT-IH27
   1: *PT-IH5
   2: *PT-IH3
   3: *PT-IH2
-
 run3:
   0: *PT-IH27
-  1: { <<: *PT-IH5, HV: 230 }
+  1: {<<: *PT-IH5, HV: 230}
   2: *PT-IH3
   3: *PT-IH2
-
 run7:
   0:
     <<: *PT-IH27
@@ -91,7 +87,6 @@ run7:
         x: 0
         y: 0
         z: 0
-
 run10:
   0:
     <<: *PT-IH27
@@ -115,8 +110,8 @@ run10:
         y: -30
         z: 0
       translation:
-        x: 0
-        y: 0
+        x: -0.56
+        y: 5.85
         z: 0
   2:
     <<: *PT-IH3
@@ -136,6 +131,55 @@ run10:
       rotation:
         x: 0
         y: -30
+        z: 0
+      translation:
+        x: -0.56
+        y: -5.85
+        z: 0
+run12:
+  0:
+    <<: *PT-IH27
+    role: extra
+    transformation:
+      rotation:
+        x: 0
+        y: -60
+        z: 0
+      translation:
+        x: 0
+        y: 0
+        z: 0
+  1:
+    <<: *PT-IH5
+    HV: 230
+    role: ref
+    transformation:
+      rotation:
+        x: 0
+        y: -60
+        z: 0
+      translation:
+        x: 0
+        y: 0
+        z: 0
+  2:
+    <<: *PT-IH3
+    role: trig
+    transformation:
+      rotation:
+        x: 0
+        y: -60
+        z: 0
+      translation:
+        x: 0
+        y: 0
+        z: 0
+  3:
+    <<: *PT-IH2
+    transformation:
+      rotation:
+        x: 0
+        y: -60
         z: 0
       translation:
         x: 0
