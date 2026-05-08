@@ -224,22 +224,36 @@ def process_single_file(
         if df.empty:
             return f"Empty: {filepath.name}"
 
+        # --- NEW LOGIC: Dynamic Column Checking ---
+        # Only keep roles if their actual data columns exist in THIS file
+        # We check for 'tot_{role}' as a proxy for the board's data being present
+        valid_all_roles = {
+            role: bid for role, bid in all_roles.items()
+            if f'tot_{role}' in df.columns
+        }
+
+        valid_cut_roles = [
+            role for role in cut_roles
+            if f'tot_{role}' in df.columns
+        ]
+
         # 1. Routing logic for conversion and cuts
         if args.convert_first:
-            time_df = convert_to_time(df, all_roles)
-            final_df = apply_time_domain_cuts(time_df, cut_roles, args)
+            time_df = convert_to_time(df, valid_all_roles)
+            final_df = apply_time_domain_cuts(time_df, valid_cut_roles, args)
             raw_df_to_use = df.loc[final_df.index] if not final_df.empty else pd.DataFrame()
         else:
-            cut_df = apply_raw_tdc_cuts(df, all_roles, cut_roles, args)
-            correlated_df = apply_correlation_cut(cut_df, args.distance_factor, cut_roles)
-            final_df = convert_to_time(correlated_df, all_roles)
+            cut_df = apply_raw_tdc_cuts(df, valid_all_roles, valid_cut_roles, args)
+            correlated_df = apply_correlation_cut(cut_df, args.distance_factor, valid_cut_roles)
+            final_df = convert_to_time(correlated_df, valid_all_roles)
             raw_df_to_use = cut_df
 
         # 2. Add Neighbor tracking
         if not final_df.empty and not raw_df_to_use.empty:
-            for role in all_roles.keys():
+            for role in valid_all_roles.keys():
                 col_name = f'HasNeighbor_{role}'
-                final_df[col_name] = raw_df_to_use[col_name].astype(bool)
+                if col_name in raw_df_to_use.columns:
+                    final_df[col_name] = raw_df_to_use[col_name].astype(bool)
 
             # Track-level neighbor flag
             neighbor_columns = [col for col in final_df.columns if col.startswith('HasNeighbor')]
