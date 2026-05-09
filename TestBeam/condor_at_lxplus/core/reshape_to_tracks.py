@@ -3,13 +3,13 @@ import sys
 import yaml
 import warnings
 import pandas as pd
-import gc
+import shutil
+import pyarrow.dataset as ds
 from pathlib import Path
 from tqdm import tqdm
-from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from natsort import natsorted
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Tuple, Any
 
 # --- Configuration ---
 warnings.filterwarnings("ignore")
@@ -18,7 +18,6 @@ warnings.filterwarnings("ignore")
 def load_config_and_roles(config_path: str, run_name: str) -> Tuple[Dict[int, str], Dict[str, str]]:
     """
     Loads YAML config and builds the board ID to Role mapping.
-    REMOVED: parquet_positional_role_map from return.
     """
     with open(config_path) as f:
         config = yaml.safe_load(f)
@@ -26,15 +25,10 @@ def load_config_and_roles(config_path: str, run_name: str) -> Tuple[Dict[int, st
     if run_name not in config:
         raise ValueError(f"Run config '{run_name}' not found in {config_path}")
 
-    # Map ID -> Role (for PKL/MultiIndex filename generation)
     id_role_map = {}
-
-    # REMOVED: Positional Index -> Role map creation logic
 
     for board_id, board_info in config[run_name].items():
         role = board_info.get('role', 'unknown')
-
-        # 1. Build the ID -> Role map (used for PKL/MultiIndex naming)
         try:
             board_id_int = int(board_id)
             id_role_map[board_id_int] = role
@@ -49,112 +43,44 @@ def load_config_and_roles(config_path: str, run_name: str) -> Tuple[Dict[int, st
         if role not in nickname_dict:
             nickname_dict[role] = f'_{role[:3]}-'
 
-    # REMOVED: parquet_positional_role_map from return
     return id_role_map, nickname_dict
 
-def generate_track_filename(df: pd.DataFrame, id_map: Dict[int, str], nicknames: Dict[str, str]) -> str:
+def generate_track_filename(df: pd.DataFrame, nicknames: Dict[str, str]) -> str:
     """Generates a descriptive filename based on the track's coordinates."""
-
     filename_parts = ["track"]
 
-    # --- Logic for PKL (MultiIndex) Format ---
-    if isinstance(df.columns, pd.MultiIndex):
+    # Flat Index/Role-based Columns Format
+    known_roles = nicknames.keys()
+    for role in known_roles:
+        row_col = f'row_{role}'
+        col_col = f'col_{role}'
+        prefix = nicknames.get(role, f'_{role}-')
 
-        # We look for level 'board' in columns
-        board_ids = [
-            b for b in df.columns.get_level_values('board').unique()
-            if isinstance(b, int)
-        ]
-
-        for bid in board_ids:
-            role = id_map.get(bid, 'unknown')
-            prefix = nicknames.get(role, f'_{bid}-')
-
+        if row_col in df.columns and col_col in df.columns:
             try:
-                # unique()[0] assumes the track is static across the event
-                r_val = df['row'][bid].unique()[0]
-                c_val = df['col'][bid].unique()[0]
+                r_val = df[row_col].unique()[0]
+                c_val = df[col_col].unique()[0]
                 filename_parts.append(f"{prefix}R{r_val}C{c_val}")
             except KeyError:
                 continue
 
-    # --- Logic for Parquet (Flat Index/Role-based Columns) Format ---
-    else:
-        # Columns are assumed to be pre-renamed (e.g., 'row_trig')
-        known_roles = nicknames.keys()
-
-        for role in known_roles:
-            # Construct the expected column names based on the role
-            row_col = f'row_{role}'
-            col_col = f'col_{role}'
-
-            # Determine the prefix using the role
-            prefix = nicknames.get(role, f'_{role}-')
-
-            if row_col in df.columns and col_col in df.columns:
-
-                try:
-                    # unique()[0] assumes the track is static across the event
-                    r_val = df[row_col].unique()[0]
-                    c_val = df[col_col].unique()[0]
-                    filename_parts.append(f"{prefix}R{r_val}C{c_val}")
-
-                except KeyError:
-                    # Columns were present but values were empty/missing (should not happen with unique()[0])
-                    continue
-
     return "".join(filename_parts)
-
-def process_and_save_track(
-    track_key: Any,
-    df_parts: List[pd.DataFrame],
-    output_dir: Path,
-    id_map: Dict[int, str],
-    nicknames: Dict[str, str],
-    is_parquet_format: bool = False
-) -> str:
-    """Worker function: Concatenates data parts for one track and saves to disk."""
-    if not df_parts:
-        return f"Skipped empty track list: {track_key}"
-
-    try:
-        full_df = pd.concat(df_parts, ignore_index=True)
-
-        if full_df.empty:
-            return f"Skipped empty dataframe: {track_key}"
-
-        out_name = generate_track_filename(full_df, id_map, nicknames)
-
-        ext = ".parquet" if is_parquet_format else ".pkl"
-        save_path = output_dir / f"{out_name}{ext}"
-
-        if is_parquet_format:
-            full_df.to_parquet(save_path, compression='lz4')
-        else:
-            full_df.to_pickle(save_path)
-
-        return f"Saved: {save_path.name}"
-
-    except Exception as e:
-        return f"Error saving track {track_key}: {e}"
-
 
 def determine_file_batches(files: List[Path], num_groups: int = 1) -> List[List[Path]]:
     """
     Equally spaces files into a fixed number of groups.
     """
     n_files = len(files)
-
-    # Ensure we don't try to make more groups than there are files
     num_groups = min(num_groups, n_files)
 
-    # Calculate base size (k) and the remainder (m)
-    k, m = divmod(n_files, num_groups)
+    if num_groups <= 0:
+        return [files]
 
+    k, m = divmod(n_files, num_groups)
     batches = []
     start_idx = 0
+
     for i in range(num_groups):
-        # Add 1 extra file to the first 'm' groups to handle the remainder
         batch_size = k + 1 if i < m else k
         end_idx = start_idx + batch_size
         batches.append(files[start_idx:end_idx])
@@ -163,28 +89,69 @@ def determine_file_batches(files: List[Path], num_groups: int = 1) -> List[List[
     print(f"\nSplitting {n_files} files into {num_groups} equal groups.")
     return batches
 
-# --- Main Logic ---
+def process_partitioned_track(
+    track_dir: Path,
+    output_dir: Path,
+    nicknames: Dict[str, str]
+) -> str:
+    try:
+        # 1. Safely read the actual parquet files INSIDE the partition folder
+        pq_files = list(track_dir.glob("*.parquet"))
+        if not pq_files:
+            shutil.rmtree(track_dir, ignore_errors=True)
+            return f"Skipped: No parquet files found in {track_dir.name}"
 
+        # Read the file(s) and force the pyarrow engine
+        df = pd.concat([pd.read_parquet(f, engine='pyarrow') for f in pq_files], ignore_index=True)
+
+        if df.empty:
+            shutil.rmtree(track_dir, ignore_errors=True)
+            return f"Skipped empty track: {track_dir.name}"
+
+        # 2. Generate your custom filename
+        out_name = generate_track_filename(df, nicknames)
+
+        # --- Safety Check: Prevent Overwriting ---
+        # If generate_track_filename fails to find the right columns, it returns just "track".
+        # We append the track_id so 695 files don't overwrite each other as "track.parquet"!
+        if out_name == "track":
+            out_name = f"track_{track_dir.name}"
+
+        save_path = output_dir / f"{out_name}.parquet"
+
+        # 3. Save the final file
+        df.to_parquet(save_path, compression='lz4', engine='pyarrow')
+
+        # 4. Clean up the temp directory
+        shutil.rmtree(track_dir, ignore_errors=True)
+
+        return f"Saved: {save_path.name}"
+
+    except Exception as e:
+        # Return the EXACT error so we can see what's going wrong
+        return f"Error processing {track_dir.name}: {repr(e)}"
+
+# --- Main Logic ---
 def main():
     parser = argparse.ArgumentParser(
-        description='Reads file-based data, reshapes it, and saves as track-based files.'
+        description='Reads Parquet event data, reshapes it, and saves as track-based files out-of-core.'
     )
     parser.add_argument('-d', '--inputdir', required=True, dest='dirname', help='Input directory')
     parser.add_argument('-o', '--outdir', required=True, dest='outdir', help='Output directory')
     parser.add_argument('-r', '--runName', required=True, dest='runName', help='Run name')
     parser.add_argument('-c', '--config', required=True, dest='config', help='YAML config file')
     parser.add_argument('--groups', type=int, default=1, help='Number of processing groups to split files into')
-    parser.add_argument('--file_pattern', default='*.parquet', help="Glob pattern for input files (e.g. '*.pkl *.parquet')")
+    parser.add_argument('--file_pattern', default='*.parquet', help="Glob pattern for input files (e.g. '*.parquet')")
     parser.add_argument('--debug', action='store_true', help='Run sequentially for debugging')
 
     args = parser.parse_args()
 
     # 1. Setup paths and config
     try:
-        # REMOVED: parquet_rename_map from unpacking
         id_role_map, nickname_dict = load_config_and_roles(args.config, args.runName)
     except Exception as e:
         sys.exit(f"Config Error: {e}")
+
     base_out_path = Path(args.outdir)
 
     print(f'\nInput:  {args.dirname}')
@@ -200,8 +167,6 @@ def main():
 
     # 3. Determine Batches
     batches = determine_file_batches(files, num_groups=args.groups)
-
-    # Check if we have multiple batches to decide naming convention
     is_multi_group = len(batches) > 1
 
     # 4. Process Batches
@@ -214,121 +179,76 @@ def main():
             subdir_name = 'tracks'
 
         current_out_dir = base_out_path / subdir_name
+        temp_dir = base_out_path / f'temp_partitions_group{batch_idx + 1}'
+
         current_out_dir.mkdir(parents=True, exist_ok=True)
+        temp_dir.mkdir(parents=True, exist_ok=True)
 
         print(f'\n====== Processing Group {batch_idx + 1}/{len(batches)} ({len(batch_files)} files) ======')
         print(f"Saving to: {current_out_dir}")
 
-        track_data_pkl = defaultdict(list)
-        track_data_pqt_aggregated = defaultdict(list)
+        # ==========================================
+        # PHASE 1: Out-of-Core Streaming & Grouping
+        # ==========================================
+        print(f"Phase 1: Streaming and partitioning Group {batch_idx + 1} to disk (zero memory spikes)...")
+        try:
+            # Convert Path objects to strings for pyarrow
+            file_paths_str = [str(f) for f in batch_files]
+            dataset = ds.dataset(file_paths_str, format="parquet")
 
-        pkl_flag = False
-        pqt_flag = False
+            ds.write_dataset(
+                data=dataset,
+                base_dir=temp_dir,
+                format="parquet",
+                partitioning=["track_id"],
+                existing_data_behavior="overwrite_or_ignore"
+            )
+        except Exception as e:
+            print(f"Failed during out-of-core partitioning for Group {batch_idx + 1}: {e}")
+            continue
 
-        # A. Read Files into Memory
-        for f in tqdm(batch_files, desc=f"Reading Group {batch_idx + 1}"):
-            if '.pkl' in f.name:
-                data_dict = pd.read_pickle(f)
-                for key, df in data_dict.items():
-                    if not df.empty:
-                        track_data_pkl[key].append(df)
-                pkl_flag = True
-            elif '.parquet' in f.name:
-                initial_df = pd.read_parquet(f)
-                if not initial_df.empty:
-                    # PERFORMANCE IMPROVEMENT (Bullet 3): Group by track_id immediately after reading a file
-                    grouped = initial_df.groupby('track_id')
-                    for track_id, track_df in grouped:
-                        # Append each track's DataFrame to the aggregated dictionary
-                        track_data_pqt_aggregated[track_id].append(track_df)
-                pqt_flag = True
-            else:
-                print(f"Warning: Failed to read {f.name}")
+        # ==========================================
+        # PHASE 2: Parallel Formatting & Cleanup
+        # ==========================================
+        track_dirs = [d for d in temp_dir.iterdir() if d.is_dir()]
+        total_tracks = len(track_dirs)
 
-        # --- Handle input file type conflict ---
-        if pkl_flag and pqt_flag:
-            # We allow mixing input types but process them separately, so we just warn
-            print('Warning: Input directory contains both .pkl and .parquet files. Both formats will be processed.')
-
-        # B. Save Tracks
-        print(f'Saving tracks for Group {batch_idx + 1}...')
+        print(f"\nPhase 2: Found {total_tracks} unique tracks. Formatting and saving...")
 
         all_futures = []
-        tracks_to_process = 0
 
-        # 1. Process PKL files (Old Logic)
-        if pkl_flag:
-            total_tracks = len(track_data_pkl)
-            print(f"  PKL: Found {total_tracks} unique tracks to process.")
-            tracks_to_process += total_tracks
-
-            if args.debug:
-                print("(Debug Mode: PKL processing sequentially)")
-                for key, parts in track_data_pkl.items():
-                    res = process_and_save_track(key, parts, current_out_dir, id_role_map, nickname_dict, is_parquet_format=False)
-                    print(res)
-                    if "Saved" in res: break
-            else:
-                executor_pkl = ProcessPoolExecutor()
-                pkl_futures = [
-                    executor_pkl.submit(
-                        process_and_save_track,
-                        key, parts, current_out_dir, id_role_map, nickname_dict, is_parquet_format=False
+        if args.debug:
+            print("(Debug Mode: Processing sequentially)")
+            for track_dir in track_dirs:
+                res = process_partitioned_track(track_dir, current_out_dir, nickname_dict)
+                print(res)
+                if "Saved" in res: break
+        else:
+            with ProcessPoolExecutor(max_workers=6) as executor:
+                for track_dir in track_dirs:
+                    future = executor.submit(
+                        process_partitioned_track,
+                        track_dir, current_out_dir, nickname_dict
                     )
-                    for key, parts in track_data_pkl.items()
-                ]
-                all_futures.extend(pkl_futures)
+                    all_futures.append(future)
 
-        # 2. Process PARQUET files (Optimized Logic)
-        if pqt_flag:
-            total_tracks = len(track_data_pqt_aggregated)
-            if total_tracks > 0:
-                print(f"  PARQUET: Found {total_tracks} unique tracks to process.")
-                tracks_to_process += total_tracks
+                for future in tqdm(as_completed(all_futures), total=total_tracks, desc=f"Saving Group {batch_idx + 1}"):
+                    try:
+                        res = future.result()
+                        # CRITICAL: Print the error if the worker failed!
+                        if "Error" in res:
+                            tqdm.write(res) # tqdm.write prints without breaking the progress bar
+                    except Exception as e:
+                        tqdm.write(f"Worker Exception: {repr(e)}")
 
-                if args.debug:
-                    print("(Debug Mode: PARQUET processing sequentially)")
-                    for track_id, parts in track_data_pqt_aggregated.items():
-                        res = process_and_save_track(track_id, parts, current_out_dir, id_role_map, nickname_dict, is_parquet_format=True)
-                        print(res)
-                        if "Saved" in res: break
-                else:
-                    executor_pqt = ProcessPoolExecutor()
-                    pqt_futures = [
-                        executor_pqt.submit(
-                            process_and_save_track,
-                            track_id, parts, current_out_dir, id_role_map, nickname_dict, is_parquet_format=True
-                        )
-                        for track_id, parts in track_data_pqt_aggregated.items()
-                    ]
-                    all_futures.extend(pqt_futures)
+        # Clean up the temp directory for this specific group
+        if temp_dir.exists():
+            try:
+                shutil.rmtree(temp_dir)
+            except OSError:
+                pass
 
-        # 3. Wait for all futures to complete (if not in debug mode)
-        if not args.debug and all_futures:
-            print(f"  Starting parallel saving for a total of {tracks_to_process} tracks...")
-            for future in tqdm(as_completed(all_futures), total=tracks_to_process, desc="Saving All Tracks"):
-                try:
-                    future.result()
-                except Exception as e:
-                    print(f"Worker Error: {e}")
-
-            # Close the executor for this batch
-            if 'executor_pkl' in locals():
-                executor_pkl.shutdown(wait=True)
-            if 'executor_pqt' in locals():
-                executor_pqt.shutdown(wait=True)
-
-        # C. Memory Cleanup
-        print(f"Cleaning up memory for Group {batch_idx + 1}...")
-        track_data_pkl.clear()
-        del track_data_pkl
-
-        # Cleanup the aggregated Parquet data structure
-        track_data_pqt_aggregated.clear()
-        del track_data_pqt_aggregated
-        gc.collect()
-
-    print(f"\nDone. All groups processed.")
+    print(f"\nDone. All groups processed successfully.")
 
 if __name__ == "__main__":
     main()
