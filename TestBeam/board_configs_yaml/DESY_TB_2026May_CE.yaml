@@ -136,14 +136,14 @@ run10:
         x: -0.56
         y: -5.85
         z: 0
-run12:
+run13:
   0:
     <<: *PT-IH27
     role: extra
     transformation:
       rotation:
         x: 0
-        y: -60
+        y: -45
         z: 0
       translation:
         x: 0
@@ -156,7 +156,7 @@ run12:
     transformation:
       rotation:
         x: 0
-        y: -60
+        y: -45
         z: 0
       translation:
         x: 0
@@ -168,7 +168,7 @@ run12:
     transformation:
       rotation:
         x: 0
-        y: -60
+        y: -45
         z: 0
       translation:
         x: 0
@@ -179,7 +179,7 @@ run12:
     transformation:
       rotation:
         x: 0
-        y: -60
+        y: -45
         z: 0
       translation:
         x: 0
