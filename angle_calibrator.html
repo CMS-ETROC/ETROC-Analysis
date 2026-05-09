@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pro Setup Calibrator</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; background-color: #1e1e1e; color: #eee; margin: 0; }
+        .panel { background: #2d2d30; padding: 12px 15px; margin-bottom: 10px; border-radius: 6px; border: 1px solid #3e3e42; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+        .panel-col { display: flex; flex-direction: column; width: 100%; }
+        
+        button { padding: 8px 12px; cursor: pointer; border: none; border-radius: 4px; background: #007acc; color: white; font-weight: 500; transition: background 0.2s; }
+        button:hover:not(:disabled) { background: #0098ff; }
+        button:disabled { opacity: 0.4; cursor: not-allowed; background: #555; }
+        .btn-active { background: #ff9800; font-weight: bold; color: black; }
+        .btn-active:hover:not(:disabled) { background: #ffb74d; }
+        
+        input[type="range"] { vertical-align: middle; }
+        .instruction { color: #aaa; font-size: 13px; margin-bottom: 8px; width: 100%; }
+        
+        /* The new scrolling viewport */
+        #viewport { 
+            width: 100%; 
+            height: 65vh; /* Takes up 65% of screen height */
+            overflow: auto; 
+            border: 2px solid #555; 
+            background: #111; 
+            position: relative;
+            cursor: crosshair;
+        }
+        
+        /* The scalable workspace */
+        #workspace { 
+            position: relative; 
+            display: inline-block; 
+            transform-origin: top left; 
+        }
+        
+        #image-container { transform-origin: 0 0; }
+        #source-image { display: block; max-width: none; pointer-events: none; }
+        canvas { position: absolute; top: 0; left: 0; }
+        
+        #results { font-family: monospace; font-size: 16px; color: #00ff00; margin-left: auto; background: #000; padding: 5px 10px; border-radius: 4px;}
+        #zoom-val { font-family: monospace; display: inline-block; width: 45px; text-align: right; }
+    </style>
+</head>
+<body>
+
+    <div class="panel">
+        <input type="file" id="imageLoader" accept="image/*" style="color:white;"/>
+        <div style="border-left: 1px solid #555; height: 24px; margin: 0 10px;"></div>
+        
+        <span>Zoom:</span>
+        <input type="range" id="zoom-slider" min="0.1" max="4" step="0.05" value="1" disabled />
+        <span id="zoom-val">100%</span>
+        <button id="btn-fit" disabled>Fit to Screen</button>
+        <button id="btn-100" disabled>100%</button>
+    </div>
+
+    <div class="panel">
+        <div class="instruction"><b>Step 1 (Parallax):</b> Draw 2 parallel lines for the X-axis, then 2 for the Y-axis. (Must be perpendicular in real life).</div>
+        <button id="btn-pair1" disabled>Draw Pair 1 (X-Axis)</button>
+        <button id="btn-pair2" disabled>Draw Pair 2 (Y-Axis)</button>
+        <button id="btn-warp" disabled style="background:#28a745;">Apply Warp</button>
+        <button id="btn-reset-calib" disabled>Reset Image</button>
+    </div>
+
+    <div class="panel">
+        <div class="instruction"><b>Step 2 (Measure):</b> Zoom in and draw lines to measure precise angles.</div>
+        <button id="btn-measure" disabled>Draw Measure Lines</button>
+        <button id="btn-reset-measure" disabled>Clear Measurements</button>
+        <div id="results">Angles: None</div>
+    </div>
+
+    <div id="viewport">
+        <div id="workspace">
+            <div id="image-container">
+                <img id="source-image" src="" alt=""/>
+            </div>
+            <canvas id="uiCanvas"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('uiCanvas');
+        const ctx = canvas.getContext('2d');
+        const img = document.getElementById('source-image');
+        const imgContainer = document.getElementById('image-container');
+        const workspace = document.getElementById('workspace');
+        const viewport = document.getElementById('viewport');
+        
+        let mode = 'none'; 
+        let isDrawing = false;
+        
+        let startX, startY, currentX, currentY;
+        let currentMousePos = null; // For crosshairs
+
+        let pair1Lines = []; 
+        let pair2Lines = []; 
+        let measureLines = []; 
+        let isWarped = false;
+
+        // UI
+        const zoomSlider = document.getElementById('zoom-slider');
+        const zoomValTxt = document.getElementById('zoom-val');
+        const btnFit = document.getElementById('btn-fit');
+        const btn100 = document.getElementById('btn-100');
+
+        const btns = {
+            p1: document.getElementById('btn-pair1'),
+            p2: document.getElementById('btn-pair2'),
+            warp: document.getElementById('btn-warp'),
+            rCal: document.getElementById('btn-reset-calib'),
+            meas: document.getElementById('btn-measure'),
+            rMeas: document.getElementById('btn-reset-measure')
+        };
+
+        // --- Zoom & Viewport Logic ---
+        let currentZoom = 1;
+
+        function setZoom(z) {
+            currentZoom = Math.max(0.05, Math.min(z, 5));
+            zoomSlider.value = currentZoom;
+            zoomValTxt.innerText = Math.round(currentZoom * 100) + '%';
+            workspace.style.transform = `scale(${currentZoom})`;
+        }
+
+        function fitToScreen() {
+            if (!img.src) return;
+            const vw = viewport.clientWidth - 20; // accounting for scrollbars
+            const vh = viewport.clientHeight - 20;
+            const ww = workspace.offsetWidth;
+            const wh = workspace.offsetHeight;
+            if (ww > 0 && wh > 0) {
+                const scale = Math.min(vw / ww, vh / wh);
+                setZoom(scale);
+            }
+        }
+
+        zoomSlider.addEventListener('input', (e) => setZoom(e.target.value));
+        btnFit.addEventListener('click', fitToScreen);
+        btn100.addEventListener('click', () => setZoom(1));
+
+        // --- Bulletproof Mouse Coordinate Math ---
+        function getMousePos(e) {
+            const rect = canvas.getBoundingClientRect();
+            // This maps the screen pixel exactly to the internal canvas pixel, 
+            // completely ignoring how much the CSS has scaled the canvas.
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            return {
+                x: (e.clientX - rect.left) * scaleX,
+                y: (e.clientY - rect.top) * scaleY
+            };
+        }
+
+        // --- Core Application Logic ---
+        document.getElementById('imageLoader').addEventListener('change', function(e) {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                img.onload = function() {
+                    resetCalibration();
+                    resetMeasurements();
+                    
+                    // Enable Zoom UI
+                    zoomSlider.disabled = false;
+                    btnFit.disabled = false;
+                    btn100.disabled = false;
+                    
+                    btns.p1.disabled = false;
+                    btns.rCal.disabled = false;
+                    setMode('pair1');
+                    
+                    // Auto-fit immediately when loaded
+                    setTimeout(fitToScreen, 50); 
+                }
+                img.src = event.target.result;
+            }
+            if(e.target.files[0]) reader.readAsDataURL(e.target.files[0]);
+        });
+
+        function setMode(newMode) {
+            mode = newMode;
+            btns.p1.classList.toggle('btn-active', mode === 'pair1');
+            btns.p2.classList.toggle('btn-active', mode === 'pair2');
+            btns.meas.classList.toggle('btn-active', mode === 'measure');
+        }
+
+        btns.p1.addEventListener('click', () => setMode('pair1'));
+        btns.p2.addEventListener('click', () => setMode('pair2'));
+        btns.meas.addEventListener('click', () => setMode('measure'));
+        btns.rCal.addEventListener('click', resetCalibration);
+        btns.rMeas.addEventListener('click', resetMeasurements);
+
+        function resetCalibration() {
+            pair1Lines = []; pair2Lines = [];
+            isWarped = false;
+            
+            imgContainer.style.transform = 'none';
+            workspace.style.width = img.clientWidth + 'px';
+            workspace.style.height = img.clientHeight + 'px';
+            canvas.width = img.clientWidth;
+            canvas.height = img.clientHeight;
+
+            btns.warp.disabled = true;
+            btns.p2.disabled = true;
+            btns.meas.disabled = true;
+            setMode('pair1');
+            fitToScreen();
+            redraw();
+        }
+
+        function resetMeasurements() {
+            measureLines = [];
+            document.getElementById('results').innerText = 'Angles: None';
+            redraw();
+        }
+
+        // --- Interaction ---
+        canvas.addEventListener('mousedown', (e) => {
+            if (mode === 'none') return;
+            if (mode === 'pair1' && pair1Lines.length >= 2) return;
+            if (mode === 'pair2' && pair2Lines.length >= 2) return;
+
+            isDrawing = true;
+            let pos = getMousePos(e);
+            startX = pos.x; 
+            startY = pos.y;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            currentMousePos = getMousePos(e); // Track for crosshairs
+            if (isDrawing) {
+                currentX = currentMousePos.x; 
+                currentY = currentMousePos.y;
+            }
+            redraw();
+        });
+
+        canvas.addEventListener('mouseout', () => {
+            currentMousePos = null;
+            redraw();
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            if (!isDrawing) return;
+            isDrawing = false;
+            let line = {x1: startX, y1: startY, x2: currentX, y2: currentY};
+
+            if (mode === 'pair1') {
+                pair1Lines.push(line);
+                if (pair1Lines.length === 2) { btns.p2.disabled = false; setMode('pair2'); }
+            } else if (mode === 'pair2') {
+                pair2Lines.push(line);
+                if (pair2Lines.length === 2) { btns.warp.disabled = false; setMode('none'); }
+            } else if (mode === 'measure') {
+                measureLines.push(line);
+                calculateMeasurements();
+            }
+            redraw();
+        });
+
+        function getModeColor(m) {
+            if (m === 'pair1') return '#00ffff';
+            if (m === 'pair2') return '#ff00ff';
+            return '#00ff00';
+        }
+
+        function drawLine(x1, y1, x2, y2, color) {
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2 / currentZoom; // Keep line width visually consistent
+            ctx.stroke();
+        }
+
+        function drawCrosshairs() {
+            if (!currentMousePos || mode === 'none') return;
+            ctx.beginPath();
+            // Vertical line
+            ctx.moveTo(currentMousePos.x, 0);
+            ctx.lineTo(currentMousePos.x, canvas.height);
+            // Horizontal line
+            ctx.moveTo(0, currentMousePos.y);
+            ctx.lineTo(canvas.width, currentMousePos.y);
+            
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.lineWidth = 1 / currentZoom; // Thin, consistent line
+            ctx.setLineDash([5 / currentZoom, 5 / currentZoom]);
+            ctx.stroke();
+            ctx.setLineDash([]); // reset
+        }
+
+        function redraw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (!isWarped) {
+                pair1Lines.forEach(l => drawLine(l.x1, l.y1, l.x2, l.y2, '#00ffff'));
+                pair2Lines.forEach(l => drawLine(l.x1, l.y1, l.x2, l.y2, '#ff00ff'));
+            }
+            measureLines.forEach(l => drawLine(l.x1, l.y1, l.x2, l.y2, '#00ff00'));
+            
+            if (isDrawing) drawLine(startX, startY, currentX, currentY, getModeColor(mode));
+            
+            drawCrosshairs(); // Overlay targeting guides
+        }
+
+        function calculateMeasurements() {
+            let res = [];
+            for (let i = 0; i < measureLines.length - 1; i += 2) {
+                let l1 = measureLines[i], l2 = measureLines[i+1];
+                let a1 = Math.atan2(l1.y2 - l1.y1, l1.x2 - l1.x1);
+                let a2 = Math.atan2(l2.y2 - l2.y1, l2.x2 - l2.x1);
+                let diff = Math.abs(a1 - a2) * (180 / Math.PI);
+                if (diff > 90) diff = 180 - diff;
+                res.push(`P${(i/2)+1}: ${diff.toFixed(2)}°`);
+            }
+            document.getElementById('results').innerText = res.length ? res.join(' | ') : 'Angles: None';
+        }
+
+        // --- Math & Homography ---
+        btns.warp.addEventListener('click', applyWarp);
+
+        function lineIntersect(l1, l2) {
+            let d = (l1.x1 - l1.x2) * (l2.y1 - l2.y2) - (l1.y1 - l1.y2) * (l2.x1 - l2.x2);
+            if (d === 0) return null;
+            let nx = (l1.x1*l1.y2 - l1.y1*l1.x2)*(l2.x1 - l2.x2) - (l1.x1 - l1.x2)*(l2.x1*l2.y2 - l2.y1*l2.x2);
+            let ny = (l1.x1*l1.y2 - l1.y1*l1.x2)*(l2.y1 - l2.y2) - (l1.y1 - l1.y2)*(l2.x1*l2.y2 - l2.y1*l2.x2);
+            return {x: nx/d, y: ny/d};
+        }
+
+        function transformPoint(px, py, H) {
+            let w_ = H[6]*px + H[7]*py + 1; 
+            return { x: (H[0]*px + H[1]*py + H[2]) / w_, y: (H[3]*px + H[4]*py + H[5]) / w_ };
+        }
+
+        function applyWarp() {
+            let p1 = lineIntersect(pair1Lines[0], pair2Lines[0]);
+            let p2 = lineIntersect(pair1Lines[1], pair2Lines[0]);
+            let p3 = lineIntersect(pair1Lines[1], pair2Lines[1]);
+            let p4 = lineIntersect(pair1Lines[0], pair2Lines[1]);
+
+            if(!p1 || !p2 || !p3 || !p4) return alert("Error: Parallel axes. Try drawing clearer perpendicular structures.");
+
+            let src = [p1, p2, p3, p4];
+            let w = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+            let h = Math.hypot(p4.x - p1.x, p4.y - p1.y);
+            let dst = [{x: 0, y: 0}, {x: w, y: 0}, {x: w, y: h}, {x: 0, y: h}];
+
+            let H = getHomography(src, dst);
+
+            let imgW = img.clientWidth, imgH = img.clientHeight;
+            let c1 = transformPoint(0, 0, H), c2 = transformPoint(imgW, 0, H);
+            let c3 = transformPoint(imgW, imgH, H), c4 = transformPoint(0, imgH, H);
+
+            let minX = Math.min(c1.x, c2.x, c3.x, c4.x);
+            let minY = Math.min(c1.y, c2.y, c3.y, c4.y);
+            let maxX = Math.max(c1.x, c2.x, c3.x, c4.x);
+            let maxY = Math.max(c1.y, c2.y, c3.y, c4.y);
+
+            let newW = maxX - minX, newH = maxY - minY;
+            
+            let cssMatrix = `translate(${-minX}px, ${-minY}px) matrix3d(
+                ${H[0]}, ${H[3]}, 0, ${H[6]},
+                ${H[1]}, ${H[4]}, 0, ${H[7]},
+                0, 0, 1, 0,
+                ${H[2]}, ${H[5]}, 0, 1
+            )`;
+
+            imgContainer.style.transform = cssMatrix;
+            
+            workspace.style.width = newW + 'px';
+            workspace.style.height = newH + 'px';
+            canvas.width = newW;
+            canvas.height = newH;
+
+            isWarped = true;
+            btns.meas.disabled = false;
+            btns.rMeas.disabled = false;
+            setMode('measure');
+            
+            // Re-fit the newly shaped workspace into the window view
+            setTimeout(fitToScreen, 50); 
+            redraw();
+        }
+
+        function getHomography(src, dst) {
+            let matrix = [], vector = [];
+            for (let i = 0; i < 4; i++) {
+                let x = src[i].x, y = src[i].y, u = dst[i].x, v = dst[i].y;
+                matrix.push([x, y, 1, 0, 0, 0, -u*x, -u*y]);
+                matrix.push([0, 0, 0, x, y, 1, -v*x, -v*y]);
+                vector.push(u); vector.push(v);
+            }
+            let h = gaussJordan(matrix, vector);
+            h.push(1); 
+            return h;
+        }
+
+        function gaussJordan(A, b) {
+            let n = A.length;
+            for (let i = 0; i < n; i++) A[i].push(b[i]);
+            for (let i = 0; i < n; i++) {
+                let maxEl = Math.abs(A[i][i]), maxRow = i;
+                for (let k = i + 1; k < n; k++) if (Math.abs(A[k][i]) > maxEl) { maxEl = Math.abs(A[k][i]); maxRow = k; }
+                let tmp = A[maxRow]; A[maxRow] = A[i]; A[i] = tmp;
+                for (let k = i + 1; k < n; k++) {
+                    let c = -A[k][i] / A[i][i];
+                    for (let j = i; j < n + 1; j++) {
+                        if (i === j) A[k][j] = 0; else A[k][j] += c * A[i][j];
+                    }
+                }
+            }
+            let x = new Array(n).fill(0);
+            for (let i = n - 1; i > -1; i--) {
+                x[i] = A[i][n] / A[i][i];
+                for (let k = i - 1; k > -1; k--) A[k][n] -= A[k][i] * x[i];
+            }
+            return x;
+        }
+    </script>
+</body>
+</html>
