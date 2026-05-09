@@ -1,187 +1,68 @@
 defaults:
-  PT-IH27: &PT-IH27
-    name: ET2.02 PacTech IH-27
-    short: PT-IH27
-    offset: 20
-    HV: 220
-    role: ref
-  PT-IH5: &PT-IH5
-    name: ET2.02 PacTech IH-5
-    short: PT-IH5
-    offset: 20
-    HV: 220
-    role: trig
-  PT-IH3: &PT-IH3
-    name: ET2.02 PacTech IH-3
-    short: PT-IH3
-    offset: 20
-    HV: 220
-    role: extra
-  PT-IH2: &PT-IH2
-    name: ET2.02 PacTech IH-2
-    short: PT-IH2
-    offset: 20
-    HV: 190
-    role: dut
-run1:
+  # Base Configurations
+  PT-IH27: &PT-IH27 {name: ET2.02 PacTech IH-27, short: PT-IH27, offset: 20, HV: 220, role: ref}
+  PT-IH5:  &PT-IH5  {name: ET2.02 PacTech IH-5,  short: PT-IH5,  offset: 20, HV: 220, role: trig}
+  PT-IH3:  &PT-IH3  {name: ET2.02 PacTech IH-3,  short: PT-IH3,  offset: 20, HV: 220, role: extra}
+  PT-IH2:  &PT-IH2  {name: ET2.02 PacTech IH-2,  short: PT-IH2,  offset: 20, HV: 190, role: dut}
+
+  # 30 Degree Configurations
+  PT-IH27_30deg: &PT-IH27_30deg {<<: *PT-IH27, role: extra, angle: 30}
+  PT-IH5_30deg:  &PT-IH5_30deg  {<<: *PT-IH5,  role: ref,   angle: 30, HV: 230} # Fixed HV
+  PT-IH3_30deg:  &PT-IH3_30deg  {<<: *PT-IH3,  role: trig,  angle: 30}
+  PT-IH2_30deg:  &PT-IH2_30deg  {<<: *PT-IH2,               angle: 30}
+
+  # 45 Degree Configurations
+  PT-IH27_45deg: &PT-IH27_45deg {<<: *PT-IH27, role: extra, angle: 45}
+  PT-IH5_45deg:  &PT-IH5_45deg  {<<: *PT-IH5,  role: ref,   angle: 45, HV: 230}
+  PT-IH3_45deg:  &PT-IH3_45deg  {<<: *PT-IH3,  role: trig,  angle: 45}
+  PT-IH2_45deg:  &PT-IH2_45deg  {<<: *PT-IH2,               angle: 45}
+
+  # 60 Degree Configurations
+  PT-IH27_60deg: &PT-IH27_60deg {<<: *PT-IH27, role: extra, angle: 60}
+  PT-IH5_60deg:  &PT-IH5_60deg  {<<: *PT-IH5,  role: ref,   angle: 60, HV: 230}
+  PT-IH3_60deg:  &PT-IH3_60deg  {<<: *PT-IH3,  role: trig,  angle: 60}
+  PT-IH2_60deg:  &PT-IH2_60deg  {<<: *PT-IH2,               angle: 60}
+
+run1: &run1
   0: *PT-IH27
   1: *PT-IH5
   2: *PT-IH3
   3: *PT-IH2
-run2:
-  0: *PT-IH27
-  1: *PT-IH5
-  2: *PT-IH3
-  3: *PT-IH2
+
+run2: *run1
+
 run3:
   0: *PT-IH27
   1: {<<: *PT-IH5, HV: 230}
   2: *PT-IH3
   3: *PT-IH2
-run7:
-  0:
-    <<: *PT-IH27
-    role: extra
-    transformation:
-      rotation:
-        x: 0
-        y: -60
-        z: 0
-      translation:
-        x: 0
-        y: 0
-        z: 0
-  1:
-    <<: *PT-IH5
-    HV: 230
-    role: ref
-    transformation:
-      rotation:
-        x: 0
-        y: -60
-        z: 0
-      translation:
-        x: 0
-        y: 0
-        z: 0
-  2:
-    <<: *PT-IH3
-    role: trig
-    transformation:
-      rotation:
-        x: 0
-        y: -60
-        z: 0
-      translation:
-        x: 0
-        y: 0
-        z: 0
-  3:
-    <<: *PT-IH2
-    transformation:
-      rotation:
-        x: 0
-        y: -60
-        z: 0
-      translation:
-        x: 0
-        y: 0
-        z: 0
-run10:
-  0:
-    <<: *PT-IH27
-    role: extra
-    transformation:
-      rotation:
-        x: 0
-        y: -30
-        z: 0
-      translation:
-        x: 0
-        y: 0
-        z: 0
-  1:
-    <<: *PT-IH5
-    HV: 230
-    role: ref
-    transformation:
-      rotation:
-        x: 0
-        y: -30
-        z: 0
-      translation:
-        x: -0.56
-        y: 5.85
-        z: 0
-  2:
-    <<: *PT-IH3
-    role: trig
-    transformation:
-      rotation:
-        x: 0
-        y: -30
-        z: 0
-      translation:
-        x: 0
-        y: 0
-        z: 0
-  3:
-    <<: *PT-IH2
-    transformation:
-      rotation:
-        x: 0
-        y: -30
-        z: 0
-      translation:
-        x: -0.56
-        y: -5.85
-        z: 0
-run13:
-  0:
-    <<: *PT-IH27
-    role: extra
-    transformation:
-      rotation:
-        x: 0
-        y: -45
-        z: 0
-      translation:
-        x: 0
-        y: 0
-        z: 0
-  1:
-    <<: *PT-IH5
-    HV: 230
-    role: ref
-    transformation:
-      rotation:
-        x: 0
-        y: -45
-        z: 0
-      translation:
-        x: -0.46
-        y: 9.75
-        z: 0
-  2:
-    <<: *PT-IH3
-    role: trig
-    transformation:
-      rotation:
-        x: 0
-        y: -45
-        z: 0
-      translation:
-        x: 0
-        y: 0
-        z: 0
-  3:
-    <<: *PT-IH2
-    transformation:
-      rotation:
-        x: 0
-        y: -45
-        z: 0
-      translation:
-        x: -0.46
-        y: -9.75
-        z: 0
+
+# 60 Degree runs
+run5: &run5
+  0: {<<: *PT-IH27_60deg, temp: 0C,   transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  1: {<<: *PT-IH5_60deg,  temp: 0C,   transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  2: {<<: *PT-IH3_60deg,  temp: 0C,   transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  3: {<<: *PT-IH2_60deg,  temp: -22C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+run6: *run5
+run7: *run5
+run8: *run5
+
+# 30 Degree runs
+run9: &run9
+  0: {<<: *PT-IH27_30deg, temp: 0C,   transformation: {rotation: {x: 0, y: -30, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  1: {<<: *PT-IH5_30deg,  temp: 0C,   transformation: {rotation: {x: 0, y: -30, z: 0}, translation: {x: -0.56, y: 5.85, z: 0}}}
+  2: {<<: *PT-IH3_30deg,  temp: 0C,   transformation: {rotation: {x: 0, y: -30, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  3: {<<: *PT-IH2_30deg,  temp: -22C, transformation: {rotation: {x: 0, y: -30, z: 0}, translation: {x: -0.56, y: -5.85, z: 0}}}
+run10: *run9
+run11: *run9
+
+# 45 Degree runs
+run12: &run12
+  0: {<<: *PT-IH27_45deg, temp: 0C,   transformation: {rotation: {x: 0, y: -45, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  1: {<<: *PT-IH5_45deg,  temp: 0C,   transformation: {rotation: {x: 0, y: -45, z: 0}, translation: {x: -0.46, y: 9.75, z: 0}}}
+  2: {<<: *PT-IH3_45deg,  temp: 0C,   transformation: {rotation: {x: 0, y: -45, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  3: {<<: *PT-IH2_45deg,  temp: -22C, transformation: {rotation: {x: 0, y: -45, z: 0}, translation: {x: -0.46, y: -9.75, z: 0}}}
+
+run13: *run12
+run14: *run12
+run15: *run12
