@@ -234,9 +234,9 @@ if __name__ == "__main__":
 
     tag_for_condor = args.condor_tag
     if tag_for_condor is None:
-        runAppend = ""
+        runAppend = "subdir"
     else:
-        runAppend = "_" + tag_for_condor
+        runAppend = tag_for_condor
 
     log_dir = Path('./') / 'condor_logs' / 'decoding' / f'{runAppend}'
     log_dir.mkdir(exist_ok=True, parents=True)
