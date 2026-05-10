@@ -75,3 +75,4 @@ run17: &run17
   3: {<<: *PT-IH2_45deg,  temp: -10C,  transformation: {rotation: {x: 0, y: -45, z: 0}, translation: {x: -0.46, y: -9.75, z: 0}}}
 
 run18: *run17
+run19: *run17
