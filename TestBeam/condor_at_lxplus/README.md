@@ -72,13 +72,14 @@ python submit/submit_extract_events_by_path.py -d <DIRNAME> -t <TRACK> -o <OUTNA
 
 ### 9. Reshaping the output from event-based to track-based
 ```
-python core/reshape_to_tracks.py -d <DIRNAME> -o <OUTDIR> -c <CONFIG> -r <RUNNAME> [--groups <GROUPS>]
+python core/reshape_event_to_track.py -d <DIRNAME> -o <OUTDIR> -c <CONFIG> -r <RUNNAME> -b <BATCHES> -p <PARTITIONS>
 ```
 - `-d` option: path to the directory of step 8.
 - `-o` option: path to the output directory.
 - `-c` option: path to the board config yaml file.
 - `-r` option: "key" of dictionary in yaml file (usually run identifier).
-- `--groups` option: In case that want to divide the run into a multiple groups, add the integer. Default is 1.
+- `-b` option: Total batches to split input files into for safety.
+- `-p` option: Number of output datasets (partitions)
 
 ### 10. Submit jobs for apply TDC cuts
 ```
