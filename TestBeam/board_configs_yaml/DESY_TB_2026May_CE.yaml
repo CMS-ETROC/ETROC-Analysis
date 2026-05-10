@@ -66,3 +66,12 @@ run12: &run12
 run13: *run12
 run14: *run12
 run15: *run12
+
+# 45 Degree runs + -10C
+run17: &run17
+  0: {<<: *PT-IH27_45deg, temp: 7.5C,  transformation: {rotation: {x: 0, y: -45, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  1: {<<: *PT-IH5_45deg,  temp: 7.5C,  transformation: {rotation: {x: 0, y: -45, z: 0}, translation: {x: -0.46, y: 9.75, z: 0}}}
+  2: {<<: *PT-IH3_45deg,  temp: 7.5C,  transformation: {rotation: {x: 0, y: -45, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  3: {<<: *PT-IH2_45deg,  temp: -10C,  transformation: {rotation: {x: 0, y: -45, z: 0}, translation: {x: -0.46, y: -9.75, z: 0}}}
+
+run18: *run17
