@@ -13,6 +13,9 @@ from scipy.stats import gaussian_kde
 from natsort import natsorted
 from pathlib import Path
 from matplotlib import rcParams
+from scipy.stats import norm
+from iminuit import Minuit
+
 rcParams["axes.formatter.useoffset"] = False
 rcParams["axes.formatter.use_mathtext"] = False
 
@@ -25,6 +28,8 @@ __all__ = [
     'plot_resolution_table',
     'plot_resolutions_per_row',
     'plot_avg_resolution_per_row',
+    'fit_board_resolution_iminuit',
+    'plot_board_resolution_unbinned_fit',
 ]
 
 ## --------------- Plotting -----------------------
@@ -118,7 +123,7 @@ def plot_TWC(
 ## --------------------------------------
 def fit_board_resolution(
     input_df: pd.DataFrame,
-    role: list,
+    role: str,
     fit_range: list[int] = [20, 75],
 ) -> dict:
     """
@@ -174,6 +179,181 @@ def fit_board_resolution(
         "lmfit_obj": out
     }
 
+## --------------------------------------
+def fit_board_resolution_iminuit(
+    input_df: pd.DataFrame,
+    role: str,
+    sigma_cut: float = 2.0
+):
+    def nll(input_data, mu, sigma):
+        return -np.sum(norm.logpdf(input_data, loc=mu, scale=sigma))
+
+    col_name = f'res_{role}'
+    if col_name not in input_df.columns:
+        return None
+
+    data = input_df[col_name].dropna().values
+    if len(data) == 0:
+        return None
+
+    # 1. Robust Scouting (No Fit Needed)
+    # This ignores outliers by design
+    mu_init = np.median(data)
+    q75, q25 = np.percentile(data, [75, 25])
+    sigma_init = (q75 - q25) / 1.349
+
+    # 2. Masking based on Robust Stats
+    # This is the "shield" that protects your fit from the outliers
+    mask = (data >= mu_init - sigma_cut * sigma_init) & \
+           (data <= mu_init + sigma_cut * sigma_init)
+    masked_data = data[mask]
+
+    if len(masked_data) == 0:
+        return None
+
+    # 3. Final Unbinned Fit on Clean Data
+    # Note: data must be passed to the lambda correctly
+    m = Minuit(lambda mu, sigma: nll(masked_data, mu, sigma),
+                mu=mu_init,
+                sigma=sigma_init)
+
+    m.errordef = Minuit.LIKELIHOOD
+    m.limits["sigma"] = (1e-6, None) # Physical constraint
+
+    m.migrad()
+    m.hesse()
+
+    # CRITICAL: Return the count so your plot scales correctly
+    return m
+
+## --------------------------------------
+def plot_board_resolution_unbinned_fit(
+    m,
+    input_df: pd.DataFrame,
+    role: str,
+    tb_loc: str,
+    fig_config: dict,
+    hist_range: list[int] = [20, 75],
+    hist_bins: int = 30,
+    save_mother_dir: Path | None = None,
+):
+
+    # 1. Data Prep
+    plot_title = load_fig_title(tb_loc)
+
+    raw_vals = input_df[f'res_{role}'].dropna().values
+    total_entries = len(raw_vals)
+    bin_width = (hist_range[1] - hist_range[0]) / hist_bins
+    target_area = total_entries * bin_width
+
+    # 2. Histogramming & Pull Calculation
+    h = hist.Hist(hist.axis.Regular(hist_bins, *hist_range))
+    h.fill(raw_vals)
+    centers = h.axes[0].centers
+    counts = h.values()
+
+    # Expected counts based on fit parameters
+    mu_fit, sigma_fit = m.values['mu'], m.values['sigma']
+    mu_err, sigma_err = m.errors['mu'], m.errors['sigma']
+
+    expected_counts = target_area * norm.pdf(centers, mu_fit, sigma_fit)
+
+    with np.errstate(divide='ignore', invalid='ignore'):
+        pulls = (counts - expected_counts) / np.sqrt(expected_counts)
+        pulls[~np.isfinite(pulls)] = 0  # Handle empty bins
+
+    # --- CANVAS SETUP ---
+    fig = plt.figure(figsize=(12, 10))
+    grid = fig.add_gridspec(2, 1, hspace=0, height_ratios=[3, 1])
+    main_ax = fig.add_subplot(grid[0])
+    sub_ax = fig.add_subplot(grid[1], sharex=main_ax)
+    plt.setp(main_ax.get_xticklabels(), visible=False)
+
+    hep.cms.text(loc=0, ax=main_ax, text="ETL ETROC Test Beam", fontsize=18)
+    main_ax.set_title(f"{plot_title}\n{fig_config.get('title', role)}", loc="right", size=14)
+
+    # Plot Data Points
+    main_ax.errorbar(centers, counts, np.sqrt(counts),
+                    ecolor="steelblue", mfc="steelblue", mec="steelblue", fmt="o",
+                    ms=6, capsize=1, capthick=2, alpha=0.8, label="Data")
+
+    # 4. Main Plot: Data & Fit
+    x_range = np.linspace(*hist_range, 200)
+    y_fit = norm.pdf(x_range, mu_fit, sigma_fit) * target_area
+
+    # 5. Uncertainty Band (Sampling)
+    pcov = m.covariance
+    if pcov is not None:
+        n_samples = 100
+        vopts = np.random.multivariate_normal([mu_fit, sigma_fit], pcov, n_samples)
+
+        sampled_ydata = []
+        for v in vopts:
+            if v[1] <= 0: continue # Sigma must be positive
+            y_sample = norm.pdf(x_range, loc=v[0], scale=v[1]) * target_area
+            sampled_ydata.append(y_sample)
+
+        sampled_ydata = np.vstack(sampled_ydata)
+        model_uncert = np.nanstd(sampled_ydata, axis=0)
+
+        main_ax.fill_between(x_range, y_fit - model_uncert, y_fit + model_uncert,
+                            color="hotpink", alpha=0.3, label='Fit Uncertainty')
+
+    # Fit Line (Updated to iminuit params)
+    main_ax.plot(x_range, y_fit, color="hotpink", ls="-", lw=3, alpha=0.8,
+                label=fr"$\mu$: {mu_fit:.2f} $\pm$ {mu_err:.2f} ps")
+
+    # Legend entry for Sigma
+    main_ax.plot([], [], ' ', label=fr"$\sigma$: {abs(sigma_fit):.2f} $\pm$ {sigma_err:.2f} ps")
+
+    main_ax.set_ylabel('Counts', fontsize=25)
+    main_ax.tick_params(axis='y', labelsize=20)
+    main_ax.legend(fontsize=18, loc='best')
+
+    # --- PULL PLOT ---
+    sub_ax.axhline(0, c='black', lw=1.2)
+    sub_ax.axhline(1, c='black', lw=0.75, ls='--')
+    sub_ax.axhline(-1, c='black', lw=0.75, ls='--')
+
+    sub_ax.bar(centers, pulls, width=bin_width, fc='royalblue', alpha=0.7)
+
+    sub_ax.set_ylim(-3, 3)
+    sub_ax.set_yticks([-2, 0, 2])
+    sub_ax.set_ylabel('Pulls', fontsize=20)
+    sub_ax.set_xlabel('Time Resolution [ps]', fontsize=25)
+    sub_ax.tick_params(axis='both', labelsize=20)
+
+    fig.tight_layout()
+
+    # def calculate_goodness(counts, expected_counts):
+    # # Standard Chi-Square
+    #     with np.errstate(divide='ignore', invalid='ignore'):
+    #         # We only consider bins with data to avoid div by zero
+    #         mask = counts > 0
+    #         bin_chi2 = ((counts[mask] - expected_counts[mask])**2) / expected_counts[mask]
+
+    #         total_chi2 = np.sum(bin_chi2)
+    #         ndf = len(counts[mask]) - 2 # mu and sigma
+    #         red_chi2 = total_chi2 / ndf
+
+    #         # Pull statistics
+    #         pull_vals = (counts[mask] - expected_counts[mask]) / np.sqrt(expected_counts[mask])
+    #         pull_mean = np.mean(pull_vals)
+    #         pull_std = np.std(pull_vals)
+
+    #     return red_chi2, pull_mean, pull_std
+
+    # # Example usage printout:
+    # r_chi2, p_mu, p_std = calculate_goodness(counts, expected_counts)
+    # print(f"Red. Chi2: {r_chi2:.2f} | Pull Mean: {p_mu:.2f} | Pull Sigma: {p_std:.2f}")
+
+    # --- SAVING ---
+    if save_mother_dir:
+        save_path = Path(save_mother_dir) / 'time_resolution_results'
+        save_path.mkdir(exist_ok=True, parents=True)
+        name_tag = fig_config.get('short', role)
+        fig.savefig(save_path / f"board_res_{name_tag}.png")
+        plt.close(fig)
 
 ## --------------------------------------
 def plot_resolution_with_pulls(
