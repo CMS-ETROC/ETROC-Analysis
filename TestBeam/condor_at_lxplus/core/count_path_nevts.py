@@ -162,7 +162,7 @@ def main():
                 group_suffix = ""
 
             # Final name: nevt_<dirname_part>_<group_suffix>.csv
-            out_filename = f"nevt_{dirname_part}{group_suffix}{args.tag}.csv"
+            out_filename = f"nevt{group_suffix}{args.tag}.csv"
             final_out_path = output_path / out_filename
 
             print(f"    Saving to: {final_out_path}")
