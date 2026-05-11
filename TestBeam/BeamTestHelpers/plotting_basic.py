@@ -415,6 +415,7 @@ def plot_occupany_map(
         extra_cms_title: str = 'ETL ETROC Test Beam',
         fname_tag: str = '',
         save_mother_dir: Path | None = None,
+        replace_cms_string: str | None = None,
     ):
     """Make occupancy plot.
 
@@ -490,7 +491,11 @@ def plot_occupany_map(
         cbar.set_label('Hits', fontsize=25)
         cbar.ax.tick_params(labelsize=18)
 
-        hep.cms.text(loc=0, ax=ax, text=extra_cms_title, fontsize=18)
+        if replace_cms_string is None:
+            hep.cms.text(loc=0, ax=ax, text=extra_cms_title, fontsize=18)
+        else:
+            hep.label.exp_text(exp="", text=replace_cms_string, loc=0, ax=ax, fontsize=18)
+
         ax.set_title(f"{loc_title}\n{config['name']}", loc="right", size=16)
         ax.set_xlabel('Column', fontsize=25)
         ax.set_ylabel('Row', fontsize=25)
@@ -699,6 +704,7 @@ def plot_1d_TDC_histograms(
     save_mother_dir: Path | None = None,
     no_errorbar: bool = False,
     tag: str = '',
+    replace_cms_string: str | None = None,
 ):
     """Make plots of 1D TDC histograms.
 
@@ -736,7 +742,10 @@ def plot_1d_TDC_histograms(
                 try:
                     fig, ax = plt.subplots(figsize=(11, 10))
                     ax.set_title(loc_title, loc="right", size=16)
-                    hep.cms.text(loc=0, ax=ax, text=extra_cms_title, fontsize=18)
+                    if replace_cms_string is None:
+                        hep.cms.text(loc=0, ax=ax, text=extra_cms_title, fontsize=18)
+                    else:
+                        hep.label.exp_text(exp="", text=replace_cms_string, loc=0, ax=ax, fontsize=18)
                     ihist.project(ival).plot1d(ax=ax, lw=2, yerr=not no_errorbar)
                     ax.xaxis.label.set_fontsize(25)
                     ax.yaxis.label.set_fontsize(25)
@@ -753,7 +762,10 @@ def plot_1d_TDC_histograms(
             # 2D TOA-TOT plot
             fig, ax = plt.subplots(figsize=(11, 10))
             ax.set_title(loc_title, loc="right", size=16)
-            hep.cms.text(loc=0, ax=ax, text=extra_cms_title, fontsize=18)
+            if replace_cms_string is None:
+                hep.cms.text(loc=0, ax=ax, text=extra_cms_title, fontsize=18)
+            else:
+                hep.label.exp_text(exp="", text=replace_cms_string, loc=0, ax=ax, fontsize=18)
             hep.hist2dplot(ihist.project("TOA", "TOT")[::2j, ::2j], ax=ax)
             ax.xaxis.label.set_fontsize(25)
             ax.yaxis.label.set_fontsize(25)
@@ -767,7 +779,10 @@ def plot_1d_TDC_histograms(
             if event_hist:
                 fig, ax = plt.subplots(figsize=(11, 10))
                 ax.set_title(loc_title, loc="right", size=16)
-                hep.cms.text(loc=0, ax=ax, text=extra_cms_title, fontsize=18)
+                if replace_cms_string is None:
+                    hep.cms.text(loc=0, ax=ax, text=extra_cms_title, fontsize=18)
+                else:
+                    hep.label.exp_text(exp="", text=replace_cms_string, loc=0, ax=ax, fontsize=18)
                 event_hist.project("HA").plot1d(ax=ax, lw=2, yerr=not no_errorbar)
                 ax.xaxis.label.set_fontsize(25)
                 ax.yaxis.label.set_fontsize(25)
@@ -786,7 +801,10 @@ def plot_1d_TDC_histograms(
 
             for i, plot_info in enumerate(gs):
                 ax = fig.add_subplot(plot_info)
-                hep.cms.text(loc=0, ax=ax, text=extra_cms_title, fontsize=18)
+                if replace_cms_string is None:
+                    hep.cms.text(loc=0, ax=ax, text=extra_cms_title, fontsize=18)
+                else:
+                    hep.label.exp_text(exp="", text=replace_cms_string, loc=0, ax=ax, fontsize=18)
 
                 if i < len(plot_vars):
                     ax.set_title(f"{loc_title}\n{fig_tag[idx]}", loc="right", size=16)
@@ -1122,6 +1140,7 @@ def plot_TOA_correlation(
         tb_loc: str,
         draw_boundary: bool = False,
         save_mother_dir: Path | None = None,
+        replace_cms_string: str | None = None,
     ):
     """Make plot of TOA correlation between selected two boards.
 
@@ -1158,7 +1177,12 @@ def plot_TOA_correlation(
     distance = (x*params[0] - y + params[1])/(np.sqrt(params[0]**2 + 1))
 
     fig, ax = plt.subplots(figsize=(11, 10))
-    hep.cms.text(loc=0, ax=ax, text="ETL ETROC Test Beam", fontsize=18)
+
+    if replace_cms_string is None:
+        hep.cms.text(loc=0, ax=ax, text="ETL ETROC Test Beam", fontsize=18)
+    else:
+        hep.label.exp_text(exp="", text=replace_cms_string, loc=0, ax=ax, fontsize=18)
+
     ax.set_title(plot_title, loc='right', fontsize=16)
     ax.xaxis.label.set_fontsize(25)
     ax.yaxis.label.set_fontsize(25)
@@ -1180,7 +1204,7 @@ def plot_TOA_correlation(
 
     save_dir = save_mother_dir / 'temporal_correlation' if save_mother_dir else None
     if save_dir:
-        save_plot(fig, save_dir, f"toa_correlation_{board_names[board_id1]}_{board_names[board_id2]}")
+        save_plot(fig, save_dir, f"toa_correlation_{board_names[0]}_{board_names[1]}")
 
 
 ## --------------------------------------
@@ -1190,6 +1214,7 @@ def plot_TOA_correlation_hit(
         board_id2: int,
         tb_loc: str,
         board_info: dict | None = None, # Prioritized argument
+        replace_cms_string: str | None = None,
     ):
 
     ### Filtering dataframe
@@ -1237,11 +1262,12 @@ def plot_TOA_correlation_hit(
     h.fill(x, y)
 
     fig, ax = plt.subplots(figsize=(11, 10))
-    hep.cms.text(loc=0, ax=ax, text="ETL ETROC Test Beam", fontsize=18)
+    if replace_cms_string is None:
+        hep.cms.text(loc=0, ax=ax, text="ETL ETROC Test Beam", fontsize=18)
+    else:
+        hep.label.exp_text(exp="", text=replace_cms_string, loc=0, ax=ax, fontsize=18)
     ax.set_title(loc_title, loc='right', fontsize=16)
     ax.xaxis.label.set_fontsize(25)
     ax.yaxis.label.set_fontsize(25)
     hep.hist2dplot(h, ax=ax, norm=colors.LogNorm())
     fig.tight_layout()
-
-
