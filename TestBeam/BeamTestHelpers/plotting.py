@@ -352,7 +352,7 @@ def plot_board_resolution_unbinned_fit(
         save_path = Path(save_mother_dir) / 'time_resolution_results'
         save_path.mkdir(exist_ok=True, parents=True)
         name_tag = fig_config.get('short', role)
-        run_info = fig_config.get('run', 'anyrun')
+        run_info = fig_config.get('run', role)
         fig.savefig(save_path / f"board_res_{run_info}_{name_tag}.png")
         fig.savefig(save_path / f"board_res_{run_info}_{name_tag}.pdf")
         plt.close(fig)
