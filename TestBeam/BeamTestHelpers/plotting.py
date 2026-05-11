@@ -352,7 +352,9 @@ def plot_board_resolution_unbinned_fit(
         save_path = Path(save_mother_dir) / 'time_resolution_results'
         save_path.mkdir(exist_ok=True, parents=True)
         name_tag = fig_config.get('short', role)
-        fig.savefig(save_path / f"board_res_{name_tag}.png")
+        run_info = fig_config.get('run', 'anyrun')
+        fig.savefig(save_path / f"board_res_{run_info}_{name_tag}.png")
+        fig.savefig(save_path / f"board_res_{run_info}_{name_tag}.pdf")
         plt.close(fig)
 
 ## --------------------------------------
@@ -566,8 +568,8 @@ def plot_resolution_table(
         if save_mother_dir is not None:
             save_dir = save_mother_dir / 'time_resolution_results'
             save_dir.mkdir(exist_ok=True)
-            fig.savefig(save_dir / f"resolution_map_{fig_config[idx]['short']}.png")
-            fig.savefig(save_dir / f"resolution_map_{fig_config[idx]['short']}.pdf")
+            fig.savefig(save_dir / f"resolution_map_{fig_config[idx]['run']}_{fig_config[idx]['short']}.png")
+            fig.savefig(save_dir / f"resolution_map_{fig_config[idx]['run']}_{fig_config[idx]['short']}.pdf")
             plt.close(fig)
 
     del tables
