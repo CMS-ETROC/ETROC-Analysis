@@ -4,6 +4,11 @@ defaults:
   PT-IH3: &PT-IH3   {name: ET2.02 PacTech IH-3,  short: PT-IH3,  offset: 20, HV: 220, role: extra}
   PT-IH2: &PT-IH2   {name: ET2.02 PacTech IH-2,  short: PT-IH2,  offset: 20, HV: 190, role: dut}
 
+  PT-IH27_10deg: &PT-IH27_10deg  {<<: *PT-IH27, angle: 10, role: extra}
+  PT-IH5_10deg:  &PT-IH5_10deg   {<<: *PT-IH5,  angle: 10, role: ref,   HV: 230}
+  PT-IH3_10deg:  &PT-IH3_10deg   {<<: *PT-IH3,  angle: 10, role: trig}
+  PT-IH2_10deg:  &PT-IH2_10deg   {<<: *PT-IH2,  angle: 10}
+
   PT-IH27_20deg: &PT-IH27_20deg  {<<: *PT-IH27, angle: 20, role: extra}
   PT-IH5_20deg:  &PT-IH5_20deg   {<<: *PT-IH5,  angle: 20, role: ref,   HV: 230}
   PT-IH3_20deg:  &PT-IH3_20deg   {<<: *PT-IH3,  angle: 20, role: trig}
@@ -77,3 +82,11 @@ run20: &run20
   2: {<<: *PT-IH3_20deg,  temp: 0C,   transformation: {rotation: {x: 0, y: -20, z: 0}, translation: {x: 0, y: 0, z: 0}}}
   3: {<<: *PT-IH2_20deg,  temp: -22C, transformation: {rotation: {x: 0, y: -20, z: 0}, translation: {x: -0.61, y: -3.75, z: 0}}}
 run21: *run20
+run22: *run20
+run23: *run20
+
+run24: &run24
+  0: {<<: *PT-IH27_10deg, temp: 0C,   transformation: {rotation: {x: 0, y: -20, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  1: {<<: *PT-IH5_10deg,  temp: 0C,   transformation: {rotation: {x: 0, y: -20, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  2: {<<: *PT-IH3_10deg,  temp: 0C,   transformation: {rotation: {x: 0, y: -20, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  3: {<<: *PT-IH2_10deg,  temp: -22C, transformation: {rotation: {x: 0, y: -20, z: 0}, translation: {x: 0, y: 0, z: 0}}}
