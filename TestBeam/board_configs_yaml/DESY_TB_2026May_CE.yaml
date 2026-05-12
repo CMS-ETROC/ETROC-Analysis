@@ -87,7 +87,7 @@ run23: *run20
 
 run24: &run24
   0: {<<: *PT-IH27_10deg, temp: 0C,   transformation: {rotation: {x: 0, y: -10, z: 0}, translation: {x: 0, y: 0, z: 0}}}
-  1: {<<: *PT-IH5_10deg,  temp: 0C,   transformation: {rotation: {x: 0, y: -10, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  1: {<<: *PT-IH5_10deg,  temp: 0C,   transformation: {rotation: {x: 0, y: -10, z: 0}, translation: {x: -0.06, y: 2.73, z: 0}}}
   2: {<<: *PT-IH3_10deg,  temp: 0C,   transformation: {rotation: {x: 0, y: -10, z: 0}, translation: {x: 0, y: 0, z: 0}}}
-  3: {<<: *PT-IH2_10deg,  temp: -22C, transformation: {rotation: {x: 0, y: -10, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  3: {<<: *PT-IH2_10deg,  temp: -22C, transformation: {rotation: {x: 0, y: -10, z: 0}, translation: {x: -0.06, y: -2.73, z: 0}}}
 run25: *run24
