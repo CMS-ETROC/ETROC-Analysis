@@ -4,6 +4,7 @@ from pathlib import Path
 from natsort import natsorted
 from tqdm import tqdm
 from collections import Counter
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 def get_balanced_sequential_groups(files, target_size):
     """
@@ -32,10 +33,36 @@ def get_balanced_sequential_groups(files, target_size):
 
     return groups
 
+def process_single_group(idx, igroup, tmp_outdir):
+    """
+    Worker function to process a single group of files.
+    """
+    try:
+        nevt_adder = 0
+        dfs = []
+
+        for ifile in igroup:
+            df = pd.read_feather(ifile)
+
+            # Offset 'evt' column to maintain continuity within the new merged file
+            df['evt'] += nevt_adder
+            nevt_adder += df['evt'].nunique()
+
+            dfs.append(df)
+
+        # Concatenate and save to temporary location
+        final_df = pd.concat(dfs, ignore_index=True)
+        output_file = tmp_outdir / f'loop_{idx}.feather'
+        final_df.to_feather(output_file)
+
+        return True, idx
+    except Exception as e:
+        return False, f"Group {idx} failed: {e}"
+
 def main():
     parser = argparse.ArgumentParser(
         prog='MergeFeathers',
-        description='Merge feather files into balanced, sequential chunks.',
+        description='Merge feather files into balanced, sequential chunks using ProcessPoolExecutor.',
     )
 
     parser.add_argument(
@@ -60,11 +87,9 @@ def main():
     )
 
     args = parser.parse_args()
-    input_path = Path(args.input_dir)
+    input_path = Path(args.input_dir).resolve()
 
     # 1. Collect and Sort files
-    # Using a specific pattern 'loop_*.feather' prevents picking up
-    # already merged files if they have a different naming scheme.
     files = natsorted([
         f for f in input_path.glob('loop_*.feather')
         if not (f.name.startswith('merged_') or f.name.startswith('new_'))
@@ -78,63 +103,38 @@ def main():
     groups = get_balanced_sequential_groups(files, args.number_of_merge)
 
     # 3. Improved Group Printing
-
     counts = Counter(len(g) for g in groups)
-    # Sort by size so it reads logically: "3 groups of 11, 7 groups of 10"
     dist_str = ", ".join([f"{count} groups of {size}" for size, count in sorted(counts.items(), reverse=True)])
+
+    # 4. Create a temporary output directory
+    tmp_outdir = input_path.parents[0] / "merged_hits"
+    tmp_outdir.mkdir(parents=True, exist_ok=True)
 
     print(f'Total input files: {len(files)}')
     print(f'Total output files: {len(groups)}')
     print(f'Group distribution: {dist_str}')
+    print(f'Output directory: {tmp_outdir}')
 
     if args.dryrun:
         return
 
-    # 4. Create a temporary output directory
-    # Placing it inside input_path ensures it's on the same drive (faster moves)
-    input_path = Path(args.input_dir).resolve()
-    tmp_outdir = input_path / "temp_merged_processing"
-
-    # Parents=True ensures that even if input_path doesn't exist, it creates the tree
-    tmp_outdir.mkdir(parents=True, exist_ok=True)
-
-    # Double check for the user
-    if not tmp_outdir.exists():
-        raise RuntimeError(f"Failed to create directory at {tmp_outdir}")
-
+    # 5. Processing with ProcessPoolExecutor
     try:
-        # 5. Processing Loop
-        for idx, igroup in enumerate(tqdm(groups, desc="Merging Groups")):
-            nevt_adder = 0
-            dfs = []
+        results_count = 0
+        with ProcessPoolExecutor(max_workers=3) as executor:
+            # Map each group to a future
+            future_to_group = {
+                executor.submit(process_single_group, idx, group, tmp_outdir): idx
+                for idx, group in enumerate(groups)
+            }
 
-            for ifile in igroup:
-                df = pd.read_feather(ifile)
-
-                # Offset 'evt' column to maintain continuity within the new merged file
-                df['evt'] += nevt_adder
-                nevt_adder += df['evt'].nunique()
-
-                dfs.append(df)
-
-            # Concatenate and save to temporary location
-            # ignore_index=True replaces the need for .reset_index(drop=True)
-            final_df = pd.concat(dfs, ignore_index=True)
-            final_df.to_feather(tmp_outdir / f'merged_loop_{idx}.feather')
-
-            # Explicitly clear memory
-            del dfs
-            del final_df
-
-        print('\nProcessing complete. Finalizing files...')
-
-        # 6. Move and Rename merged files
-        for kfile in tmp_outdir.glob('merged_loop_*.feather'):
-           # Rename 'merged_loop_X' to 'loop_X' in the original directory
-           new_name = kfile.name.replace('merged_', '')
-           kfile.rename(tmp_outdir / new_name)
-
-        print('Done. All files merged and cleaned.')
+            # Wrap in tqdm to track progress as futures complete
+            for future in tqdm(as_completed(future_to_group), total=len(groups), desc="Merging Groups"):
+                success, info = future.result()
+                if success:
+                    results_count += 1
+                else:
+                    print(f"\n[ERROR] {info}")
 
     except Exception as e:
         print(f"\nCRITICAL ERROR: {e}")
