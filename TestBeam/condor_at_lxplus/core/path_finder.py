@@ -3,13 +3,13 @@ import sys
 import logging
 import warnings
 import random
-import ruamel.yaml
 import numpy as np
 import pandas as pd
 from pathlib import Path
 from tqdm import tqdm
 from functools import reduce
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple
+from ruamel.yaml import YAML
 
 # Configure Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -176,8 +176,11 @@ def apply_masking(df: pd.DataFrame, mask_config_path: Path) -> pd.DataFrame:
     if not mask_config_path:
         return df
 
+    # Initialize the modern YAML loader
+    yaml = YAML(typ='safe') # Use 'safe' for faster read-only performance
+
     with open(mask_config_path, 'r') as f:
-        mask_info = yaml.safe_load(f)
+        mask_info = yaml.load(f)
 
     for board_id, val in mask_info.get("board_ids", {}).items():
         pixels = val.get('pixels', [])
@@ -301,9 +304,14 @@ def main():
 
     args = parser.parse_args()
 
-    # 1. Setup & Config
-    with open(args.config) as f:
-        full_config = ruamel.yaml.load(f, Loader=ruamel.yaml.RoundTripLoader)
+    # 1. Setup & Config with modern API
+    yaml = YAML(typ='rt')  # 'rt' = Round Trip
+    yaml.preserve_quotes = True
+    yaml.default_flow_style = None  # Crucial: tells ruamel to respect existing flow/block style
+    yaml.width = 4096  # Prevents ruamel from wrapping long lines into block style
+
+    with open(args.config, 'r') as f:
+        full_config = yaml.load(f)
 
     if args.runName not in full_config:
         raise ValueError(f"Run config {args.runName} not found")
@@ -429,8 +437,9 @@ def main():
             full_config[args.runName][bid]['transformation']['translation']['x'] += -center_x
             full_config[args.runName][bid]['transformation']['translation']['y'] += -center_y
 
+        # Save using the same yaml instance to keep the formatting rules
         with open(args.config, 'w') as f:
-            ruamel.yaml.dump(full_config, f, Dumper=ruamel.yaml.RoundTripDumper)
+            yaml.dump(full_config, f)
 
         run_config = full_config[args.runName]
         apply_geometric_transformation(track_candidates, ids_to_process, run_config)
