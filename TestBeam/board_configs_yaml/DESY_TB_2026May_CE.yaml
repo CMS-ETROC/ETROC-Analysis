@@ -1,7 +1,7 @@
 defaults:
-  PT-IH27: &PT-IH27 {name: ET2.02 PacTech IH-27, short: PT-IH27, offset: 20, HV: 220, role: ref}
+  PT-IH27: &PT-IH27 {name: ET2.02 PacTech IH-27, short: PT-IH27, offset: 20, HV: 220, role: extra}
   PT-IH5: &PT-IH5   {name: ET2.02 PacTech IH-5,  short: PT-IH5,  offset: 20, HV: 220, role: trig}
-  PT-IH3: &PT-IH3   {name: ET2.02 PacTech IH-3,  short: PT-IH3,  offset: 20, HV: 220, role: extra}
+  PT-IH3: &PT-IH3   {name: ET2.02 PacTech IH-3,  short: PT-IH3,  offset: 20, HV: 220, role: ref}
   PT-IH2: &PT-IH2   {name: ET2.02 PacTech IH-2,  short: PT-IH2,  offset: 20, HV: 190, role: dut}
 
   PT-IH27_10deg: &PT-IH27_10deg  {<<: *PT-IH27, angle: 10, role: extra}
@@ -90,3 +90,4 @@ run24: &run24
   1: {<<: *PT-IH5_10deg,  temp: 0C,   transformation: {rotation: {x: 0, y: -20, z: 0}, translation: {x: 0, y: 0, z: 0}}}
   2: {<<: *PT-IH3_10deg,  temp: 0C,   transformation: {rotation: {x: 0, y: -20, z: 0}, translation: {x: 0, y: 0, z: 0}}}
   3: {<<: *PT-IH2_10deg,  temp: -22C, transformation: {rotation: {x: 0, y: -20, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+run25: *run24
