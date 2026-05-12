@@ -38,24 +38,31 @@ args = parser.parse_args()
 track_output_df = pd.read_csv(f'{args.file}')
 previous_num = track_output_df.shape[0]
 
+
 if args.ntrk_table:
     from tabulate import tabulate
-    import sys
+    import numpy as np
 
-    cuts = range(40, 600, 40)
-    ntrk_survived = []
-    cut_name = [f'ntrk > {jcut}' for jcut in cuts]
+    # SMART STEP 1: Determine cuts based on data distribution (deciles)
+    # This prevents the table from being empty or uselessly small
+    data_counts = track_output_df['count']
+    cuts = np.percentile(data_counts, [10, 20, 30, 40, 50, 60, 70, 75, 80, 85, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99])
+    cuts = sorted(list(set(cuts.astype(int))))
 
+    table_data = []
     for icut in cuts:
-        tmp_df = track_output_df.loc[track_output_df['count'] > icut]
-        ntrk_survived.append(tmp_df.shape[0])
-    del tmp_df
+        survived = (data_counts > icut).sum()
+        percent = (survived / previous_num) * 100
 
-    table_data = list(zip(cut_name, ntrk_survived))
-    print('\n================================================================\n')
-    print(tabulate(table_data, headers=['nTrk Cut', 'Number of survived track candidates']))
-    print('\n================================================================')
-    sys.exit(1)
+        table_data.append([f"> {icut}", f"{survived:,}", f"{percent:.1f}%"])
+
+    print('\n=== Track Candidate Reduction Analysis ===')
+    print(tabulate(table_data,
+                   headers=['nTrk Cut', 'Survived', '% of Total'],
+                   tablefmt='simple'))
+
+    print('=== Track Candidate Reduction Analysis ===\n')
+    sys.exit(0)
 
 track_output_df = track_output_df.loc[track_output_df['count'] > args.minimum_ntracks]
 track_output_df.reset_index(drop=True, inplace=True)
