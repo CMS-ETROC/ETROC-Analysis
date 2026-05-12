@@ -1,5 +1,10 @@
 ## How to run this analysis
 
+### 0. Change the limit, recommend to put in your ~/.bashrc
+```
+ulimit -n 4096
+```
+
 ### 1. Load python 3.9 enviornment
 ```
 source envs/load_python39.sh
