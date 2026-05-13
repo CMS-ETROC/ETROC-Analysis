@@ -123,10 +123,9 @@ python submit/submit_bootstrap.py -d <DIRNAME> -o <OUTPUTDIR> -n <NUM_BOOTSTRAP_
 
 ### 13. Merge bootstrap results (unbinned gaussian fit)
 ```
-python core/merge_bootstrap_results.py -d <INPUTDIR> -o <OUTPUTDIR> --minimum <MINIMUM> [--tag <TAG>] [--hist_bins <HIST_BINS>]
+python core/fit_bootstrap_results.py -d <INPUTDIR> -o <OUTPUTDIR> --sigma_cut <coeff>[--tag <TAG>]
 ```
 - `-d` option: path to the directory including boostrap output files.
 - `-o` option: path to the output directory. **Recommend to use the same output directory in step 11.**
-- `--minimum` option: the threshold for number of bootstrap results. If number of results is less than the threshold, the path is ignored for the final result.
+- `--sigma_cut` option: number to multiply on sigma to determine fit range. Default value is 2.5.
 - `--tag` option: addtional string if needed.
-- `--hist_bins` option: number of histogram for binned fit. If unbinned fit is failed.
