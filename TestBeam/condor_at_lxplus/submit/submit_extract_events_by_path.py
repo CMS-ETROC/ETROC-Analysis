@@ -190,7 +190,7 @@ if __name__ == "__main__":
     # --- Setup Environments ---
     username = getpass.getuser()
     eos_base_dir = f'/eos/user/{username[0]}/{username}'
-    run_append = f"_{args.condor_tag}" if args.condor_tag else ""
+    run_append = f"{args.condor_tag}" if args.condor_tag else "subdir"
 
     # Directory setup
     paths = {
