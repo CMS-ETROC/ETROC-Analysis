@@ -58,7 +58,7 @@ output_destination    = root://eosuser.cern.ch/{1}/{2}
 MY.XRDCP_CREATE_DIR   = True
 MY.WantOS             = "el9"
 +JobFlavour           = "workday"
-Queue index, flist from {3}/input_list.txt DELIMITER=\\t
+Queue index, flist from {3}/input_list.txt
 """.format(condor_log_dir, eos_base_dir, output_dir, condor_scripts_dir)
     return jdl
 
@@ -125,8 +125,7 @@ def make_jobs(args, log_dir, condor_scripts_dir):
             # Space-separated bundle of filenames
             file_bundle = " ".join([f.name for f in chunk])
 
-            # Write: Index [TAB] File1 File2 File3
-            f.write(f"{physical_idx}\t{file_bundle}\n")
+            f.write(f"{physical_idx} {file_bundle}\n")
 
             idx_ptr += job_size
 
