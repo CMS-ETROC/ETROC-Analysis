@@ -66,14 +66,12 @@ def make_jobs(args, log_dir, condor_scripts_dir):
 
     input_path = Path(args.input_dir)
     file_extension = None
-    file_suffix = None
     file_list = None
 
     bin_files = natsorted(input_path.glob('file*.bin'))
     if bin_files:
         print("Found '.bin' files.")
         file_extension = 'bin'
-        file_suffix = ''  # No suffix for .bin files
         file_list = bin_files
     else:
         # If no .bin files, check for '_CE.dat' files.
@@ -81,7 +79,6 @@ def make_jobs(args, log_dir, condor_scripts_dir):
         if dat_files:
             print("Found '_CE.dat' files.")
             file_extension = 'dat'
-            file_suffix = '_CE' # Suffix is '_CE' for .dat files
             file_list = dat_files
 
     if file_list is None:
@@ -95,39 +92,19 @@ def make_jobs(args, log_dir, condor_scripts_dir):
     print(f'\nFirst file: {file_list[0].name}')
     print(f'Last file: {file_list[-1].name}')
 
-    if len(file_list) < args.range[0]:
-        print(f'Number of input files: {len(file_list)} which is smaller than the given argument: {args.range[0]}')
-        files_per_job = 1
-        num_jobs = len(file_list) // files_per_job
-        remainder = len(file_list) % files_per_job
-        print(f"\nNumber of jobs: {num_jobs}")
-        print(f"Each job gets 1 file.\n")
-    else:
-        files_per_job, remainder = min(((v, len(file_list) % v) for v in range(args.range[0], args.range[1]+1)), key=lambda x: x[1])
-        num_jobs = len(file_list) // files_per_job
-
-        print(f"\nNumber of jobs: {num_jobs}")
-        print(f"Each job gets {files_per_job} files, with some jobs getting 1 extra file.\n")
-
     listfile = condor_scripts_dir / f'input_list.txt'
     if listfile.is_file():
         listfile.unlink()
 
-    idx_ptr = 0
     with open(listfile, 'w') as f:
-        for job_id in range(num_jobs):
-            job_size = files_per_job + (1 if job_id < remainder else 0)
-            chunk = file_list[idx_ptr:idx_ptr + job_size]
+        for file_path in file_list:
+            try:
+                physical_idx = int(file_path.name.split('.')[0].split('_')[1])
+            except (IndexError, ValueError):
+                print(f"Warning: Could not parse index from {file_path.name}, skipping.")
+                continue
 
-            # Use physical index from the filename to prevent overwrites
-            physical_idx = int(chunk[0].name.split('.')[0].split('_')[1])
-
-            # Space-separated bundle of filenames
-            file_bundle = " ".join([f.name for f in chunk])
-
-            f.write(f"{physical_idx} {file_bundle}\n")
-
-            idx_ptr += job_size
+            f.write(f"{physical_idx} {file_path.name}\n")
 
     bash_script = load_bash_template(args.input_dir)
 
@@ -170,16 +147,6 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        '--range',
-        metavar='N',
-        type=int,
-        nargs='+',
-        help='Range to decide the number of files per job with the smallest remainder',
-        default = [5, 10],
-        dest = 'range',
-    )
-
-    parser.add_argument(
         '--condor_tag',
         metavar = 'NAME',
         type = str,
@@ -192,13 +159,6 @@ if __name__ == "__main__":
         action = 'store_true',
         help = 'If set, condor submission will not happen',
         dest = 'dryrun',
-    )
-
-    parser.add_argument(
-        '--resubmit',
-        action = 'store_true',
-        help = 'If set, condor resubmission for jobs in Running and IDLE. Will kill the old jobs.',
-        dest = 'resubmit',
     )
 
     args = parser.parse_args()
@@ -232,38 +192,6 @@ if __name__ == "__main__":
         with open(condor_scripts_dir / f'condor_decoding.jdl') as f:
             print(f.read(), '\n')
         print()
-
-    elif args.resubmit:
-        input_txt_path = condor_scripts_dir / f"input_list.txt"
-        condor_output = subprocess.run(['condor_q', '-nobatch'], capture_output=True, text=True)
-
-        # Filter lines containing the target script
-        filtered_lines = [line for line in condor_output.stdout.splitlines() if f'run_decode.sh' in line]
-
-        if len(filtered_lines) == 0:
-            print('No condor job found.')
-            sys.exit(1)
-
-        with open(input_txt_path, 'w') as f:
-            for line in filtered_lines:
-                fields = line.split()
-                if len(fields) == 13:
-                    if fields[5] == 'X':
-                        old_condor_job_id = -1
-                        continue
-                    old_condor_job_id = fields[0].split('.')[0]
-                    last_three = fields[-4:-1]  # Extract 4th to last, 3rd to last, 2nd to last
-                    sentence = ' '.join(last_three)
-                    f.write(sentence + '\n')
-
-        if not old_condor_job_id == -1:
-            ## Kill old jobs before submit new one
-            subprocess.run(['condor_rm', f'{old_condor_job_id}'])
-
-            if input_txt_path.stat().st_size > 0:
-                subprocess.run(['condor_submit', f'{condor_scripts_dir}/condor_decoding.jdl'])
-            else:
-                print("No jobs to submit — input list is empty.")
 
     else:
         subprocess.run(['condor_submit', f'{condor_scripts_dir}/condor_decoding.jdl'])
