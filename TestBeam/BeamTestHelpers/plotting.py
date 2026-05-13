@@ -284,7 +284,7 @@ def plot_board_resolution_unbinned_fit(
                     ms=6, capsize=1, capthick=2, alpha=0.8, label="Data")
 
     # 4. Main Plot: Data & Fit
-    x_range = np.linspace(*hist_range, 200)
+    x_range = np.linspace(*hist_range, 500)
     y_fit = norm.pdf(x_range, mu_fit, sigma_fit) * target_area
 
     # 5. Uncertainty Band (Sampling)
