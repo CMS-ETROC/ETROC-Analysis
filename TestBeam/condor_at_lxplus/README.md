@@ -24,11 +24,10 @@ myschedd bump
 
 ### 4. Submit decoding jobs
 ```
-python submit/submit_decoding.py -d <absolute path to input directory> -o <relative path to output directry> --range N1 N2 --condor_tag <unique tag> --dryrun
+python submit/submit_decoding.py -d <absolute path to input directory> -o <relative path to output directry> --condor_tag <unique tag> --dryrun
 ```
 - `-d` option: absolute path to the input directory. e.g. `/eos/user/n/name/directory`
 - `-o` option: relative path to the output directory. The script knows the base path `/eos/user/n/name/`, so only need to specify the path after the base path.
-- `--range N1 N2` option: Must be integers and `N1 < N2`. Determine the best number of files to merge in a given range.
 - `--condor_tag` option: String to identify the job submission.
 - `--dryrun` option: if this argument is included, actual submission will not happen. But still making the list, bash script, and condor jdl files.
 
