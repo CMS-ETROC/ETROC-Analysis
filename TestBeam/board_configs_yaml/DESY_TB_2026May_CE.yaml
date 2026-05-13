@@ -24,6 +24,11 @@ defaults:
   PT-IH3_45deg:  &PT-IH3_45deg  {<<: *PT-IH3,  angle: 45, role: trig}
   PT-IH2_45deg:  &PT-IH2_45deg  {<<: *PT-IH2,  angle: 45}
 
+  PT-IH27_50deg: &PT-IH27_50deg {<<: *PT-IH27, angle: 50, role: extra}
+  PT-IH5_50deg:  &PT-IH5_50deg  {<<: *PT-IH5,  angle: 50, role: ref,    HV: 230}
+  PT-IH3_50deg:  &PT-IH3_50deg  {<<: *PT-IH3,  angle: 50, role: trig}
+  PT-IH2_50deg:  &PT-IH2_50deg  {<<: *PT-IH2,  angle: 50}
+
   PT-IH27_60deg: &PT-IH27_60deg {<<: *PT-IH27, angle: 60, role: extra}
   PT-IH5_60deg:  &PT-IH5_60deg  {<<: *PT-IH5,  angle: 60, role: ref,    HV: 230}
   PT-IH3_60deg:  &PT-IH3_60deg  {<<: *PT-IH3,  angle: 60, role: trig}
@@ -97,3 +102,39 @@ run26: &run26
   1: {<<: *PT-IH5,  temp: 0C, role: ref,    HV: 230}
   2: {<<: *PT-IH3,  temp: 0C, role: trig}
   3: {<<: *PT-IH2,  temp: -22C }
+run27: *run26
+
+run28: &run28
+  0: {<<: *PT-IH27_10deg, temp: 0C,   transformation: {rotation: {x: 0, y: -10, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  1: {<<: *PT-IH5_10deg,  temp: 0C,   transformation: {rotation: {x: 0, y: -10, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  2: {<<: *PT-IH3_10deg,  temp: 0C,   transformation: {rotation: {x: 0, y: -10, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  3: {<<: *PT-IH2_10deg,  temp: -22C, transformation: {rotation: {x: 0, y: -10, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+run29: *run28
+
+run30: &run30
+  0: {<<: *PT-IH27_20deg, temp: 0C,   transformation: {rotation: {x: 0, y: -20, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  1: {<<: *PT-IH5_20deg,  temp: 0C,   transformation: {rotation: {x: 0, y: -20, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  2: {<<: *PT-IH3_20deg,  temp: 0C,   transformation: {rotation: {x: 0, y: -20, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  3: {<<: *PT-IH2_20deg,  temp: -22C, transformation: {rotation: {x: 0, y: -20, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+run31: *run30
+
+run32: &run32
+  0: {<<: *PT-IH27_30deg, temp: 0C,   transformation: {rotation: {x: 0, y: -30, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  1: {<<: *PT-IH5_30deg,  temp: 0C,   transformation: {rotation: {x: 0, y: -30, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  2: {<<: *PT-IH3_30deg,  temp: 0C,   transformation: {rotation: {x: 0, y: -30, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  3: {<<: *PT-IH2_30deg,  temp: -22C, transformation: {rotation: {x: 0, y: -30, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+run33: *run32
+
+run34: &run34
+  0: {<<: *PT-IH27_45deg, temp: 0C,   transformation: {rotation: {x: 0, y: -45, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  1: {<<: *PT-IH5_45deg,  temp: 0C,   transformation: {rotation: {x: 0, y: -45, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  2: {<<: *PT-IH3_45deg,  temp: 0C,   transformation: {rotation: {x: 0, y: -45, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  3: {<<: *PT-IH2_45deg,  temp: -22C, transformation: {rotation: {x: 0, y: -45, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+run35: *run34
+
+run36: &run36
+  0: {<<: *PT-IH27_50deg, temp: 0C,   transformation: {rotation: {x: 0, y: -50, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  1: {<<: *PT-IH5_50deg,  temp: 0C,   transformation: {rotation: {x: 0, y: -50, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  2: {<<: *PT-IH3_50deg,  temp: 0C,   transformation: {rotation: {x: 0, y: -50, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  3: {<<: *PT-IH2_50deg,  temp: -22C, transformation: {rotation: {x: 0, y: -50, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+run37: *run36
