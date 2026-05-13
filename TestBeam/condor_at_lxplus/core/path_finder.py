@@ -73,44 +73,41 @@ def get_transformation_params(board_id: int, config: dict) -> Tuple[Tuple[float,
 
     return rot, tra
 
-def apply_geometric_transformation(df: pd.DataFrame, board_ids: List[int], config: dict):
+def get_rotation_matrix(rx, ry, rz):
+    # Pre-calculate trig values once
+    cx, sx = np.cos(rx), np.sin(rx)
+    cy, sy = np.cos(ry), np.sin(ry)
+    cz, sz = np.cos(rz), np.sin(rz)
 
-    """
-    Applies rotation and translation to coordinate columns in place.
-    """
+    # Construct the Z-Y-X rotation matrix
+    R = np.array([
+        [cz*cy, cz*sy*sx - sz*cx, cz*sy*cx + sz*sx],
+        [sz*cy, sz*sy*sx + cz*cx, sz*sy*cx - cz*sx],
+        [-sy,   cy*sx,            cy*cx]
+    ])
+    return R
 
+def apply_geometric_transformation_matrix(df, board_ids, config):
     for bid in board_ids:
-        # Check if columns exist before processing
-        if f'col_{bid}' not in df.columns or f'row_{bid}' not in df.columns:
-            continue
+        if f'col_{bid}' not in df.columns: continue
 
-        # Local coordinates
-        x_prime = (df[f'col_{bid}'] - PIXEL_OFFSET) * PIXEL_PITCH
-        y_prime = (df[f'row_{bid}'] - PIXEL_OFFSET) * PIXEL_PITCH
+        # 1. Local coordinates (Pre-calculated vectors)
+        x_prime = (df[f'col_{bid}'] - 7.5) * 1.3
+        y_prime = (df[f'row_{bid}'] - 7.5) * 1.3
+        z_prime = np.zeros_like(x_prime) # Boards are 2D planes at z=0 locally
 
+        # 2. Get Transformation Parameters
         rot, tra = get_transformation_params(bid, config)
-        rx, ry, rz = rot
-        tx, ty, tz = tra
+        R = get_rotation_matrix(*rot)
 
-        # Rotation Matrix Application (Z-Y-X sequence based on original code logic)
-        # Note: Optimization could be done using matrix multiplication, but keeping
-        # explicit expansion to match original logic exactly.
+        # 3. Stack into (N, 3) matrix and apply dot product
+        coords = np.stack([x_prime, y_prime, z_prime], axis=1)
+        transformed = coords @ R.T + np.array(tra)
 
-        cos_rx, sin_rx = np.cos(rx), np.sin(rx)
-        cos_ry, sin_ry = np.cos(ry), np.sin(ry)
-        cos_rz, sin_rz = np.cos(rz), np.sin(rz)
-
-        df[f'x_{bid}'] = (x_prime * (cos_rz * cos_ry) +
-                          y_prime * (cos_rz * sin_ry * sin_rx - sin_rz * cos_rx) +
-                          tx)
-
-        df[f'y_{bid}'] = (x_prime * (sin_rz * cos_ry) +
-                          y_prime * (sin_rz * sin_ry * sin_rx + cos_rz * cos_rx) +
-                          ty)
-
-        df[f'z_{bid}'] = (x_prime * (-sin_ry) +
-                          y_prime * (cos_ry * sin_rx) +
-                          tz)
+        # 4. Re-assign to dataframe
+        df[f'x_{bid}'] = transformed[:, 0]
+        df[f'y_{bid}'] = transformed[:, 1]
+        df[f'z_{bid}'] = transformed[:, 2]
 
 # --- Core Logic Blocks ---
 
@@ -408,7 +405,7 @@ def main():
         sys.exit(0)
 
     # 6. Geometric Transformation & Final Filtering
-    apply_geometric_transformation(track_candidates, ids_to_process, run_config)
+    apply_geometric_transformation_matrix(track_candidates, ids_to_process, run_config)
 
     if args.find_alignment:
         shift_df = track_candidates.copy(deep=True)
@@ -442,7 +439,7 @@ def main():
             yaml.dump(full_config, f)
 
         run_config = full_config[args.runName]
-        apply_geometric_transformation(track_candidates, ids_to_process, run_config)
+        apply_geometric_transformation_matrix(track_candidates, ids_to_process, run_config)
 
     spatial_mask = check_spatial_alignment(track_candidates, roles, args.max_diff_pixel)
     final_tracks = track_candidates[spatial_mask]
