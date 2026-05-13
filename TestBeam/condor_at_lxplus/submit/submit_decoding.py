@@ -58,7 +58,6 @@ output_destination    = root://eosuser.cern.ch/{1}/{2}
 MY.XRDCP_CREATE_DIR   = True
 MY.WantOS             = "el9"
 +JobFlavour           = "workday"
-# We define the TAB (\t) as the delimiter to keep flist clean
 Queue index, flist from {3}/input_list.txt DELIMITER=\\t
 """.format(condor_log_dir, eos_base_dir, output_dir, condor_scripts_dir)
     return jdl
