@@ -45,7 +45,7 @@ JDL_TEMPLATE = """universe              = vanilla
 executable            = {{ script_dir }}/run_extract_events.sh
 should_Transfer_Files = YES
 whenToTransferOutput  = ON_EXIT
-arguments             = $(fname) $(path)
+arguments             = $(fname) {{ input_dir }}/$(fname)
 transfer_Input_Files  = core/extract_events_by_path.py,{{ track_file }},{{ cal_table }},{{ config_file }}
 output                = {{ log_dir }}/$(ClusterId).$(ProcId).extractEvents.stdout
 error                 = {{ log_dir }}/$(ClusterId).$(ProcId).extractEvents.stderr
@@ -54,7 +54,7 @@ MY.WantOS             = "el9"
 MY.XRDCP_CREATE_DIR   = True
 output_destination    = root://eosuser.cern.ch/{{ eos_base }}/{{ out_dir }}
 +JobFlavour           = "microcentury"
-Queue fname,path from {{ script_dir }}/input_list.txt
+Queue fname from {{ script_dir }}/input_list.txt
 """
 
 # --- Helper Functions ---
@@ -115,6 +115,7 @@ def create_submission_files(
     # 3. Generate JDL File
     jdl_content = Template(JDL_TEMPLATE).render({
         'script_dir': paths['scripts_dir'],
+        'input_dir': args.dirname,
         'track_file': args.track,
         'cal_table': args.cal_table,
         'log_dir': paths['log_dir'],
@@ -130,13 +131,7 @@ def create_submission_files(
     return jdl_path, bash_script_path, input_list_path
 
 def handle_resubmission(script_name: str, input_list_path: Path):
-    """
-    Identifies running/idle jobs, removes them, and repopulates the input list
-    to re-queue them.
-    """
     condor_output = subprocess.run(['condor_q', '-nobatch'], capture_output=True, text=True)
-
-    # Filter lines relevant to our specific script
     relevant_jobs = [line for line in condor_output.stdout.splitlines() if script_name in line]
 
     if not relevant_jobs:
@@ -144,29 +139,26 @@ def handle_resubmission(script_name: str, input_list_path: Path):
         sys.exit(0)
 
     jobs_to_kill = set()
-    requeue_lines = []
+    requeue_fnames = []
 
     for line in relevant_jobs:
         fields = line.split()
-        if len(fields) >= 12:
+        if len(fields) >= 10:
             job_id = fields[0].split('.')[0]
             status = fields[5]
 
-            # Reconstruct the input arguments (fname run path)
-            # Assumes arguments are the last 3 fields
-            args = fields[-3:]
-            requeue_lines.append(' '.join(args))
+            # The first argument in our new JDL is the filename
+            # condor_q -nobatch usually shows args at the end
+            fname = fields[-2]
+            requeue_fnames.append(fname)
 
-            # Mark for deletion if not already deleted ('X')
             if status != 'X':
                 jobs_to_kill.add(job_id)
 
-    # Rewrite the input list with only the jobs we found
     with open(input_list_path, 'w') as f:
-        for line in requeue_lines:
-            f.write(line + '\n')
+        for name in requeue_fnames:
+            f.write(name + '\n')
 
-    # Kill old jobs
     for job_id in jobs_to_kill:
         print(f"Removing old job {job_id}...")
         subprocess.run(['condor_rm', job_id])
