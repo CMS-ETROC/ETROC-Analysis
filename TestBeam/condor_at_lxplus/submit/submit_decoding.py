@@ -6,66 +6,36 @@ import argparse
 import subprocess
 import sys
 
-def load_bash_template(input_dir_path, file_extension, file_suffix=''):
-    """
-    Loads and renders a bash script template.
-
-    Args:
-        input_dir_path (str): The path to the input directory on EOS.
-        file_extension (str): The file extension to use (e.g., 'bin' or 'dat').
-                              Defaults to 'bin'.
-    """
-
-    # Define the bash script template
+def load_bash_template(input_dir_path):
     bash_template = """#!/bin/bash
-
-# Check current directory to make sure that input files are transferred
 ls -ltrh
 echo ""
 
-# Load python environment from work node
 source /cvmfs/sft.cern.ch/lcg/views/LCG_104a/x86_64-el9-gcc13-opt/setup.sh
 
-# Make temporary directory to save files
-mkdir -p ./job_{{ ClusterID }}_{{ idx }}
+# Directory name uses $2 (index) and $1 (ClusterID)
+mkdir -p ./job_${1}_${2}
 
-# Copy input data from EOS to local work node
-# The file extension is now a variable
-for num in $(seq {{ start }} {{ end }}); do
-    xrdcp -s root://eosuser.cern.ch/{{ eos_path }}/file_${num}{{ file_suffix }}.{{ file_ext }} ./job_{{ ClusterID }}_{{ idx }}
+# IMPORTANT: We do NOT quote $3 so bash splits the file bundle into individual names
+for fname in $3; do
+    echo "Transferring ${fname}..."
+    xrdcp -s root://eosuser.cern.ch/{{ eos_path }}/${fname} ./job_${1}_${2}
 done
 
-# Untar python environment
 tar -xf python_lib.tar
-
-# Check untar output
-ls -ltrh
-
-# Set custom python environment
 export PYTHONPATH=${PWD}/local/lib/python3.9/site-packages:$PYTHONPATH
-echo "${PYTHONPATH}"
-echo ""
 
-echo "python decoding.py -d job_{{ ClusterID }}_{{ idx }} -o loop_{{ idx }}"
-python decoding.py -d job_{{ ClusterID }}_{{ idx }} -o loop_{{ idx }}
+# Output loop index is now strictly numeric (no commas)
+echo "python decoding.py -d job_${1}_${2} -o loop_${2}"
+python decoding.py -d job_${1}_${2} -o loop_${2}
 
-# Remove temporary directory
-rm -r job_{{ ClusterID }}_{{ idx }}
+rm -r job_${1}_${2}
 """
-
-    # Prepare the data for the template
     options = {
         'eos_path': input_dir_path,
-        'file_ext': file_extension,
-        'file_suffix': file_suffix,
-        'start': '${1}',
-        'end': '${2}',
-        'idx': '${3}',
-        'ClusterID': '${4}',
     }
-
-    # Render the template with the data
     return Template(bash_template).render(options)
+
 
 def load_jdl_template(condor_log_dir, output_dir, condor_scripts_dir):
 
@@ -77,7 +47,8 @@ def load_jdl_template(condor_log_dir, output_dir, condor_scripts_dir):
 executable            = {3}/run_decode.sh
 should_Transfer_Files = YES
 whenToTransferOutput  = ON_EXIT
-arguments             = $(start) $(end) $(index) $(ClusterId)
+# $1:ClusterId, $2:Index, $3:FileBundle
+arguments             = $(ClusterId) $(index) $(flist)
 transfer_Input_Files  = core/decoding.py, utils/python_lib.tar
 output                = {0}/$(ClusterId).$(ProcId).decoding.stdout
 error                 = {0}/$(ClusterId).$(ProcId).decoding.stderr
@@ -87,12 +58,12 @@ output_destination    = root://eosuser.cern.ch/{1}/{2}
 MY.XRDCP_CREATE_DIR   = True
 MY.WantOS             = "el9"
 +JobFlavour           = "workday"
-Queue start, end, index from {3}/input_list.txt
+# We define the TAB (\t) as the delimiter to keep flist clean
+Queue index, flist from {3}/input_list.txt DELIMITER=\\t
 """.format(condor_log_dir, eos_base_dir, output_dir, condor_scripts_dir)
-
     return jdl
 
-def make_jobs(args, log_dir, condor_scripts_dir, runAppend):
+def make_jobs(args, log_dir, condor_scripts_dir):
 
     input_path = Path(args.input_dir)
     file_extension = None
@@ -143,23 +114,24 @@ def make_jobs(args, log_dir, condor_scripts_dir, runAppend):
     if listfile.is_file():
         listfile.unlink()
 
-    idx = 0
-    with open(listfile, 'a') as base_txt:
+    idx_ptr = 0
+    with open(listfile, 'w') as f:
         for job_id in range(num_jobs):
-            # Distribute the remainder among the first `remainder` jobs
             job_size = files_per_job + (1 if job_id < remainder else 0)
-            chunk = file_list[idx:idx + job_size]
-            start = int(chunk[0].name.split('.')[0].split('_')[1])
-            end = int(chunk[-1].name.split('.')[0].split('_')[1])
-            save_string = f"{start}, {end}, {job_id}"
-            base_txt.write(save_string + '\n')
-            idx += job_size
+            chunk = file_list[idx_ptr:idx_ptr + job_size]
 
-    bash_script = load_bash_template(
-        args.input_dir,
-        file_extension=file_extension,
-        file_suffix=file_suffix
-    )
+            # Use physical index from the filename to prevent overwrites
+            physical_idx = int(chunk[0].name.split('.')[0].split('_')[1])
+
+            # Space-separated bundle of filenames
+            file_bundle = " ".join([f.name for f in chunk])
+
+            # Write: Index [TAB] File1 File2 File3
+            f.write(f"{physical_idx}\t{file_bundle}\n")
+
+            idx_ptr += job_size
+
+    bash_script = load_bash_template(args.input_dir)
 
     with open(condor_scripts_dir / f'run_decode.sh','w') as bashfile:
         bashfile.write(bash_script)
@@ -245,7 +217,7 @@ if __name__ == "__main__":
     condor_scripts_dir = Path('./') / 'condor_scripts' / 'decoding' / f'{runAppend}'
     condor_scripts_dir.mkdir(exist_ok=True, parents=True)
 
-    make_jobs(args=args, log_dir=log_dir, condor_scripts_dir=condor_scripts_dir, runAppend=runAppend)
+    make_jobs(args=args, log_dir=log_dir, condor_scripts_dir=condor_scripts_dir)
 
     if args.dryrun:
         input_txt_path = condor_scripts_dir / f"input_list.txt"

@@ -45,6 +45,7 @@ JDL_TEMPLATE = """universe              = vanilla
 executable            = {{ script_dir }}/run_extract_events.sh
 should_Transfer_Files = YES
 whenToTransferOutput  = ON_EXIT
+# $1 is the clean filename, $2 is the clean path
 arguments             = $(fname) {{ input_dir }}/$(fname)
 transfer_Input_Files  = core/extract_events_by_path.py,{{ track_file }},{{ cal_table }},{{ config_file }}
 output                = {{ log_dir }}/$(ClusterId).$(ProcId).extractEvents.stdout
@@ -91,10 +92,10 @@ def create_submission_files(
     if not feather_files:
         print(f"Warning: No feather files found in {args.dirname}")
 
-    with open(input_list_path, 'a') as f:
+    with open(input_list_path, 'w') as f:
         for file_path in feather_files:
-            # Format: filename, run_identifier, full_path
-            f.write(f"{file_path.name}, {file_path}\n")
+            # We only need the filename. No commas.
+            f.write(f"{file_path.name}\n")
 
     # 2. Generate Bash Script
     bash_content = Template(BASH_TEMPLATE).render({
@@ -147,17 +148,18 @@ def handle_resubmission(script_name: str, input_list_path: Path):
             job_id = fields[0].split('.')[0]
             status = fields[5]
 
-            # The first argument in our new JDL is the filename
-            # condor_q -nobatch usually shows args at the end
+            # In HTCondor -nobatch, the arguments are at the end.
+            # Our first argument is the filename $(fname)
             fname = fields[-2]
             requeue_fnames.append(fname)
 
             if status != 'X':
                 jobs_to_kill.add(job_id)
 
+    # Write back only the filenames (one per line)
     with open(input_list_path, 'w') as f:
         for name in requeue_fnames:
-            f.write(name + '\n')
+            f.write(f"{name}\n")
 
     for job_id in jobs_to_kill:
         print(f"Removing old job {job_id}...")
