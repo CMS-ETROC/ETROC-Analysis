@@ -1,4 +1,4 @@
-import argparse
+import argparse, getpass
 import pandas as pd
 from pathlib import Path
 from natsort import natsorted
@@ -87,7 +87,12 @@ def main():
     )
 
     args = parser.parse_args()
-    input_path = Path(args.input_dir).resolve()
+
+    # --- Setup Environments ---
+    username = getpass.getuser()
+    eos_base_dir = f'/eos/user/{username[0]}/{username}'
+
+    input_path = Path(f'{eos_base_dir}/{args.input_dir}').resolve()
 
     # 1. Collect and Sort files
     files = natsorted([
