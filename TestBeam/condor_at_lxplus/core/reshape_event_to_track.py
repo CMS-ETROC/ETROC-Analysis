@@ -1,4 +1,4 @@
-import argparse, sys, yaml, shutil, gc
+import argparse, sys, yaml, shutil, gc, getpass
 
 import pandas as pd
 import pyarrow.dataset as ds
@@ -219,7 +219,13 @@ def main():
     parser.add_argument('--file_pattern', default='*.parquet', help="Glob pattern for inputs")
 
     args = parser.parse_args()
-    all_files = natsorted(Path(args.dirname).glob(args.file_pattern))
+
+    # --- Setup Environments ---
+    username = getpass.getuser()
+    eos_base_dir = f'/eos/user/{username[0]}/{username}'
+
+    all_files = natsorted(Path(f'{eos_base_dir}/{args.dirname}').glob(args.file_pattern))
+    final_output_dir = f'{eos_base_dir}/{args.outdir}'
 
     if not all_files:
         print('No input files found')
@@ -242,7 +248,7 @@ def main():
 
     run_parallel_packing(flat_tasks)
 
-    run_hybrid_fast_splitting(args.outdir, out_tmp_dir, nickname_dict, args.partitions)
+    run_hybrid_fast_splitting(final_output_dir, out_tmp_dir, nickname_dict, args.partitions)
 
     print(f"--- Final Step: Cleaning up temporary files in {out_tmp_dir} ---")
     try:
