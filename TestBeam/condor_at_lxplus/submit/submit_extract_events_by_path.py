@@ -1,11 +1,9 @@
 import argparse
 import getpass
 import subprocess
-import sys
-from pathlib import Path
-from typing import Dict
+import sys, yaml
 
-import yaml
+from pathlib import Path
 from jinja2 import Template
 from natsort import natsorted
 
@@ -77,7 +75,7 @@ def get_trigger_id_from_config(config_path: Path, run_name: str) -> int:
 def create_submission_files(
     args: argparse.Namespace,
     trig_id: int,
-    paths: Dict[str, Path],
+    paths: dict[str, Path],
     eos_base: str
 ):
     """Generates the Input List, Bash Script, and JDL file."""
@@ -131,40 +129,6 @@ def create_submission_files(
         f.write(jdl_content)
 
     return jdl_path, bash_script_path, input_list_path
-
-def handle_resubmission(script_name: str, input_list_path: Path):
-    condor_output = subprocess.run(['condor_q', '-nobatch'], capture_output=True, text=True)
-    relevant_jobs = [line for line in condor_output.stdout.splitlines() if script_name in line]
-
-    if not relevant_jobs:
-        print('No relevant Condor jobs found to resubmit.')
-        sys.exit(0)
-
-    jobs_to_kill = set()
-    requeue_fnames = []
-
-    for line in relevant_jobs:
-        fields = line.split()
-        if len(fields) >= 10:
-            job_id = fields[0].split('.')[0]
-            status = fields[5]
-
-            # In HTCondor -nobatch, the arguments are at the end.
-            # Our first argument is the filename $(fname)
-            fname = fields[-2]
-            requeue_fnames.append(fname)
-
-            if status != 'X':
-                jobs_to_kill.add(job_id)
-
-    # Write back only the filenames (one per line)
-    with open(input_list_path, 'w') as f:
-        for name in requeue_fnames:
-            f.write(f"{name}\n")
-
-    for job_id in jobs_to_kill:
-        print(f"Removing old job {job_id}...")
-        subprocess.run(['condor_rm', job_id])
 
 # --- Main Execution ---
 
@@ -238,16 +202,6 @@ if __name__ == "__main__":
         print(f"JDL:  {jdl_file}")
         print(f"Bash: {bash_file}")
         print(f"List: {list_file}")
-
-    elif args.resubmit:
-        print("--- Resubmission Mode ---")
-        handle_resubmission(bash_file.name, list_file)
-
-        if list_file.stat().st_size > 0:
-            print("Submitting new jobs...")
-            subprocess.run(['condor_submit', str(jdl_file)])
-        else:
-            print("Input list empty after filtering. Nothing to submit.")
 
     else:
         # Standard Submission
