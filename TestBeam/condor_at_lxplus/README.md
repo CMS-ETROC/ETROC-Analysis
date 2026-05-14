@@ -87,15 +87,13 @@ python core/reshape_event_to_track.py -d <DIRNAME> -o <OUTDIR> -c <CONFIG> -r <R
 
 ### 10. Submit jobs for apply TDC cuts
 ```
-python submit/submit_apply_tdc_cuts.py -d <INPUTDIR> -c <CONFIG> -r <RUNNAME> --TOALower <TOALOWER> --TOAUpper <TOAUPPER> --dutTOTlower <DUTTOTLOWER> --dutTOTupper <DUTTOTUPPER> --distance_factor <DISTANCE_FACTOR> --condor_tag <CONDOR_TAG> [--dryrun]
+python submit/submit_apply_tdc_cuts.py -d <INPUTDIR> -c <CONFIG> -r <RUNNAME> --TOALower <TOALOWER> --TOAUpper <TOAUPPER> --distance_factor <DISTANCE_FACTOR> --condor_tag <CONDOR_TAG> [--dryrun]
 ```
 - `-d` option:
 - `-c` option: path to the board config yaml file.
 - `-r` option: "key" of dictionary in yaml file (usually run identifier).
 - `--TOALower` option: lower boundary TOA cut in code.
 - `--TOAUpper` option: upper boundary TOA cut in code.
-- `--dutTOTlower` option: lower boundary for TOT cut. TOT cut is quantile cut.
-- `--dutTOTupper` option: upper boundary for TOT cut. TOT cut is quantile cut.
 - `--distance_factor` option: The size of spread allowing in TOA correlation. Default is 3.
 - `--condor_tag` option: String to identify the job submission.
 - `--dryrun` option: if this argument is included, actual submission will not happen. But still making the list, bash script, and condor jdl files.
