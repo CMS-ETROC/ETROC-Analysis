@@ -1,5 +1,7 @@
 import pandas as pd
+import numpy as np
 import argparse, sys
+from tabulate import tabulate
 
 parser = argparse.ArgumentParser(
             prog='Reduce number of track candidates',
@@ -40,9 +42,6 @@ previous_num = track_output_df.shape[0]
 
 
 if args.ntrk_table:
-    from tabulate import tabulate
-    import numpy as np
-
     # SMART STEP 1: Determine cuts based on data distribution (deciles)
     # This prevents the table from being empty or uselessly small
     data_counts = track_output_df['count']
