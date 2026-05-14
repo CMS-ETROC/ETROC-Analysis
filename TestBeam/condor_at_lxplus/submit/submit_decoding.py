@@ -107,7 +107,7 @@ def make_jobs(args, log_dir, condor_scripts_dir):
 
             f.write(f"{physical_idx} {file_path.name}\n")
 
-    bash_script = load_bash_template(args.input_dir)
+    bash_script = load_bash_template(str(input_path))
 
     with open(condor_scripts_dir / f'run_decode.sh','w') as bashfile:
         bashfile.write(bash_script)
