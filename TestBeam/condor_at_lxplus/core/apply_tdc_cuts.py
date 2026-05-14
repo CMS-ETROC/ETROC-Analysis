@@ -85,34 +85,52 @@ def convert_to_time(df: pd.DataFrame, all_roles: dict[str, int]) -> pd.DataFrame
 
     return pd.concat(processed_chunks).sort_index() if processed_chunks else pd.DataFrame()
 
-def find_tot_lower_bound(series: pd.Series, n_bins: int = 200) -> float:
+def get_tot_range(data, mad_factor=5.0, sigma_factor=3.0, max_iterations=10):
     """
-    Finds the valley to the left of the main TOT peak as a lower bound.
-    Returns None if no secondary peak/valley exists (i.e. left side is clean).
-
-    Strategy:
-      1. Histogram the TOT distribution.
-      2. Find the main (tallest) peak.
-      3. Find the minimum bin to the LEFT of the main peak.
-      4. If that minimum is at the leftmost bin, there is no real valley
-         (left side rises monotonically) -> return None, fall back to quantile cut.
-      5. Otherwise return the TOT value at the valley as the new lower bound.
+    Determines a robust cut range with an explicit convergence check.
     """
-    counts, edges = np.histogram(series.dropna(), bins=n_bins)
-    bin_centers = (edges[:-1] + edges[1:]) / 2
+    clean_data = data.dropna().values
+    if len(clean_data) == 0:
+        return None, None
 
-    main_peak_idx = np.argmax(counts)
+    # Step 1: Initial MAD-based Pass
+    median = np.median(clean_data)
+    mad = np.median(np.abs(clean_data - median)) * 1.4826
 
-    if main_peak_idx == 0:
-        return None
+    initial_mask = (clean_data > (median - mad_factor * mad)) & \
+                   (clean_data < (median + mad_factor * mad))
+    final_data = clean_data[initial_mask]
 
-    valley_idx = np.argmin(counts[:main_peak_idx])
+    # Step 2: Iterative Sigma Clipping with Convergence
+    prev_count = len(final_data)
 
-    # If valley is at the leftmost bin, left side is monotonically rising - no secondary peak
-    if valley_idx == 0:
-        return None
+    for i in range(max_iterations):
+        if len(final_data) < 2:
+            break
 
-    return float(bin_centers[valley_idx])
+        mean = np.mean(final_data)
+        std = np.std(final_data)
+
+        lower = mean - sigma_factor * std
+        upper = mean + sigma_factor * std
+
+        # Apply the new cut
+        mask = (final_data >= lower) & (final_data <= upper)
+        final_data = final_data[mask]
+
+        # --- CONVERGENCE CHECK ---
+        current_count = len(final_data)
+
+        # Option A: Check if the number of points stopped changing
+        if current_count == prev_count:
+            break
+
+        prev_count = current_count
+
+    if len(final_data) == 0:
+        return data.min(), data.max()
+
+    return np.min(final_data), np.max(final_data)
 
 def apply_raw_tdc_cuts(
     df: pd.DataFrame,
@@ -121,7 +139,6 @@ def apply_raw_tdc_cuts(
     args: argparse.Namespace
 ) -> pd.DataFrame:
     """Filters raw TDC values using file-specific thresholds and config roles."""
-    dut_role = 'dut' if 'dut' in all_roles else 'extra'
     trig_role = 'ref' if 'ref' in all_roles else 'trig'
     chunks = []
 
@@ -135,21 +152,7 @@ def apply_raw_tdc_cuts(
                 continue
 
             tot_col = sub[f'tot_{role}']
-
-            # First: strip left-side secondary peak if present, then compute quantile on clean data
-            # valley = find_tot_lower_bound(tot_col)
-            # tot_col_clean = tot_col[tot_col >= valley] if valley is not None else tot_col
-            tot_col_clean = tot_col
-
-            # Determine TOT bounds for DUT vs others
-            if role == dut_role:
-                if args.dutTOTlowerVal != -1 or args.dutTOTupperVal != -1:
-                    low = args.dutTOTlowerVal if args.dutTOTlowerVal != -1 else -np.inf
-                    high = args.dutTOTupperVal if args.dutTOTupperVal != -1 else np.inf
-                else:
-                    low, high = tot_col_clean.quantile([args.dutTOTlower * 0.01, args.dutTOTupper * 0.01])
-            else:
-                low, high = tot_col_clean.quantile([0.01, 0.96])
+            low, high = get_tot_range(tot_col)
 
             # Apply TOA window primarily for the trigger-assigned board
             toa_low = args.TOALower if role == trig_role else 0
@@ -191,24 +194,11 @@ def apply_time_domain_cuts(
             continue
 
         tot_col = df[col]
-
-        # First: strip left-side secondary peak if present, then compute quantile on clean data
-        valley = find_tot_lower_bound(tot_col)
-        tot_col_clean = tot_col[tot_col >= valley] if valley is not None else tot_col
-
-        # Determine TOT bounds for DUT vs others
-        if role == 'dut':
-            if args.dutTOTlowerTime != -1 or args.dutTOTupperTime != -1:
-                low = args.dutTOTlowerTime * 1e3 if args.dutTOTlowerTime != -1 else -np.inf
-                high = args.dutTOTupperTime * 1e3 if args.dutTOTupperTime != -1 else np.inf
-            else:
-                low, high = tot_col_clean.quantile([args.dutTOTlower * 0.01, args.dutTOTupper * 0.01])
-        else:
-            low, high = tot_col_clean.quantile([0.01, 0.96])
-
+        low, high = get_tot_range(tot_col)
         mask &= df[col].between(low, high)
 
     df = df.loc[mask].reset_index(drop=True)
+
     return apply_correlation_cut(df, args.distance_factor, cut_roles)
 
 def process_single_file(
@@ -283,12 +273,6 @@ def main():
     parser.add_argument('--TOAUpper', type=int, default=500)
     parser.add_argument('--TOALowerTime', type=float, default=2)
     parser.add_argument('--TOAUpperTime', type=float, default=10)
-    parser.add_argument('--dutTOTlower', type=int, default=1)
-    parser.add_argument('--dutTOTupper', type=int, default=96)
-    parser.add_argument('--dutTOTlowerVal', type=float, default=-1)
-    parser.add_argument('--dutTOTupperVal', type=float, default=-1)
-    parser.add_argument('--dutTOTlowerTime', type=float, default=-1)
-    parser.add_argument('--dutTOTupperTime', type=float, default=-1)
 
     parser.add_argument('--exclude_role', default='trig')
     parser.add_argument('--convert-first', action='store_true')
