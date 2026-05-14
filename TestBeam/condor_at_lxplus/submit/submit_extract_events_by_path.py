@@ -117,7 +117,7 @@ def create_submission_files(
     # 3. Generate JDL File
     jdl_content = Template(JDL_TEMPLATE).render({
         'script_dir': paths['scripts_dir'],
-        'input_dir': args.dirname,
+        'input_dir': final_input_dir,
         'track_file': args.track,
         'cal_table': args.cal_table,
         'log_dir': paths['log_dir'],
