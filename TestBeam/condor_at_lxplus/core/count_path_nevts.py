@@ -1,7 +1,7 @@
 import pandas as pd
 import argparse
 import re
-import sys
+import sys, getpass
 import pyarrow.parquet as pq
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
@@ -94,7 +94,11 @@ def main():
 
     args = parser.parse_args()
 
-    mother_dir = Path(args.inputdir)
+    # --- Setup Environments ---
+    username = getpass.getuser()
+    eos_base_dir = f'/eos/user/{username[0]}/{username}'
+
+    mother_dir = Path(f'{eos_base_dir}/{args.inputdir}')
     output_path = Path(args.outputdir)
     output_path.mkdir(exist_ok=True, parents=True)
 
