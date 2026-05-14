@@ -255,7 +255,10 @@ if __name__ == "__main__":
 
         bash_path = script_dir / f'run_applyTDC_{dir_name}.sh'
         with open(bash_path, 'w') as f:
-            f.write(Template(BASH_TEMPLATE).render({'command': python_cmd, 'remote_path': f'{args.inputdir}/{dir_name}'}))
+            f.write(Template(BASH_TEMPLATE).render({
+                'command': python_cmd,
+                'remote_path': f'{mother_dir}/{dir_name}'
+            }))
 
         jdl_file = create_jdl_file(args, master_list_path, dir_name, num_of_jobs, script_to_run)
         print(f">>> Preparing Group: {dir_name}")
