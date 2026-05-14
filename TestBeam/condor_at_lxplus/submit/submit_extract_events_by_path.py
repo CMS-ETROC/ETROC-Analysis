@@ -88,9 +88,10 @@ def create_submission_files(
     if input_list_path.exists():
         input_list_path.unlink()
 
-    feather_files = natsorted(Path(args.dirname).glob('loop*feather'))
+    final_input_dir = f'{eos_base_dir}/{args.dirname}'
+    feather_files = natsorted(Path(final_input_dir).glob('loop*feather'))
     if not feather_files:
-        print(f"Warning: No feather files found in {args.dirname}")
+        print(f"Warning: No feather files found in {final_input_dir}")
 
     with open(input_list_path, 'w') as f:
         for file_path in feather_files:

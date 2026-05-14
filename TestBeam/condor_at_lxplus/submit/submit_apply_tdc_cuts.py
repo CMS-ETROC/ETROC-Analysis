@@ -210,7 +210,7 @@ if __name__ == "__main__":
     script_dir.mkdir(parents=True, exist_ok=True)
 
     # --- 1. Identify Input/Output Groups ---
-    mother_dir = Path(args.inputdir)
+    mother_dir = Path(f'{eos_base_dir}/{args.inputdir}')
     track_dirs = sorted([d for d in mother_dir.iterdir() if d.is_dir() and d.name.startswith('tracks')])
 
     if not track_dirs:
