@@ -5,6 +5,7 @@ from natsort import natsorted
 import argparse
 import subprocess
 import sys
+import getpass
 
 def load_bash_template(input_dir_path):
     bash_template = """#!/bin/bash
@@ -37,11 +38,7 @@ rm -r job_${1}_${2}
     return Template(bash_template).render(options)
 
 
-def load_jdl_template(condor_log_dir, output_dir, condor_scripts_dir):
-
-    import getpass
-    username = getpass.getuser()
-    eos_base_dir = f'/eos/user/{username[0]}/{username}'
+def load_jdl_template(condor_log_dir, eos_base_dir, output_dir, condor_scripts_dir):
 
     jdl = """universe              = vanilla
 executable            = {3}/run_decode.sh
@@ -64,7 +61,11 @@ Queue index, flist from {3}/input_list.txt
 
 def make_jobs(args, log_dir, condor_scripts_dir):
 
-    input_path = Path(args.input_dir)
+    # --- Setup Environments ---
+    username = getpass.getuser()
+    eos_base_dir = f'/eos/user/{username[0]}/{username}'
+
+    input_path = Path(f'{eos_base_dir}/{args.input_dir}')
     file_extension = None
     file_list = None
 
@@ -112,7 +113,7 @@ def make_jobs(args, log_dir, condor_scripts_dir):
         bashfile.write(bash_script)
 
     outdir = f'{args.output}'
-    jdl_script = load_jdl_template(condor_log_dir=log_dir, output_dir=outdir, condor_scripts_dir=condor_scripts_dir)
+    jdl_script = load_jdl_template(condor_log_dir=log_dir, eos_base_dir=eos_base_dir, output_dir=outdir, condor_scripts_dir=condor_scripts_dir)
     with open(condor_scripts_dir / f'condor_decoding.jdl','w') as jdlfile:
         jdlfile.write(jdl_script)
 
