@@ -1,7 +1,7 @@
 import argparse
 import subprocess
 import sys
-import re
+import re, getpass
 from pathlib import Path
 from jinja2 import Template
 from natsort import natsorted
@@ -182,7 +182,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # --- 1. Identify Groups ---
-    mother_dir = Path(args.dirname).resolve()
+    username = getpass.getuser()
+    eos_base_dir = f'/eos/user/{username[0]}/{username}'
+    mother_dir = Path(f'{eos_base_dir}/{args.dirname}').resolve()
 
     if mother_dir.name.find('time') != -1:
         time_dirs = [mother_dir]
