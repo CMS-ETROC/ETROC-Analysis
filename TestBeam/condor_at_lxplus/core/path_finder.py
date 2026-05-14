@@ -2,7 +2,7 @@ import argparse
 import sys
 import logging
 import warnings
-import random
+import random, getpass
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -319,7 +319,12 @@ def main():
     roles = {info['role']: bid for bid, info in run_config.items()}
 
     # 2. Load Data
-    files = list(Path(args.path).glob('loop*feather'))
+
+    # --- Setup Environments ---
+    username = getpass.getuser()
+    eos_base_dir = f'/eos/user/{username[0]}/{username}'
+
+    files = list(Path(f'{eos_base_dir}/{args.path}').glob('loop*feather'))
     if len(files) > 100: files = files[:100]
 
     if not files:
