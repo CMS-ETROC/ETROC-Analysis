@@ -141,13 +141,13 @@ def create_master_file_list(input_group_dir: Path, output_dir: Path) -> Optional
     print(f"    Generated master list with {len(absolute_filenames)} files: {list_file_path.name}")
     return list_file_path, len(absolute_filenames)
 
-def create_jdl_file(args, master_list_path, group_name, njobs, script_to_run):
+def create_jdl_file(args, eos_base_dir, master_list_path, group_name, njobs, script_to_run):
     jdl_content = Template(JDL_TEMPLATE).render({
         'script_dir': script_dir.as_posix(),
         'bash_script_name': f'run_applyTDC_{group_name}.sh',
         'master_list_file_name': f'{master_list_path.name}',
         'transfer_files': f"core/{script_to_run}, {Path(args.config).as_posix()}, {master_list_path.as_posix()}",
-        'output_dir': f"{args.inputdir}/{group_name.replace('tracks','time')}",
+        'output_dir': f"{eos_base_dir}/{args.inputdir}/{group_name.replace('tracks','time')}",
         'log_dir': log_dir.as_posix(),
         'batch_size': args.batch_size,
         'num_of_jobs': njobs,
@@ -260,7 +260,7 @@ if __name__ == "__main__":
                 'remote_path': f'{mother_dir}/{dir_name}'
             }))
 
-        jdl_file = create_jdl_file(args, master_list_path, dir_name, num_of_jobs, script_to_run)
+        jdl_file = create_jdl_file(args, eos_base_dir, master_list_path, dir_name, num_of_jobs, script_to_run)
         print(f">>> Preparing Group: {dir_name}")
 
         # --- Submission ---
