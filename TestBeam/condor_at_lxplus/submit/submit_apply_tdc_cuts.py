@@ -38,15 +38,6 @@ echo "Processing lines from $START_LINE to $END_LINE"
 # 'sed -n "${START_LINE},${END_LINE}p"' prints only lines between START_LINE and END_LINE
 BATCH_FILENAMES=$(sed -n "${START_LINE},${END_LINE}p" "$INPUT_LIST_FILE")
 
-echo "\n--- Print ---\n"
-ls -ltrh .
-
-# Check if any files were extracted (for the last, possibly partial, batch)
-if [ -z "$BATCH_FILENAMES" ]; then
-    echo "No files found in range $START_LINE-$END_LINE. Exiting gracefully."
-    exit 0
-fi
-
 # Check if any files were extracted (for the last, possibly partial, batch)
 if [ -z "$BATCH_FILENAMES" ]; then
     echo "No files found in range $START_LINE-$END_LINE. Exiting gracefully."
@@ -56,12 +47,8 @@ fi
 # 3. Loop through the extracted filenames
 for FILENAME in $BATCH_FILENAMES
 do
-    REMOTE_FILE_PATH="{{ remote_path }}/${FILENAME}"
-    LOCAL_FILE_PATH="${LOCAL_DIR}/${FILENAME}"
-
     echo "Transferring: $FILENAME"
-    xrdcp -s root://eosuser.cern.ch/{{ remote_path }}/${FILENAME} $LOCAL_FILE_PATH
-
+    xrdcp -s root://eosuser.cern.ch/{{ remote_path }}/${FILENAME} ${LOCAL_DIR}/${FILENAME}
 done
 
 # 4. Print input files
