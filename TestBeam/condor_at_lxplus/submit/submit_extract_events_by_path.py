@@ -94,7 +94,7 @@ def create_submission_files(args, trig_id, paths, eos_base):
     bash_content = Template(BASH_TEMPLATE).render(
         runname=args.runName,
         track=track_path,
-        cal_table=cal_path,
+        cal_table=cal_path.name,
         trigID=trig_id,
         search_method=args.search_method,
         config=config_path.name,
