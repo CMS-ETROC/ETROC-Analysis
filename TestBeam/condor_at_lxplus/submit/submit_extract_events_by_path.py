@@ -17,12 +17,13 @@ echo ""
 pwd
 
 input_file=$1
+path_to_copy=$2
 
 # Load python environment from work node
 source /cvmfs/sft.cern.ch/lcg/views/LCG_104a/x86_64-el9-gcc13-opt/setup.sh
 
 # Copy input data from EOS to local work node
-xrdcp -r root://eosuser.cern.ch/{{ path }} ./
+xrdcp -r root://eosuser.cern.ch/$path_to_copy ./
 
 echo "Will process input file from {{ runname }} $input_file"
 
