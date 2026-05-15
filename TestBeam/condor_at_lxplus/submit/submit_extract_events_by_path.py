@@ -191,7 +191,7 @@ if __name__ == "__main__":
     # --- Submission ---
     if args.dryrun:
         print("--- Dry Run: Files Generated ---")
-        print(f"[Dry Run]JDL:  {jdl_file}")
+        print(f"[Dry Run] JDL:  {jdl_file}")
         print(f"[Dry Run] Bash: {bash_file}")
         print(f"[Dry Run] List: {list_file}")
 
