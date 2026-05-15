@@ -72,57 +72,46 @@ def get_trigger_id_from_config(config_path: Path, run_name: str) -> int:
 
     raise ValueError(f"No board with role 'trig' found in config for {run_name}")
 
-def create_submission_files(
-    args: argparse.Namespace,
-    trig_id: int,
-    paths: dict[str, Path],
-    eos_base: str
-):
-    """Generates the Input List, Bash Script, and JDL file."""
+def create_submission_files(args, trig_id, paths, eos_base):
 
-    # 1. Generate Input List
-    # Finds all feather files and writes them to a text file
-    input_list_path = paths['scripts_dir'] / f'input_list.txt'
-    if input_list_path.exists():
-        input_list_path.unlink()
+    config_path = Path(args.config)
+    cal_path = Path(args.cal_table)
+    track_path = Path(args.track)
+    final_input_dir = Path(eos_base) / args.dirname
 
-    final_input_dir = f'{eos_base_dir}/{args.dirname}'
-    feather_files = natsorted(Path(final_input_dir).glob('loop*feather'))
-    if not feather_files:
-        print(f"Warning: No feather files found in {final_input_dir}")
+    # 2. No unlink() needed
+    input_list_path = paths['scripts_dir'] / 'input_list.txt'
+    feather_files = natsorted(final_input_dir.glob('loop*feather'))
 
     with open(input_list_path, 'w') as f:
         for file_path in feather_files:
-            # We only need the filename. No commas.
             f.write(f"{file_path.name}\n")
 
-    # 2. Generate Bash Script
-    bash_content = Template(BASH_TEMPLATE).render({
-        'path': '${2}',          # Condor Argument 2
-        'runname': args.runName,
-        'filename': '${1}',      # Condor Argument 1
-        'track': args.track,
-        'cal_table': Path(args.cal_table).name,
-        'trigID': trig_id,
-        'search_method': args.search_method,
-        'config': Path(args.config).name,
-    })
+    # 3. Pass Path objects directly to Template
+    bash_content = Template(BASH_TEMPLATE).render(
+        runname=args.runName,
+        track=track_path,
+        cal_table=cal_path,
+        trigID=trig_id,
+        search_method=args.search_method,
+        config=config_path,
+    )
 
     bash_script_path = paths['scripts_dir'] / f'run_extract_events.sh'
     with open(bash_script_path, 'w') as f:
         f.write(bash_content)
 
     # 3. Generate JDL File
-    jdl_content = Template(JDL_TEMPLATE).render({
-        'script_dir': paths['scripts_dir'],
-        'input_dir': final_input_dir,
-        'track_file': args.track,
-        'cal_table': args.cal_table,
-        'log_dir': paths['log_dir'],
-        'eos_base': eos_base,
-        'out_dir': args.outname,
-        'config_file': args.config,
-    })
+    jdl_content = Template(JDL_TEMPLATE).render(
+        script_dir=paths['scripts_dir'],
+        input_dir=final_input_dir,
+        track_file=track_path,
+        cal_table=cal_path,
+        config_file=config_path,
+        log_dir=paths['log_dir'],
+        eos_base=eos_base,
+        out_dir=args.outname,
+    )
 
     jdl_path = paths['scripts_dir'] / f'condor_extract_events.jdl'
     with open(jdl_path, 'w') as f:
@@ -199,9 +188,9 @@ if __name__ == "__main__":
     # --- Submission ---
     if args.dryrun:
         print("--- Dry Run: Files Generated ---")
-        print(f"JDL:  {jdl_file}")
-        print(f"Bash: {bash_file}")
-        print(f"List: {list_file}")
+        print(f"[Dry Run]JDL:  {jdl_file}")
+        print(f"[Dry Run] Bash: {bash_file}")
+        print(f"[Dry Run] List: {list_file}")
 
     else:
         # Standard Submission
