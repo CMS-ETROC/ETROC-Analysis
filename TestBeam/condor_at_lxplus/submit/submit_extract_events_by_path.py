@@ -16,23 +16,25 @@ ls -ltrh
 echo ""
 pwd
 
+input_file=$1
+
 # Load python environment from work node
 source /cvmfs/sft.cern.ch/lcg/views/LCG_104a/x86_64-el9-gcc13-opt/setup.sh
 
 # Copy input data from EOS to local work node
 xrdcp -r root://eosuser.cern.ch/{{ path }} ./
 
-echo "Will process input file from {{ runname }} {{ filename }}"
+echo "Will process input file from {{ runname }} $input_file"
 
 # Run the python script
-echo "python extract_events_by_path.py -f {{ filename }} -r {{ runname }} -t {{ track }} -c {{ config }} --trigID {{ trigID }} --cal_table {{ cal_table }} --neighbor_search_method {{ search_method }}"
-python extract_events_by_path.py -f {{ filename }} -r {{ runname }} -t {{ track }} -c {{ config }} --trigID {{ trigID }} --cal_table {{ cal_table }} --neighbor_search_method {{ search_method }}
+echo "python extract_events_by_path.py -f $input_file -r {{ runname }} -t {{ track }} -c {{ config }} --trigID {{ trigID }} --cal_table {{ cal_table }} --neighbor_search_method {{ search_method }}"
+python extract_events_by_path.py -f $input_file -r {{ runname }} -t {{ track }} -c {{ config }} --trigID {{ trigID }} --cal_table {{ cal_table }} --neighbor_search_method {{ search_method }}
 
 ls -ltrh
 echo ""
 
 # Delete input file so condor will not return it as output
-rm {{ filename }}
+rm $input_file
 
 ls -ltrh
 echo ""
