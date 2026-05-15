@@ -97,7 +97,7 @@ def create_submission_files(args, trig_id, paths, eos_base):
         cal_table=cal_path,
         trigID=trig_id,
         search_method=args.search_method,
-        config=config_path,
+        config=config_path.name,
     )
 
     bash_script_path = paths['scripts_dir'] / f'run_extract_events.sh'
