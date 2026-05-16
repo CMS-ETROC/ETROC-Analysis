@@ -1,6 +1,7 @@
 import argparse, sys, yaml, shutil, gc, getpass
 
 import pandas as pd
+import pyarrow as pa
 import pyarrow.dataset as ds
 import pyarrow.parquet as pq
 
@@ -12,6 +13,9 @@ from tqdm import tqdm
 # ------------------------------------
 def packer_worker(p_idx, b_idx, file_list, out_tmp_dir):
     try:
+        pa.set_cpu_count(1)
+        pa.set_io_thread_count(1)
+
         dataset = ds.dataset(file_list, format="parquet")
         table = dataset.to_table()
         output_file = out_tmp_dir / f"p{p_idx}_b{b_idx}.parquet"
@@ -46,60 +50,13 @@ def run_parallel_packing(flat_tasks):
             print(r)
 
 # ------------------------------------
-def run_safe_sequential_splitting(out_dir, out_tmp_dir, nicknames, num_partitions):
-    print(f"--- Step 2: Safe Sequential Splitting ---")
-
-    # 1. Create a SECOND local temp directory for the final tracks
-    local_final_base = out_tmp_dir.parent / "final_tracks_local"
-    if local_final_base.exists():
-        shutil.rmtree(local_final_base)
-    local_final_base.mkdir(parents=True, exist_ok=True)
+def run_native_scatter(out_tmp_dir, num_partitions):
+    print(f"\n--- Step 2: Native Scatter ---")
 
     for p_idx in range(num_partitions):
-        subdir_name = "tracks" if num_partitions == 1 else f"tracks_group{p_idx + 1}"
-        local_track_dir = local_final_base / subdir_name
-        local_track_dir.mkdir(parents=True, exist_ok=True)
-
         partition_masters = natsorted(out_tmp_dir.glob(f"p{p_idx}_b*.parquet"))
-        if not partition_masters: continue
-
-        for m_file in tqdm(partition_masters, desc=f"Merging {subdir_name} locally"):
-            batch_df = pd.read_parquet(m_file)
-
-            for _, track_df in batch_df.groupby('track_id'):
-                fname = generate_track_filename(track_df, nicknames) + ".parquet"
-                save_path = local_track_dir / fname # Writing to LOCAL SSD
-
-                if save_path.exists():
-                    # This Read-Append-Write is now 100x faster because it's on SSD
-                    existing_df = pd.read_parquet(save_path)
-                    combined_df = pd.concat([existing_df, track_df], ignore_index=True)
-                    combined_df.to_parquet(save_path, compression='lz4')
-                    del existing_df, combined_df
-                else:
-                    track_df.to_parquet(save_path, compression='lz4')
-
-            del batch_df
-            gc.collect()
-
-    # 2. THE BULK MOVE: Copy from /tmp to EOS in one go
-    print(f"--- Step 3: Moving final files to EOS: {out_dir} ---")
-    final_eos_path = Path(out_dir)
-    # shutil.copytree is usually more robust for EOS than shutil.move
-    shutil.copytree(local_final_base, final_eos_path, dirs_exist_ok=True)
-
-    # 3. Final cleanup of all local temp areas
-    shutil.rmtree(local_final_base)
-
-
-# ------------------------------------
-def run_hybrid_fast_splitting(out_dir, out_tmp_dir, nicknames, num_partitions):
-    print(f"--- Step 2: Native Scatter ---")
-
-    for p_idx in range(num_partitions):
-
-        partition_masters = natsorted(out_tmp_dir.glob(f"p{p_idx}_b*.parquet"))
-        if not partition_masters: continue
+        if not partition_masters:
+            continue
 
         scatter_dir = out_tmp_dir / f"p{p_idx}"
         scatter_dir.mkdir(parents=True, exist_ok=True)
@@ -116,19 +73,16 @@ def run_hybrid_fast_splitting(out_dir, out_tmp_dir, nicknames, num_partitions):
                 use_threads=False,
             )
 
-    # 2. THE GATHER: Unifying the fragments into the final EOS directory
-    print(f"\n--- Step 3: Final Unification ---")
+# ------------------------------------
+def gather_track_worker(track_folder, out_dir, subdir, nicknames):
+    try:
+        # Prevent oversubscription: restrict each process to 1 or 2 internal threads
+        pa.set_cpu_count(1)
+        pa.set_io_thread_count(1) # Limits parallel network I/O threads per process
 
-    # Identify all numeric track directories (e.g., 0, 1, 2...)
-    # In your output, PyArrow created directories directly by ID value
-    subdir = "tracks" if num_partitions == 1 else f"tracks_group{p_idx + 1}"
-    track_dirs = natsorted([d for d in scatter_dir.iterdir() if d.is_dir()])
-
-    for track_folder in tqdm(track_dirs, desc=f"Unifying {subdir}"):
         track_fragments = ds.dataset(track_folder, format="parquet")
         combined_table = track_fragments.to_table()
 
-        # Efficient coordinate lookup
         sample_df = combined_table.slice(0, 1).to_pandas()
         fname = generate_track_filename(sample_df, nicknames) + ".parquet"
 
@@ -136,11 +90,46 @@ def run_hybrid_fast_splitting(out_dir, out_tmp_dir, nicknames, num_partitions):
         save_path.parent.mkdir(parents=True, exist_ok=True)
 
         pq.write_table(combined_table, save_path, compression='lz4')
+        return True
 
-    # Clean up this partition's fragments before moving to the next one to save /tmp space
-    shutil.rmtree(scatter_dir)
+    except Exception as e:
+        return f"Error unifying {track_folder.name}: {e}"
 
-    print(f"Successfully unified {len(track_dirs)} tracks.")
+# ------------------------------------
+def run_parallel_gather(out_dir, out_tmp_dir, nicknames, num_partitions):
+    print(f"\n--- Step 3: Parallel Unification (Gathering) ---")
+
+    with ProcessPoolExecutor(max_workers=4) as executor:
+        for p_idx in range(num_partitions):
+            scatter_dir = out_tmp_dir / f"p{p_idx}"
+            if not scatter_dir.exists():
+                continue
+
+            subdir = "tracks" if num_partitions == 1 else f"tracks_group{p_idx + 1}"
+            track_dirs = natsorted([d for d in scatter_dir.iterdir() if d.is_dir()])
+            if not track_dirs:
+                continue
+
+            # Submit all track folders in this partition to the pool
+            futures = [
+                executor.submit(gather_track_worker, track_folder, out_dir, subdir, nicknames)
+                for track_folder in track_dirs
+            ]
+
+            results = []
+            for f in tqdm(as_completed(futures), total=len(track_dirs), desc=f"Unifying {subdir}"):
+                res = f.result()
+                if res != True:
+                    results.append(res)
+
+            # Print any errors that occurred during processing
+            for error_msg in results:
+                print(error_msg)
+
+            # Clean up this partition's fragments to save /tmp space before moving to next partition
+            shutil.rmtree(scatter_dir)
+
+    print("Gathering and unification complete!")
 
 # ------------------------------------
 def load_config_and_roles(config_path: str, run_name: str) -> tuple[dict[int, str], dict[str, str]]:
@@ -247,10 +236,10 @@ def main():
             flat_tasks.append((p_idx, b_idx, file_list_str, out_tmp_dir))
 
     run_parallel_packing(flat_tasks)
+    run_native_scatter(out_tmp_dir, args.partitions)
+    run_parallel_gather(final_output_dir, out_tmp_dir, nickname_dict, args.partitions)
 
-    run_hybrid_fast_splitting(final_output_dir, out_tmp_dir, nickname_dict, args.partitions)
-
-    print(f"--- Final Step: Cleaning up temporary files in {out_tmp_dir} ---")
+    print(f"\n--- Final Step: Cleaning up temporary files in {out_tmp_dir} ---")
     try:
         shutil.rmtree(out_tmp_dir)
         # Also remove the 'tmp' parent folder if it's now empty
