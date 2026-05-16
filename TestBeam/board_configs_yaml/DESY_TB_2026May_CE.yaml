@@ -135,3 +135,9 @@ run36: *run35
 run37: *run35
 run38: *run35
 run39: *run35
+
+run41:
+  0: {<<: *PT-IH27_50deg, temp: 0C,   transformation: {rotation: {x: 0, y: -50, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  1: {<<: *PT-IH5_50deg,  temp: 0C,   transformation: {rotation: {x: 0, y: -50, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  2: {<<: *PT-IH3_50deg,  temp: 0C,   transformation: {rotation: {x: 0, y: -50, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  3: {<<: *PT-IH2_50deg,  temp: -22C, transformation: {rotation: {x: 0, y: -50, z: 0}, translation: {x: 0, y: 0, z: 0}}}
