@@ -30,8 +30,8 @@ defaults:
   PT-IH2_50deg:  &PT-IH2_50deg  {<<: *PT-IH2,  angle: 50}
 
   PT-IH27_60deg: &PT-IH27_60deg {<<: *PT-IH27, angle: 60, role: extra}
-  PT-IH5_60deg:  &PT-IH5_60deg  {<<: *PT-IH5,  angle: 60, role: ref,    HV: 230}
-  PT-IH3_60deg:  &PT-IH3_60deg  {<<: *PT-IH3,  angle: 60, role: trig}
+  PT-IH5_60deg:  &PT-IH5_60deg  {<<: *PT-IH5,  angle: 60, role: ref}
+  PT-IH3_60deg:  &PT-IH3_60deg  {<<: *PT-IH3,  angle: 60, role: trig,   HV: 210}
   PT-IH2_60deg:  &PT-IH2_60deg  {<<: *PT-IH2,  angle: 60}
 
 run1: &run1
@@ -137,8 +137,8 @@ run38: *run35
 run39: *run35
 
 run42: &run42
-  0: {<<: *PT-IH27_50deg, temp: 0C,   transformation: {rotation: {x: 0, y: 60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
-  1: {<<: *PT-IH5_50deg,  temp: 0C,   transformation: {rotation: {x: 0, y: 60, z: 0}, translation: {x: -0.33, y: 4.55, z: 0}}}
-  2: {<<: *PT-IH3_50deg,  temp: 0C,   transformation: {rotation: {x: 0, y: 60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
-  3: {<<: *PT-IH2_50deg,  temp: -22C, transformation: {rotation: {x: 0, y: 60, z: 0}, translation: {x: -0.33, y: -3.25, z: 0}}}
+  0: {<<: *PT-IH27_60deg, temp: 0C,   transformation: {rotation: {x: 0, y: 60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  1: {<<: *PT-IH5_60deg,  temp: 0C,   transformation: {rotation: {x: 0, y: 60, z: 0}, translation: {x: -0.33, y: 4.55, z: 0}}}
+  2: {<<: *PT-IH3_60deg,  temp: 0C,   transformation: {rotation: {x: 0, y: 60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  3: {<<: *PT-IH2_60deg,  temp: -22C, transformation: {rotation: {x: 0, y: 60, z: 0}, translation: {x: -0.33, y: -3.25, z: 0}}}
 run43: *run42
