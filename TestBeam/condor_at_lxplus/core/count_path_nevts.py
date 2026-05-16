@@ -1,8 +1,10 @@
-import pandas as pd
 import argparse
 import re
 import sys, getpass
+
+import pandas as pd
 import pyarrow.parquet as pq
+
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from natsort import natsorted
