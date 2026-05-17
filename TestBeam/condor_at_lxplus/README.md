@@ -26,8 +26,9 @@ myschedd bump
 ```
 python submit/submit_decoding.py -d <absolute path to input directory> -o <relative path to output directry> --condor_tag <unique tag> --dryrun
 ```
-- `-d` option: absolute path to the input directory. e.g. `/eos/user/n/name/directory`
-- `-o` option: relative path to the output directory. The script knows the base path `/eos/user/n/name/`, so only need to specify the path after the base path.
+- The script knows the base path `/eos/user/n/name/`
+- `-d` option: remaining path to the input directory.
+- `-o` option: remaining path to the output directory.
 - `--condor_tag` option: String to identify the job submission.
 - `--dryrun` option: if this argument is included, actual submission will not happen. But still making the list, bash script, and condor jdl files.
 
@@ -35,7 +36,8 @@ python submit/submit_decoding.py -d <absolute path to input directory> -o <relat
 ```
 python utils/merge_feathers.py -d <INPUT_DIR> -n <NUMBER_OF_MERGE> --dryrun
 ```
-- `-d` option: absolute path to the input directory.
+- The script knows the base path `/eos/user/n/name/`
+- `-d` option: remaining path to the input directory.
 - `-n` option: number of files for a single group.
 - `--dryrun` option: if this argument is included, merge will not happen but showing the number of groups after merging.
 
@@ -43,7 +45,8 @@ python utils/merge_feathers.py -d <INPUT_DIR> -n <NUMBER_OF_MERGE> --dryrun
 ```
 python core/path_finder.py -p <PATH> --cal-label <CAL_LABEL> --track-label <TRACK_LABEL> -c <CONFIG> -r <RUNNAME> -s <SAMPLING> -m <NTRACKS> [--cal_table_only] [--exclude_role <EXCLUDE_ROLE>]
 ```
-- `-p` option: absolute path to the directory including feathers (outputs from step 4 or 5).
+- The script knows the base path `/eos/user/n/name/`
+- `-p` option: remaining path to the directory including feathers (outputs from step 4 or 5).
 - `--cal-label` option: output name for cal table csv file.
 - `--track-label` option: output name for track candidates csv file.
 - `-c` option: path to the board config yaml file.
@@ -89,7 +92,7 @@ python core/reshape_event_to_track.py -d <DIRNAME> -o <OUTDIR> -c <CONFIG> -r <R
 ```
 python submit/submit_apply_tdc_cuts.py -d <INPUTDIR> -c <CONFIG> -r <RUNNAME> --TOALower <TOALOWER> --TOAUpper <TOAUPPER> --distance_factor <DISTANCE_FACTOR> --condor_tag <CONDOR_TAG> [--dryrun]
 ```
-- `-d` option:
+- `-d` option: path to directory of step 9.
 - `-c` option: path to the board config yaml file.
 - `-r` option: "key" of dictionary in yaml file (usually run identifier).
 - `--TOALower` option: lower boundary TOA cut in code.
