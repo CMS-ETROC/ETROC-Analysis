@@ -735,7 +735,7 @@ def plot_resolutions_per_row(
                 linewidth=1
             )
 
-        ax.set_title(f'{loc_title}\n{selected_fig_config['title']} - Row {irow}', loc='right', fontsize=20)
+        ax.set_title(f"{loc_title}\n{selected_fig_config['title']} - Row {irow}", loc='right', fontsize=20)
         ax.set_xlim(-0.5, 15.5)
         ax.legend(title='Ordered paths', bbox_to_anchor=(1, 1), loc='upper left')
         ax.grid(axis='y', linestyle='--', alpha=0.7)
