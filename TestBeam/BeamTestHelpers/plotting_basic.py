@@ -1251,10 +1251,10 @@ def plot_TOA_correlation_hit(
     loc_title = load_fig_title(tb_loc)
 
     h = hist.Hist(
-        hist.axis.Regular(128, 0, 1024, name=f'{board_info[board_id1]['short']}',
-                          label=f'TOA of {board_info[board_id1]['short']} ({board_info[board_id1]['role']}) [LSB]'),
-        hist.axis.Regular(128, 0, 1024, name=f'{board_info[board_id2]['short']}',
-                          label=f'TOA of {board_info[board_id2]['short']} ({board_info[board_id2]['role']}) [LSB]'),
+        hist.axis.Regular(128, 0, 1024, name=f"{board_info[board_id1]['short']}",
+                          label=f"TOA of {board_info[board_id1]['short']} ({board_info[board_id1]['role']}) [LSB]"),
+        hist.axis.Regular(128, 0, 1024, name=f"{board_info[board_id2]['short']}",
+                          label=f"TOA of {board_info[board_id2]['short']} ({board_info[board_id2]['role']}) [LSB]"),
     )
 
     x = paired_hits['toa_b0'].values
