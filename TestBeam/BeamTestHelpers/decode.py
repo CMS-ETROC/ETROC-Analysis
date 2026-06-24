@@ -331,7 +331,9 @@ class DecodeBinary:
             'events': [],
             'prev_event': [],
             'last_event': [],
-            'filler_data': [],
+            'error_reg': [],
+            'linkNormalReg': [],
+            'resetCount': [],
         }
 
         self.filler_data = self.copy_dict_by_json(self.filler_data_template)
@@ -386,11 +388,13 @@ class DecodeBinary:
 
         self.filler_data = {
             'idx': np.array(tmp['idx'], dtype=np.uint64),
-            'type': np.array(tmp['type'], dtype=np.string_),
+            'type': np.array(tmp['type'], dtype=np.uint16),
             'events': np.array(tmp['events'], dtype=np.uint32),
             'prev_event': np.array(tmp['prev_event'], dtype=np.int64),
             'last_event': np.array(tmp['last_event'], dtype=np.int64),
-            'filler_data': np.array(tmp['filler_data'], dtype=np.string_),
+            'error_reg': np.array(tmp['error_reg'], dtype=np.uint8),
+            'linkNormalReg': np.array(tmp['linkNormalReg'], dtype=np.uint8),
+            'resetCount': np.array(tmp['resetCount'], dtype=np.uint8),
         }
 
     def reset_params(self):
@@ -759,11 +763,16 @@ class DecodeBinary:
                     elif (word >> 20) == self.firmware_filler_pattern_new:
                         if not self.skip_fw_filler:
                             self.filler_data['idx'].append(self.filler_idx)
-                            self.filler_data['type'].append("FW")
+                            self.filler_data['type'].append(self.firmware_filler_pattern_new)
                             self.filler_data['events'].append(self.event_in_filler_counter)
                             self.filler_data['prev_event'].append(self.filler_prev_event)
                             self.filler_data['last_event'].append(self.event_counter)
-                            self.filler_data['filler_data'].append(f"0b{word & 0xfffff:020b}")
+                            error_reg = (word >> 16) & 0x0F
+                            link_normal_reg = (word >> 8) & 0xFF
+                            reset_count = word & 0xFF
+                            self.filler_data['error_reg'].append(error_reg)
+                            self.filler_data['linkNormalReg'].append(link_normal_reg)
+                            self.filler_data['resetCount'].append(reset_count)
                             self.filler_idx += 1
                             self.event_in_filler_counter = 0
                             self.filler_prev_event = self.event_counter
@@ -774,13 +783,18 @@ class DecodeBinary:
                     elif (word >> 20) == self.check_link_filler_pattern or (word >> 20) == self.check_link_filler_pattern_2:
                         self.filler_data['idx'].append(self.filler_40_idx)
                         if (word >> 20) == self.check_link_filler_pattern:
-                            self.filler_data['type'].append("40")
+                            self.filler_data['type'].append(self.check_link_filler_pattern)
                         elif (word >> 20) == self.check_link_filler_pattern_2:
-                            self.filler_data['type'].append("40_2")
+                            self.filler_data['type'].append(self.check_link_filler_pattern_2)
                         self.filler_data['events'].append(self.event_in_filler_40_counter)
                         self.filler_data['prev_event'].append(self.filler_40_prev_event)
                         self.filler_data['last_event'].append(self.event_counter)
-                        self.filler_data['filler_data'].append(f"0b{word & 0xfffff:020b}")
+                        error_reg = (word >> 16) & 0x0F
+                        link_normal_reg = (word >> 8) & 0xFF
+                        reset_count = word & 0xFF
+                        self.filler_data['error_reg'].append(error_reg)
+                        self.filler_data['linkNormalReg'].append(link_normal_reg)
+                        self.filler_data['resetCount'].append(reset_count)
                         self.filler_40_idx += 1
                         self.event_in_filler_40_counter = 0
                         self.filler_40_prev_event = self.event_counter
