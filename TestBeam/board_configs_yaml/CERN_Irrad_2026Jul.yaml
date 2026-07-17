@@ -57,6 +57,7 @@ h1_run3: &h1_run3
   2: { <<: *PT_IH12, irrad: 1.5e15, note: 17cm off beam axis }
   3: { <<: *PT_IH13, irrad: 1.5e15, note: 17cm off beam axis }
 h1_run4: *h1_run3
+h1_run5: *h1_run3
 
 f1_run3: &f1_run3
   0: { <<: *PT_LF10, irrad: 1.5e15, note: 17cm off beam axis }
