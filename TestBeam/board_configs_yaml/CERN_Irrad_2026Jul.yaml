@@ -59,9 +59,21 @@ h1_run3: &h1_run3
 h1_run4: *h1_run3
 h1_run5: *h1_run3
 
+h1_run6: &h1_run6
+  0: { <<: *PT_IH7,  HV: 530, irrad: 1.5e15, note: 17cm off beam axis }
+  1: { <<: *PT_IH11, HV: 530, irrad: 1.5e15, note: 17cm off beam axis }
+  2: { <<: *PT_IH12, HV: 530, irrad: 1.5e15, note: 17cm off beam axis }
+  3: { <<: *PT_IH13, HV: 0,   irrad: 1.5e15, note: 17cm off beam axis }
+
 f1_run3: &f1_run3
   0: { <<: *PT_LF10, irrad: 1.5e15, note: 17cm off beam axis }
   1: { <<: *PT_LF12, irrad: 1.5e15, note: 17cm off beam axis }
   2: { <<: *PT_LF17, irrad: 1.5e15, note: 17cm off beam axis }
   3: { <<: *PT_LF18, irrad: 1.5e15, note: 17cm off beam axis }
 f1_run4: *f1_run3
+
+f1_run5: &f1_run5
+  0: { <<: *PT_LF10, HV: 460, irrad: 1.5e15, note: 17cm off beam axis }
+  1: { <<: *PT_LF12, HV: 460, irrad: 1.5e15, note: 17cm off beam axis }
+  2: { <<: *PT_LF17, HV: 460, irrad: 1.5e15, note: 17cm off beam axis }
+  3: { <<: *PT_LF18, HV: 460, irrad: 1.5e15, note: 17cm off beam axis }
