@@ -1,4 +1,4 @@
-import argparse, re, warnings
+import argparse, re, sys, warnings
 
 import pandas as pd
 import numpy as np
@@ -103,52 +103,84 @@ def parse_filename_metadata(filename: str) -> dict:
             pixel_dict[full_role] = (int(row), int(col))
     return pixel_dict
 
-def process_group(input_dir: Path, output_dir: Path, args: argparse.Namespace):
+def process_single_boot_file(ifile: Path, excluded_role: str, args: argparse.Namespace) -> dict:
+    """
+    Processes one *_boot.parquet file and returns its contribution to the merged
+    result dict as a plain dict (one file = one row), or {} if there's nothing to
+    contribute. Built as a standalone dict rather than appending straight into the
+    caller's column-lists, so a failure partway through never leaves some columns
+    with more entries than others.
+    """
+    df = pd.read_parquet(ifile)
+    if df.empty:
+        return {}
+
+    pixel_dict = parse_filename_metadata(ifile.name)
+    boot_df = df.loc[df['is_bootstrap'] == True]
+    anchor_df = df.loc[df['is_bootstrap'] == False]
+
+    contribution = {}
+
+    if excluded_role in pixel_dict:
+        contribution[f'row_{excluded_role}'] = pixel_dict[excluded_role][0]
+        contribution[f'col_{excluded_role}'] = pixel_dict[excluded_role][1]
+
+    for col in boot_df.columns:
+        if col == 'is_bootstrap': continue
+
+        # FIT STEP
+        stats = perform_robust_unbinned_fit(boot_df[col], args.sigma_cut)
+
+        if col in pixel_dict:
+            contribution[f'row_{col}'] = pixel_dict[col][0]
+            contribution[f'col_{col}'] = pixel_dict[col][1]
+
+        # Standard Results
+        contribution[f'res_{col}'] = stats['mu']
+        contribution[f'err_{col}'] = stats['sigma']
+
+        # AUDIT METRICS
+        contribution[f'rel_error_{col}'] = stats['err_sigma']/stats['sigma']
+        contribution[f'red_chi2_{col}'] = stats['chi2_red']
+        contribution[f'div_{col}'] = stats['div']
+        contribution[f'fit_valid_{col}'] = stats['valid']
+
+    for col in anchor_df.columns:
+        if col == 'is_bootstrap': continue
+        contribution[f'single_shot_res_{col}'] = anchor_df[col].iloc[0]
+
+    return contribution
+
+def process_group(input_dir: Path, output_dir: Path, args: argparse.Namespace) -> int:
     files = natsorted(input_dir.glob('*_boot.parquet'))
-    if not files: return
+    if not files: return 0
 
     excluded_role = files[0].name.split('_')[1] if '_' in files[0].name else 'trig'
     boot_dict = defaultdict(list)
 
+    failures = 0
     for ifile in tqdm(files, desc=f"  Merging {input_dir.name}"):
-        df = pd.read_parquet(ifile)
-        if df.empty: continue
+        try:
+            contribution = process_single_boot_file(ifile, excluded_role, args)
+        except Exception as e:
+            print(f"  Warning: failed to process {ifile.name}: {e}")
+            failures += 1
+            continue
 
-        pixel_dict = parse_filename_metadata(ifile.name)
-        boot_df = df.loc[df['is_bootstrap'] == True]
-        anchor_df = df.loc[df['is_bootstrap'] == False]
+        if not contribution:
+            continue
 
-        if excluded_role in pixel_dict:
-            boot_dict[f'row_{excluded_role}'].append(pixel_dict[excluded_role][0])
-            boot_dict[f'col_{excluded_role}'].append(pixel_dict[excluded_role][1])
+        for key, value in contribution.items():
+            boot_dict[key].append(value)
 
-        for col in boot_df.columns:
-            if col == 'is_bootstrap': continue
-
-            # FIT STEP
-            stats = perform_robust_unbinned_fit(boot_df[col], args.sigma_cut)
-
-            if col in pixel_dict:
-                boot_dict[f'row_{col}'].append(pixel_dict[col][0])
-                boot_dict[f'col_{col}'].append(pixel_dict[col][1])
-
-            # Standard Results
-            boot_dict[f'res_{col}'].append(stats['mu'])
-            boot_dict[f'err_{col}'].append(stats['sigma'])
-
-            # AUDIT METRICS
-            boot_dict[f'rel_error_{col}'].append(stats['err_sigma']/stats['sigma'])
-            boot_dict[f'red_chi2_{col}'].append(stats['chi2_red'])
-            boot_dict[f'div_{col}'].append(stats['div'])
-            boot_dict[f'fit_valid_{col}'].append(stats['valid'])
-
-        for col in anchor_df.columns:
-            if col == 'is_bootstrap': continue
-            boot_dict[f'single_shot_res_{col}'].append(anchor_df[col].iloc[0])
+    if failures:
+        print(f"  Warning: {failures}/{len(files)} file(s) FAILED to process in {input_dir.name}")
 
     if boot_dict:
         out_path = output_dir / f"resolution_table{args.tag}.csv"
         pd.DataFrame(boot_dict).to_csv(out_path, index=False)
+
+    return failures
 
 # --- Main ---
 
@@ -160,13 +192,15 @@ def main():
     parser.add_argument('--tag', default='')
     args = parser.parse_args()
 
-    group_dirs = [Path(args.inputdir).resolve()]
+    input_dir = Path(args.inputdir).resolve()
 
     out_dir = Path(args.outputdir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    for group in group_dirs:
-        process_group(group, out_dir, args)
+    failures = process_group(input_dir, out_dir, args)
+
+    if failures:
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
