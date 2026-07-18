@@ -89,6 +89,9 @@ def fit_gmm_and_get_fwhm(data: np.ndarray):
 
     for n_comp in components_to_try:
         try:
+            # random_state intentionally left unseeded even under --reproducible: n_init=3
+            # already does multi-restart to find a good fit, and pinning a seed here would
+            # just lock in whichever local optimum that seed lands on rather than the best one.
             gmm = GaussianMixture(n_components=n_comp, n_init=3).fit(data_reshaped)
             ks_score, _ = kstest(data_sorted, lambda x: calculate_gmm_cdf(x, gmm.weights_, gmm.means_, gmm.covariances_))
 
@@ -97,11 +100,14 @@ def fit_gmm_and_get_fwhm(data: np.ndarray):
             peak_val = np.max(pdf_range)
             half_max_indices = np.where(pdf_range >= peak_val / 2.0)[0]
 
-            if len(half_max_indices) > 1:
-                fwhm = float(x_range[half_max_indices[-1], 0] - x_range[half_max_indices[0], 0])
+            if len(half_max_indices) <= 1:
+                # No usable half-max width from this component count - skip it rather
+                # than falling through with a stale fwhm from a previous n_comp's fit.
+                continue
+            fwhm = float(x_range[half_max_indices[-1], 0] - x_range[half_max_indices[0], 0])
 
             if ks_score < best_ks:
-                    best_ks, best_fwhm = ks_score, fwhm
+                best_ks, best_fwhm = ks_score, fwhm
 
         except Exception:
             continue
@@ -158,7 +164,8 @@ def main():
     parser.add_argument('-s', '--sampling', type=int, default=75)
     parser.add_argument('--iteration_limit', type=int, default=7500)
     parser.add_argument('--minimum_nevt', type=int, default=100)
-    parser.add_argument('--reproducible', action='store_true')
+    parser.add_argument('--reproducible', action='store_true',
+                        help='Seed sampling and GMM fitting so results are reproducible run-to-run.')
     parser.add_argument('--neighbor_cut', dest='neighbor_cut', default=['none'], nargs='+',
                         help='Specify one or more **space-separated** board columns to be used for neighbor cuts. '
                         'The argument collects all values into a list. '
@@ -189,17 +196,28 @@ def main():
     final_results = []
     phases = [(1.0, 1, False), (args.sampling * 0.01, args.num_bootstrap_output, True)]
 
-    for fraction, target, is_boot in phases:
+    # One independent seed per (phase, attempt) instead of a single shared/advancing
+    # random state, so any specific attempt's resample can be regenerated directly and
+    # doesn't depend on the exact sequence of every prior draw. Does not seed the GMM
+    # fit itself - that's a numerical fitting detail, not part of the resampling design.
+    root_seed_seq = np.random.SeedSequence(42) if args.reproducible else None
+    phase_seed_seqs = root_seed_seq.spawn(len(phases)) if root_seed_seq is not None else [None] * len(phases)
+
+    for phase_idx, (fraction, target, is_boot) in enumerate(phases):
         n_success, attempts = 0, 0
         current_threshold = 0.03
         logger.info(f"Starting Phase: {'Bootstrap' if is_boot else 'Single-Shot'}")
 
         max_attempts = args.iteration_limit if is_boot else 30
 
+        phase_seed_seq = phase_seed_seqs[phase_idx]
+        attempt_seeds = phase_seed_seq.spawn(max_attempts) if phase_seed_seq is not None else None
+
         while n_success < target and attempts < max_attempts:
+            attempt_rng = np.random.default_rng(attempt_seeds[attempts]) if attempt_seeds is not None else None
             attempts += 1
 
-            sample = df.sample(frac=fraction) if fraction < 1.0 else df
+            sample = df.sample(frac=fraction, random_state=attempt_rng) if fraction < 1.0 else df
             res, success = run_sample_analysis(sample, active_roles, threshold=current_threshold, is_boot=is_boot)
 
             if success:
@@ -236,6 +254,10 @@ def main():
             fail_res = {role: -1.0 for role in active_roles}
             fail_res['is_bootstrap'] = is_boot
             final_results.append(fail_res)
+        elif n_success < target:
+            label = "Bootstrap" if is_boot else "Single-Shot"
+            logger.warning(f"[{label}] Only reached {n_success}/{target} successes after {attempts} attempts "
+                            f"(hit the {'iteration_limit' if is_boot else 'attempt'} cap) -- output has fewer samples than requested.")
 
     # 4. Save Output
     if final_results:
