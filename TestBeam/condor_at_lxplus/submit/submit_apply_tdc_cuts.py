@@ -158,10 +158,6 @@ if __name__ == "__main__":
     parser.add_argument('-d', '--inputdir', required=True, dest='inputdir',
                         help='Mother directory containing "tracks" or "tracks_groupX" folders')
 
-    # Naming Logic (Retained for prefix/suffix customization of the output dir)
-    parser.add_argument('--prefix', default='', help='Add a prefix to the output folder name')
-    parser.add_argument('--suffix', default='', help='Add a suffix to the output folder name')
-
     # Config
     parser.add_argument('-c', '--config', required=True, help='YAML config file')
     parser.add_argument('-r', '--runName', required=True, help='Run name')
