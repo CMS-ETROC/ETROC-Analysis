@@ -7,7 +7,6 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from tqdm import tqdm
-from functools import reduce
 from typing import List, Dict, Tuple
 from ruamel.yaml import YAML
 
@@ -223,30 +222,6 @@ def generate_cal_table(df: pd.DataFrame, output_name: str) -> pd.DataFrame:
     cal_table.to_csv(f'{output_name}_cal_table.csv', index=False)
     return cal_table
 
-def filter_by_tdc(df: pd.DataFrame, cuts: Dict[int, List[int]]) -> pd.DataFrame:
-
-    """
-    Filters events based on TDC/ToA/ToT cuts.
-    """
-
-    # Create masks per board
-    masks = {}
-    for board, c in cuts.items():
-        # c = [cal_min, cal_max, toa_min, toa_max, tot_min, tot_max]
-        mask = (
-            (df['board'] == board) &
-            df['cal'].between(c[0], c[1]) &
-            df['toa'].between(c[2], c[3]) &
-            df['tot'].between(c[4], c[5])
-        )
-        # Store the valid events for this board
-        masks[board] = df.loc[mask, 'evt'].unique()
-
-    # Find intersection of events present in ALL required boards logic could be complex
-    # The original logic used intersection of unique events
-    common_events = reduce(np.intersect1d, list(masks.values()))
-    return df.loc[df['evt'].isin(common_events)].reset_index(drop=True)
-
 def check_spatial_alignment(df: pd.DataFrame, roles: Dict[str, int], max_diff_pixel: float) -> pd.Series:
 
     """
@@ -372,18 +347,7 @@ def main():
     df = reindex_events(df) # Renumber after filtering
     check_empty_df(df, "CAL deviation filtering")
 
-    # Define TDC Cuts (Moved from hardcoded logic)
-    # Default fallback logic from original code
     ids_to_process = sorted(roles.values())
-    tdc_cuts = {}
-    for idx in ids_to_process:
-        if idx == roles.get('trig'):
-            tdc_cuts[idx] = [0, 1100, 0, 1100, 50, 250]
-        else:
-            tdc_cuts[idx] = [0, 1100, 0, 1100, 0, 600]
-
-    df = filter_by_tdc(df, tdc_cuts)
-    check_empty_df(df, "TDC filtering")
 
     # Single Hit Selection
     # Ensure every required board has exactly 1 hit
