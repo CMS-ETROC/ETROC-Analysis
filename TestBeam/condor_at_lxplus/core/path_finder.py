@@ -92,8 +92,8 @@ def apply_geometric_transformation_matrix(df, board_ids, config):
         if f'col_{bid}' not in df.columns: continue
 
         # 1. Local coordinates (Pre-calculated vectors)
-        x_prime = (df[f'col_{bid}'] - 7.5) * 1.3
-        y_prime = (df[f'row_{bid}'] - 7.5) * 1.3
+        x_prime = (df[f'col_{bid}'] - PIXEL_OFFSET) * PIXEL_PITCH
+        y_prime = (df[f'row_{bid}'] - PIXEL_OFFSET) * PIXEL_PITCH
         z_prime = np.zeros_like(x_prime) # Boards are 2D planes at z=0 locally
 
         # 2. Get Transformation Parameters
@@ -128,9 +128,10 @@ def load_and_sample_data(file_paths: List[Path], sampling_rate: float) -> pd.Dat
     for f in tqdm(check_files):
         temp_df = pd.read_feather(f, columns=columns_to_read)
         # Simulate sampling
-        n = int(portion * temp_df['evt'].nunique())
-        if n > 0:
-            indices = np.random.choice(temp_df['evt'].unique(), n, replace=False)
+        unique_evts = temp_df['evt'].unique()
+        if len(unique_evts) > 0:
+            n = max(1, int(portion * len(unique_evts)))
+            indices = np.random.choice(unique_evts, n, replace=False)
             temp_df = temp_df.loc[temp_df['evt'].isin(indices)]
         sum_use += temp_df.memory_usage(deep=True).sum() / (1024**2)
 
@@ -148,11 +149,13 @@ def load_and_sample_data(file_paths: List[Path], sampling_rate: float) -> pd.Dat
     dfs = []
     for f in tqdm(file_paths, desc="Reading Files"):
         tmp_df = pd.read_feather(f, columns=columns_to_read)
-        n = int(portion * tmp_df['evt'].nunique())
-        if n > 0:
-            indices = np.random.choice(tmp_df['evt'].unique(), n, replace=False)
-            tmp_df = tmp_df.loc[tmp_df['evt'].isin(indices)]
-            dfs.append(tmp_df)
+        unique_evts = tmp_df['evt'].unique()
+        if len(unique_evts) == 0:
+            continue
+        n = max(1, int(portion * len(unique_evts)))
+        indices = np.random.choice(unique_evts, n, replace=False)
+        tmp_df = tmp_df.loc[tmp_df['evt'].isin(indices)]
+        dfs.append(tmp_df)
 
     if not dfs:
         logging.warning("No data loaded.")
@@ -179,15 +182,19 @@ def apply_masking(df: pd.DataFrame, mask_config_path: Path) -> pd.DataFrame:
     with open(mask_config_path, 'r') as f:
         mask_info = yaml.load(f)
 
-    for board_id, val in mask_info.get("board_ids", {}).items():
-        pixels = val.get('pixels', [])
-        if not pixels:
-            continue
+    bad_pixels = [
+        (board_id, r, c)
+        for board_id, val in mask_info.get("board_ids", {}).items()
+        for (r, c) in val.get('pixels', [])
+    ]
 
-        # Vectorized masking is faster than iterating
-        # Create a boolean mask
-        for (r, c) in pixels:
-             df = df[~((df['board'] == board_id) & (df['row'] == r) & (df['col'] == c))]
+    if not bad_pixels:
+        return df
+
+    # Single combined membership check instead of one filter pass per pixel
+    bad_index = pd.MultiIndex.from_tuples(bad_pixels, names=['board', 'row', 'col'])
+    row_keys = pd.MultiIndex.from_arrays([df['board'], df['row'], df['col']])
+    df = df[~row_keys.isin(bad_index)]
 
     return df.reset_index(drop=True)
 
@@ -325,7 +332,7 @@ def main():
     eos_base_dir = f'/eos/user/{username[0]}/{username}'
 
     files = list(Path(f'{eos_base_dir}/{args.path}').glob('loop*feather'))
-    if len(files) > 100: files = files[:100]
+    if len(files) > 100: files = random.sample(files, 100)
 
     if not files:
         logging.error("No input files found.")
@@ -355,9 +362,13 @@ def main():
     logging.info('Starting track finding...')
 
     # Filter based on CAL deviations
-    merged = pd.merge(df[['board', 'row', 'col', 'cal', 'evt']], cal_table, on=['board', 'row', 'col'])
-    valid_cal = abs(merged['cal'] - merged['cal_mode']) <= 3
-    df = df.loc[valid_cal].reset_index(drop=True)
+    # Carry the original row index through the merge explicitly rather than relying
+    # on the merge preserving df's row order/count, and use a left join so rows with
+    # no matching cal_table entry are excluded instead of silently shifting alignment.
+    keyed = df[['board', 'row', 'col', 'cal']].reset_index(names='orig_idx')
+    merged = keyed.merge(cal_table, on=['board', 'row', 'col'], how='left')
+    valid_cal = (abs(merged['cal'] - merged['cal_mode']) <= 3) & merged['cal_mode'].notna()
+    df = df.loc[merged.loc[valid_cal, 'orig_idx']].reset_index(drop=True)
     df = reindex_events(df) # Renumber after filtering
     check_empty_df(df, "CAL deviation filtering")
 
