@@ -2,7 +2,6 @@ import argparse
 import sys
 import logging
 import yaml
-from collections import defaultdict
 from pathlib import Path
 from functools import reduce
 from typing import List, Dict, Tuple, Optional
@@ -267,18 +266,21 @@ def main():
     logging.info(f"Calculated ToT cuts for Trig ({args.trigID}): {tot_cuts}")
 
     # 7. Process Tracks
-    track_pivots = defaultdict(pd.DataFrame)
+    track_pivots = []
     file_indicator = int(Path(args.inputfile).stem.split('_')[1])
 
     logging.info(f"Processing {len(track_df)} tracks...")
 
+    # Pull row_X/col_X once per track up front instead of repeated .iloc[itrack] lookups
+    pix_cols = [f'{axis}_{bid}' for bid in present_boards for axis in ('row', 'col')]
+    track_rows = track_df[pix_cols].to_dict('records')
+
     for itrack in tqdm(range(len(track_df))):
-        pix_dict = {}
-        for bid in present_boards:
-            pix_dict[bid] = [
-                track_df.iloc[itrack][f'row_{bid}'],
-                track_df.iloc[itrack][f'col_{bid}']
-            ]
+        row_data = track_rows[itrack]
+        pix_dict = {
+            bid: [row_data[f'row_{bid}'], row_data[f'col_{bid}']]
+            for bid in present_boards
+        }
 
         table = extract_events_for_track(
             hit_index=hit_index,  # Passing the index instead of the df
@@ -292,7 +294,7 @@ def main():
         if not table.empty:
             table['track_id'] = itrack
             table['file'] = file_indicator
-            track_pivots[itrack] = table
+            track_pivots.append(table)
 
     # 8. Save Output
     fname = Path(args.inputfile).stem
@@ -302,8 +304,7 @@ def main():
         logging.info(f"Concatenating {len(track_pivots)} tracks...")
 
         # 1. Flatten: Merge all small DataFrames into one massive DataFrame
-        # If track_pivots is a dict, values() gives the DFs.
-        final_df = pd.concat(track_pivots.values(), ignore_index=True)
+        final_df = pd.concat(track_pivots, ignore_index=True)
 
         # 2. Flatten MultiIndex Columns (Parquet doesn't like Tuple columns)
         # Your pivot table created columns like ('row', 0), ('row', 1).
