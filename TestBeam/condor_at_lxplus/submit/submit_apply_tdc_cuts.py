@@ -2,6 +2,8 @@ import argparse
 import getpass
 import subprocess
 import sys
+import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
@@ -106,8 +108,8 @@ def create_master_file_list(input_group_dir: Path, output_dir: Path) -> Optional
 
     Returns the path to the temporary list file.
     """
-    # 1. Identify all track files (e.g., .root files)
-    allowed_extensions = {'.pkl', '.parquet'}
+    # 1. Identify all track files
+    allowed_extensions = {'.parquet'}
     all_files = natsorted([
         f for f in input_group_dir.iterdir()
         if f.suffix in allowed_extensions
@@ -176,10 +178,9 @@ if __name__ == "__main__":
     parser.add_argument('--convert-first', action='store_true', help='Convert to time before cutting')
 
     # Condor options
-    parser.add_argument('--batch_size', default=10, dest='batch_size', help='Number of files per job')
+    parser.add_argument('--batch_size', type=int, default=10, dest='batch_size', help='Number of files per job')
     parser.add_argument('--condor_tag', dest='condor_tag', help='Tag appended to filenames to avoid collisions')
     parser.add_argument('--dryrun', action='store_true', help='Generate files but do not submit')
-    parser.add_argument('--resubmit', action='store_true', help='Kill matching jobs and re-submit them')
 
     args = parser.parse_args()
 
@@ -189,7 +190,15 @@ if __name__ == "__main__":
     # Determine the user's EOS base directory structure (e.g., /eos/user/j/jongho)
     # This assumes the input directory path is under this root.
     eos_base_dir = Path(f'/eos/user/{username[0]}/{username}')
-    run_append = f"{args.condor_tag}" if args.condor_tag else "subdir"
+
+    if args.condor_tag:
+        run_append = args.condor_tag
+    else:
+        # Auto-generate a unique tag rather than falling back to a shared bucket name -
+        # otherwise a second untagged submission can overwrite run_applyTDC_*.sh/file_list.txt
+        # while an earlier untagged submission is still queued and hasn't been dispatched yet.
+        run_append = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
+        print(f"No --condor_tag given; auto-generated tag '{run_append}' to avoid collisions with other submissions.")
 
     script_dir =  Path('.') / 'condor_scripts' / 'apply_TDC' / f'{run_append}'
     log_dir_base = Path ('.') / 'condor_logs' / 'apply_TDC' / f'{run_append}'
@@ -211,15 +220,11 @@ if __name__ == "__main__":
     print(f"\nScanning: {mother_dir}")
     print(f"Found {len(track_dirs)} track groups: {[d.name for d in track_dirs]}")
 
+    script_to_run = "apply_tdc_cuts.py"
+    failures = 0
+
     for input_group_dir in track_dirs:
         dir_name = input_group_dir.name
-
-        # Check the first file in the directory to determine the extension
-        first_file = next(input_group_dir.glob('*'), None)
-        if first_file and first_file.suffix == '.parquet':
-            script_to_run = "apply_tdc_cuts.py"
-        else:
-            script_to_run = "apply_tdc_cuts_pkl.py"
 
         python_cmd = build_python_command_args(args, script_to_run)
 
@@ -233,7 +238,7 @@ if __name__ == "__main__":
         master_list_path, num_files = list_info
 
         # Calculate number of jobs
-        batch_size = int(args.batch_size)
+        batch_size = args.batch_size
         num_of_jobs = (num_files + batch_size - 1) // batch_size # Ceiling division
 
         # Log directory (local)
@@ -258,6 +263,13 @@ if __name__ == "__main__":
         else:
             # Standard Submission
             print(f"    Submitting {jdl_file}...")
-            subprocess.run(['condor_submit', str(jdl_file)], check=True)
+            result = subprocess.run(['condor_submit', str(jdl_file)])
+            if result.returncode != 0:
+                print(f"    !!! ERROR: condor_submit failed for {dir_name} with exit code {result.returncode}.")
+                failures += 1
+
+    if failures:
+        print(f"\n{failures}/{len(track_dirs)} group(s) FAILED to submit.")
+        sys.exit(1)
 
     print("\nSubmission process complete.")
