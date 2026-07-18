@@ -125,6 +125,7 @@ def main():
     print(f"Groups: {[d.name for d in time_dirs]}\n")
 
     # 2. Loop through each group independently
+    total_failures = 0
     for group_dir in time_dirs:
         group_name = group_dir.name
         print(f">>> Processing Group: {group_name}")
@@ -143,6 +144,7 @@ def main():
         with ProcessPoolExecutor() as executor:
             futures = [executor.submit(process_single_file, f) for f in files]
 
+            group_failures = 0
             for future in tqdm(as_completed(futures), total=len(files), desc=f"    Extracting {group_name}"):
                 try:
                     result = future.result()
@@ -150,25 +152,28 @@ def main():
                         group_dict[key].extend(value)
                 except Exception as e:
                     print(f"Worker exception: {e}")
+                    group_failures += 1
+
+            if group_failures:
+                print(f"    Warning: {group_failures}/{len(files)} file(s) FAILED to process in {group_name}")
+            total_failures += group_failures
 
         # C. Save and Summarize Specific to this Group
         if group_dict:
             df = pd.DataFrame(data=group_dict)
             df.sort_values(by=['nevt'], ascending=False, inplace=True)
 
-            # --- Modified Filename Logic ---
-            # 1. dirname_part is already calculated (e.g., Angle30Deg_HV160_os10)
-            # 2. Determine suffix based on group name (e.g., time_group1 -> _group1)
+            # --- Filename Logic ---
+            # Join non-empty parts with '_' so segments never run together regardless
+            # of whether a group suffix and/or tag are present.
             group_match = re.search(r'(group\d+)', group_name)
+            name_parts = ["nevt", dirname_part]
             if group_match:
-                # If "group1" exists in the folder name, append "_group1"
-                group_suffix = f"_{group_match.group(1)}"
-            else:
-                # If folder is just "time", no suffix
-                group_suffix = ""
+                name_parts.append(group_match.group(1))
+            if args.tag:
+                name_parts.append(args.tag)
 
-            # Final name: nevt_<dirname_part>_<group_suffix>.csv
-            out_filename = f"nevt{group_suffix}{args.tag}.csv"
+            out_filename = "_".join(name_parts) + ".csv"
             final_out_path = output_path / out_filename
 
             print(f"    Saving to: {final_out_path}")
@@ -177,6 +182,10 @@ def main():
             generate_summary_table(df, group_name)
         else:
             print(f"    No data extracted for {group_name}.")
+
+    if total_failures:
+        print(f"\nDone WITH {total_failures} FAILED FILE(S) -- output may be incomplete.")
+        sys.exit(1)
 
     print("Done.")
 
