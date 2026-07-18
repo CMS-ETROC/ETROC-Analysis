@@ -1,7 +1,8 @@
-import argparse, sys, yaml, shutil, gc, getpass
+import argparse, sys, yaml, shutil, getpass, uuid
 
 import pandas as pd
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.dataset as ds
 import pyarrow.parquet as pq
 
@@ -45,11 +46,21 @@ def run_parallel_packing(flat_tasks):
                 results.append(f"Worker crashed: {e}")
 
     # Print any errors that occurred during the run
-    for r in results:
-        if "Error" in r or "crashed" in r:
-            print(r)
+    failures = [r for r in results if "Error" in r or "crashed" in r]
+    for r in failures:
+        print(r)
+    if failures:
+        print(f"--- Step 1: {len(failures)}/{len(flat_tasks)} packing task(s) FAILED ---")
+
+    return len(failures)
 
 # ------------------------------------
+# pyarrow's write_dataset() refuses to fan a single call out into more than 1024
+# partitions (its own hardcoded default). Real track counts here routinely exceed
+# that, so each master file's track_ids are written in chunks safely under the cap
+# instead of picking one large-enough-for-now number.
+_SCATTER_CHUNK_SIZE = 500
+
 def run_native_scatter(out_tmp_dir, num_partitions):
     print(f"\n--- Step 2: Native Scatter ---")
 
@@ -63,15 +74,20 @@ def run_native_scatter(out_tmp_dir, num_partitions):
 
         for m_file in tqdm(partition_masters, desc=f"Scattering Partition {p_idx+1}"):
             table = pq.read_table(m_file)
-            ds.write_dataset(
-                table,
-                base_dir=scatter_dir,
-                format="parquet",
-                partitioning=["track_id"],
-                existing_data_behavior="overwrite_or_ignore",
-                basename_template=f"{m_file.stem}_{{i}}.parquet",
-                use_threads=False,
-            )
+            track_ids = table.column('track_id').unique().to_pylist()
+
+            for chunk_idx in range(0, len(track_ids), _SCATTER_CHUNK_SIZE):
+                chunk_ids = track_ids[chunk_idx:chunk_idx + _SCATTER_CHUNK_SIZE]
+                chunk_table = table.filter(pc.field('track_id').isin(chunk_ids))
+                ds.write_dataset(
+                    chunk_table,
+                    base_dir=scatter_dir,
+                    format="parquet",
+                    partitioning=["track_id"],
+                    existing_data_behavior="overwrite_or_ignore",
+                    basename_template=f"{m_file.stem}_c{chunk_idx // _SCATTER_CHUNK_SIZE}_{{i}}.parquet",
+                    use_threads=False,
+                )
 
 # ------------------------------------
 def gather_track_worker(track_folder, out_dir, subdir, nicknames):
@@ -99,6 +115,7 @@ def gather_track_worker(track_folder, out_dir, subdir, nicknames):
 def run_parallel_gather(out_dir, out_tmp_dir, nicknames, num_partitions):
     print(f"\n--- Step 3: Parallel Unification (Gathering) ---")
 
+    total_failures = 0
     with ProcessPoolExecutor(max_workers=4) as executor:
         for p_idx in range(num_partitions):
             scatter_dir = out_tmp_dir / f"p{p_idx}"
@@ -125,11 +142,15 @@ def run_parallel_gather(out_dir, out_tmp_dir, nicknames, num_partitions):
             # Print any errors that occurred during processing
             for error_msg in results:
                 print(error_msg)
+            if results:
+                print(f"--- {subdir}: {len(results)}/{len(track_dirs)} track(s) FAILED to gather ---")
+            total_failures += len(results)
 
             # Clean up this partition's fragments to save /tmp space before moving to next partition
             shutil.rmtree(scatter_dir)
 
     print("Gathering and unification complete!")
+    return total_failures
 
 # ------------------------------------
 def load_config_and_roles(config_path: str, run_name: str) -> tuple[dict[int, str], dict[str, str]]:
@@ -220,9 +241,12 @@ def main():
         print('No input files found')
         sys.exit(1)
 
-    out_tmp_dir = Path('/tmp/reshape_events_to_tracks')
-    if out_tmp_dir.exists():
-        shutil.rmtree(out_tmp_dir)
+    # Unique per invocation and nested below a per-user wrapper folder, so concurrent
+    # runs (or retries) never collide or delete each other's in-flight data, and the
+    # end-of-run "remove empty parent" cleanup below can never reach /tmp itself.
+    tmp_root = Path(f'/tmp/reshape_events_to_tracks_{username}')
+    tmp_root.mkdir(parents=True, exist_ok=True)
+    out_tmp_dir = tmp_root / uuid.uuid4().hex
     out_tmp_dir.mkdir(parents=True, exist_ok=True)
 
     _, nickname_dict = load_config_and_roles(args.config, args.runName)
@@ -235,18 +259,23 @@ def main():
             file_list_str = [str(f) for f in batch_files]
             flat_tasks.append((p_idx, b_idx, file_list_str, out_tmp_dir))
 
-    run_parallel_packing(flat_tasks)
+    packing_failures = run_parallel_packing(flat_tasks)
     run_native_scatter(out_tmp_dir, args.partitions)
-    run_parallel_gather(final_output_dir, out_tmp_dir, nickname_dict, args.partitions)
+    gather_failures = run_parallel_gather(final_output_dir, out_tmp_dir, nickname_dict, args.partitions)
 
     print(f"\n--- Final Step: Cleaning up temporary files in {out_tmp_dir} ---")
     try:
         shutil.rmtree(out_tmp_dir)
-        # Also remove the 'tmp' parent folder if it's now empty
+        # Also remove this run's per-user wrapper folder if it's now empty
         if out_tmp_dir.parent.exists() and not any(out_tmp_dir.parent.iterdir()):
             out_tmp_dir.parent.rmdir()
     except Exception as e:
         print(f"Warning: Cleanup failed: {e}")
+
+    total_failures = packing_failures + gather_failures
+    if total_failures:
+        print(f"\nReshaping FINISHED WITH {total_failures} FAILED TASK(S) -- output is incomplete.")
+        sys.exit(1)
 
     print("\nReshaping Complete!")
 
