@@ -116,7 +116,7 @@ def determine_tot_cut_range_for_trig(
 
     median = clean_tot.median()
     mad = (clean_tot - median).abs().median()
-    half_width = 5 * 1.4826 * mad
+    half_width = 3 * 1.4826 * mad
 
     return [median - half_width, median + half_width]
 
