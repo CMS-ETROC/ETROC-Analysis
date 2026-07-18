@@ -2,6 +2,8 @@ import argparse
 import subprocess
 import sys
 import re, getpass
+import uuid
+from datetime import datetime
 from pathlib import Path
 from jinja2 import Template
 from natsort import natsorted
@@ -83,7 +85,7 @@ def create_submission_files(
     Generates the input list (stem), bash script, and JDL file.
     """
 
-    master_list_file_name = f'input_list.txt'
+    master_list_file_name = f'input_list{unique_tag}.txt'
     input_list_path = paths['scripts'] / master_list_file_name
     if input_list_path.exists():
         input_list_path.unlink()
@@ -118,7 +120,7 @@ def create_submission_files(
             f.write(f"{file_path.stem}\n")
 
     # Generate Bash Script
-    bash_script_name = f'run_bootstrap.sh'
+    bash_script_name = f'run_bootstrap{unique_tag}.sh'
     command = build_python_command(args)
 
     bash_content = Template(BASH_TEMPLATE).render({
@@ -144,7 +146,7 @@ def create_submission_files(
         'ext': ext                  # Pass the extension to Jinja
     })
 
-    jdl_path = paths['scripts'] / f'condor_bootstrap.jdl'
+    jdl_path = paths['scripts'] / f'condor_bootstrap{unique_tag}.jdl'
     with open(jdl_path, 'w') as f:
         f.write(jdl_content)
 
@@ -176,8 +178,6 @@ if __name__ == "__main__":
 
     # Execution Modes
     parser.add_argument('--dryrun', action='store_true')
-    parser.add_argument('--resubmit', action='store_true', help='Kill & Rerun active jobs')
-    parser.add_argument('--resubmit_with_stderr', action='store_true', help='Rerun failed jobs')
 
     args = parser.parse_args()
 
@@ -212,7 +212,14 @@ if __name__ == "__main__":
     print(f"Found {len(time_dirs)} groups: {[d.name for d in time_dirs]}")
 
     # --- 2. Setup Base Paths ---
-    run_append = f"{args.condor_tag}" if args.condor_tag else "subdir"
+    if args.condor_tag:
+        run_append = args.condor_tag
+    else:
+        # Auto-generate a unique tag rather than falling back to a shared bucket name -
+        # otherwise a second untagged submission can overwrite this run's scripts/logs
+        # while an earlier untagged submission is still queued and hasn't been dispatched yet.
+        run_append = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
+        print(f"No --condor_tag given; auto-generated tag '{run_append}' to avoid collisions with other submissions.")
 
     # Only script paths are global; Output/Log paths are calculated per group
     # Note: Using relative paths here to keep JDL portable
@@ -229,6 +236,7 @@ if __name__ == "__main__":
         sys.exit(f"Error: Worker script '{WORKER_SCRIPT_NAME}' not found.")
 
     # --- 3. Process Each Group ---
+    failures = 0
     for group_dir in time_dirs:
         group_name = group_dir.name
 
@@ -242,7 +250,7 @@ if __name__ == "__main__":
         # 2. Log Directory: condor_logs/.../time_group1
         group_log_dir = paths['logs'] / group_name
 
-        if not (args.dryrun or args.resubmit or args.resubmit_with_stderr):
+        if not args.dryrun:
             try:
                 group_out_dir.mkdir(parents=True, exist_ok=True)
                 group_log_dir.mkdir(parents=True, exist_ok=True)
@@ -250,7 +258,7 @@ if __name__ == "__main__":
                 print(f"Error creating directories for {group_name}: {e}")
                 continue
 
-        unique_group_tag = f"_{group_name}"
+        unique_group_tag = group_suffix
 
         print(f"\n>>> Processing Group: {group_name}")
         print(f"    Out: {group_out_dir}")
@@ -271,8 +279,15 @@ if __name__ == "__main__":
         else:
             if list_file.stat().st_size > 0:
                 print(f"    Submitting jobs...")
-                subprocess.run(['condor_submit', str(jdl)])
+                result = subprocess.run(['condor_submit', str(jdl)])
+                if result.returncode != 0:
+                    print(f"    !!! ERROR: condor_submit failed for {group_name} with exit code {result.returncode}.")
+                    failures += 1
             else:
                 print("    Input list empty.")
+
+    if failures:
+        print(f"\n{failures}/{len(time_dirs)} group(s) FAILED to submit.")
+        sys.exit(1)
 
     print("\nDone.")
