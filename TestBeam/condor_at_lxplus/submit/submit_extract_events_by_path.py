@@ -2,6 +2,8 @@ import argparse
 import getpass
 import subprocess
 import sys, yaml
+import uuid
+from datetime import datetime
 
 from pathlib import Path
 from jinja2 import Template
@@ -93,7 +95,7 @@ def create_submission_files(args, trig_id, paths, eos_base):
     # 3. Pass Path objects directly to Template
     bash_content = Template(BASH_TEMPLATE).render(
         runname=args.runName,
-        track=track_path,
+        track=track_path.name,
         cal_table=cal_path.name,
         trigID=trig_id,
         search_method=args.search_method,
@@ -140,14 +142,21 @@ if __name__ == "__main__":
                         help="Search method for neighbor hit checking, default is 'none'. possible argument: 'row_only', 'col_only', 'cross', 'square'")
     parser.add_argument('--condor_tag', dest='condor_tag', help='Tag appended to filenames to avoid collisions')
     parser.add_argument('--dryrun', action='store_true', help='Generate files but do not submit')
-    parser.add_argument('--resubmit', action='store_true', help='Kill matching jobs and re-submit them')
 
     args = parser.parse_args()
 
     # --- Setup Environments ---
     username = getpass.getuser()
     eos_base_dir = f'/eos/user/{username[0]}/{username}'
-    run_append = f"{args.condor_tag}" if args.condor_tag else "subdir"
+
+    if args.condor_tag:
+        run_append = args.condor_tag
+    else:
+        # Auto-generate a unique tag rather than falling back to a shared bucket name -
+        # otherwise a second untagged submission can overwrite run_extract_events.sh/input_list.txt
+        # while an earlier untagged submission is still queued and hasn't been dispatched yet.
+        run_append = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
+        print(f"No --condor_tag given; auto-generated tag '{run_append}' to avoid collisions with other submissions.")
 
     # Directory setup
     paths = {
@@ -198,6 +207,9 @@ if __name__ == "__main__":
     else:
         # Standard Submission
         if list_file.stat().st_size > 0:
-            subprocess.run(['condor_submit', str(jdl_file)])
+            result = subprocess.run(['condor_submit', str(jdl_file)])
+            if result.returncode != 0:
+                print(f"!!! ERROR: condor_submit failed with exit code {result.returncode}.")
+                sys.exit(1)
         else:
             print("No input files found in directory. Nothing submitted.")
