@@ -284,11 +284,10 @@ def create_tamalero_decoder(fmt_dict):
         # O(1) LOOKUP & EXECUTION: Instantly generate the dictionary
         res = extractors[data_type](val)
 
-        res['raw'] = hex(val & 0xFFFFFFFFFF)
-        res['raw_full'] = hex(val)
-        res['meta'] = hex((val >> 40) & 0xFFFFFF)
-
         if not quiet:
+            res['raw'] = hex(val & 0xFFFFFFFFFF)
+            res['raw_full'] = hex(val)
+            res['meta'] = hex((val >> 40) & 0xFFFFFF)
             print(f"Found data of type {data_type}:", res)
 
         return data_type, res
@@ -336,6 +335,7 @@ def extract_event_data(unpacked_data_list):
     event_counter = -1
     current_bcid = -1
     current_l1acounter = -1
+    dropped_packets = 0
 
     for record_type, record_data in unpacked_data_list:
         if not record_type or not record_data:
@@ -346,6 +346,9 @@ def extract_event_data(unpacked_data_list):
             continue
 
         if record_type == 'header':
+            if elink in pending_packets:
+                # Previous header on this elink never got a matching trailer; its data is lost.
+                dropped_packets += 1
             pending_packets[elink] = {'header': record_data, 'data': []}
 
         elif record_type == 'data':
@@ -365,11 +368,8 @@ def extract_event_data(unpacked_data_list):
                 # Event counter logic
                 if packet_bcid != current_bcid and packet_l1acounter != current_l1acounter:
                     event_counter += 1
-                    current_bcid = packet_bcid
-                    current_l1acounter = packet_l1acounter
-                else:
-                    current_bcid = packet_bcid
-                    current_l1acounter = packet_l1acounter
+                current_bcid = packet_bcid
+                current_l1acounter = packet_l1acounter
 
                 # 1. POPULATE HIT COLUMNS
                 # If packet['data'] is empty, this loop safely skips and nothing is appended to hit_cols
@@ -400,6 +400,9 @@ def extract_event_data(unpacked_data_list):
                 status_cols['status'].append(record_data.get('status'))
                 status_cols['hits'].append(record_data.get('hits'))
                 status_cols['crc'].append(record_data.get('crc'))
+
+    if dropped_packets:
+        print(f"  -> Warning: {dropped_packets} packet(s) dropped (header without matching trailer).")
 
     return hit_cols, status_cols
 
