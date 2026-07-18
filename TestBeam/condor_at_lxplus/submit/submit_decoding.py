@@ -6,6 +6,8 @@ import argparse
 import subprocess
 import sys
 import getpass
+import uuid
+from datetime import datetime
 
 def load_bash_template(input_dir_path):
     bash_template = """#!/bin/bash
@@ -149,7 +151,11 @@ if __name__ == "__main__":
 
     tag_for_condor = args.condor_tag
     if tag_for_condor is None:
-        runAppend = "subdir"
+        # Auto-generate a unique tag rather than falling back to a shared bucket name -
+        # otherwise a second untagged submission can overwrite run_decode.sh/input_list.txt
+        # while an earlier untagged submission is still queued and hasn't been dispatched yet.
+        runAppend = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
+        print(f"No --condor_tag given; auto-generated tag '{runAppend}' to avoid collisions with other submissions.")
     else:
         runAppend = tag_for_condor
 
@@ -167,4 +173,7 @@ if __name__ == "__main__":
         print(f"[Dry Run] Input: {condor_scripts_dir / 'input_list.txt'}")
 
     else:
-        subprocess.run(['condor_submit', f'{condor_scripts_dir}/condor_decoding.jdl'])
+        result = subprocess.run(['condor_submit', f'{condor_scripts_dir}/condor_decoding.jdl'])
+        if result.returncode != 0:
+            print(f"!!! ERROR: condor_submit failed with exit code {result.returncode}.")
+            sys.exit(1)
