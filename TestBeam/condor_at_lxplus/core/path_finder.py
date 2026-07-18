@@ -447,8 +447,9 @@ def main():
 
             center_y = round(float(0.5*(max_bin_end+max_bin_start)), 2)
 
-            full_config[args.runName][bid]['transformation']['translation']['x'] += -center_x
-            full_config[args.runName][bid]['transformation']['translation']['y'] += -center_y
+            translation = full_config[args.runName][bid].setdefault('transformation', {}).setdefault('translation', {'x': 0.0, 'y': 0.0, 'z': 0.0})
+            translation['x'] = translation.get('x', 0.0) - center_x
+            translation['y'] = translation.get('y', 0.0) - center_y
 
         # Save using the same yaml instance to keep the formatting rules
         with open(args.config, 'w') as f:
