@@ -59,7 +59,9 @@ def apply_correlation_cut(
         # Center the mask on the median, not zero, for robustness
         mask &= (np.abs(dist - median_val) < limit)
 
-    return df.loc[mask].reset_index(drop=True)
+    # Preserve the caller's original row labels (no reset) so downstream code can
+    # reliably map filtered rows back to the pre-cut dataframe by index.
+    return df.loc[mask]
 
 def convert_to_time(df: pd.DataFrame, all_roles: dict[str, int]) -> pd.DataFrame:
     """Calculates physical time units, ensuring bin_size is calculated per-file."""
@@ -169,7 +171,9 @@ def apply_raw_tdc_cuts(
         if not sub_cut.empty:
             chunks.append(sub_cut)
 
-    return pd.concat(chunks, ignore_index=True) if chunks else pd.DataFrame()
+    # ignore_index=False: keep original row labels so downstream code can map
+    # filtered rows back to the pre-cut dataframe by index.
+    return pd.concat(chunks) if chunks else pd.DataFrame()
 
 def apply_time_domain_cuts(
     df: pd.DataFrame,
@@ -197,7 +201,8 @@ def apply_time_domain_cuts(
         low, high = get_tot_range(tot_col)
         mask &= df[col].between(low, high)
 
-    df = df.loc[mask].reset_index(drop=True)
+    # No reset here either: keep original row labels intact through the whole cut chain.
+    df = df.loc[mask]
 
     return apply_correlation_cut(df, args.distance_factor, cut_roles)
 
@@ -231,12 +236,16 @@ def process_single_file(
         if args.convert_first:
             time_df = convert_to_time(df, valid_all_roles)
             final_df = apply_time_domain_cuts(time_df, valid_cut_roles, args)
-            raw_df_to_use = df.loc[final_df.index] if not final_df.empty else pd.DataFrame()
         else:
             cut_df = apply_raw_tdc_cuts(df, valid_all_roles, valid_cut_roles, args)
             correlated_df = apply_correlation_cut(cut_df, args.distance_factor, valid_cut_roles)
             final_df = convert_to_time(correlated_df, valid_all_roles)
-            raw_df_to_use = cut_df
+
+        # Neither cut path resets the index anywhere upstream, so final_df.index is
+        # always a genuine subset of the original df's row labels - this reliably
+        # fetches HasNeighbor_* for the SAME physical rows that survived the cuts,
+        # regardless of which branch produced final_df.
+        raw_df_to_use = df.loc[final_df.index] if not final_df.empty else pd.DataFrame()
 
         # 2. Add Neighbor tracking
         if not final_df.empty and not raw_df_to_use.empty:
@@ -248,6 +257,8 @@ def process_single_file(
             # Track-level neighbor flag
             neighbor_columns = [col for col in final_df.columns if col.startswith('HasNeighbor')]
             final_df['trackNeighbor'] = final_df[neighbor_columns].any(axis=1)
+
+            final_df = final_df.reset_index(drop=True)  # tidy index for the saved output
 
             prefix = f'exclude_{args.exclude_role}_'
             out_name = f"{prefix}{filepath.stem}.parquet"
@@ -301,8 +312,16 @@ def main():
         sys.exit(0)
 
     # 3. Process
+    failures = 0
     for f in tqdm(files, desc="Processing Tracks"):
-        print(process_single_file(f, args, all_roles, cut_roles))
+        result = process_single_file(f, args, all_roles, cut_roles)
+        print(result)
+        if result.startswith("Error"):
+            failures += 1
+
+    if failures:
+        print(f"\n{failures}/{len(files)} file(s) FAILED to process.")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
