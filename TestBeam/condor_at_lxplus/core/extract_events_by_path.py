@@ -9,7 +9,6 @@ from typing import List, Dict, Tuple, Optional
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
-from scipy.signal import argrelextrema
 
 # --- Configuration & Logging ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%H:%M:%S')
@@ -91,33 +90,45 @@ def find_neighbor_hits(
     return final_df
 
 
-def determine_tot_cut_range_for_trig(input_df: pd.DataFrame, trig_id: int) -> List[float]:
-    """Calculates Time-over-Threshold (ToT) cuts based on the valley after the first peak."""
-    trig_tot = input_df.loc[input_df['board'] == trig_id, 'tot'].reset_index(drop=True)
+def determine_tot_cut_range_for_trig(
+        input_df: pd.DataFrame,
+        trig_id: int,
+        cal_map: Dict[Tuple[int, int, int], float]
+) -> List[float]:
+    """
+    Applies the per-pixel CAL-mode cut to the trigger board's hits first (the same cut
+    tdc_event_selection uses downstream), which removes the wrong-CAL-code population that
+    used to masquerade as a second ToT peak. The remaining CAL-clean ToT distribution is a
+    single peak that widens under irradiation, so the cut range is a robust median +/- k*MAD
+    window (1.4826*MAD approximates a Gaussian sigma) rather than any peak/valley search.
+    """
+    trig_df = input_df.loc[input_df['board'] == trig_id, ['row', 'col', 'cal', 'tot']]
 
-    counts, bin_centers = np.histogram(trig_tot, bins=128, range=(0, 512))
-    first_peak_index = np.argmax(counts)
+    cal_mode = pd.Series(
+        [cal_map.get((trig_id, r, c)) for r, c in zip(trig_df['row'], trig_df['col'])],
+        index=trig_df.index, dtype=float
+    )
+    clean_tot = trig_df.loc[trig_df['cal'].between(cal_mode - 3, cal_mode + 3), 'tot']
 
-    minima_indices = argrelextrema(counts, np.less)[0]
-    valley_candidates = minima_indices[minima_indices > first_peak_index]
+    if clean_tot.empty:
+        logging.warning(f"No trig (board {trig_id}) hits passed the CAL cut; falling back to unfiltered ToT quantiles.")
+        return [trig_df['tot'].quantile(0.02), trig_df['tot'].quantile(0.98)]
 
-    if len(valley_candidates) > 0:
-        valley_index = valley_candidates[0]
-        filtered_tot = trig_tot.loc[trig_tot < bin_centers[valley_index]]
-        return [filtered_tot.quantile(0.02), filtered_tot.quantile(0.98)]
-    else:
-        return [trig_tot.quantile(0.03), trig_tot.quantile(0.96)]
+    median = clean_tot.median()
+    mad = (clean_tot - median).abs().median()
+    half_width = 5 * 1.4826 * mad
+
+    return [median - half_width, median + half_width]
 
 def tdc_event_selection(input_df: pd.DataFrame, tdc_cuts_dict: dict) -> pd.DataFrame:
-    """Filters events based on calibration, ToA, and ToT cuts."""
+    """Filters events based on calibration and ToT cuts."""
     masks = {}
     for board, cuts in tdc_cuts_dict.items():
-        # cuts = [cal_min, cal_max, toa_min, toa_max, tot_min, tot_max]
+        # cuts = [cal_min, cal_max, tot_min, tot_max]
         mask = (
             (input_df['board'] == board) &
             input_df['cal'].between(cuts[0], cuts[1]) &
-            input_df['toa'].between(cuts[2], cuts[3]) &
-            input_df['tot'].between(cuts[4], cuts[5])
+            input_df['tot'].between(cuts[2], cuts[3])
         )
         masks[board] = input_df.loc[mask, 'evt'].unique()
 
@@ -163,9 +174,9 @@ def extract_events_for_track(
         if cal_mode is None: return pd.DataFrame()
 
         if bid == trig_id:
-            tdc_cuts[bid] = [cal_mode - 3, cal_mode + 3, 0, 1100, tot_cuts[0], tot_cuts[1]]
+            tdc_cuts[bid] = [cal_mode - 3, cal_mode + 3, tot_cuts[0], tot_cuts[1]]
         else:
-            tdc_cuts[bid] = [cal_mode - 3, cal_mode + 3, 0, 1100, 0, 600]
+            tdc_cuts[bid] = [cal_mode - 3, cal_mode + 3, 0, 600]
 
     # 3. Apply TDC filtering
     track_tmp_df = tdc_event_selection(track_tmp_df, tdc_cuts)
@@ -262,7 +273,7 @@ def main():
     hit_index = run_df.groupby(['board', 'row', 'col'])
 
     # 6. Calculate Trigger Cuts
-    tot_cuts = determine_tot_cut_range_for_trig(run_df, args.trigID)
+    tot_cuts = determine_tot_cut_range_for_trig(run_df, args.trigID, cal_map)
     logging.info(f"Calculated ToT cuts for Trig ({args.trigID}): {tot_cuts}")
 
     # 7. Process Tracks
