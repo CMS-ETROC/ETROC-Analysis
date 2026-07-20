@@ -69,10 +69,10 @@ h1_run8: *h1_run6
 h1_run9: *h1_run6
 
 h1_run10: &h1_run10
-  0: { <<: *PT_IH7,  HV: 550, role: trig,  irrad: 1.5e15, note: 17cm off beam axis }
+  0: { <<: *PT_IH7,  HV: 550, role: extra,  irrad: 1.5e15, note: 17cm off beam axis }
   1: { <<: *PT_IH11, HV: 550, role: dut,   irrad: 1.5e15, note: 17cm off beam axis }
   2: { <<: *PT_IH12, HV: 550, role: ref,   irrad: 1.5e15, note: 17cm off beam axis }
-  3: { <<: *PT_IH13, HV: 550, role: extra, irrad: 1.5e15, note: 17cm off beam axis }
+  3: { <<: *PT_IH13, HV: 550, role: trig, irrad: 1.5e15, note: 17cm off beam axis }
 
 f1_run3: &f1_run3
   0: { <<: *PT_LF10, irrad: 1.5e15, note: 17cm off beam axis }
