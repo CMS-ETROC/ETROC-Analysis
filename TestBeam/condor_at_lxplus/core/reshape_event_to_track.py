@@ -1,4 +1,4 @@
-import argparse, sys, yaml, shutil, getpass, uuid
+import argparse, sys, yaml, shutil, getpass, uuid, tempfile
 
 import pandas as pd
 import pyarrow as pa
@@ -243,8 +243,10 @@ def main():
 
     # Unique per invocation and nested below a per-user wrapper folder, so concurrent
     # runs (or retries) never collide or delete each other's in-flight data, and the
-    # end-of-run "remove empty parent" cleanup below can never reach /tmp itself.
-    tmp_root = Path(f'/tmp/reshape_events_to_tracks_{username}')
+    # end-of-run "remove empty parent" cleanup below can never reach the system temp
+    # dir itself. Uses tempfile.gettempdir() (honors $TMPDIR) rather than a hardcoded
+    # /tmp, since shared lxplus nodes often expect scratch space to go elsewhere.
+    tmp_root = Path(tempfile.gettempdir()) / f'reshape_events_to_tracks_{username}'
     tmp_root.mkdir(parents=True, exist_ok=True)
     out_tmp_dir = tmp_root / uuid.uuid4().hex
     out_tmp_dir.mkdir(parents=True, exist_ok=True)
