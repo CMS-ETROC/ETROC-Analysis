@@ -11,6 +11,8 @@ from pathlib import Path
 from natsort import natsorted
 from tqdm import tqdm
 
+import io_utils
+
 # ------------------------------------
 def packer_worker(p_idx, b_idx, file_list, out_tmp_dir):
     try:
@@ -232,10 +234,10 @@ def main():
 
     # --- Setup Environments ---
     username = getpass.getuser()
-    eos_base_dir = f'/eos/user/{username[0]}/{username}'
+    eos_base_dir = io_utils.eos_base_dir(username)
 
-    all_files = natsorted(Path(f'{eos_base_dir}/{args.dirname}').glob(args.file_pattern))
-    final_output_dir = f'{eos_base_dir}/{args.outdir}'
+    all_files = natsorted((eos_base_dir / args.dirname).glob(args.file_pattern))
+    final_output_dir = str(eos_base_dir / args.outdir)
 
     if not all_files:
         print('No input files found')

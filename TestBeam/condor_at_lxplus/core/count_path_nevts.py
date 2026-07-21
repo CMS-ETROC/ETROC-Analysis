@@ -12,6 +12,8 @@ from collections import defaultdict
 from tqdm import tqdm
 from tabulate import tabulate
 
+import io_utils
+
 # --- Configuration ---
 NICKNAME_DICT = {
     't': 'trig',
@@ -94,9 +96,9 @@ def main():
 
     # --- Setup Environments ---
     username = getpass.getuser()
-    eos_base_dir = f'/eos/user/{username[0]}/{username}'
+    eos_base_dir = io_utils.eos_base_dir(username)
 
-    mother_dir = Path(f'{eos_base_dir}/{args.inputdir}')
+    mother_dir = eos_base_dir / args.inputdir
     output_path = Path(args.outputdir)
     output_path.mkdir(exist_ok=True, parents=True)
 
@@ -171,7 +173,7 @@ def main():
             final_out_path = output_path / out_filename
 
             print(f"    Saving to: {final_out_path}")
-            df.to_csv(final_out_path, index=False)
+            io_utils.write_csv(df, final_out_path, index=False)
 
             generate_summary_table(df, group_name)
         else:

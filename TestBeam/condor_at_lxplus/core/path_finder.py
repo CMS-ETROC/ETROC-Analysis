@@ -10,6 +10,8 @@ from tqdm import tqdm
 from typing import List, Dict, Tuple
 from ruamel.yaml import YAML
 
+import io_utils
+
 # Configure Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 warnings.filterwarnings("ignore")
@@ -219,7 +221,7 @@ def generate_cal_table(df: pd.DataFrame, output_name: str) -> pd.DataFrame:
     cal_table.columns = ['row', 'col', 'board', 'cal_mode']
 
     # Save
-    cal_table.to_csv(f'{output_name}_cal_table.csv', index=False)
+    io_utils.write_csv(cal_table, f'{output_name}_cal_table.csv', index=False)
     return cal_table
 
 def check_spatial_alignment(df: pd.DataFrame, roles: Dict[str, int], max_diff_pixel: float) -> pd.Series:
@@ -304,9 +306,9 @@ def main():
 
     # --- Setup Environments ---
     username = getpass.getuser()
-    eos_base_dir = f'/eos/user/{username[0]}/{username}'
+    eos_base_dir = io_utils.eos_base_dir(username)
 
-    files = list(Path(f'{eos_base_dir}/{args.path}').glob('loop*feather'))
+    files = list((eos_base_dir / args.path).glob('loop*feather'))
     if len(files) > 100: files = random.sample(files, 100)
 
     if not files:
@@ -432,7 +434,7 @@ def main():
     final_tracks[coord_cols] = final_tracks[coord_cols].round(2)
 
     output_file = f'{args.track_label}_tracks.csv'
-    final_tracks.to_csv(output_file, index=False)
+    io_utils.write_csv(final_tracks, output_file, index=False)
     logging.info(f"Done. Tracks saved to {output_file}")
 
 if __name__ == "__main__":

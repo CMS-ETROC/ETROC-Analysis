@@ -10,6 +10,8 @@ from tqdm import tqdm
 from scipy.stats import norm
 from iminuit import Minuit
 
+import io_utils
+
 # --- Configuration ---
 warnings.filterwarnings("ignore")
 
@@ -178,7 +180,7 @@ def process_group(input_dir: Path, output_dir: Path, args: argparse.Namespace) -
 
     if boot_dict:
         out_path = output_dir / f"resolution_table{args.tag}.csv"
-        pd.DataFrame(boot_dict).to_csv(out_path, index=False)
+        io_utils.write_csv(pd.DataFrame(boot_dict), out_path, index=False)
 
     return failures
 
