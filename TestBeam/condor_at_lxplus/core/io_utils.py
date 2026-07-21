@@ -17,7 +17,7 @@ checkout) reach it with a small path bootstrap first:
 import getpass
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, Union
 
@@ -84,7 +84,7 @@ def record_manifest(manifest_path: Union[str, Path], **fields) -> None:
     from many condor tasks writing into the same manifest path, since each
     call is a single append of one line.
     """
-    fields.setdefault('timestamp', datetime.now(timezone.utc).isoformat())
+    fields.setdefault('timestamp', datetime.now().isoformat())
     manifest_path = Path(manifest_path)
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     with open(manifest_path, 'a') as f:
