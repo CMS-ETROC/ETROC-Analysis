@@ -266,14 +266,6 @@ def process_single_file(
             out_name = f"{prefix}{filepath.stem}.parquet"
             io_utils.write_parquet(final_df, out_name, compression='lz4')
 
-            if args.manifest:
-                io_utils.record_manifest(
-                    args.manifest,
-                    input=filepath.name,
-                    output=out_name,
-                    rows=len(final_df),
-                )
-
             return f"Saved: {out_name}"
         else:
             return f"Filtered to Empty: {filepath.name}"
@@ -298,9 +290,6 @@ def main():
 
     parser.add_argument('--exclude_role', default='trig')
     parser.add_argument('--convert-first', action='store_true')
-    parser.add_argument('--manifest', default=None, dest='manifest',
-                        help="Path to a JSON-lines file to append one record per saved output "
-                             "file to (input file, output file, row count). Skipped if omitted.")
 
     args = parser.parse_args()
 

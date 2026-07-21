@@ -16,9 +16,7 @@ WORKER_SCRIPT_NAME = "bootstrap.py"
 BASH_TEMPLATE = """#!/bin/bash
 
 # $1: The full EOS path of the input file (e.g., /path/to/time/data_01.parquet)
-# $2: The file's stem (e.g., data_01), used to name this task's manifest uniquely
 INPUT_FILE_EOS="$1"
-STEM="$2"
 
 # Load python environment from work node
 source /cvmfs/sft.cern.ch/lcg/views/LCG_104a/x86_64-el9-gcc13-opt/setup.sh
@@ -31,9 +29,8 @@ echo "Transferring: $INPUT_FILE_EOS"
 xrdcp root://eosuser.cern.ch/$INPUT_FILE_EOS ./$LOCAL_FILENAME
 
 # 3. Construct and Run Bootstrap Analysis
-mkdir -p manifests
-echo "\nRunning: {{ command }} -f $LOCAL_FILENAME --manifest manifests/manifest_${STEM}.jsonl"
-{{ command }} -f $LOCAL_FILENAME --manifest manifests/manifest_${STEM}.jsonl
+echo "\nRunning: {{ command }} -f $LOCAL_FILENAME"
+{{ command }} -f $LOCAL_FILENAME
 
 # 4. Cleanup: Delete the local copy of the input file
 if [ -f $LOCAL_FILENAME ]; then
@@ -48,8 +45,8 @@ executable            = {{ script_dir }}/{{ bash_script_name }}
 should_Transfer_Files = YES
 whenToTransferOutput  = ON_EXIT
 transfer_Input_Files  = {{ transfer_files }}
-Arguments             = {{ logical_dir }}/$(stem){{ ext }} $(stem)
-TransferOutputRemaps  = "$(stem)_boot.parquet={{ out_dir }}/$(stem)_boot.parquet;manifests/manifest_$(stem).jsonl={{ out_dir }}/manifests/manifest_$(stem).jsonl"
+Arguments             = {{ logical_dir }}/$(stem){{ ext }}
+TransferOutputRemaps  = "$(stem)_boot.parquet={{ out_dir }}/$(stem)_boot.parquet"
 output                = {{ log_dir }}/$(ClusterId).$(ProcId).bootstrap.stdout
 error                 = {{ log_dir }}/$(ClusterId).$(ProcId).bootstrap.stderr
 log                   = {{ log_dir }}/bootstrap.log
@@ -234,7 +231,6 @@ if __name__ == "__main__":
         if not args.dryrun:
             try:
                 group_out_dir.mkdir(parents=True, exist_ok=True)
-                (group_out_dir / 'manifests').mkdir(parents=True, exist_ok=True)
                 group_log_dir.mkdir(parents=True, exist_ok=True)
             except OSError as e:
                 print(f"Error creating directories for {group_name}: {e}")

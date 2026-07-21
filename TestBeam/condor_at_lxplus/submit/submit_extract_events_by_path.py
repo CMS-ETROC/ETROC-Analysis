@@ -33,13 +33,9 @@ xrdcp -r root://eosuser.cern.ch/$path_to_copy ./
 
 echo "Will process input file from {{ runname }} $input_file (index $file_index)"
 
-# Manifests go in their own subdirectory so they don't clutter the flat
-# per-file parquet output; condor ships new subdirectories back as-is.
-mkdir -p manifests
-
 # Run the python script
-echo "python extract_events_by_path.py -f $input_file -r {{ runname }} -t {{ track }} -c {{ config }} --trigID {{ trigID }} --cal_table {{ cal_table }} --neighbor_search_method {{ search_method }} --file-index $file_index --manifest manifests/manifest_${file_index}.jsonl"
-python extract_events_by_path.py -f $input_file -r {{ runname }} -t {{ track }} -c {{ config }} --trigID {{ trigID }} --cal_table {{ cal_table }} --neighbor_search_method {{ search_method }} --file-index $file_index --manifest manifests/manifest_${file_index}.jsonl
+echo "python extract_events_by_path.py -f $input_file -r {{ runname }} -t {{ track }} -c {{ config }} --trigID {{ trigID }} --cal_table {{ cal_table }} --neighbor_search_method {{ search_method }} --file-index $file_index"
+python extract_events_by_path.py -f $input_file -r {{ runname }} -t {{ track }} -c {{ config }} --trigID {{ trigID }} --cal_table {{ cal_table }} --neighbor_search_method {{ search_method }} --file-index $file_index
 
 ls -ltrh
 echo ""

@@ -15,7 +15,6 @@ checkout) reach it with a small path bootstrap first:
     from io_utils import ...
 """
 import getpass
-import json
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -104,19 +103,3 @@ def write_csv(df: pd.DataFrame, path: Union[str, Path], **kwargs) -> None:
     path = Path(path)
     _warn_if_exists(path)
     df.to_csv(path, **kwargs)
-
-
-def record_manifest(manifest_path: Union[str, Path], **fields) -> None:
-    """Appends one JSON line to a per-run manifest.
-
-    Call once per output file from condor-facing scripts, right after the
-    write, so later you can answer "which outputs came from which
-    commit/input" without mtime archaeology. Safe to call concurrently
-    from many condor tasks writing into the same manifest path, since each
-    call is a single append of one line.
-    """
-    fields.setdefault('timestamp', datetime.now().isoformat())
-    manifest_path = Path(manifest_path)
-    manifest_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(manifest_path, 'a') as f:
-        f.write(json.dumps(fields) + '\n')

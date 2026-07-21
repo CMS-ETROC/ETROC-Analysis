@@ -226,10 +226,6 @@ def main():
                         help="Numeric index tagged into each output row's 'file' column. "
                              "The submit script passes this explicitly; if omitted, it falls back "
                              "to parsing it from the input filename (expects 'loop_<N>...').")
-    parser.add_argument('--manifest', default=None, dest='manifest',
-                        help="Path to a JSON-lines file to append a record to after saving "
-                             "output (input file, output file, row count). Skipped if omitted.")
-
     args = parser.parse_args()
 
     # NEW: Dynamically load the rename map from the config file
@@ -370,14 +366,6 @@ def main():
 
         # 4. Save to Parquet with LZ4 compression (high compression ratio)
         io_utils.write_parquet(final_df, out_name, index=False, compression='lz4')
-
-        if args.manifest:
-            io_utils.record_manifest(
-                args.manifest,
-                input=Path(args.inputfile).name,
-                output=out_name,
-                rows=len(final_df),
-            )
 
 
 if __name__ == "__main__":

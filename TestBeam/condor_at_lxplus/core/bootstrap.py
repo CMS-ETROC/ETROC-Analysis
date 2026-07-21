@@ -178,9 +178,6 @@ def main():
                         'Default value is a list containing only "none".')
     parser.add_argument('--neighbor_logic', dest='neighbor_logic', default='OR',
                         help='Logic for multiple neighbor cuts on board. Default is OR. AND is possble.')
-    parser.add_argument('--manifest', default=None, dest='manifest',
-                        help="Path to a JSON-lines file to append a record to after saving "
-                             "output (input file, output file, row count). Skipped if omitted.")
 
     args = parser.parse_args()
 
@@ -277,14 +274,6 @@ def main():
         output_name = f"{input_path.stem}_boot.parquet"
         io_utils.write_parquet(res_df, output_name, compression='lz4')
         logger.info(f"Results saved to {output_name}")
-
-        if args.manifest:
-            io_utils.record_manifest(
-                args.manifest,
-                input=input_path.name,
-                output=output_name,
-                rows=len(res_df),
-            )
 
 if __name__ == "__main__":
     main()
