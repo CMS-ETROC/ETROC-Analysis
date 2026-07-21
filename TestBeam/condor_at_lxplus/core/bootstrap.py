@@ -184,7 +184,7 @@ def main():
     except:
         sys.exit("Error: Check filename format.")
 
-    df = pd.read_pickle(input_path) if input_path.suffix == '.pkl' else pd.read_parquet(input_path)
+    df = pd.read_parquet(input_path)
 
     # 2. Apply Neighbor Cut
     df = apply_neighbor_cut(df, args.neighbor_cut, args.neighbor_logic)

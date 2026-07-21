@@ -12,7 +12,7 @@ WORKER_SCRIPT_NAME = "bootstrap.py"
 
 BASH_TEMPLATE = """#!/bin/bash
 
-# $1: The full EOS path of the input file (e.g., /path/to/time/data_01.pkl)
+# $1: The full EOS path of the input file (e.g., /path/to/time/data_01.parquet)
 INPUT_FILE_EOS="$1"
 
 # Load python environment from work node
@@ -90,24 +90,19 @@ def create_submission_files(
     if input_list_path.exists():
         input_list_path.unlink()
 
-    pkl_files = list(input_dir.glob('*.pkl'))
     parquet_files = list(input_dir.glob('*.parquet'))
 
     files: list[Path] = []
     ext = "" # Store the extension for the JDL
 
-    if pkl_files:
-        print(f"    Found {len(pkl_files)} PKL files. Ignoring any Parquet files.")
-        files = pkl_files
-        ext = ".pkl"
-    elif parquet_files:
+    if parquet_files:
         print(f"    Found {len(parquet_files)} Parquet files. Proceeding with Parquet.")
         files = parquet_files
         ext = ".parquet"
 
     files = natsorted(files)
     if not files:
-        print(f"Warning: No pickle or parquet files found in {input_dir.name}. Skipping group.")
+        print(f"Warning: No parquet files found in {input_dir.name}. Skipping group.")
         return None, None, None
 
     # --- PATH FIX: Calculate the base directory ONLY ONCE ---

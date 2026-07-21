@@ -44,10 +44,6 @@ def process_single_file(filepath: Path) -> dict:
         # ONLY read metadata, do not load columns!
         meta = pq.read_metadata(filepath)
         nevt = meta.num_rows
-    elif filepath.suffix == '.pkl':
-        # Pickle has no metadata, must read fully
-        df = pd.read_pickle(filepath)
-        nevt = len(df)
     else:
         nevt = 0
 
@@ -131,12 +127,10 @@ def main():
         print(f">>> Processing Group: {group_name}")
 
         # A. Find Files
-        files = natsorted(group_dir.glob('exclude*.pkl'))
-        if not files:
-            files = natsorted(group_dir.glob('*.parquet'))
+        files = natsorted(group_dir.glob('*.parquet'))
 
         if not files:
-            print(f"    Warning: No .pkl or .parquet files found in {group_name}. Skipping.")
+            print(f"    Warning: No .parquet files found in {group_name}. Skipping.")
             continue
 
         # B. Process Files in Parallel
