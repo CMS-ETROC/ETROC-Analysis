@@ -31,8 +31,9 @@ echo "Transferring: $INPUT_FILE_EOS"
 xrdcp root://eosuser.cern.ch/$INPUT_FILE_EOS ./$LOCAL_FILENAME
 
 # 3. Construct and Run Bootstrap Analysis
-echo "\nRunning: {{ command }} -f $LOCAL_FILENAME --manifest manifest_${STEM}.jsonl"
-{{ command }} -f $LOCAL_FILENAME --manifest manifest_${STEM}.jsonl
+mkdir -p manifests
+echo "\nRunning: {{ command }} -f $LOCAL_FILENAME --manifest manifests/manifest_${STEM}.jsonl"
+{{ command }} -f $LOCAL_FILENAME --manifest manifests/manifest_${STEM}.jsonl
 
 # 4. Cleanup: Delete the local copy of the input file
 if [ -f $LOCAL_FILENAME ]; then
@@ -48,7 +49,7 @@ should_Transfer_Files = YES
 whenToTransferOutput  = ON_EXIT
 transfer_Input_Files  = {{ transfer_files }}
 Arguments             = {{ logical_dir }}/$(stem){{ ext }} $(stem)
-TransferOutputRemaps  = "$(stem)_boot.parquet={{ out_dir }}/$(stem)_boot.parquet;manifest_$(stem).jsonl={{ out_dir }}/manifest_$(stem).jsonl"
+TransferOutputRemaps  = "$(stem)_boot.parquet={{ out_dir }}/$(stem)_boot.parquet;manifests/manifest_$(stem).jsonl={{ out_dir }}/manifests/manifest_$(stem).jsonl"
 output                = {{ log_dir }}/$(ClusterId).$(ProcId).bootstrap.stdout
 error                 = {{ log_dir }}/$(ClusterId).$(ProcId).bootstrap.stderr
 log                   = {{ log_dir }}/bootstrap.log
@@ -233,6 +234,7 @@ if __name__ == "__main__":
         if not args.dryrun:
             try:
                 group_out_dir.mkdir(parents=True, exist_ok=True)
+                (group_out_dir / 'manifests').mkdir(parents=True, exist_ok=True)
                 group_log_dir.mkdir(parents=True, exist_ok=True)
             except OSError as e:
                 print(f"Error creating directories for {group_name}: {e}")
