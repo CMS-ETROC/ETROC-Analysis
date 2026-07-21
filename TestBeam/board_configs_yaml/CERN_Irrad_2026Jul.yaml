@@ -90,3 +90,9 @@ f1_run6: *f1_run5
 f1_run7: *f1_run5
 f1_run8: *f1_run5
 f1_run9: *f1_run5
+
+f1_run10: &f1_run10
+  0: { <<: *PT_LF10, HV: 460, irrad: 2e15, note: 17cm off beam axis }
+  1: { <<: *PT_LF12, HV: 460, irrad: 2e15, note: 17cm off beam axis }
+  2: { <<: *PT_LF17, HV: 460, irrad: 2e15, note: 17cm off beam axis }
+  3: { <<: *PT_LF18, HV: 460, irrad: 2e15, note: 17cm off beam axis }
