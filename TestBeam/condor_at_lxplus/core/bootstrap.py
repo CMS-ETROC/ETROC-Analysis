@@ -1,4 +1,5 @@
 import argparse
+import re
 import sys
 import warnings
 import logging
@@ -19,6 +20,8 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)]
 )
 logger = logging.getLogger(__name__)
+
+ALL_ROLES = {'trig', 'dut', 'ref', 'extra'}
 
 # --- Modular Logic: Data Filtering ---
 
@@ -183,11 +186,15 @@ def main():
 
     # 1. Metadata & Data Loading
     input_path = Path(args.file)
-    try:
-        active_roles = sorted({'trig', 'dut', 'ref', 'extra'} - {input_path.stem.split('_')[1]})
-        logger.info(f"Processing {input_path.stem} | Active: {active_roles}")
-    except:
-        sys.exit("Error: Check filename format.")
+    # apply_tdc_cuts.py names its output 'exclude_{role}_track_...' -- anchor on that
+    # known vocabulary instead of assuming the role is always the 2nd '_'-token, so a
+    # naming-convention drift upstream fails loudly here instead of silently no-op'ing
+    # the set subtraction below (which would leave all four roles "active").
+    role_match = re.search(rf"exclude_({'|'.join(ALL_ROLES)})_", input_path.stem)
+    if role_match is None:
+        sys.exit(f"Error: Could not find 'exclude_<role>_' in filename '{input_path.name}'.")
+    active_roles = sorted(ALL_ROLES - {role_match.group(1)})
+    logger.info(f"Processing {input_path.stem} | Active: {active_roles}")
 
     df = pd.read_parquet(input_path)
 
