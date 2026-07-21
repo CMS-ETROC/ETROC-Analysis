@@ -103,13 +103,12 @@ def main():
     output_path.mkdir(exist_ok=True, parents=True)
 
     # 1. Identify Input Groups and Base Dir Name
-    if mother_dir.name.find('time') != -1:
+    time_dirs = io_utils.discover_time_dirs(mother_dir)
+    if 'time' in mother_dir.name:
         # User pointed directly to a specific time folder (e.g., .../Angle30.../time_group1)
-        time_dirs = [mother_dir]
         raw_dirname = mother_dir.parent.name
     else:
         # User pointed to mother dir; scan for subfolders (e.g., .../Angle30.../)
-        time_dirs = sorted([d for d in mother_dir.iterdir() if d.is_dir() and 'time' in d.name])
         raw_dirname = mother_dir.name
 
     if not time_dirs:

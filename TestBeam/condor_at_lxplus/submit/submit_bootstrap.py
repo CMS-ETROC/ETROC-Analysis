@@ -184,25 +184,7 @@ if __name__ == "__main__":
     eos_base_dir = io_utils.eos_base_dir(username)
     mother_dir = Path(f'{eos_base_dir}/{args.dirname}').resolve()
 
-    if mother_dir.name.find('time') != -1:
-        time_dirs = [mother_dir]
-    else:
-        # Find all directories containing 'time'
-        all_time_dirs = sorted([d for d in mother_dir.iterdir() if d.is_dir() and 'time' in d.name])
-
-        # Check if we have split groups (e.g., time_group1)
-        has_groups = any('group' in d.name for d in all_time_dirs)
-
-        if has_groups:
-            # If groups exist, filter out the bare 'time' folder to avoid duplicates
-            time_dirs = [d for d in all_time_dirs if 'group' in d.name]
-            # Optional: Print what was excluded
-            excluded = set(all_time_dirs) - set(time_dirs)
-            if excluded:
-                print(f"Detected split groups. Excluding base folders: {[d.name for d in excluded]}")
-        else:
-            # If no groups, just process whatever was found (e.g. just 'time')
-            time_dirs = all_time_dirs
+    time_dirs = io_utils.discover_time_dirs(mother_dir)
 
     if not time_dirs:
         sys.exit(f"No directories containing 'time' found in {mother_dir}")

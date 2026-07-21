@@ -19,7 +19,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Union
+from typing import List, Optional, Union
 
 import pandas as pd
 
@@ -50,6 +50,37 @@ def build_transfer_files(worker_script: str, *extra_paths: Union[str, Path]) -> 
     if missing:
         raise FileNotFoundError(f"transfer_Input_Files references missing file(s): {missing}")
     return ", ".join(files)
+
+
+def discover_time_dirs(mother_dir: Union[str, Path]) -> List[Path]:
+    """Resolves an apply_tdc_cuts.py (step 10) output location to the list of
+    time-group directories to process.
+
+    If `mother_dir` itself looks like a specific time-group folder (its name
+    contains 'time'), returns just [mother_dir]. Otherwise scans its children
+    for directories containing 'time' in the name; if both a bare 'time'
+    folder and 'time_group*' folders are present (e.g. from reprocessing the
+    same output location with different --partitions across separate runs),
+    the bare folder is excluded so its events aren't double-counted against
+    the group split.
+    """
+    mother_dir = Path(mother_dir)
+    if 'time' in mother_dir.name:
+        return [mother_dir]
+
+    all_time_dirs = sorted(d for d in mother_dir.iterdir() if d.is_dir() and 'time' in d.name)
+    has_groups = any('group' in d.name for d in all_time_dirs)
+    if not has_groups:
+        return all_time_dirs
+
+    time_dirs = [d for d in all_time_dirs if 'group' in d.name]
+    excluded = set(all_time_dirs) - set(time_dirs)
+    if excluded:
+        logging.warning(
+            f"Detected split groups in {mother_dir}; excluding base folder(s) to avoid "
+            f"double-counting: {sorted(d.name for d in excluded)}"
+        )
+    return time_dirs
 
 
 def _warn_if_exists(path: Path) -> None:
