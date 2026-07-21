@@ -100,7 +100,7 @@ def build_python_command_args(args: argparse.Namespace, script_to_run: str) -> s
         f'--TOALowerTime {args.TOALowerTime}',
         f'--TOAUpperTime {args.TOAUpperTime}',
         f"--exclude_role {args.exclude_role}",
-        "--manifest manifest_${clusterid}_${procid}.jsonl",
+        "--manifest manifests/manifest_${clusterid}_${procid}.jsonl",
     ]
     if args.convert_first: cmd_parts.append("--convert-first")
     return " ".join(cmd_parts)
