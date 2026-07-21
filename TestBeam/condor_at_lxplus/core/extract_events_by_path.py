@@ -220,6 +220,10 @@ def main():
                         help="Search method for neighbor hit checking, default is 'none'. possible argument: 'row_only', 'col_only', 'cross', 'square'")
     parser.add_argument('--cal_table', required=True, dest='cal_table', help='CSV file with CAL mode values')
     parser.add_argument('--trigID', type=int, required=True, dest='trigID', help='Trigger board ID')
+    parser.add_argument('--file-index', type=int, default=None, dest='file_index',
+                        help="Numeric index tagged into each output row's 'file' column. "
+                             "The submit script passes this explicitly; if omitted, it falls back "
+                             "to parsing it from the input filename (expects 'loop_<N>...').")
 
     args = parser.parse_args()
 
@@ -278,7 +282,17 @@ def main():
 
     # 7. Process Tracks
     track_pivots = []
-    file_indicator = int(Path(args.inputfile).stem.split('_')[1])
+    if args.file_index is not None:
+        file_indicator = args.file_index
+    else:
+        try:
+            file_indicator = int(Path(args.inputfile).stem.split('_')[1])
+        except (IndexError, ValueError):
+            logging.error(
+                f"Could not parse file index from '{args.inputfile}' (expected 'loop_<N>...'). "
+                f"Pass --file-index explicitly to avoid relying on filename parsing."
+            )
+            sys.exit(1)
 
     logging.info(f"Processing {len(track_df)} tracks...")
 

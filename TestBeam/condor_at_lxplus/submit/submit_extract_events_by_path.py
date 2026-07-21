@@ -18,8 +18,9 @@ ls -ltrh
 echo ""
 pwd
 
-input_file=$1
-path_to_copy=$2
+file_index=$1
+input_file=$2
+path_to_copy=$3
 
 # Load python environment from work node
 source /cvmfs/sft.cern.ch/lcg/views/LCG_104a/x86_64-el9-gcc13-opt/setup.sh
@@ -27,11 +28,11 @@ source /cvmfs/sft.cern.ch/lcg/views/LCG_104a/x86_64-el9-gcc13-opt/setup.sh
 # Copy input data from EOS to local work node
 xrdcp -r root://eosuser.cern.ch/$path_to_copy ./
 
-echo "Will process input file from {{ runname }} $input_file"
+echo "Will process input file from {{ runname }} $input_file (index $file_index)"
 
 # Run the python script
-echo "python extract_events_by_path.py -f $input_file -r {{ runname }} -t {{ track }} -c {{ config }} --trigID {{ trigID }} --cal_table {{ cal_table }} --neighbor_search_method {{ search_method }}"
-python extract_events_by_path.py -f $input_file -r {{ runname }} -t {{ track }} -c {{ config }} --trigID {{ trigID }} --cal_table {{ cal_table }} --neighbor_search_method {{ search_method }}
+echo "python extract_events_by_path.py -f $input_file -r {{ runname }} -t {{ track }} -c {{ config }} --trigID {{ trigID }} --cal_table {{ cal_table }} --neighbor_search_method {{ search_method }} --file-index $file_index"
+python extract_events_by_path.py -f $input_file -r {{ runname }} -t {{ track }} -c {{ config }} --trigID {{ trigID }} --cal_table {{ cal_table }} --neighbor_search_method {{ search_method }} --file-index $file_index
 
 ls -ltrh
 echo ""
@@ -48,8 +49,8 @@ JDL_TEMPLATE = """universe              = vanilla
 executable            = {{ script_dir }}/run_extract_events.sh
 should_Transfer_Files = YES
 whenToTransferOutput  = ON_EXIT
-# $1 is the clean filename, $2 is the clean path
-arguments             = $(fname) {{ input_dir }}/$(fname)
+# $1 is the file index, $2 is the clean filename, $3 is the clean path
+arguments             = $(idx) $(fname) {{ input_dir }}/$(fname)
 transfer_Input_Files  = core/extract_events_by_path.py,{{ track_file }},{{ cal_table }},{{ config_file }}
 output                = {{ log_dir }}/$(ClusterId).$(ProcId).extractEvents.stdout
 error                 = {{ log_dir }}/$(ClusterId).$(ProcId).extractEvents.stderr
@@ -58,7 +59,7 @@ MY.WantOS             = "el9"
 MY.XRDCP_CREATE_DIR   = True
 output_destination    = root://eosuser.cern.ch/{{ eos_base }}/{{ out_dir }}
 +JobFlavour           = "microcentury"
-Queue fname from {{ script_dir }}/input_list.txt
+Queue idx,fname from {{ script_dir }}/input_list.txt
 """
 
 # --- Helper Functions ---
@@ -90,7 +91,12 @@ def create_submission_files(args, trig_id, paths, eos_base):
 
     with open(input_list_path, 'w') as f:
         for file_path in feather_files:
-            f.write(f"{file_path.name}\n")
+            try:
+                file_idx = int(file_path.stem.split('_')[1])
+            except (IndexError, ValueError):
+                print(f"Warning: Could not parse index from {file_path.name}, skipping.")
+                continue
+            f.write(f"{file_idx},{file_path.name}\n")
 
     # 3. Pass Path objects directly to Template
     bash_content = Template(BASH_TEMPLATE).render(
