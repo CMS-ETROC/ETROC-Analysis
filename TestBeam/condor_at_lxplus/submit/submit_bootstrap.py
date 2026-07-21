@@ -8,12 +8,17 @@ from pathlib import Path
 from jinja2 import Template
 from natsort import natsorted
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'core'))
+import io_utils
+
 WORKER_SCRIPT_NAME = "bootstrap.py"
 
 BASH_TEMPLATE = """#!/bin/bash
 
 # $1: The full EOS path of the input file (e.g., /path/to/time/data_01.parquet)
+# $2: The file's stem (e.g., data_01), used to name this task's manifest uniquely
 INPUT_FILE_EOS="$1"
+STEM="$2"
 
 # Load python environment from work node
 source /cvmfs/sft.cern.ch/lcg/views/LCG_104a/x86_64-el9-gcc13-opt/setup.sh
@@ -26,8 +31,8 @@ echo "Transferring: $INPUT_FILE_EOS"
 xrdcp root://eosuser.cern.ch/$INPUT_FILE_EOS ./$LOCAL_FILENAME
 
 # 3. Construct and Run Bootstrap Analysis
-echo "\nRunning: {{ command }} -f $LOCAL_FILENAME"
-{{ command }} -f $LOCAL_FILENAME
+echo "\nRunning: {{ command }} -f $LOCAL_FILENAME --manifest manifest_${STEM}.jsonl"
+{{ command }} -f $LOCAL_FILENAME --manifest manifest_${STEM}.jsonl
 
 # 4. Cleanup: Delete the local copy of the input file
 if [ -f $LOCAL_FILENAME ]; then
@@ -42,8 +47,8 @@ executable            = {{ script_dir }}/{{ bash_script_name }}
 should_Transfer_Files = YES
 whenToTransferOutput  = ON_EXIT
 transfer_Input_Files  = {{ transfer_files }}
-Arguments             = {{ logical_dir }}/$(stem){{ ext }}
-TransferOutputRemaps  = "$(stem)_boot.parquet={{ out_dir }}/$(stem)_boot.parquet"
+Arguments             = {{ logical_dir }}/$(stem){{ ext }} $(stem)
+TransferOutputRemaps  = "$(stem)_boot.parquet={{ out_dir }}/$(stem)_boot.parquet;manifest_$(stem).jsonl={{ out_dir }}/manifest_$(stem).jsonl"
 output                = {{ log_dir }}/$(ClusterId).$(ProcId).bootstrap.stdout
 error                 = {{ log_dir }}/$(ClusterId).$(ProcId).bootstrap.stderr
 log                   = {{ log_dir }}/bootstrap.log
@@ -127,15 +132,13 @@ def create_submission_files(
         f.write(bash_content)
 
     # Generate JDL File
-    transfer_list = [f'core/{WORKER_SCRIPT_NAME}']
-
     jdl_content = Template(JDL_TEMPLATE).render({
         'script_dir': str(paths['scripts']),
         'bash_script_name': bash_script_name,
         'master_list_file_name': master_list_file_name,
         'out_dir': str(group_out_dir),
         'log_dir': str(group_log_dir),
-        'transfer_files': ", ".join(transfer_list),
+        'transfer_files': io_utils.build_transfer_files(WORKER_SCRIPT_NAME),
         'unique_tag': unique_tag,
         'logical_dir': logical_dir, # Pass the directory to Jinja
         'ext': ext                  # Pass the extension to Jinja
@@ -178,7 +181,7 @@ if __name__ == "__main__":
 
     # --- 1. Identify Groups ---
     username = getpass.getuser()
-    eos_base_dir = f'/eos/user/{username[0]}/{username}'
+    eos_base_dir = io_utils.eos_base_dir(username)
     mother_dir = Path(f'{eos_base_dir}/{args.dirname}').resolve()
 
     if mother_dir.name.find('time') != -1:

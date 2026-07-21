@@ -9,6 +9,9 @@ from pathlib import Path
 from jinja2 import Template
 from natsort import natsorted
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'core'))
+import io_utils
+
 # --- Configuration & Templates ---
 
 # Template for the shell script running on the worker node
@@ -31,8 +34,8 @@ xrdcp -r root://eosuser.cern.ch/$path_to_copy ./
 echo "Will process input file from {{ runname }} $input_file (index $file_index)"
 
 # Run the python script
-echo "python extract_events_by_path.py -f $input_file -r {{ runname }} -t {{ track }} -c {{ config }} --trigID {{ trigID }} --cal_table {{ cal_table }} --neighbor_search_method {{ search_method }} --file-index $file_index"
-python extract_events_by_path.py -f $input_file -r {{ runname }} -t {{ track }} -c {{ config }} --trigID {{ trigID }} --cal_table {{ cal_table }} --neighbor_search_method {{ search_method }} --file-index $file_index
+echo "python extract_events_by_path.py -f $input_file -r {{ runname }} -t {{ track }} -c {{ config }} --trigID {{ trigID }} --cal_table {{ cal_table }} --neighbor_search_method {{ search_method }} --file-index $file_index --manifest manifest_${file_index}.jsonl"
+python extract_events_by_path.py -f $input_file -r {{ runname }} -t {{ track }} -c {{ config }} --trigID {{ trigID }} --cal_table {{ cal_table }} --neighbor_search_method {{ search_method }} --file-index $file_index --manifest manifest_${file_index}.jsonl
 
 ls -ltrh
 echo ""
@@ -51,7 +54,7 @@ should_Transfer_Files = YES
 whenToTransferOutput  = ON_EXIT
 # $1 is the file index, $2 is the clean filename, $3 is the clean path
 arguments             = $(idx) $(fname) {{ input_dir }}/$(fname)
-transfer_Input_Files  = core/extract_events_by_path.py,{{ track_file }},{{ cal_table }},{{ config_file }}
+transfer_Input_Files  = {{ transfer_files }}
 output                = {{ log_dir }}/$(ClusterId).$(ProcId).extractEvents.stdout
 error                 = {{ log_dir }}/$(ClusterId).$(ProcId).extractEvents.stderr
 log                   = {{ log_dir }}/extractEvents.log
@@ -113,12 +116,13 @@ def create_submission_files(args, trig_id, paths, eos_base):
         f.write(bash_content)
 
     # 3. Generate JDL File
+    transfer_files = io_utils.build_transfer_files(
+        'extract_events_by_path.py', track_path, cal_path, config_path
+    )
     jdl_content = Template(JDL_TEMPLATE).render(
         script_dir=paths['scripts_dir'],
         input_dir=final_input_dir,
-        track_file=track_path,
-        cal_table=cal_path,
-        config_file=config_path,
+        transfer_files=transfer_files,
         log_dir=paths['log_dir'],
         eos_base=eos_base,
         out_dir=args.outname,
@@ -153,7 +157,7 @@ if __name__ == "__main__":
 
     # --- Setup Environments ---
     username = getpass.getuser()
-    eos_base_dir = f'/eos/user/{username[0]}/{username}'
+    eos_base_dir = str(io_utils.eos_base_dir(username))
 
     if args.condor_tag:
         run_append = args.condor_tag

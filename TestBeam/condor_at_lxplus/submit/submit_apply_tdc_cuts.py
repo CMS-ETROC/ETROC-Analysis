@@ -10,6 +10,9 @@ from typing import Dict, Any, Optional, List
 from jinja2 import Template
 from natsort import natsorted
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'core'))
+import io_utils
+
 BASH_TEMPLATE = """#!/bin/bash
 
 clusterid="$1"
@@ -97,6 +100,7 @@ def build_python_command_args(args: argparse.Namespace, script_to_run: str) -> s
         f'--TOALowerTime {args.TOALowerTime}',
         f'--TOAUpperTime {args.TOAUpperTime}',
         f"--exclude_role {args.exclude_role}",
+        "--manifest manifest_${clusterid}_${procid}.jsonl",
     ]
     if args.convert_first: cmd_parts.append("--convert-first")
     return " ".join(cmd_parts)
@@ -135,7 +139,7 @@ def create_jdl_file(args, eos_base_dir, master_list_path, group_name, njobs, scr
         'script_dir': script_dir.as_posix(),
         'bash_script_name': f'run_applyTDC_{group_name}.sh',
         'master_list_file_name': f'{master_list_path.name}',
-        'transfer_files': f"core/{script_to_run}, {Path(args.config).as_posix()}, {master_list_path.as_posix()}",
+        'transfer_files': io_utils.build_transfer_files(script_to_run, args.config, master_list_path),
         'output_dir': f"{eos_base_dir}/{args.inputdir}/{group_name.replace('tracks','time')}",
         'log_dir': log_dir.as_posix(),
         'batch_size': args.batch_size,
@@ -185,7 +189,7 @@ if __name__ == "__main__":
 
     # Determine the user's EOS base directory structure (e.g., /eos/user/j/jongho)
     # This assumes the input directory path is under this root.
-    eos_base_dir = Path(f'/eos/user/{username[0]}/{username}')
+    eos_base_dir = io_utils.eos_base_dir(username)
 
     if args.condor_tag:
         run_append = args.condor_tag
