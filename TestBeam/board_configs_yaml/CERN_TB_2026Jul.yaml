@@ -1,7 +1,7 @@
-PT-NH76: &PT-NH76 {name: ET2.02 PacTech HPK-76, short: PT-NH76, offset: 20, HV: 230, role: extra}
-PT-IH5: &PT-IH5   {name: ET2.02 PacTech IH-5,  short: PT-IH5,  offset: 20, HV: 230, role: ref}
-PT-IH3: &PT-IH3   {name: ET2.02 PacTech IH-3,  short: PT-IH3,  offset: 20, HV: 230, role: trig}
-PT-IH2: &PT-IH2   {name: ET2.02 PacTech IH-2,  short: PT-IH2,  offset: 20, HV: 220, role: dut}
+PT-NH76: &PT-NH76 {name: ET2.02 PacTech HPK-76, short: PT-NH76, angle: 60, offset: 20, HV: 230, role: extra}
+PT-IH5: &PT-IH5   {name: ET2.02 PacTech IH-5,   short: PT-IH5,  angle: 60, offset: 20, HV: 230, role: ref}
+PT-IH3: &PT-IH3   {name: ET2.02 PacTech IH-3,   short: PT-IH3,  angle: 60, offset: 20, HV: 230, role: trig}
+PT-IH2: &PT-IH2   {name: ET2.02 PacTech IH-2,   short: PT-IH2,  angle: 60, offset: 20, HV: 220, role: dut}
 
 run1: &run1
   0: *PT-NH76
