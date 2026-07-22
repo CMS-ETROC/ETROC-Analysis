@@ -8,5 +8,3 @@ run1: &run1
   1: *PT-IH5
   2: *PT-IH3
   3: *PT-IH2
-
-run3: *run1
