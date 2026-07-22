@@ -121,19 +121,26 @@ def load_and_sample_data(file_paths: List[Path], sampling_rate: float) -> pd.Dat
     columns_to_read = ['evt', 'board', 'row', 'col', 'toa', 'tot', 'cal']
     portion = sampling_rate * 0.01
 
+    def sample_events(tmp_df: pd.DataFrame) -> pd.DataFrame:
+        unique_evts = tmp_df['evt'].unique()
+        if len(unique_evts) == 0:
+            return tmp_df
+        n = max(1, int(portion * len(unique_evts)))
+        indices = np.random.choice(unique_evts, n, replace=False)
+        return tmp_df.loc[tmp_df['evt'].isin(indices)]
+
     # 1. Memory Safety Check
     logging.info('Performing Memory Safety Check...')
     check_files = file_paths if len(file_paths) < 10 else random.sample(file_paths, 10)
     sum_use = 0
+    # Cache these full reads so the main loading pass below doesn't hit disk
+    # a second time for the same (up to 10) files.
+    checked_full_dfs = {}
 
     for f in tqdm(check_files):
-        temp_df = pd.read_feather(f, columns=columns_to_read)
-        # Simulate sampling
-        unique_evts = temp_df['evt'].unique()
-        if len(unique_evts) > 0:
-            n = max(1, int(portion * len(unique_evts)))
-            indices = np.random.choice(unique_evts, n, replace=False)
-            temp_df = temp_df.loc[temp_df['evt'].isin(indices)]
+        full_df_f = pd.read_feather(f, columns=columns_to_read)
+        checked_full_dfs[f] = full_df_f
+        temp_df = sample_events(full_df_f)
         sum_use += temp_df.memory_usage(deep=True).sum() / (1024**2)
 
     avg_use = sum_use / len(check_files)
@@ -149,13 +156,11 @@ def load_and_sample_data(file_paths: List[Path], sampling_rate: float) -> pd.Dat
     logging.info('Loading data...')
     dfs = []
     for f in tqdm(file_paths, desc="Reading Files"):
-        tmp_df = pd.read_feather(f, columns=columns_to_read)
+        tmp_df = checked_full_dfs[f] if f in checked_full_dfs else pd.read_feather(f, columns=columns_to_read)
         unique_evts = tmp_df['evt'].unique()
         if len(unique_evts) == 0:
             continue
-        n = max(1, int(portion * len(unique_evts)))
-        indices = np.random.choice(unique_evts, n, replace=False)
-        tmp_df = tmp_df.loc[tmp_df['evt'].isin(indices)]
+        tmp_df = sample_events(tmp_df)
         dfs.append(tmp_df)
 
     if not dfs:

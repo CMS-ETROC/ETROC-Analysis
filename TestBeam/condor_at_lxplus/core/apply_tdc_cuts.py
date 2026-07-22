@@ -146,9 +146,10 @@ def apply_raw_tdc_cuts(
     trig_role = 'ref' if 'ref' in all_roles else 'trig'
     chunks = []
 
-    # Iterate per file to ensure quantile cuts are relative to local distributions
-    for fid in df['file'].unique():
-        sub = df.loc[df['file'] == fid]
+    # Iterate per file to ensure quantile cuts are relative to local distributions.
+    # groupby computes the file->rows partition once, instead of rescanning the
+    # whole 'file' column on every iteration the way df.loc[df['file'] == fid] did.
+    for fid, sub in df.groupby('file', sort=False):
         mask = pd.Series(True, index=sub.index)
 
         for role in all_roles.keys():
