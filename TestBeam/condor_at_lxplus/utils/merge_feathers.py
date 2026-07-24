@@ -44,9 +44,14 @@ def process_single_group(idx, igroup, tmp_outdir):
         for ifile in igroup:
             df = pd.read_feather(ifile)
 
-            # Offset 'evt' column to maintain continuity within the new merged file
+            # Offset 'evt' column to maintain continuity within the new merged file.
+            # Use max()+1 (not nunique()) for the next offset: a file can have gaps in
+            # 'evt' (the decoder increments its counter even for zero-hit triggers,
+            # which write no rows), so nunique() under-counts the required shift and
+            # lets the next file's offset evt values collide with this file's.
             df['evt'] += nevt_adder
-            nevt_adder += df['evt'].nunique()
+            if not df.empty:
+                nevt_adder = df['evt'].max() + 1
 
             dfs.append(df)
 
