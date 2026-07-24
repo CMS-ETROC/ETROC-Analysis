@@ -18,7 +18,11 @@ def load_bash_template(input_dir_path):
 ls -ltrh
 echo ""
 
+# LCG's setup.sh references its own internal vars (e.g. COMPILER) without
+# defaults, which trips our `set -u` above even though it's not a real error.
+set +u
 source /cvmfs/sft.cern.ch/lcg/views/LCG_104a/x86_64-el9-gcc13-opt/setup.sh
+set -u
 
 mkdir -p ./job_${1}_${2}
 

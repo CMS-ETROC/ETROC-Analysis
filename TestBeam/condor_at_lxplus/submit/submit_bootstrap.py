@@ -19,7 +19,11 @@ BASH_TEMPLATE = """#!/bin/bash
 INPUT_FILE_EOS="$1"
 
 # Load python environment from work node
+# LCG's setup.sh references its own internal vars (e.g. COMPILER) without
+# defaults, which trips our `set -u` above even though it's not a real error.
+set +u
 source /cvmfs/sft.cern.ch/lcg/views/LCG_104a/x86_64-el9-gcc13-opt/setup.sh
+set -u
 
 # 1. Determine local file name
 LOCAL_FILENAME=$(basename "$INPUT_FILE_EOS")

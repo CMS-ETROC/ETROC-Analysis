@@ -26,7 +26,11 @@ input_file=$2
 path_to_copy=$3
 
 # Load python environment from work node
+# LCG's setup.sh references its own internal vars (e.g. COMPILER) without
+# defaults, which trips our `set -u` above even though it's not a real error.
+set +u
 source /cvmfs/sft.cern.ch/lcg/views/LCG_104a/x86_64-el9-gcc13-opt/setup.sh
+set -u
 
 # Copy input data from EOS to local work node
 xrdcp -r root://eosuser.cern.ch/$path_to_copy ./
