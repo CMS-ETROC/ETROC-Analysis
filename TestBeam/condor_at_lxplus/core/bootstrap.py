@@ -166,7 +166,6 @@ def main():
     parser = argparse.ArgumentParser(description='Unified Analysis with Neighbor Logic')
     parser.add_argument('-f', '--file', required=True, help='Input file')
     parser.add_argument('-n', '--num_bootstrap_output', type=int, default=200)
-    parser.add_argument('-s', '--sampling', type=int, default=75)
     parser.add_argument('--iteration_limit', type=int, default=7500)
     parser.add_argument('--minimum_nevt', type=int, default=100)
     parser.add_argument('--reproducible', action='store_true',
@@ -203,7 +202,10 @@ def main():
 
     # 3. Unified Phase Execution
     final_results = []
-    phases = [(1.0, 1, False), (args.sampling * 0.01, args.num_bootstrap_output, True)]
+    # Single-shot: the actual central value, computed once on the untouched full
+    # dataset. Bootstrap: proper resamples of the same size n, WITH replacement, so
+    # their spread estimates Var of the full-n estimator (not a smaller subsample's).
+    phases = [(1, False), (args.num_bootstrap_output, True)]
 
     # One independent seed per (phase, attempt) instead of a single shared/advancing
     # random state, so any specific attempt's resample can be regenerated directly and
@@ -212,7 +214,7 @@ def main():
     root_seed_seq = np.random.SeedSequence(42) if args.reproducible else None
     phase_seed_seqs = root_seed_seq.spawn(len(phases)) if root_seed_seq is not None else [None] * len(phases)
 
-    for phase_idx, (fraction, target, is_boot) in enumerate(phases):
+    for phase_idx, (target, is_boot) in enumerate(phases):
         n_success, attempts = 0, 0
         current_threshold = 0.03
         logger.info(f"Starting Phase: {'Bootstrap' if is_boot else 'Single-Shot'}")
@@ -226,7 +228,7 @@ def main():
             attempt_rng = np.random.default_rng(attempt_seeds[attempts]) if attempt_seeds is not None else None
             attempts += 1
 
-            sample = df.sample(frac=fraction, random_state=attempt_rng) if fraction < 1.0 else df
+            sample = df.sample(frac=1.0, replace=True, random_state=attempt_rng) if is_boot else df
             res, success = run_sample_analysis(sample, active_roles, threshold=current_threshold, is_boot=is_boot)
 
             if success:

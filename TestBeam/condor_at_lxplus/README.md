@@ -203,14 +203,13 @@ python core/count_path_nevts.py -d <INPUTDIR> -o <OUTPUTDIR> [--tag <TAG>]
 
 ### 12. Submit jobs for bootstrap
 ```bash
-python submit/submit_bootstrap.py -d <DIRNAME> -o <OUTPUTDIR> -n <NUM_BOOTSTRAP_OUTPUT> -s <SAMPLING> --minimum_nevt <MINIMUM_NEVT> --iteration_limit <ITERATION_LIMIT> --condor_tag <CONDOR_TAG> [--reproducible] [--neighbor_cut <COL> ...] [--neighbor_logic <OR|AND>] [--dryrun]
+python submit/submit_bootstrap.py -d <DIRNAME> -o <OUTPUTDIR> -n <NUM_BOOTSTRAP_OUTPUT> --minimum_nevt <MINIMUM_NEVT> --iteration_limit <ITERATION_LIMIT> --condor_tag <CONDOR_TAG> [--reproducible] [--neighbor_cut <COL> ...] [--neighbor_logic <OR|AND>] [--dryrun]
 ```
 | Flag | Default | Description |
 |---|---|---|
 | `-d`, `--inputdir` | *required* | Directory containing step 10 output. |
 | `-o`, `--outputdir` | *required* | Output directory base name. |
 | `-n`, `--num_bootstrap_output` | `100` | Target number of bootstrap results. |
-| `-s`, `--sampling` | `75` | Percent of events resampled per bootstrap draw. |
 | `--minimum_nevt` | `1000` | Minimum event count required to run bootstrap. |
 | `--iteration_limit` | `7500` | Maximum number of bootstrap trials. |
 | `--reproducible` | off | Seed resampling (not the GMM fit) so results are reproducible run-to-run. |

@@ -65,7 +65,6 @@ def build_python_command(args: argparse.Namespace) -> str:
     cmd_parts = [
         f"python {WORKER_SCRIPT_NAME}",
         f"-n {args.num_bootstrap_output}",
-        f"-s {args.sampling}",
         f"--minimum_nevt {args.minimum_nevt}",
         f"--iteration_limit {args.iteration_limit}",
         f"--neighbor_cut {neighbor_cut_str}",
@@ -157,7 +156,6 @@ if __name__ == "__main__":
 
     # Bootstrap Params
     parser.add_argument('-n', '--num_bootstrap_output', type=int, default=100)
-    parser.add_argument('-s', '--sampling', type=int, default=75)
     parser.add_argument('--minimum_nevt', type=int, default=1000)
     parser.add_argument('--iteration_limit', type=int, default=7500)
 
