@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'core'))
 import io_utils
 
 BASH_TEMPLATE = """#!/bin/bash
-
+""" + io_utils.BASH_STRICT_HEADER + """
 clusterid="$1"
 procid="$2"
 INPUT_LIST_FILE="$3"
