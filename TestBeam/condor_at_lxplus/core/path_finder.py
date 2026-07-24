@@ -349,7 +349,11 @@ def main():
     # no matching cal_table entry are excluded instead of silently shifting alignment.
     keyed = df[['board', 'row', 'col', 'cal']].reset_index(names='orig_idx')
     merged = keyed.merge(cal_table, on=['board', 'row', 'col'], how='left')
-    valid_cal = (abs(merged['cal'] - merged['cal_mode']) <= 3) & merged['cal_mode'].notna()
+    # 'cal' and 'cal_mode' are both stored as uint16, so a plain Series-Series
+    # subtraction wraps around to a huge positive value whenever cal < cal_mode -
+    # cast to a signed type first so the deviation is computed correctly.
+    cal_dev = merged['cal'].astype('int32') - merged['cal_mode'].astype('float64')
+    valid_cal = (cal_dev.abs() <= 3) & merged['cal_mode'].notna()
     df = df.loc[merged.loc[valid_cal, 'orig_idx']].reset_index(drop=True)
     df = reindex_events(df) # Renumber after filtering
     check_empty_df(df, "CAL deviation filtering")

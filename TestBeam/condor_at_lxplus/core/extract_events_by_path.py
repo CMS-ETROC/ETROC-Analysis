@@ -238,6 +238,9 @@ def main():
     # 1. Load Main Data
     try:
         run_df = pd.read_feather(args.inputfile, columns=['evt', 'board', 'row', 'col', 'toa', 'tot', 'cal'])
+        # Stored as uint16 upstream; cast to signed so any cal-vs-cal_mode arithmetic
+        # here can't silently wrap around like the equivalent code in path_finder.py did.
+        run_df['cal'] = run_df['cal'].astype('int32')
     except Exception as e:
         logging.error(f"Failed to read input file: {e}")
         sys.exit(1)
