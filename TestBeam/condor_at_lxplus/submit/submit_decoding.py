@@ -9,8 +9,12 @@ import getpass
 import uuid
 from datetime import datetime
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'core'))
+import io_utils
+
 def load_bash_template(input_dir_path):
     bash_template = """#!/bin/bash
+""" + io_utils.BASH_STRICT_HEADER + """
 ls -ltrh
 echo ""
 

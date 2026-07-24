@@ -14,7 +14,7 @@ import io_utils
 WORKER_SCRIPT_NAME = "bootstrap.py"
 
 BASH_TEMPLATE = """#!/bin/bash
-
+""" + io_utils.BASH_STRICT_HEADER + """
 # $1: The full EOS path of the input file (e.g., /path/to/time/data_01.parquet)
 INPUT_FILE_EOS="$1"
 

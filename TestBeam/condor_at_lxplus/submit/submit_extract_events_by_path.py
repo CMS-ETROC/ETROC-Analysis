@@ -16,7 +16,7 @@ import io_utils
 
 # Template for the shell script running on the worker node
 BASH_TEMPLATE = """#!/bin/bash
-
+""" + io_utils.BASH_STRICT_HEADER + """
 ls -ltrh
 echo ""
 pwd
