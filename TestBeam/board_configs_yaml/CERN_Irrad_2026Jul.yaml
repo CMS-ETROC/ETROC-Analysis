@@ -80,6 +80,34 @@ h1_run11: &h1_run11
   2: { <<: *PT_IH12, HV: 550, role: ref,   irrad: 2e15, note: 17cm off beam axis }
   3: { <<: *PT_IH13, HV: 550, role: trig,  irrad: 2e15, note: 17cm off beam axis }
 h1_run12: *h1_run11
+h1_run13: *h1_run11
+
+h1_run14: &h1_run14
+  0: { <<: *PT_IH7,  HV: 480, role: extra, irrad: 3.5e15, note: 17cm off beam axis }
+  1: { <<: *PT_IH11, HV: 540, role: dut,   irrad: 3.5e15, note: 17cm off beam axis }
+  2: { <<: *PT_IH12, HV: 540, role: ref,   irrad: 3.5e15, note: 17cm off beam axis }
+  3: { <<: *PT_IH13, HV: 540, role: trig,  irrad: 3.5e15, note: 17cm off beam axis }
+h1_run15: *h1_run14
+
+h1_run16: &h1_run16
+  0: { <<: *PT_IH7,  HV: 520, role: extra, irrad: 3.5e15, note: 17cm off beam axis }
+  1: { <<: *PT_IH11, HV: 550, role: dut,   irrad: 3.5e15, note: 17cm off beam axis }
+  2: { <<: *PT_IH12, HV: 550, role: ref,   irrad: 3.5e15, note: 17cm off beam axis }
+  3: { <<: *PT_IH13, HV: 550, role: trig,  irrad: 3.5e15, note: 17cm off beam axis }
+
+h1_run17: &h1_run17
+  0: { <<: *PT_IH7,  HV: 530, role: extra, irrad: 3.5e15, note: 17cm off beam axis }
+  1: { <<: *PT_IH11, HV: 550, role: dut,   irrad: 3.5e15, note: 17cm off beam axis }
+  2: { <<: *PT_IH12, HV: 550, role: ref,   irrad: 3.5e15, note: 17cm off beam axis }
+  3: { <<: *PT_IH13, HV: 550, role: trig,  irrad: 3.5e15, note: 17cm off beam axis }
+h1_run18: *h1_run17
+h1_run19: *h1_run17
+
+h1_run33: &h1_run33
+  0: { <<: *PT_IH7,  HV: 530, role: extra, offset: 10, irrad: 3.5e15, note: 17cm off beam axis }
+  1: { <<: *PT_IH11, HV: 550, role: dut,   offset: 10, irrad: 3.5e15, note: 17cm off beam axis }
+  2: { <<: *PT_IH12, HV: 550, role: ref,   offset: 10, irrad: 3.5e15, note: 17cm off beam axis }
+  3: { <<: *PT_IH13, HV: 550, role: trig,  offset: 10, irrad: 3.5e15, note: 17cm off beam axis }
 
 f1_run3: &f1_run3
   0: { <<: *PT_LF10, irrad: 1.5e15, note: 17cm off beam axis }
