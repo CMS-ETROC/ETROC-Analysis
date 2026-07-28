@@ -152,3 +152,5 @@ f1_run16: &f1_run16
   1: { <<: *PT_LF12, HV: 480, irrad: 3.5e15, note: 17cm off beam axis }
   2: { <<: *PT_LF17, HV: 450, irrad: 3.5e15, note: 17cm off beam axis }
   3: { <<: *PT_LF18, HV: 480, irrad: 3.5e15, note: 17cm off beam axis }
+f1_run17: *f1_run16
+f1_run18: *f1_run16
