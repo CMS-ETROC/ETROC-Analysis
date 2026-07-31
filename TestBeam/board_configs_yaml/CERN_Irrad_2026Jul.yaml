@@ -5,24 +5,28 @@ F1:
     offset: 20
     HV: 480
     role: extra
+    RFSel: 2
   PT_LF12: &PT_LF12
     name: ETROC LFoundry-12
     short: PT_LF12
     offset: 20
     HV: 480
     role: dut
+    RFSel: 2
   PT_LF17: &PT_LF17
     name: ETROC LFoundry-17
     short: PT_LF17
     offset: 20
     HV: 480
     role: ref
+    RFSel: 2
   PT_LF18: &PT_LF18
     name: ETROC LFoundry-18
     short: PT_LF18
     offset: 20
     HV: 480
     role: trig
+    RFSel: 2
 
 H1:
   PT_IH7: &PT_IH7
@@ -31,24 +35,28 @@ H1:
     offset: 20
     HV: 540
     role: extra
+    RFSel: 2
   PT_IH11: &PT_IH11
     name: ETROC HPK-11
     short: PT_IH11
     offset: 20
     HV: 540
     role: ref
+    RFSel: 2
   PT_IH12: &PT_IH12
     name: ETROC HPK-12
     short: PT_IH12
     offset: 20
     HV: 540
     role: dut
+    RFSel: 2
   PT_IH13: &PT_IH13
     name: ETROC HPK-13
     short: PT_IH13
     offset: 20
     HV: 540
     role: trig
+    RFSel: 2
 
 
 h1_run3: &h1_run3
@@ -168,3 +176,10 @@ f1_run32: &f1_run32
   1: { <<: *PT_LF12, HV: 480, offset: 10, irrad: 3.5e15, note: 17cm off beam axis }
   2: { <<: *PT_LF17, HV: 450, offset: 10, irrad: 3.5e15, note: 17cm off beam axis }
   3: { <<: *PT_LF18, HV: 480, offset: 10, irrad: 3.5e15, note: 17cm off beam axis }
+
+f1_run46: &f1_run46
+  0: { <<: *PT_LF10, HV: 450, offset: 20, RFSel: 1, irrad: 3.5e15, note: 17cm off beam axis }
+  1: { <<: *PT_LF12, HV: 480, offset: 20, RFSel: 1, irrad: 3.5e15, note: 17cm off beam axis }
+  2: { <<: *PT_LF17, HV: 450, offset: 20, RFSel: 1, irrad: 3.5e15, note: 17cm off beam axis }
+  3: { <<: *PT_LF18, HV: 480, offset: 20, RFSel: 1, irrad: 3.5e15, note: 17cm off beam axis }
+f1_run47: *f1_run46
