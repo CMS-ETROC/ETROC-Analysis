@@ -192,3 +192,10 @@ f1_run49:
   1: { <<: *PT_LF12, HV: 480, offset: 20, irrad: 3.5e15, note: 17cm off beam axis }
   2: { <<: *PT_LF17, HV: 450, offset: 20, irrad: 3.5e15, note: 17cm off beam axis }
   3: { <<: *PT_LF18, HV: 480, offset: 20, irrad: 3.5e15, note: 17cm off beam axis }
+
+f1_run50: &f1_run50
+  0: { <<: *PT_LF10, HV: 450, offset: 15, irrad: 3.5e15, note: 17cm off beam axis }
+  1: { <<: *PT_LF12, HV: 480, offset: 15, irrad: 3.5e15, note: 17cm off beam axis }
+  2: { <<: *PT_LF17, HV: 450, offset: 15, irrad: 3.5e15, note: 17cm off beam axis }
+  3: { <<: *PT_LF18, HV: 480, offset: 15, irrad: 3.5e15, note: 17cm off beam axis }
+f1_run51: *f1_run50
