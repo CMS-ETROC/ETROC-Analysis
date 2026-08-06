@@ -151,11 +151,75 @@ def create_submission_files(
 
     return jdl_path, bash_path, input_list_path
 
+def process_group_dir(group_dir: Path, combo_label, args: argparse.Namespace, paths: dict[str, Path]) -> bool:
+    """Submits (or dry-runs) the condor job for one time/time_groupX directory.
+    Returns True on success (including a skipped/empty group), False on failure."""
+    group_name = group_dir.name
+
+    # Calculate Suffix: time -> "", time_group1 -> _group1
+    group_suffix = group_name.replace('time', '')
+
+    # Namespace output/log dirs and local artifact names (script/JDL/input list)
+    # by combo so two combos with the same group_suffix (e.g. both a bare "time"
+    # dir) never collide. Unlike step 11's CSVs, a collision here would silently
+    # overwrite bootstrap .parquet output between combos via TransferOutputRemaps
+    # (stem-based filenames can plausibly match across combos), not just mix up
+    # human-readable filenames.
+    if combo_label:
+        unique_out_name = f"bootstrap_{args.outputdir}/{combo_label}{group_suffix}"
+        group_log_dir = paths['logs'] / combo_label / group_name
+        unique_group_tag = f'_{combo_label}{group_suffix}'
+    else:
+        unique_out_name = f"bootstrap_{args.outputdir}{group_suffix}"
+        group_log_dir = paths['logs'] / group_name
+        unique_group_tag = group_suffix
+
+    group_out_dir = Path(unique_out_name)
+    label = f'{combo_label}/{group_name}' if combo_label else group_name
+
+    if not args.dryrun:
+        try:
+            group_out_dir.mkdir(parents=True, exist_ok=True)
+            group_log_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            print(f"Error creating directories for {label}: {e}")
+            return False
+
+    print(f"\n>>> Processing Group: {label}")
+    print(f"    Out: {group_out_dir}")
+    print(f"    Log: {group_log_dir}")
+
+    jdl, bash, list_file = create_submission_files(
+        args, paths, unique_group_tag, group_dir, group_out_dir, group_log_dir
+    )
+
+    if not jdl:
+        return True
+
+    if args.dryrun:
+        print(f"    [Dry Run] JDL: {jdl}")
+        print(f"    [Dry Run] Bash: {bash}")
+        print(f"    [Dry Run] Input: {list_file}")
+        return True
+
+    if list_file.stat().st_size > 0:
+        print(f"    Submitting jobs...")
+        result = subprocess.run(['condor_submit', str(jdl)])
+        if result.returncode != 0:
+            print(f"    !!! ERROR: condor_submit failed for {label} with exit code {result.returncode}.")
+            return False
+    else:
+        print("    Input list empty.")
+
+    return True
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Submit Bootstrap Analysis to Condor')
 
     # Required
-    parser.add_argument('-d', '--inputdir', required=True, dest='dirname', help='Mother directory containing time/time_group folders')
+    parser.add_argument('-d', '--inputdir', required=True, dest='dirname', help='Mother directory containing time/time_group folders. '
+                        'Can also be the combo mother directory (one subdirectory per board combo, each with its own time/time_groupX '
+                        'folders) -- every combo is then auto-detected and processed in one submission.')
     parser.add_argument('-o', '--outputdir', required=True, dest='outputdir', help='Output directory base name')
 
     # Bootstrap Params
@@ -186,11 +250,6 @@ if __name__ == "__main__":
 
     time_dirs = io_utils.discover_time_dirs(mother_dir)
 
-    if not time_dirs:
-        sys.exit(f"No directories containing 'time' found in {mother_dir}")
-
-    print(f"Found {len(time_dirs)} groups: {[d.name for d in time_dirs]}")
-
     # --- 2. Setup Base Paths ---
     if args.condor_tag:
         run_append = args.condor_tag
@@ -217,57 +276,37 @@ if __name__ == "__main__":
 
     # --- 3. Process Each Group ---
     failures = 0
-    for group_dir in time_dirs:
-        group_name = group_dir.name
+    total_groups = 0
 
-        # Calculate Suffix: time -> "", time_group1 -> _group1
-        group_suffix = group_name.replace('time', '')
-
-        # 1. Output Directory: bootstrap_OutName_group1
-        unique_out_name = f"bootstrap_{args.outputdir}{group_suffix}"
-        group_out_dir = Path(unique_out_name)
-
-        # 2. Log Directory: condor_logs/.../time_group1
-        group_log_dir = paths['logs'] / group_name
-
-        if not args.dryrun:
-            try:
-                group_out_dir.mkdir(parents=True, exist_ok=True)
-                group_log_dir.mkdir(parents=True, exist_ok=True)
-            except OSError as e:
-                print(f"Error creating directories for {group_name}: {e}")
+    if time_dirs:
+        print(f"Found {len(time_dirs)} groups: {[d.name for d in time_dirs]}")
+        for group_dir in time_dirs:
+            total_groups += 1
+            if not process_group_dir(group_dir, None, args, paths):
+                failures += 1
+    else:
+        # -d may be the combo mother directory step 10 can write (one
+        # subdirectory per board combo, each itself containing
+        # time/time_groupX) -- descend one level and process every combo
+        # instead of requiring one submission per combo.
+        processed_any = False
+        for combo_dir in sorted(d for d in mother_dir.iterdir() if d.is_dir()):
+            combo_time_dirs = io_utils.discover_time_dirs(combo_dir)
+            if not combo_time_dirs:
                 continue
-
-        unique_group_tag = group_suffix
-
-        print(f"\n>>> Processing Group: {group_name}")
-        print(f"    Out: {group_out_dir}")
-        print(f"    Log: {group_log_dir}")
-
-        jdl, bash, list_file = create_submission_files(
-            args, paths, unique_group_tag, group_dir, group_out_dir, group_log_dir
-        )
-
-        if not jdl: continue
-
-        # --- Submission Logic ---
-        if args.dryrun:
-            print(f"    [Dry Run] JDL: {jdl}")
-            print(f"    [Dry Run] Bash: {bash}")
-            print(f"    [Dry Run] Input: {list_file}")
-
-        else:
-            if list_file.stat().st_size > 0:
-                print(f"    Submitting jobs...")
-                result = subprocess.run(['condor_submit', str(jdl)])
-                if result.returncode != 0:
-                    print(f"    !!! ERROR: condor_submit failed for {group_name} with exit code {result.returncode}.")
+            processed_any = True
+            print(f"Found {len(combo_time_dirs)} groups for combo {combo_dir.name}: "
+                  f"{[d.name for d in combo_time_dirs]}")
+            for group_dir in combo_time_dirs:
+                total_groups += 1
+                if not process_group_dir(group_dir, combo_dir.name, args, paths):
                     failures += 1
-            else:
-                print("    Input list empty.")
+
+        if not processed_any:
+            sys.exit(f"No directories containing 'time' found in {mother_dir} or its subdirectories")
 
     if failures:
-        print(f"\n{failures}/{len(time_dirs)} group(s) FAILED to submit.")
+        print(f"\n{failures}/{total_groups} group(s) FAILED to submit.")
         sys.exit(1)
 
     print("\nDone.")
