@@ -147,7 +147,7 @@ if __name__ == "__main__":
     )
 
     parser.add_argument('-d', '--inputdir', required=True, dest='dirname', help='Input directory containing feather files')
-    parser.add_argument('-t', '--track', required=True, dest='track', help='CSV file with track candidates')
+    parser.add_argument('-t', '--track', required=True, dest='track', help='Parquet file with track candidates for one board combo')
     parser.add_argument('-c', '--config', required=True, dest='config', help='YAML file with run config')
     parser.add_argument('-r', '--runName', required=True, dest='runName', help='Run name in YAML config')
     parser.add_argument('--cal_table', required=True, dest='cal_table', help='CSV file with CAL mode values')
