@@ -85,15 +85,34 @@ def get_trigger_id_from_config(config_path: Path, run_name: str) -> int:
 
     raise ValueError(f"No board with role 'trig' found in config for {run_name}")
 
-def create_submission_files(args, trig_id, paths, eos_base):
+def find_track_files(track_arg: Path) -> list[Path]:
+    """Resolves -t to the list of track files to submit jobs for.
+
+    If track_arg is a file, it's a single combo's track file and is returned
+    as the sole entry -- unchanged from before. If it's a directory (the
+    per-run directory path_finder.py writes combo track files into, and
+    reduce_number_of_track_candidates.py writes '_reduced' files alongside),
+    every '*_reduced.parquet' file in it is auto-detected -- one submission
+    per combo. All of them share the same --cal_table, since CAL mode values
+    are computed once per run (not per combo) by path_finder.py.
+    """
+    if track_arg.is_file():
+        return [track_arg]
+    if track_arg.is_dir():
+        track_files = natsorted(track_arg.glob('*_reduced.parquet'))
+        if not track_files:
+            sys.exit(f"Error: No '*_reduced.parquet' files found in {track_arg}.")
+        return track_files
+    sys.exit(f"Error: Track path '{track_arg}' not found.")
+
+def create_submission_files(args, trig_id, script_dir, log_dir, eos_base, track_path, out_dir):
 
     config_path = Path(args.config)
     cal_path = Path(args.cal_table)
-    track_path = Path(args.track)
     final_input_dir = Path(eos_base) / args.dirname
 
     # 2. No unlink() needed
-    input_list_path = paths['scripts_dir'] / 'input_list.txt'
+    input_list_path = script_dir / 'input_list.txt'
     feather_files = natsorted(final_input_dir.glob('loop*feather'))
 
     with open(input_list_path, 'w') as f:
@@ -115,7 +134,7 @@ def create_submission_files(args, trig_id, paths, eos_base):
         config=config_path.name,
     )
 
-    bash_script_path = paths['scripts_dir'] / f'run_extract_events.sh'
+    bash_script_path = script_dir / f'run_extract_events.sh'
     with open(bash_script_path, 'w') as f:
         f.write(bash_content)
 
@@ -124,15 +143,15 @@ def create_submission_files(args, trig_id, paths, eos_base):
         'extract_events_by_path.py', track_path, cal_path, config_path
     )
     jdl_content = Template(JDL_TEMPLATE).render(
-        script_dir=paths['scripts_dir'],
+        script_dir=script_dir,
         input_dir=final_input_dir,
         transfer_files=transfer_files,
-        log_dir=paths['log_dir'],
+        log_dir=log_dir,
         eos_base=eos_base,
-        out_dir=args.outname,
+        out_dir=out_dir,
     )
 
-    jdl_path = paths['scripts_dir'] / f'condor_extract_events.jdl'
+    jdl_path = script_dir / f'condor_extract_events.jdl'
     with open(jdl_path, 'w') as f:
         f.write(jdl_content)
 
@@ -147,7 +166,12 @@ if __name__ == "__main__":
     )
 
     parser.add_argument('-d', '--inputdir', required=True, dest='dirname', help='Input directory containing feather files')
-    parser.add_argument('-t', '--track', required=True, dest='track', help='Parquet file with track candidates for one board combo')
+    parser.add_argument('-t', '--track', required=True, dest='track',
+                        help='Parquet file with track candidates for one board combo. Can also be the '
+                             'per-run directory path_finder.py / reduce_number_of_track_candidates.py '
+                             'wrote them into -- every "*_reduced.parquet" file in it is then '
+                             'auto-detected and submitted as a separate job, one per combo, all sharing '
+                             'the same --cal_table.')
     parser.add_argument('-c', '--config', required=True, dest='config', help='YAML file with run config')
     parser.add_argument('-r', '--runName', required=True, dest='runName', help='Run name in YAML config')
     parser.add_argument('--cal_table', required=True, dest='cal_table', help='CSV file with CAL mode values')
@@ -173,19 +197,17 @@ if __name__ == "__main__":
         print(f"No --condor_tag given; auto-generated tag '{run_append}' to avoid collisions with other submissions.")
 
     # Directory setup
-    paths = {
-        'scripts_dir': Path('.') / 'condor_scripts' / 'extract_events' / f'{run_append}',
-        'log_dir': Path('.') / 'condor_logs' / 'extract_events' / f'{run_append}'
-    }
-
-    for p in paths.values():
-        p.mkdir(parents=True, exist_ok=True)
+    base_scripts_dir = Path('.') / 'condor_scripts' / 'extract_events' / f'{run_append}'
+    base_log_dir = Path('.') / 'condor_logs' / 'extract_events' / f'{run_append}'
+    base_scripts_dir.mkdir(parents=True, exist_ok=True)
+    base_log_dir.mkdir(parents=True, exist_ok=True)
 
     # --- Validation ---
     if not Path('core/extract_events_by_path.py').is_file():
         sys.exit(f"Error: Worker script extract_events_by_path.py not found in current directory.")
-    if not Path(args.track).is_file():
-        sys.exit(f"Error: Track file '{args.track}' not found.")
+    track_arg = Path(args.track)
+    if not track_arg.exists():
+        sys.exit(f"Error: Track path '{args.track}' not found.")
     if not Path(args.cal_table).is_file():
         sys.exit(f"Error: Cal table '{args.cal_table}' not found.")
     if not Path(args.config).is_file():
@@ -197,44 +219,64 @@ if __name__ == "__main__":
     except Exception as e:
         sys.exit(f"Configuration Error: {e}")
 
-    # Auto-namespace the output directory by board combo so two combos
-    # submitted with the same -o can never collide on EOS or get merged
-    # together by step 9's track_id-based gather (track_id restarts at 0
-    # independently per combo, so mixing combos in one directory silently
-    # corrupts the merge).
-    try:
-        combo_label = io_utils.combo_label_from_track_filename(args.track)
-    except ValueError as e:
-        sys.exit(f"Error: {e}")
-    args.outname = str(Path(args.outname) / combo_label)
+    track_files = find_track_files(track_arg)
 
     print('\n========= Submission Details =========')
     print(f'Input:       {args.dirname}')
     print(f'Input CAL table: {args.cal_table}')
-    print(f'Input track file: {args.track}')
     print(f'Trigger ID:  {trig_id}')
-    print(f'Output:      {eos_base_dir}/{args.outname}')
     if args.search_method != 'none':
         print(f'Neighbor search method: {args.search_method}')
+    if len(track_files) > 1:
+        print(f'Found {len(track_files)} combo track file(s) in {track_arg}: {[f.name for f in track_files]}')
     print('======================================\n')
 
-    jdl_file, bash_file, list_file = create_submission_files(
-        args, trig_id, paths, eos_base_dir
-    )
+    base_outname = args.outname
+    failures = 0
 
-    # --- Submission ---
-    if args.dryrun:
-        print("--- Dry Run: Files Generated ---")
-        print(f"[Dry Run] JDL:  {jdl_file}")
-        print(f"[Dry Run] Bash: {bash_file}")
-        print(f"[Dry Run] List: {list_file}")
+    for track_path in track_files:
+        # Auto-namespace the output directory by board combo so two combos
+        # submitted with the same -o can never collide on EOS or get merged
+        # together by step 9's track_id-based gather (track_id restarts at 0
+        # independently per combo, so mixing combos in one directory silently
+        # corrupts the merge). Same reasoning for nesting each combo's own
+        # script/log directory, so their input_list.txt/JDL/bash files (and
+        # condor logs) don't overwrite each other either.
+        try:
+            combo_label = io_utils.combo_label_from_track_filename(track_path)
+        except ValueError as e:
+            sys.exit(f"Error: {e}")
 
-    else:
-        # Standard Submission
+        combo_script_dir = base_scripts_dir / combo_label
+        combo_log_dir = base_log_dir / combo_label
+        combo_script_dir.mkdir(parents=True, exist_ok=True)
+        combo_log_dir.mkdir(parents=True, exist_ok=True)
+
+        out_dir = str(Path(base_outname) / combo_label)
+
+        print(f'>>> Combo: {combo_label}')
+        print(f'    Track file: {track_path}')
+        print(f'    Output:     {eos_base_dir}/{out_dir}')
+
+        jdl_file, bash_file, list_file = create_submission_files(
+            args, trig_id, combo_script_dir, combo_log_dir, eos_base_dir, track_path, out_dir
+        )
+
+        if args.dryrun:
+            print(f"    [Dry Run] JDL:  {jdl_file}")
+            print(f"    [Dry Run] Bash: {bash_file}")
+            print(f"    [Dry Run] List: {list_file}\n")
+            continue
+
         if list_file.stat().st_size > 0:
             result = subprocess.run(['condor_submit', str(jdl_file)])
             if result.returncode != 0:
-                print(f"!!! ERROR: condor_submit failed with exit code {result.returncode}.")
-                sys.exit(1)
+                print(f"    !!! ERROR: condor_submit failed for {combo_label} with exit code {result.returncode}.")
+                failures += 1
         else:
-            print("No input files found in directory. Nothing submitted.")
+            print(f"    No input files found in directory. Nothing submitted for {combo_label}.")
+        print()
+
+    if failures:
+        print(f"{failures}/{len(track_files)} combo(s) FAILED to submit.")
+        sys.exit(1)
