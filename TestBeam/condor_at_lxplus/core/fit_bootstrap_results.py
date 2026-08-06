@@ -153,15 +153,37 @@ def process_single_boot_file(ifile: Path, excluded_role: str, args: argparse.Nam
 
     return contribution
 
-def process_group(input_dir: Path, output_dir: Path, args: argparse.Namespace) -> int:
+def find_input_dirs(mother_dir: Path):
+    """Resolves -d to the list of boot-file directories to process.
+
+    If mother_dir itself directly contains *_boot.parquet files, it's already
+    a single group directory (step 12 writes one such directory per
+    combo/group, e.g. bootstrap_<outputdir>/<combo_label>[_groupX]) and is
+    returned as the sole entry, with is_direct=True so the output filename
+    stays exactly as before (no label). Otherwise mother_dir is treated as
+    the combo mother directory: every subdirectory that actually contains
+    boot files is entered, is_direct=False, and each gets a labeled output
+    filename (mirroring step 11) so results from different combos/groups
+    saved to the same -o never collide.
+    """
+    if list(mother_dir.glob('*_boot.parquet')):
+        return [mother_dir], True
+
+    sub_dirs = [d for d in sorted(mother_dir.iterdir()) if d.is_dir() and list(d.glob('*_boot.parquet'))]
+    if not sub_dirs:
+        sys.exit(f"Error: No '*_boot.parquet' files found in {mother_dir} or its subdirectories.")
+    return sub_dirs, False
+
+def process_group(input_dir: Path, output_dir: Path, label, args: argparse.Namespace) -> int:
     files = natsorted(input_dir.glob('*_boot.parquet'))
     if not files: return 0
 
     excluded_role = files[0].name.split('_')[1] if '_' in files[0].name else 'trig'
     boot_dict = defaultdict(list)
 
+    desc = f'{label}' if label else input_dir.name
     failures = 0
-    for ifile in tqdm(files, desc=f"  Merging {input_dir.name}"):
+    for ifile in tqdm(files, desc=f"  Merging {desc}"):
         try:
             contribution = process_single_boot_file(ifile, excluded_role, args)
         except Exception as e:
@@ -176,10 +198,14 @@ def process_group(input_dir: Path, output_dir: Path, args: argparse.Namespace) -
             boot_dict[key].append(value)
 
     if failures:
-        print(f"  Warning: {failures}/{len(files)} file(s) FAILED to process in {input_dir.name}")
+        print(f"  Warning: {failures}/{len(files)} file(s) FAILED to process in {desc}")
 
     if boot_dict:
-        out_path = output_dir / f"resolution_table{args.tag}.csv"
+        # Combo/group label (if any) goes right after "resolution_table" so two
+        # combos/groups saved to the same -o never overwrite each other's CSV --
+        # same convention as step 11's nevt_<combo_label>_... filenames.
+        base = f"resolution_table_{label}" if label else "resolution_table"
+        out_path = output_dir / f"{base}{args.tag}.csv"
         io_utils.write_csv(pd.DataFrame(boot_dict), out_path, index=False)
 
     return failures
@@ -188,7 +214,11 @@ def process_group(input_dir: Path, output_dir: Path, args: argparse.Namespace) -
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-d', '--inputdir', required=True)
+    parser.add_argument('-d', '--inputdir', required=True,
+                        help='Directory of step 12 boot-file output for one combo/group. Can also be the '
+                             'combo mother directory (one subdirectory per board combo/group, each holding '
+                             '*_boot.parquet files) -- every one is then auto-detected and processed, with '
+                             'output CSVs distinguished by label, same as step 11.')
     parser.add_argument('-o', '--outputdir', required=True)
     parser.add_argument('--sigma_cut', type=float, default=2.5, help='Sigma window for filtered fit')
     parser.add_argument('--tag', default='')
@@ -199,9 +229,14 @@ def main():
     out_dir = Path(args.outputdir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    failures = process_group(input_dir, out_dir, args)
+    group_dirs, is_direct = find_input_dirs(input_dir)
 
-    if failures:
+    total_failures = 0
+    for group_dir in group_dirs:
+        label = None if is_direct else group_dir.name
+        total_failures += process_group(group_dir, out_dir, label, args)
+
+    if total_failures:
         sys.exit(1)
 
 if __name__ == "__main__":
