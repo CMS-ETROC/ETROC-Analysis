@@ -217,7 +217,7 @@ def main():
     parser.add_argument('-f', '--inputfile', required=True, dest='inputfile', help='Input feather file')
     parser.add_argument('-r', '--runinfo', required=True, dest='runinfo', help='Run info string for output name')
     parser.add_argument('-c', '--config', required=True, dest='config', help='YAML file with run config')
-    parser.add_argument('-t', '--track', required=True, dest='track', help='CSV file with track candidates')
+    parser.add_argument('-t', '--track', required=True, dest='track', help='Parquet file with track candidates for one board combo')
     parser.add_argument('--neighbor_search_method', default="none", dest='search_method',
                         help="Search method for neighbor hit checking, default is 'none'. possible argument: 'row_only', 'col_only', 'cross', 'square'")
     parser.add_argument('--cal_table', required=True, dest='cal_table', help='CSV file with CAL mode values')
@@ -250,7 +250,7 @@ def main():
         sys.exit(0)
 
     # 2. Load Track Candidates
-    track_df = pd.read_csv(args.track)
+    track_df = pd.read_parquet(args.track)
     if track_df.empty:
         logging.error('Track file is empty.')
         sys.exit(0)
