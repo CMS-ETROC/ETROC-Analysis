@@ -1,7 +1,7 @@
 defaults:
-  B1-P1-6: &B1-P1-6  {name: B1-P1-6,              short: B1-P1-6,  offset: 20,  HV: 220,  role: extra}
-  PT-IH5: &PT-IH5    {name: ET2.02 PacTech IH-5,  short: PT-IH5,   offset: 20,  HV: 220,  role: ref}
-  PT-IH3: &PT-IH3    {name: ET2.02 PacTech IH-3,  short: PT-IH3,   offset: 20,  HV: 220,  role: trig}
+  B1-P1-6: &B1-P1-6  {name: B1-P1-6,              short: B1-P1-6,  offset: 20,  HV: 230,  role: extra}
+  PT-IH5: &PT-IH5    {name: ET2.02 PacTech IH-5,  short: PT-IH5,   offset: 20,  HV: 230,  role: ref}
+  PT-IH3: &PT-IH3    {name: ET2.02 PacTech IH-3,  short: PT-IH3,   offset: 20,  HV: 230,  role: trig}
   B1-P1-9: &B1-P1-9  {name: B1-P1-9,              short: B1-P1-9,  offset: 20,  HV: 220,  role: dut}
 
   # PT-IH27_60deg: &PT-IH27_60deg {<<: *PT-IH27, angle: 60, role: extra}
@@ -9,8 +9,14 @@ defaults:
   # PT-IH3_60deg:  &PT-IH3_60deg  {<<: *PT-IH3,  angle: 60, role: trig,   HV: 210}
   # PT-IH2_60deg:  &PT-IH2_60deg  {<<: *PT-IH2,  angle: 60}
 
-run1: &run1
-  0: *B1-P1-9
-  1: *PT-IH3
-  2: *PT-IH5
-  3: *B1-P1-6
+run2: &run2
+  0: {<<: *B1-P1-9, temp: 15C}
+  1: {<<: *PT-IH3,  temp: 25C}
+  2: {<<: *PT-IH5,  temp: 25C}
+  3: {<<: *B1-P1-6, temp: 25C}
+
+run3: &run3
+  0: {<<: *B1-P1-9, HV: 190, temp: -20C}
+  1: {<<: *PT-IH3,  HV: 220, temp: 0C}
+  2: {<<: *PT-IH5,  HV: 220, temp: 0C}
+  3: {<<: *B1-P1-6, HV: 220, temp: 0C}
