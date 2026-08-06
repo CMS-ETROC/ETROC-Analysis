@@ -500,7 +500,12 @@ def main():
         n_written += 1
 
     if alignment_results:
-        alignment_file = f'{args.track_label}_alignment.yaml'
+        # Own directory, separate from wherever --track-label's tracks/cal_table
+        # output goes, since alignment output is a different kind of artifact
+        # (a diagnostic to review/merge by hand, not pipeline input).
+        alignment_dir = Path('alignment')
+        alignment_dir.mkdir(parents=True, exist_ok=True)
+        alignment_file = alignment_dir / f'{Path(args.track_label).name}_alignment.yaml'
         with open(alignment_file, 'w') as f:
             yaml.dump({
                 args.runName: {
