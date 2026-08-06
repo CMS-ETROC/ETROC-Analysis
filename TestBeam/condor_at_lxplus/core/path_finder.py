@@ -3,6 +3,7 @@ import sys
 import logging
 import warnings
 import random, getpass
+from itertools import combinations
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -21,6 +22,7 @@ PIXEL_PITCH = 1.3
 PIXEL_OFFSET = 7.5
 MAX_MEMORY_USAGE_MB = 2600
 SINGLE_FILE_MEMORY_LIMIT_MB = 26
+MIN_BOARD_COMBO_SIZE = 3  # extract_events_by_path.py (step 8) requires at least 3 boards
 
 # --- Helper Functions ---
 
@@ -359,92 +361,122 @@ def main():
     check_empty_df(df, "CAL deviation filtering")
 
     ids_to_process = sorted(roles.values())
-
-    # Single Hit Selection
-    # Ensure every required board has exactly 1 hit
-    req_boards = [b for b in ['trig', 'ref', 'dut', 'extra'] if b in roles]
-
-    # Group by event and board to count hits
-    counts = df.groupby(['evt', 'board']).size().unstack(fill_value=0)
-
-    # Create mask where all required boards have exactly 1 hit
-    valid_event_mask = np.logical_and.reduce([counts[roles[r]] == 1 for r in req_boards])
-    valid_events = counts[valid_event_mask].index
-
-    df = df.loc[df['evt'].isin(valid_events)].reset_index(drop=True)
     df[['row', 'col']] = df[['row', 'col']].astype('int8') # Optimization
-    check_empty_df(df, "Single hit filtering")
 
-    # Pivot to Wide Format (Events as rows, Boards as columns)
-    # Prepare columns to keep
+    # Group by event and board to count hits, once -- reused by every combo below
+    # instead of being recomputed per combo.
+    hit_counts = df.groupby(['evt', 'board']).size().unstack(fill_value=0)
+
+    # Board combinations to produce tracks for: the full board set, plus every
+    # smaller subset down to 3 boards (e.g. for 4 boards, that's the 4-board
+    # set and all four 3-board leave-one-out subsets). Each combo gets its own
+    # single-hit requirement -- a board left out of a combo isn't required to
+    # have a hit for that combo's tracks. extract_events_by_path.py requires
+    # at least 3 boards, so we never go below that.
+    min_boards = min(MIN_BOARD_COMBO_SIZE, len(ids_to_process))
+    board_combos = [
+        combo
+        for size in range(len(ids_to_process), min_boards - 1, -1)
+        for combo in combinations(ids_to_process, size)
+    ]
+
     values_to_keep = ['row', 'col'] # minimal set for tracking
+    trig_id = roles.get('trig')
+    n_written = 0
 
-    # Pivot
-    track_df = df.pivot(index='evt', columns='board', values=values_to_keep)
-    # Flatten columns: (row, 0) -> row_0
-    track_df.columns = [f"{v}_{b}" for v, b in track_df.columns]
+    for combo in board_combos:
+        combo_label = '-'.join(str(b) for b in combo)
+        logging.info(f"--- Board combo ({combo_label}) ---")
 
-    # Group identical hit patterns (finding "Hot Tracks" or frequent combinations)
-    # Identify grouping columns (row_X, col_X for all boards)
-    group_cols = list(track_df.columns)
+        # Single Hit Selection: every board in this combo must have exactly 1 hit
+        missing = [b for b in combo if b not in hit_counts.columns]
+        if missing:
+            logging.warning(f"Combo ({combo_label}): board(s) {missing} have no hits at all. Skipping.")
+            continue
 
-    track_candidates = track_df.groupby(group_cols).size().reset_index(name='count')
-    track_candidates = track_candidates[track_candidates['count'] > args.ntracks]
+        valid_event_mask = np.logical_and.reduce([hit_counts[b] == 1 for b in combo])
+        valid_events = hit_counts[valid_event_mask].index
 
-    if track_candidates.empty:
-        logging.warning("No track candidates found above threshold.")
+        combo_df = df.loc[df['evt'].isin(valid_events) & df['board'].isin(combo)].reset_index(drop=True)
+        if combo_df.empty:
+            logging.warning(f"Combo ({combo_label}): no valid events. Skipping.")
+            continue
+
+        # Pivot to Wide Format (Events as rows, Boards as columns)
+        track_df = combo_df.pivot(index='evt', columns='board', values=values_to_keep)
+        # Flatten columns: (row, 0) -> row_0
+        track_df.columns = [f"{v}_{b}" for v, b in track_df.columns]
+
+        # Group identical hit patterns (finding "Hot Tracks" or frequent combinations)
+        group_cols = list(track_df.columns)
+
+        track_candidates = track_df.groupby(group_cols).size().reset_index(name='count')
+        track_candidates = track_candidates[track_candidates['count'] > args.ntracks]
+
+        if track_candidates.empty:
+            logging.warning(f"Combo ({combo_label}): no track candidates above threshold. Skipping.")
+            continue
+
+        # 6. Geometric Transformation & Final Filtering
+        apply_geometric_transformation_matrix(track_candidates, combo, run_config)
+
+        # Alignment offsets are a property of the boards themselves, not of which
+        # combo produced the tracks -- only compute/save them once, off the
+        # full board-set combo (processed first), then every combo after it
+        # picks up the updated run_config automatically.
+        if args.find_alignment and len(combo) == len(ids_to_process) and trig_id is not None:
+            shift_df = track_candidates.copy(deep=True)
+            for bid in combo:
+                if bid == trig_id:
+                    continue
+
+                shift_df[f'x_{bid}'] = shift_df[f'x_{bid}'] - shift_df[f'x_{trig_id}']
+                shift_df[f'y_{bid}'] = shift_df[f'y_{bid}'] - shift_df[f'y_{trig_id}']
+
+                hist_counts, bin_edges = np.histogram(shift_df[f'x_{bid}'], weights=shift_df['count'], bins=30)
+                max_index = np.argmax(hist_counts)
+                max_bin_start = bin_edges[max_index]
+                max_bin_end = bin_edges[max_index + 1]
+
+                center_x = round(float(0.5*(max_bin_end+max_bin_start)), 2)
+
+                hist_counts, bin_edges = np.histogram(shift_df[f'y_{bid}'], weights=shift_df['count'], bins=30)
+                max_index = np.argmax(hist_counts)
+                max_bin_start = bin_edges[max_index]
+                max_bin_end = bin_edges[max_index + 1]
+
+                center_y = round(float(0.5*(max_bin_end+max_bin_start)), 2)
+
+                translation = full_config[args.runName][bid].setdefault('transformation', {}).setdefault('translation', {'x': 0.0, 'y': 0.0, 'z': 0.0})
+                translation['x'] = translation.get('x', 0.0) - center_x
+                translation['y'] = translation.get('y', 0.0) - center_y
+
+            # Save using the same yaml instance to keep the formatting rules
+            with open(args.config, 'w') as f:
+                yaml.dump(full_config, f)
+
+            run_config = full_config[args.runName]
+            apply_geometric_transformation_matrix(track_candidates, combo, run_config)
+
+        spatial_mask = check_spatial_alignment(track_candidates, roles, args.max_diff_pixel)
+        final_tracks = track_candidates[spatial_mask]
+
+        # Remove duplicates if any remain based on pattern
+        final_tracks = final_tracks.drop_duplicates(subset=group_cols)
+
+        coord_cols = [c for c in final_tracks.columns if c.split('_')[0] in ['x', 'y', 'z']]
+        final_tracks[coord_cols] = final_tracks[coord_cols].round(2)
+
+        output_file = f'{args.track_label}_tracks_{combo_label}.parquet'
+        io_utils.write_parquet(final_tracks, output_file, index=False)
+        logging.info(f"Combo ({combo_label}): {len(final_tracks)} tracks saved to {output_file}")
+        n_written += 1
+
+    if n_written == 0:
+        logging.warning("No track candidates found for any board combo.")
         sys.exit(0)
 
-    # 6. Geometric Transformation & Final Filtering
-    apply_geometric_transformation_matrix(track_candidates, ids_to_process, run_config)
-
-    if args.find_alignment:
-        shift_df = track_candidates.copy(deep=True)
-        trig_id = roles['trig']
-        for bid in ids_to_process:
-            if bid == trig_id:
-                continue
-
-            shift_df[f'x_{bid}'] = shift_df[f'x_{bid}'] - shift_df[f'x_{trig_id}']
-            shift_df[f'y_{bid}'] = shift_df[f'y_{bid}'] - shift_df[f'y_{trig_id}']
-
-            counts, bin_edges = np.histogram(shift_df[f'x_{bid}'], weights=shift_df['count'], bins=30)
-            max_index = np.argmax(counts)
-            max_bin_start = bin_edges[max_index]
-            max_bin_end = bin_edges[max_index + 1]
-
-            center_x = round(float(0.5*(max_bin_end+max_bin_start)), 2)
-
-            counts, bin_edges = np.histogram(shift_df[f'y_{bid}'], weights=shift_df['count'], bins=30)
-            max_index = np.argmax(counts)
-            max_bin_start = bin_edges[max_index]
-            max_bin_end = bin_edges[max_index + 1]
-
-            center_y = round(float(0.5*(max_bin_end+max_bin_start)), 2)
-
-            translation = full_config[args.runName][bid].setdefault('transformation', {}).setdefault('translation', {'x': 0.0, 'y': 0.0, 'z': 0.0})
-            translation['x'] = translation.get('x', 0.0) - center_x
-            translation['y'] = translation.get('y', 0.0) - center_y
-
-        # Save using the same yaml instance to keep the formatting rules
-        with open(args.config, 'w') as f:
-            yaml.dump(full_config, f)
-
-        run_config = full_config[args.runName]
-        apply_geometric_transformation_matrix(track_candidates, ids_to_process, run_config)
-
-    spatial_mask = check_spatial_alignment(track_candidates, roles, args.max_diff_pixel)
-    final_tracks = track_candidates[spatial_mask]
-
-    # Remove duplicates if any remain based on pattern
-    final_tracks = final_tracks.drop_duplicates(subset=group_cols)
-
-    coord_cols = [c for c in final_tracks.columns if c.split('_')[0] in ['x', 'y', 'z']]
-    final_tracks[coord_cols] = final_tracks[coord_cols].round(2)
-
-    output_file = f'{args.track_label}_tracks.csv'
-    io_utils.write_csv(final_tracks, output_file, index=False)
-    logging.info(f"Done. Tracks saved to {output_file}")
+    logging.info(f"Done. {n_written}/{len(board_combos)} board combo(s) produced track files.")
 
 if __name__ == "__main__":
     main()
