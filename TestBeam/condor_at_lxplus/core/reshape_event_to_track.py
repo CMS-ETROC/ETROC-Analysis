@@ -237,11 +237,20 @@ def main():
     eos_base_dir = io_utils.eos_base_dir(username)
 
     all_files = natsorted((eos_base_dir / args.dirname).glob(args.file_pattern))
-    final_output_dir = str(eos_base_dir / args.outdir)
 
     if not all_files:
         print('No input files found')
         sys.exit(1)
+
+    # Auto-namespace the output directory by board combo, mirroring step 8's
+    # combo_label_from_track_filename(). -d is expected to be step 8's
+    # combo-labeled output subdirectory (e.g. ".../dut0-trig1-ref2-extra3"),
+    # so its basename is the combo label. Without this, two combos pointed
+    # at the same -o would land in the same tracks/ folder and silently
+    # collide/mix in gather_track_worker's unguarded pq.write_table.
+    combo_label = Path(args.dirname).name
+    final_output_dir = str(eos_base_dir / args.outdir / combo_label)
+    print(f'Output directory: {final_output_dir}')
 
     # Unique per invocation and nested below a per-user wrapper folder, so concurrent
     # runs (or retries) never collide or delete each other's in-flight data, and the
