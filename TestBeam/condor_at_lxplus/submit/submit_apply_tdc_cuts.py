@@ -108,7 +108,7 @@ def build_python_command_args(args: argparse.Namespace, script_to_run: str) -> s
     if args.convert_first: cmd_parts.append("--convert-first")
     return " ".join(cmd_parts)
 
-def create_master_file_list(input_group_dir: Path, output_dir: Path) -> Optional[Path]:
+def create_master_file_list(input_group_dir: Path, output_dir: Path, label: str) -> Optional[Path]:
     """
     Scans the input directory for files to process, creates a sorted list of their
     paths relative to the mother_dir, and saves it to a temporary file.
@@ -127,8 +127,11 @@ def create_master_file_list(input_group_dir: Path, output_dir: Path) -> Optional
     if not all_files:
         return None
 
-    # 3. Save the list to a temporary file in the script directory
-    list_file_name = f"{input_group_dir.name}_file_list.txt"
+    # 3. Save the list to a temporary file in the script directory. Keyed by
+    # `label` (not just input_group_dir.name) so two board combos with a
+    # same-named group (e.g. both have a plain "tracks" dir) don't overwrite
+    # each other's master list within this run's script_dir.
+    list_file_name = f"{label}_file_list.txt"
     list_file_path = output_dir / list_file_name # Save it one level above the tracks dir
 
     with open(list_file_path, 'w') as f:
@@ -137,19 +140,23 @@ def create_master_file_list(input_group_dir: Path, output_dir: Path) -> Optional
     print(f"    Generated master list with {len(absolute_filenames)} files: {list_file_path.name}")
     return list_file_path, len(absolute_filenames)
 
-def create_jdl_file(args, eos_base_dir, master_list_path, group_name, njobs, script_to_run):
+def create_jdl_file(args, group_parent_dir, master_list_path, group_label, dir_name, njobs, script_to_run):
     jdl_content = Template(JDL_TEMPLATE).render({
         'script_dir': script_dir.as_posix(),
-        'bash_script_name': f'run_applyTDC_{group_name}.sh',
+        'bash_script_name': f'run_applyTDC_{group_label}.sh',
         'master_list_file_name': f'{master_list_path.name}',
         'transfer_files': io_utils.build_transfer_files(script_to_run, args.config, master_list_path),
-        'output_dir': f"{eos_base_dir}/{args.inputdir}/{group_name.replace('tracks','time')}",
+        # group_parent_dir is the group's actual immediate parent -- either
+        # the mother dir directly, or a combo subdirectory of it when -d
+        # holds multiple board combos -- so the "time" output lands next to
+        # the "tracks" dir it came from either way.
+        'output_dir': f"{group_parent_dir}/{dir_name.replace('tracks','time')}",
         'log_dir': log_dir.as_posix(),
         'batch_size': args.batch_size,
         'num_of_jobs': njobs,
     })
 
-    jdl_path = script_dir / f'condor_applyTDC_{group_name}.jdl'
+    jdl_path = script_dir / f'condor_applyTDC_{group_label}.jdl'
     with open(jdl_path, 'w') as f:
         f.write(jdl_content)
 
@@ -209,15 +216,30 @@ if __name__ == "__main__":
     script_dir.mkdir(parents=True, exist_ok=True)
 
     # --- 1. Identify Input/Output Groups ---
+    def find_track_group_dirs(d: Path) -> List[Path]:
+        return sorted([sub for sub in d.iterdir() if sub.is_dir() and sub.name.startswith('tracks')])
+
     mother_dir = Path(f'{eos_base_dir}/{args.inputdir}')
-    track_dirs = sorted([d for d in mother_dir.iterdir() if d.is_dir() and d.name.startswith('tracks')])
+    track_dirs = find_track_group_dirs(mother_dir)
 
     if not track_dirs:
-        if mother_dir.name.startswith('tracks'):
+        # Distinguish "-d points directly at a single tracks/tracks_groupX
+        # dir" from "-d is a combo mother directory" by content, not name --
+        # a name check (e.g. mother_dir.name.startswith('tracks')) would
+        # misfire on a perfectly natural combo mother dir name like
+        # "tracks_run2" and skip the combo descent below entirely.
+        if any(mother_dir.glob('*.parquet')):
             track_dirs = [mother_dir]
             mother_dir = mother_dir.parent
         else:
-            sys.exit(f"No 'tracks*' directories found in {mother_dir}")
+            # -d may be the combo mother directory step 9 can now write (one
+            # subdirectory per board combo, each itself containing
+            # tracks/tracks_groupX) -- descend one level and collect every
+            # combo's track groups instead of requiring one submission per combo.
+            for combo_dir in sorted(d for d in mother_dir.iterdir() if d.is_dir()):
+                track_dirs.extend(find_track_group_dirs(combo_dir))
+            if not track_dirs:
+                sys.exit(f"No 'tracks*' directories found in {mother_dir} or its subdirectories")
 
     # --- 3. Process Each Group ---
     print(f"\nScanning: {mother_dir}")
@@ -228,14 +250,23 @@ if __name__ == "__main__":
 
     for input_group_dir in track_dirs:
         dir_name = input_group_dir.name
+        group_parent_dir = input_group_dir.parent
+
+        # When -d holds multiple combos, input_group_dir.parent is the combo
+        # subdirectory rather than mother_dir itself -- prefix local artifact
+        # names (script/log/master-list) with the combo label so two combos'
+        # same-named groups (e.g. both a plain "tracks" dir) don't overwrite
+        # each other's files within this run's script_dir/log_dir.
+        combo_label = group_parent_dir.name if group_parent_dir != mother_dir else None
+        group_label = f'{combo_label}__{dir_name}' if combo_label else dir_name
 
         python_cmd = build_python_command_args(args, script_to_run)
 
         # Generate the master file list for this group
-        list_info = create_master_file_list(input_group_dir, script_dir)
+        list_info = create_master_file_list(input_group_dir, script_dir, group_label)
 
         if list_info is None:
-            print(f"    No files found to process for {dir_name}. Skipping.")
+            print(f"    No files found to process for {group_label}. Skipping.")
             continue
 
         master_list_path, num_files = list_info
@@ -245,18 +276,18 @@ if __name__ == "__main__":
         num_of_jobs = (num_files + batch_size - 1) // batch_size # Ceiling division
 
         # Log directory (local)
-        log_dir = log_dir_base / dir_name
+        log_dir = log_dir_base / group_label
         log_dir.mkdir(parents=True, exist_ok=True)
 
-        bash_path = script_dir / f'run_applyTDC_{dir_name}.sh'
+        bash_path = script_dir / f'run_applyTDC_{group_label}.sh'
         with open(bash_path, 'w') as f:
             f.write(Template(BASH_TEMPLATE).render({
                 'command': python_cmd,
-                'remote_path': f'{mother_dir}/{dir_name}'
+                'remote_path': str(input_group_dir),
             }))
 
-        jdl_file = create_jdl_file(args, eos_base_dir, master_list_path, dir_name, num_of_jobs, script_to_run)
-        print(f">>> Preparing Group: {dir_name}")
+        jdl_file = create_jdl_file(args, group_parent_dir, master_list_path, group_label, dir_name, num_of_jobs, script_to_run)
+        print(f">>> Preparing Group: {group_label}")
 
         # --- Submission ---
         if args.dryrun:
@@ -268,7 +299,7 @@ if __name__ == "__main__":
             print(f"    Submitting {jdl_file}...")
             result = subprocess.run(['condor_submit', str(jdl_file)])
             if result.returncode != 0:
-                print(f"    !!! ERROR: condor_submit failed for {dir_name} with exit code {result.returncode}.")
+                print(f"    !!! ERROR: condor_submit failed for {group_label} with exit code {result.returncode}.")
                 failures += 1
 
     if failures:

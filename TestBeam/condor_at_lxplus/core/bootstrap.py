@@ -189,10 +189,18 @@ def main():
     role_match = re.search(rf"exclude_({'|'.join(ALL_ROLES)})_", input_path.stem)
     if role_match is None:
         sys.exit(f"Error: Could not find 'exclude_<role>_' in filename '{input_path.name}'.")
-    active_roles = sorted(ALL_ROLES - {role_match.group(1)})
-    logger.info(f"Processing {input_path.stem} | Active: {active_roles}")
+    excluded_role = role_match.group(1)
 
     df = pd.read_parquet(input_path)
+
+    # Derive active roles from the columns actually present, not the hardcoded
+    # ALL_ROLES universe -- a reduced (e.g. 3-board) track file may already be
+    # missing a role other than excluded_role (e.g. 'dut0-trig1-extra3' has no
+    # 'ref'), and ALL_ROLES - {excluded_role} would wrongly keep that absent
+    # role "active", leading to KeyErrors/bad fits downstream.
+    roles_present = {role for role in ALL_ROLES if f'toa_{role}' in df.columns}
+    active_roles = sorted(roles_present - {excluded_role})
+    logger.info(f"Processing {input_path.stem} | Active: {active_roles}")
 
     # 2. Apply Neighbor Cut
     df = apply_neighbor_cut(df, args.neighbor_cut, args.neighbor_logic)

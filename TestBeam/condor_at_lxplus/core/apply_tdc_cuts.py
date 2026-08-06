@@ -230,10 +230,19 @@ def process_single_file(
             if f'tot_{role}' in df.columns
         }
 
-        valid_cut_roles = [
-            role for role in cut_roles
-            if f'tot_{role}' in df.columns
-        ]
+        # --exclude_role only makes sense for a full combo (all roles defined
+        # in the config present), where the excluded board is there but its
+        # ToT shouldn't drive the cut/correlation calculation. A reduced
+        # combo (e.g. a 3-board track file missing one board entirely) has
+        # fewer boards to spare, so use every role actually present instead
+        # of also dropping the excluded one.
+        if len(valid_all_roles) < len(all_roles):
+            valid_cut_roles = list(valid_all_roles.keys())
+        else:
+            valid_cut_roles = [
+                role for role in cut_roles
+                if f'tot_{role}' in df.columns
+            ]
 
         # 1. Routing logic for conversion and cuts
         if args.convert_first:
