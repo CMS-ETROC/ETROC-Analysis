@@ -431,11 +431,15 @@ def main():
         apply_geometric_transformation_matrix(track_candidates, combo, run_config)
 
         # Alignment offsets are a property of the boards themselves, not of which
-        # combo produced the tracks -- only compute/save them once, off the
-        # full board-set combo (processed first), then every combo after it
-        # picks up the updated run_config automatically.
+        # combo produced the tracks -- only compute them once, off the full
+        # board-set combo (processed first), then every combo after it picks up
+        # the in-memory run_config update automatically. Results are written to
+        # a separate file rather than back into args.config, so re-running with
+        # --find_alignment doesn't keep compounding corrections into the shared
+        # config on disk -- review the separate file and merge it in by hand.
         if args.find_alignment and len(combo) == len(ids_to_process) and trig_id is not None:
             shift_df = track_candidates.copy(deep=True)
+            alignment_result = {}
             for bid in combo:
                 if bid == trig_id:
                     continue
@@ -457,13 +461,22 @@ def main():
 
                 center_y = round(float(0.5*(max_bin_end+max_bin_start)), 2)
 
-                translation = full_config[args.runName][bid].setdefault('transformation', {}).setdefault('translation', {'x': 0.0, 'y': 0.0, 'z': 0.0})
-                translation['x'] = translation.get('x', 0.0) - center_x
-                translation['y'] = translation.get('y', 0.0) - center_y
+                existing = run_config.get(bid, {}).get('transformation', {}).get('translation', {'x': 0.0, 'y': 0.0, 'z': 0.0})
+                new_translation = {
+                    'x': existing.get('x', 0.0) - center_x,
+                    'y': existing.get('y', 0.0) - center_y,
+                    'z': existing.get('z', 0.0),
+                }
+                alignment_result[bid] = new_translation
 
-            # Save using the same yaml instance to keep the formatting rules
-            with open(args.config, 'w') as f:
-                yaml.dump(full_config, f)
+                # Apply in-memory only, so this run's own geometric transform
+                # (below) and subsequent combos use the corrected offsets.
+                full_config[args.runName][bid].setdefault('transformation', {})['translation'] = new_translation
+
+            alignment_file = f'{args.track_label}_alignment.yaml'
+            with open(alignment_file, 'w') as f:
+                yaml.dump({args.runName: {bid: {'transformation': {'translation': t}} for bid, t in alignment_result.items()}}, f)
+            logging.info(f"Alignment offsets written to {alignment_file} (not saved back to {args.config} -- merge in manually if desired).")
 
             run_config = full_config[args.runName]
             apply_geometric_transformation_matrix(track_candidates, combo, run_config)
