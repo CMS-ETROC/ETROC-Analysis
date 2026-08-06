@@ -277,8 +277,14 @@ def process_combo(combo_dir: Path, combo_label: str, args, eos_base_dir: Path,
 # ------------------------------------
 def main():
     parser = argparse.ArgumentParser(description='Submit jobs to reshape event-based to track-based')
-    parser.add_argument('-d', '--inputdir', required=True, dest='dirname', help='Input directory')
-    parser.add_argument('-o', '--outdir', required=True, dest='outdir', help='Output base directory')
+    parser.add_argument('-d', '--inputdir', required=True, dest='dirname',
+                        help='Directory of step 8 output for one board combo. Can also be the combo '
+                             'mother directory (one subdirectory per board combo) -- every combo is '
+                             'then auto-detected and processed in one call.')
+    parser.add_argument('-o', '--outdir', required=True, dest='outdir',
+                        help='Output base directory. The combo label (from -d, or each auto-detected '
+                             'combo subdirectory) is appended automatically as <outdir>/<combo_label>, '
+                             'so different combos never collide or get their tracks silently mixed.')
     parser.add_argument('-r', '--runName', required=True, dest='runName', help='Run name in config')
     parser.add_argument('-c', '--config', required=True, dest='config', help='YAML config file')
     parser.add_argument('-b', '--batches', type=int, default=30, dest='batches', help='Total batches to split input files into for safety')

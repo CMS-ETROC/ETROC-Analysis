@@ -169,7 +169,10 @@ if __name__ == "__main__":
 
     # Paths
     parser.add_argument('-d', '--inputdir', required=True, dest='inputdir',
-                        help='Mother directory containing "tracks" or "tracks_groupX" folders')
+                        help='Mother directory containing "tracks" or "tracks_groupX" folders (output of '
+                             'step 9). Can also be the combo mother directory (one subdirectory per board '
+                             'combo, each with its own "tracks"/"tracks_groupX" folders) -- every combo is '
+                             'then auto-detected and processed in one submission.')
 
     # Config
     parser.add_argument('-c', '--config', required=True, help='YAML config file')
