@@ -258,7 +258,7 @@ if __name__ == "__main__":
         # same-named groups (e.g. both a plain "tracks" dir) don't overwrite
         # each other's files within this run's script_dir/log_dir.
         combo_label = group_parent_dir.name if group_parent_dir != mother_dir else None
-        group_label = f'{combo_label}__{dir_name}' if combo_label else dir_name
+        group_label = f'{combo_label}_{dir_name}' if combo_label else dir_name
 
         python_cmd = build_python_command_args(args, script_to_run)
 
