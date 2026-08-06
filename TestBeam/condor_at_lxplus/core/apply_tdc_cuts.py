@@ -235,14 +235,16 @@ def process_single_file(
         # ToT shouldn't drive the cut/correlation calculation. A reduced
         # combo (e.g. a 3-board track file missing one board entirely) has
         # fewer boards to spare, so use every role actually present instead
-        # of also dropping the excluded one.
-        if len(valid_all_roles) < len(all_roles):
-            valid_cut_roles = list(valid_all_roles.keys())
-        else:
+        # of also dropping the excluded one. Also drives the output filename
+        # below -- exclude_role is a full-combo-only concept.
+        is_full_combo = len(valid_all_roles) >= len(all_roles)
+        if is_full_combo:
             valid_cut_roles = [
                 role for role in cut_roles
                 if f'tot_{role}' in df.columns
             ]
+        else:
+            valid_cut_roles = list(valid_all_roles.keys())
 
         # 1. Routing logic for conversion and cuts
         if args.convert_first:
@@ -272,7 +274,9 @@ def process_single_file(
 
             final_df = final_df.reset_index(drop=True)  # tidy index for the saved output
 
-            prefix = f'exclude_{args.exclude_role}_'
+            # exclude_role is a full-combo-only concept (see is_full_combo above) --
+            # a reduced combo's output isn't tagged, since no role was excluded.
+            prefix = f'exclude_{args.exclude_role}_' if is_full_combo else ''
             out_name = f"{prefix}{filepath.stem}.parquet"
             io_utils.write_parquet(final_df, out_name, compression='lz4')
 

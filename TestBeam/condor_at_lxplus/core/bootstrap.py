@@ -182,14 +182,11 @@ def main():
 
     # 1. Metadata & Data Loading
     input_path = Path(args.file)
-    # apply_tdc_cuts.py names its output 'exclude_{role}_track_...' -- anchor on that
-    # known vocabulary instead of assuming the role is always the 2nd '_'-token, so a
-    # naming-convention drift upstream fails loudly here instead of silently no-op'ing
-    # the set subtraction below (which would leave all four roles "active").
+    # apply_tdc_cuts.py names its output 'exclude_{role}_track_...', but only for a
+    # full (4-board) combo -- exclude_role is a full-combo-only concept there, so a
+    # reduced combo's file has no such tag and no role should be excluded here either.
     role_match = re.search(rf"exclude_({'|'.join(ALL_ROLES)})_", input_path.stem)
-    if role_match is None:
-        sys.exit(f"Error: Could not find 'exclude_<role>_' in filename '{input_path.name}'.")
-    excluded_role = role_match.group(1)
+    excluded_role = role_match.group(1) if role_match else None
 
     df = pd.read_parquet(input_path)
 
@@ -199,8 +196,11 @@ def main():
     # 'ref'), and ALL_ROLES - {excluded_role} would wrongly keep that absent
     # role "active", leading to KeyErrors/bad fits downstream.
     roles_present = {role for role in ALL_ROLES if f'toa_{role}' in df.columns}
-    active_roles = sorted(roles_present - {excluded_role})
-    logger.info(f"Processing {input_path.stem} | Active: {active_roles}")
+    active_roles = sorted(roles_present - {excluded_role} if excluded_role else roles_present)
+    logger.info(
+        f"Processing {input_path.stem} | Active: {active_roles}"
+        + (f" (excluded: {excluded_role})" if excluded_role else " (no role excluded -- reduced combo)")
+    )
 
     # 2. Apply Neighbor Cut
     df = apply_neighbor_cut(df, args.neighbor_cut, args.neighbor_logic)
