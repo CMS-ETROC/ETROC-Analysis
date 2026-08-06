@@ -338,20 +338,28 @@ def main():
     # 5. Track Finding
     logging.info('Starting track finding...')
 
-    # Filter based on CAL deviations
-    # Carry the original row index through the merge explicitly rather than relying
-    # on the merge preserving df's row order/count, and use a left join so rows with
-    # no matching cal_table entry are excluded instead of silently shifting alignment.
+    # Filter based on CAL deviations.
+    # board/row/col are small bounded integers (a handful of boards x a 16x16
+    # pixel grid), so a dense lookup array + vectorized numpy indexing does the
+    # same job as a merge()'d hash-join but without pandas' general-purpose
+    # join machinery -- much faster for a multi-million-row hit table against
+    # a ~1k-row cal_table. Bounds are taken from both cal_table and df so a
+    # pixel present only in df (no cal_table entry) still indexes safely and
+    # simply falls out via the NaN check below (same as the old how='left').
     _t0 = time.perf_counter()
-    keyed = df[['board', 'row', 'col', 'cal']].reset_index(names='orig_idx')
-    merged = keyed.merge(cal_table, on=['board', 'row', 'col'], how='left')
-    # 'cal' and 'cal_mode' are both stored as uint16, so a plain Series-Series
-    # subtraction wraps around to a huge positive value whenever cal < cal_mode -
-    # cast to a signed type first so the deviation is computed correctly.
-    cal_dev = merged['cal'].astype('int32') - merged['cal_mode'].astype('float64')
-    valid_cal = (cal_dev.abs() <= 3) & merged['cal_mode'].notna()
-    df = df.loc[merged.loc[valid_cal, 'orig_idx']].reset_index(drop=True)
-    logging.info(f"[timing] CAL-deviation merge+filter: {time.perf_counter() - _t0:.2f}s")
+    max_board = max(int(cal_table['board'].max()), int(df['board'].max())) + 1
+    max_row = max(int(cal_table['row'].max()), int(df['row'].max())) + 1
+    max_col = max(int(cal_table['col'].max()), int(df['col'].max())) + 1
+    cal_lookup = np.full((max_board, max_row, max_col), np.nan, dtype='float64')
+    cal_lookup[cal_table['board'].to_numpy(), cal_table['row'].to_numpy(), cal_table['col'].to_numpy()] = cal_table['cal_mode'].to_numpy()
+
+    cal_mode_vals = cal_lookup[df['board'].to_numpy(), df['row'].to_numpy(), df['col'].to_numpy()]
+    # 'cal' is stored as uint16, so subtracting a float64 cal_mode promotes
+    # safely (no wraparound risk, unlike a plain uint16-uint16 subtraction).
+    cal_dev = df['cal'].astype('int32').to_numpy() - cal_mode_vals
+    valid_cal = (np.abs(cal_dev) <= 3) & ~np.isnan(cal_mode_vals)
+    df = df.loc[valid_cal].reset_index(drop=True)
+    logging.info(f"[timing] CAL-deviation lookup+filter: {time.perf_counter() - _t0:.2f}s")
 
     _t0 = time.perf_counter()
     df = reindex_events(df) # Renumber after filtering
@@ -361,11 +369,20 @@ def main():
     ids_to_process = sorted(roles.values())
     df[['row', 'col']] = df[['row', 'col']].astype('int8') # Optimization
 
-    # Group by event and board to count hits, once -- reused by every combo below
-    # instead of being recomputed per combo.
+    # Per-board, per-event hit counts, once -- reused by every combo below.
+    # evt is contiguous 0..n-1 after reindex_events, so a bincount over
+    # (evt, board) pairs reproduces the old groupby+unstack matrix without
+    # pandas' hashing/pivoting overhead -- much faster for a large event count.
     _t0 = time.perf_counter()
-    hit_counts = df.groupby(['evt', 'board']).size().unstack(fill_value=0)
-    logging.info(f"[timing] hit_counts groupby: {time.perf_counter() - _t0:.2f}s")
+    board_vals = df['board'].to_numpy()
+    evt_vals = df['evt'].to_numpy()
+    n_events = int(evt_vals.max()) + 1
+    n_boards = int(board_vals.max()) + 1
+    boards_with_hits = set(np.unique(board_vals).tolist())
+    combined = evt_vals.astype(np.int64) * n_boards + board_vals.astype(np.int64)
+    counts_2d = np.bincount(combined, minlength=n_events * n_boards).reshape(n_events, n_boards)
+    single_hit = counts_2d == 1  # shape (n_events, n_boards): True where that board has exactly 1 hit
+    logging.info(f"[timing] hit_counts bincount: {time.perf_counter() - _t0:.2f}s")
 
     # Board combinations to produce tracks for: the full board set, plus every
     # smaller subset down to 3 boards (e.g. for 4 boards, that's the 4-board
@@ -389,13 +406,13 @@ def main():
         logging.info(f"--- Board combo ({combo_label}) ---")
 
         # Single Hit Selection: every board in this combo must have exactly 1 hit
-        missing = [b for b in combo if b not in hit_counts.columns]
+        missing = [b for b in combo if b not in boards_with_hits]
         if missing:
             logging.warning(f"Combo ({combo_label}): board(s) {missing} have no hits at all. Skipping.")
             continue
 
-        valid_event_mask = np.logical_and.reduce([hit_counts[b] == 1 for b in combo])
-        valid_events = hit_counts[valid_event_mask].index
+        valid_event_mask = np.logical_and.reduce([single_hit[:, b] for b in combo])
+        valid_events = np.nonzero(valid_event_mask)[0]
 
         combo_df = df.loc[df['evt'].isin(valid_events) & df['board'].isin(combo)].reset_index(drop=True)
         if combo_df.empty:
