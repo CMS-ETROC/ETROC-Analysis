@@ -149,11 +149,11 @@ python submit/submit_extract_events_by_path.py -d <DIRNAME> -t <TRACK> -o <OUTNA
 | Flag | Default | Description |
 |---|---|---|
 | `-d`, `--inputdir` | *required* | Directory of step 6 output. |
-| `-t`, `--track` | *required* | Reduced track-candidates Parquet file for one board combo, from step 7. |
-| `-o`, `--outdir` | `extractEvents_outputs` | Output directory, after the EOS base path. The board-combo label is parsed from `-t`'s filename and appended automatically (e.g. `extractEvents_outputs/dut0-trig1-ref2-extra3`), so different combos submitted with the same `-o` never collide or get merged together by step 9. |
+| `-t`, `--track` | *required* | Reduced track-candidates Parquet file for one board combo, from step 7. Can also be the per-run directory step 6/7 wrote them into -- every `*_reduced.parquet` file in it is then auto-detected and submitted as a separate job, one per combo, all sharing the same `--cal_table` (CAL values are computed once per run, not per combo). |
+| `-o`, `--outdir` | `extractEvents_outputs` | Output directory, after the EOS base path. The board-combo label is parsed from each track file's filename and appended automatically (e.g. `extractEvents_outputs/dut0-trig1-ref2`), so different combos submitted with the same `-o` never collide or get merged together by step 9. |
 | `-c`, `--config` | *required* | Path to the board-config YAML file. |
 | `-r`, `--runName` | *required* | Key of the run's entry in the config YAML. |
-| `--cal_table` | *required* | CAL-code table CSV from step 6. |
+| `--cal_table` | *required* | CAL-code table CSV from step 6, shared by every combo of the same run. |
 | `--neighbor_search_method` | `none` | Neighbor-hit search method: `row_only`, `col_only`, `cross`, or `square`. |
 | `--condor_tag` | auto-generated | String to identify the job submission. |
 | `--dryrun` | off | Generate the input list, bash script, and condor JDL, but skip actual submission. |
@@ -164,8 +164,8 @@ python core/reshape_event_to_track.py -d <DIRNAME> -o <OUTDIR> -c <CONFIG> -r <R
 ```
 | Flag | Default | Description |
 |---|---|---|
-| `-d`, `--inputdir` | *required* | Directory of step 8 output for one board combo (the combo-labeled subdirectory step 8 wrote). |
-| `-o`, `--outdir` | *required* | Output base directory. The combo label is taken from `-d`'s basename and appended automatically (e.g. `<outdir>/dut0-trig1-ref2-extra3/tracks`), so different combos submitted with the same `-o` never collide or get their tracks silently mixed together. |
+| `-d`, `--inputdir` | *required* | Directory of step 8 output for one board combo (the combo-labeled subdirectory step 8 wrote). Can also be the combo mother directory (one subdirectory per board combo, as step 8 now writes when given a directory for `-t`) -- every combo is then auto-detected and processed in one call. |
+| `-o`, `--outdir` | *required* | Output base directory. The combo label (from `-d`'s basename, or each auto-detected combo subdirectory) is appended automatically (e.g. `<outdir>/dut0-trig1-ref2/tracks`), so different combos never collide or get their tracks silently mixed together. |
 | `-c`, `--config` | *required* | Path to the board-config YAML file. |
 | `-r`, `--runName` | *required* | Key of the run's entry in the config YAML. |
 | `-b`, `--batches` | `30` | Total batches to split input files into, for safety. |
