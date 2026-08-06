@@ -286,7 +286,6 @@ def main():
     parser.add_argument('-c', '--config', required=True, help='YAML config file')
     parser.add_argument('-r', '--runName', required=True, help='Run name in YAML')
     parser.add_argument('--mask_config', type=Path, dest='mask_config_file', help='Mask config YAML')
-    parser.add_argument('--exclude_role', help='Role to exclude')
     parser.add_argument('--cal_table_only', action='store_true', help='Only generate CAL table')
     parser.add_argument('--find_alignment', action='store_true', help='Find the board offset alignments refer to trigger board')
 
@@ -327,13 +326,6 @@ def main():
     # 3. Preprocessing
     if args.mask_config_file:
         df = apply_masking(df, args.mask_config_file)
-
-    if args.exclude_role and args.exclude_role in roles:
-        ex_id = roles[args.exclude_role]
-        logging.info(f"Dropping board role: {args.exclude_role} (ID: {ex_id})")
-        df = df[df['board'] != ex_id].reset_index(drop=True)
-        # Remove from roles dict to prevent downstream errors
-        del roles[args.exclude_role]
 
     # 4. Calibration
     cal_table = generate_cal_table(df, args.cal_label)
