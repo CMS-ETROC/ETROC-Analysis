@@ -396,6 +396,14 @@ def main():
     n_written = 0
     alignment_results = {} # combo_label -> {board_id: translation dict}, written once after the loop
 
+    # Each combo gets its own file, so with 5+ combos per run they'd otherwise
+    # pile up flat in one directory across every run. Nest them under a
+    # per-run directory named after --track-label's basename instead --
+    # e.g. -t tracks_csv/desy2026aug_run1 writes into
+    # tracks_csv/desy2026aug_run1/desy2026aug_run1_tracks_<combo>.parquet.
+    tracks_out_dir = Path(args.track_label)
+    tracks_out_dir.mkdir(parents=True, exist_ok=True)
+
     for combo in board_combos:
         # Tag each board id with its role (from the config YAML) so output
         # filenames are legible without cross-referencing the config, e.g.
@@ -494,7 +502,7 @@ def main():
         coord_cols = [c for c in final_tracks.columns if c.split('_')[0] in ['x', 'y', 'z']]
         final_tracks[coord_cols] = final_tracks[coord_cols].round(2)
 
-        output_file = f'{args.track_label}_tracks_{combo_label}.parquet'
+        output_file = tracks_out_dir / f'{tracks_out_dir.name}_tracks_{combo_label}.parquet'
         io_utils.write_parquet(final_tracks, output_file, index=False)
         logging.info(f"Combo ({combo_label}): {len(final_tracks)} tracks saved to {output_file}")
         n_written += 1
