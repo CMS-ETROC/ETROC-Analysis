@@ -1,6 +1,7 @@
 import argparse
 import sys
 import logging
+import time
 import warnings
 import random, getpass
 from itertools import combinations
@@ -243,7 +244,7 @@ def check_spatial_alignment(df: pd.DataFrame, roles: Dict[str, int], max_diff_pi
     # We need a trigger board to compare against
     if trig_id is None:
         logging.warning("No 'trig' role found. Skipping spatial alignment check.")
-        return pd.Series([True] * len(df))
+        return pd.Series(True, index=df.index)
 
     # Identify other boards to compare with Trigger
     # We compare Trig vs Ref, Trig vs DUT, Trig vs Extra
@@ -268,7 +269,7 @@ def check_spatial_alignment(df: pd.DataFrame, roles: Dict[str, int], max_diff_pi
             conditions.append(distance <= limit)
 
     if not conditions:
-        return pd.Series([True] * len(df))
+        return pd.Series(True, index=df.index)
 
     # Combine all conditions (must satisfy distance check for ALL pairs)
     return np.logical_and.reduce(conditions)
@@ -341,6 +342,7 @@ def main():
     # Carry the original row index through the merge explicitly rather than relying
     # on the merge preserving df's row order/count, and use a left join so rows with
     # no matching cal_table entry are excluded instead of silently shifting alignment.
+    _t0 = time.perf_counter()
     keyed = df[['board', 'row', 'col', 'cal']].reset_index(names='orig_idx')
     merged = keyed.merge(cal_table, on=['board', 'row', 'col'], how='left')
     # 'cal' and 'cal_mode' are both stored as uint16, so a plain Series-Series
@@ -349,7 +351,11 @@ def main():
     cal_dev = merged['cal'].astype('int32') - merged['cal_mode'].astype('float64')
     valid_cal = (cal_dev.abs() <= 3) & merged['cal_mode'].notna()
     df = df.loc[merged.loc[valid_cal, 'orig_idx']].reset_index(drop=True)
+    logging.info(f"[timing] CAL-deviation merge+filter: {time.perf_counter() - _t0:.2f}s")
+
+    _t0 = time.perf_counter()
     df = reindex_events(df) # Renumber after filtering
+    logging.info(f"[timing] reindex_events: {time.perf_counter() - _t0:.2f}s")
     check_empty_df(df, "CAL deviation filtering")
 
     ids_to_process = sorted(roles.values())
@@ -357,7 +363,9 @@ def main():
 
     # Group by event and board to count hits, once -- reused by every combo below
     # instead of being recomputed per combo.
+    _t0 = time.perf_counter()
     hit_counts = df.groupby(['evt', 'board']).size().unstack(fill_value=0)
+    logging.info(f"[timing] hit_counts groupby: {time.perf_counter() - _t0:.2f}s")
 
     # Board combinations to produce tracks for: the full board set, plus every
     # smaller subset down to 3 boards (e.g. for 4 boards, that's the 4-board
