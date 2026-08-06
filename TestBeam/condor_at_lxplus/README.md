@@ -150,7 +150,7 @@ python submit/submit_extract_events_by_path.py -d <DIRNAME> -t <TRACK> -o <OUTNA
 |---|---|---|
 | `-d`, `--inputdir` | *required* | Directory of step 6 output. |
 | `-t`, `--track` | *required* | Reduced track-candidates Parquet file for one board combo, from step 7. |
-| `-o`, `--outdir` | `extractEvents_outputs` | Output directory, after the EOS base path. |
+| `-o`, `--outdir` | `extractEvents_outputs` | Output directory, after the EOS base path. The board-combo label is parsed from `-t`'s filename and appended automatically (e.g. `extractEvents_outputs/dut0-trig1-ref2-extra3`), so different combos submitted with the same `-o` never collide or get merged together by step 9. |
 | `-c`, `--config` | *required* | Path to the board-config YAML file. |
 | `-r`, `--runName` | *required* | Key of the run's entry in the config YAML. |
 | `--cal_table` | *required* | CAL-code table CSV from step 6. |
@@ -164,7 +164,7 @@ python core/reshape_event_to_track.py -d <DIRNAME> -o <OUTDIR> -c <CONFIG> -r <R
 ```
 | Flag | Default | Description |
 |---|---|---|
-| `-d`, `--inputdir` | *required* | Directory of step 8 output. |
+| `-d`, `--inputdir` | *required* | Directory of step 8 output for one board combo (the combo-labeled subdirectory step 8 wrote). |
 | `-o`, `--outdir` | *required* | Output base directory. |
 | `-c`, `--config` | *required* | Path to the board-config YAML file. |
 | `-r`, `--runName` | *required* | Key of the run's entry in the config YAML. |
