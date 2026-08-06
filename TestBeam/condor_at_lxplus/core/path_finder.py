@@ -281,7 +281,6 @@ def main():
     parser.add_argument('--cal-label', required=True, help='Output name for CAL table', dest='cal_label')
     parser.add_argument('--track-label', required=True, help='Output name for Tracks', dest='track_label')
     parser.add_argument('-s', '--sampling', type=float, default=3, help='Sampling fraction (percent)')
-    parser.add_argument('-m', '--minimum', type=int, default=1000, dest='ntracks', help='Min tracks')
     parser.add_argument('--max_diff_pixel', type=int, default=1, help='Max pixel diff')
     parser.add_argument('-c', '--config', required=True, help='YAML config file')
     parser.add_argument('-r', '--runName', required=True, help='Run name in YAML')
@@ -434,11 +433,6 @@ def main():
         group_cols = list(track_df.columns)
 
         track_candidates = track_df.groupby(group_cols).size().reset_index(name='count')
-        track_candidates = track_candidates[track_candidates['count'] > args.ntracks]
-
-        if track_candidates.empty:
-            logging.warning(f"Combo ({combo_label}): no track candidates above threshold. Skipping.")
-            continue
 
         # 6. Geometric Transformation & Final Filtering
         apply_geometric_transformation_matrix(track_candidates, combo, run_config)
