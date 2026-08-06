@@ -114,7 +114,7 @@ python utils/merge_feathers.py -d <INPUT_DIR> -n <NUMBER_OF_MERGE> --dryrun
 ```bash
 python core/path_finder.py -p <PATH> --cal-label <CAL_LABEL> --track-label <TRACK_LABEL> -c <CONFIG> -r <RUNNAME> -s <SAMPLING> [--max_diff_pixel <N>] [--mask_config <MASK_YAML>] [--cal_table_only] [--find_alignment]
 ```
-Produces one Parquet track-candidates file per board combo: the full board set plus every smaller subset down to 3 boards (the minimum `extract_events_by_path.py` can process), e.g. for 4 boards (ids 0-3, with roles trig/ref/dut/extra) that's a `trig0-ref1-dut2-extra3` file and all four 3-board leave-one-out combos (`trig0-ref1-dut2`, `trig0-ref1-extra3`, `trig0-dut2-extra3`, `ref1-dut2-extra3`). Each board id is tagged with its role from the config YAML so filenames are legible without cross-referencing the config. Each combo's single-hit requirement only applies to the boards in that combo. To avoid every run's combo files piling up flat in one directory, they're nested under a per-run directory named after `--track-label`'s basename, e.g. `-t tracks_csv/desy2026aug_run1` writes to `tracks_csv/desy2026aug_run1/desy2026aug_run1_tracks_trig0-ref1-dut2-extra3.parquet` (created automatically). No count threshold is applied here -- every surviving track candidate is written; use step 7 to cut on occurrence count. Pick whichever combo file fits the analysis at step 7/8.
+Produces one Parquet track-candidates file per board combo: every subset down to 3 boards (the minimum `extract_events_by_path.py` can process), e.g. for 4 boards (ids 0-3, with roles trig/ref/dut/extra) that's the four 3-board leave-one-out combos (`trig0-ref1-dut2`, `trig0-ref1-extra3`, `trig0-dut2-extra3`, `ref1-dut2-extra3`). The full board-set combo is deliberately not produced -- its single-hit requirement on every board only ever shrinks the qualifying event set relative to a leave-one-out combo, so its tracks are already a strict subset of each of those, and there's nothing downstream that made use of the extra coincidence requirement. Each board id is tagged with its role from the config YAML so filenames are legible without cross-referencing the config. Each combo's single-hit requirement only applies to the boards in that combo. To avoid every run's combo files piling up flat in one directory, they're nested under a per-run directory named after `--track-label`'s basename, e.g. `-t tracks_csv/desy2026aug_run1` writes to `tracks_csv/desy2026aug_run1/desy2026aug_run1_tracks_trig0-ref1-dut2.parquet` (created automatically). No count threshold is applied here -- every surviving track candidate is written; use step 7 to cut on occurrence count. Pick whichever combo file fits the analysis at step 7/8.
 
 | Flag | Default | Description |
 |---|---|---|
@@ -127,7 +127,7 @@ Produces one Parquet track-candidates file per board combo: the full board set p
 | `--max_diff_pixel` | `1` | Max allowed pixel-position spread across boards for spatial alignment. |
 | `--mask_config` | none | Path to a noisy-pixel mask YAML (see `mask_pixel_configs/`). |
 | `--cal_table_only` | off | Stop right after building the CAL-code table. |
-| `--find_alignment` | off | Report per-board pixel offsets relative to the trigger board, computed separately for every combo that includes it (only the full board-set combo's estimate is actually applied to this run's own track output; smaller combos' numbers are for cross-checking). Written to `alignment/{TRACK_LABEL basename}_alignment.yaml` (its own directory, separate from the tracks/cal_table output), keyed by combo, not saved back into `--config` -- merge in manually. |
+| `--find_alignment` | off | Report per-board pixel offsets relative to the trigger board, computed separately for every combo that includes it (only the largest generated combo's estimate is actually applied to this run's own track output; smaller combos' numbers are for cross-checking). Written to `alignment/{TRACK_LABEL basename}_alignment.yaml` (its own directory, separate from the tracks/cal_table output), keyed by combo, not saved back into `--config` -- merge in manually. |
 
 ### 7. Reduce path-finding output
 
@@ -165,7 +165,7 @@ python core/reshape_event_to_track.py -d <DIRNAME> -o <OUTDIR> -c <CONFIG> -r <R
 | Flag | Default | Description |
 |---|---|---|
 | `-d`, `--inputdir` | *required* | Directory of step 8 output for one board combo (the combo-labeled subdirectory step 8 wrote). |
-| `-o`, `--outdir` | *required* | Output base directory. |
+| `-o`, `--outdir` | *required* | Output base directory. The combo label is taken from `-d`'s basename and appended automatically (e.g. `<outdir>/dut0-trig1-ref2-extra3/tracks`), so different combos submitted with the same `-o` never collide or get their tracks silently mixed together. |
 | `-c`, `--config` | *required* | Path to the board-config YAML file. |
 | `-r`, `--runName` | *required* | Key of the run's entry in the config YAML. |
 | `-b`, `--batches` | `30` | Total batches to split input files into, for safety. |
@@ -174,11 +174,11 @@ python core/reshape_event_to_track.py -d <DIRNAME> -o <OUTDIR> -c <CONFIG> -r <R
 
 ### 10. Submit jobs to apply TDC cuts
 ```bash
-python submit/submit_apply_tdc_cuts.py -d <INPUTDIR> -c <CONFIG> -r <RUNNAME> --TOALower <TOALOWER> --TOAUpper <TOAUPPER> --distance_factor <DISTANCE_FACTOR> --condor_tag <CONDOR_TAG> [--TOALowerTime <NS>] [--TOAUpperTime <NS>] [--exclude_role <ROLE>] [--convert-first] [--batch_size <N>] [--dryrun]
+python submit/submit_apply_tdc_cuts.py -d <INPUTDIR> -c <CONFIG> -r <RUNNAME> --TOALower <TOALOWER> --TOAUpper <TOAUPPER> --distance_factor <DISTANCE_FACTOR> --condor_tag <CONDOR_TAG> [--TOALowerTime <NS>] [--TOAUpperTime <NS>] [--convert-first] [--batch_size <N>] [--dryrun]
 ```
 | Flag | Default | Description |
 |---|---|---|
-| `-d`, `--inputdir` | *required* | Mother directory containing `tracks` / `tracks_groupX` folders (output of step 9). |
+| `-d`, `--inputdir` | *required* | Mother directory containing `tracks` / `tracks_groupX` folders (output of step 9). Can also be the combo mother directory (containing one subdirectory per board combo, each with its own `tracks`/`tracks_groupX` folders) -- every combo is then auto-detected and processed in one submission. |
 | `-c`, `--config` | *required* | Path to the board-config YAML file. |
 | `-r`, `--runName` | *required* | Key of the run's entry in the config YAML. |
 | `--TOALower` | `100` | Lower raw-TDC TOA cut boundary. |
@@ -186,7 +186,6 @@ python submit/submit_apply_tdc_cuts.py -d <INPUTDIR> -c <CONFIG> -r <RUNNAME> --
 | `--TOALowerTime` | `2` | Lower TOA cut boundary in physical time (ns). |
 | `--TOAUpperTime` | `10` | Upper TOA cut boundary in physical time (ns). |
 | `--distance_factor` | `3.0` | Allowed spread (in MAD-derived sigma) for the TOA correlation cut. |
-| `--exclude_role` | `trig` | Role excluded from cut calculations. |
 | `--convert-first` | off | Convert to physical time before applying cuts, instead of after. |
 | `--batch_size` | `10` | Number of files per condor job. |
 | `--condor_tag` | auto-generated | String to identify the job submission. |
@@ -198,7 +197,7 @@ python core/count_path_nevts.py -d <INPUTDIR> -o <OUTPUTDIR> [--tag <TAG>]
 ```
 | Flag | Default | Description |
 |---|---|---|
-| `-d`, `--inputdir` | *required* | Directory containing step 10 output (a `time`/`time_groupX` folder or its parent). |
+| `-d`, `--inputdir` | *required* | Directory containing step 10 output (a `time`/`time_groupX` folder or its parent). Can also be the combo mother directory (one subdirectory per board combo, each with its own `time`/`time_groupX` folders) -- every combo is then auto-detected and processed, with output CSVs distinguished by combo label. |
 | `-o`, `--outputdir` | *required* | Output directory. |
 | `--tag` | none | Additional string appended to the output filename. |
 
@@ -208,7 +207,7 @@ python submit/submit_bootstrap.py -d <DIRNAME> -o <OUTPUTDIR> -n <NUM_BOOTSTRAP_
 ```
 | Flag | Default | Description |
 |---|---|---|
-| `-d`, `--inputdir` | *required* | Directory containing step 10 output. |
+| `-d`, `--inputdir` | *required* | Directory containing step 10 output (a `time`/`time_groupX` folder or its parent). Can also be the combo mother directory (one subdirectory per board combo, each with its own `time`/`time_groupX` folders) -- every combo is then auto-detected and processed, each writing to its own `bootstrap_<outputdir>/<combo_label>[_groupX]` output directory. |
 | `-o`, `--outputdir` | *required* | Output directory base name. |
 | `-n`, `--num_bootstrap_output` | `100` | Target number of bootstrap results. |
 | `--minimum_nevt` | `1000` | Minimum event count required to run bootstrap. |
@@ -225,7 +224,7 @@ python core/fit_bootstrap_results.py -d <INPUTDIR> -o <OUTPUTDIR> --sigma_cut <C
 ```
 | Flag | Default | Description |
 |---|---|---|
-| `-d`, `--inputdir` | *required* | Directory containing bootstrap output files (step 12). |
+| `-d`, `--inputdir` | *required* | Directory containing bootstrap output files (step 12) for one combo/group. Can also be the combo mother directory (one subdirectory per board combo/group, each holding `*_boot.parquet` files) -- every one is then auto-detected and processed, with output CSVs distinguished by label, same as step 11. |
 | `-o`, `--outputdir` | *required* | Output directory. **Recommended: reuse the same directory as step 11.** |
 | `--sigma_cut` | `2.5` | Sigma multiplier used to determine the fit range. |
 | `--tag` | none | Additional string appended to the output filename. |
