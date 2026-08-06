@@ -392,10 +392,15 @@ def main():
 
     values_to_keep = ['row', 'col'] # minimal set for tracking
     trig_id = roles.get('trig')
+    id_to_role = {v: k for k, v in roles.items()}
     n_written = 0
+    alignment_results = {} # combo_label -> {board_id: translation dict}, written once after the loop
 
     for combo in board_combos:
-        combo_label = '-'.join(str(b) for b in combo)
+        # Tag each board id with its role (from the config YAML) so output
+        # filenames are legible without cross-referencing the config, e.g.
+        # "trig0-ref1-dut2" instead of just "0-1-2".
+        combo_label = '-'.join(f"{id_to_role[b]}{b}" for b in combo)
         logging.info(f"--- Board combo ({combo_label}) ---")
 
         # Single Hit Selection: every board in this combo must have exactly 1 hit
@@ -430,16 +435,17 @@ def main():
         # 6. Geometric Transformation & Final Filtering
         apply_geometric_transformation_matrix(track_candidates, combo, run_config)
 
-        # Alignment offsets are a property of the boards themselves, not of which
-        # combo produced the tracks -- only compute them once, off the full
-        # board-set combo (processed first), then every combo after it picks up
-        # the in-memory run_config update automatically. Results are written to
-        # a separate file rather than back into args.config, so re-running with
-        # --find_alignment doesn't keep compounding corrections into the shared
-        # config on disk -- review the separate file and merge it in by hand.
-        if args.find_alignment and len(combo) == len(ids_to_process) and trig_id is not None:
+        # Alignment offsets are a property of the boards themselves, but the
+        # estimate itself still depends on which combo's tracks it's computed
+        # from -- so compute (and record) it for every combo that includes the
+        # trigger board, keyed by combo, instead of overwriting one shared
+        # result. Only the full board-set combo's estimate (processed first)
+        # is ever fed back into run_config, so every combo's own track output
+        # stays on the same, consistent geometry; smaller combos' numbers are
+        # recorded purely so you can sanity-check that they agree.
+        if args.find_alignment and trig_id in combo:
             shift_df = track_candidates.copy(deep=True)
-            alignment_result = {}
+            combo_alignment = {}
             for bid in combo:
                 if bid == trig_id:
                     continue
@@ -462,24 +468,22 @@ def main():
                 center_y = round(float(0.5*(max_bin_end+max_bin_start)), 2)
 
                 existing = run_config.get(bid, {}).get('transformation', {}).get('translation', {'x': 0.0, 'y': 0.0, 'z': 0.0})
-                new_translation = {
+                combo_alignment[bid] = {
                     'x': existing.get('x', 0.0) - center_x,
                     'y': existing.get('y', 0.0) - center_y,
                     'z': existing.get('z', 0.0),
                 }
-                alignment_result[bid] = new_translation
 
-                # Apply in-memory only, so this run's own geometric transform
-                # (below) and subsequent combos use the corrected offsets.
-                full_config[args.runName][bid].setdefault('transformation', {})['translation'] = new_translation
+            alignment_results[combo_label] = combo_alignment
 
-            alignment_file = f'{args.track_label}_alignment.yaml'
-            with open(alignment_file, 'w') as f:
-                yaml.dump({args.runName: {bid: {'transformation': {'translation': t}} for bid, t in alignment_result.items()}}, f)
-            logging.info(f"Alignment offsets written to {alignment_file} (not saved back to {args.config} -- merge in manually if desired).")
-
-            run_config = full_config[args.runName]
-            apply_geometric_transformation_matrix(track_candidates, combo, run_config)
+            # Only the full board-set combo's estimate feeds forward, applied
+            # in-memory only (never saved back to args.config), so subsequent
+            # combos' own track output uses the corrected geometry too.
+            if len(combo) == len(ids_to_process):
+                for bid, new_translation in combo_alignment.items():
+                    full_config[args.runName][bid].setdefault('transformation', {})['translation'] = new_translation
+                run_config = full_config[args.runName]
+                apply_geometric_transformation_matrix(track_candidates, combo, run_config)
 
         spatial_mask = check_spatial_alignment(track_candidates, roles, args.max_diff_pixel)
         final_tracks = track_candidates[spatial_mask]
@@ -494,6 +498,18 @@ def main():
         io_utils.write_parquet(final_tracks, output_file, index=False)
         logging.info(f"Combo ({combo_label}): {len(final_tracks)} tracks saved to {output_file}")
         n_written += 1
+
+    if alignment_results:
+        alignment_file = f'{args.track_label}_alignment.yaml'
+        with open(alignment_file, 'w') as f:
+            yaml.dump({
+                args.runName: {
+                    combo_label: {bid: {'transformation': {'translation': t}} for bid, t in combo_vals.items()}
+                    for combo_label, combo_vals in alignment_results.items()
+                }
+            }, f)
+        logging.info(f"Alignment offsets for {len(alignment_results)} combo(s) written to {alignment_file} "
+                     f"(not saved back to {args.config} -- merge in manually if desired).")
 
     if n_written == 0:
         logging.warning("No track candidates found for any board combo.")
