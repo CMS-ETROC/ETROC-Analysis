@@ -469,9 +469,9 @@ def main():
 
                 existing = run_config.get(bid, {}).get('transformation', {}).get('translation', {'x': 0.0, 'y': 0.0, 'z': 0.0})
                 combo_alignment[bid] = {
-                    'x': existing.get('x', 0.0) - center_x,
-                    'y': existing.get('y', 0.0) - center_y,
-                    'z': existing.get('z', 0.0),
+                    'x': round(existing.get('x', 0.0) - center_x, 2),
+                    'y': round(existing.get('y', 0.0) - center_y, 2),
+                    'z': round(existing.get('z', 0.0), 2),
                 }
 
             alignment_results[combo_label] = combo_alignment
