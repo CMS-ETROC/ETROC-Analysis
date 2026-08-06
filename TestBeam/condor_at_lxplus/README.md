@@ -22,7 +22,7 @@ binary files
   -> [4]  decode                       (condor)
   -> [5]  merge feathers               (optional, local)
   -> [6]  find paths                   (local)
-  -> [7]  reduce path candidates       (optional, local)
+  -> [7]  reduce path candidates       (local)
   -> [8]  extract events by path       (condor)
   -> [9]  reshape event -> track       (local)
   -> [10] apply TDC cuts               (condor)
@@ -47,7 +47,7 @@ binary files
   - [4. Submit decoding jobs](#4-submit-decoding-jobs)
   - [5. (Optional) Merge output feather files](#5-optional-merge-output-feather-files)
   - [6. Path finding](#6-path-finding)
-  - [7. Check path-finding output (optional)](#7-check-path-finding-output-optional)
+  - [7. Reduce path-finding output](#7-reduce-path-finding-output)
   - [8. Submit jobs for event selection by path](#8-submit-jobs-for-event-selection-by-path)
   - [9. Reshape output from event-based to track-based](#9-reshape-output-from-event-based-to-track-based)
   - [10. Submit jobs to apply TDC cuts](#10-submit-jobs-to-apply-tdc-cuts)
@@ -129,19 +129,18 @@ Produces one Parquet track-candidates file per board combo: the full board set p
 | `--cal_table_only` | off | Stop right after building the CAL-code table. |
 | `--find_alignment` | off | Report per-board pixel offsets relative to the trigger board, computed separately for every combo that includes it (only the full board-set combo's estimate is actually applied to this run's own track output; smaller combos' numbers are for cross-checking). Written to `alignment/{TRACK_LABEL basename}_alignment.yaml` (its own directory, separate from the tracks/cal_table output), keyed by combo, not saved back into `--config` -- merge in manually. |
 
-### 7. Check path-finding output (optional)
+### 7. Reduce path-finding output
 
-Recommended if the number of paths from step 6 exceeds ~1.5k.
+Step 6 writes every surviving track candidate for each combo unfiltered so this step is required before step 8, not optional; skipping it means step 8 processes the full unreduced candidate set.
 ```bash
-python utils/reduce_number_of_track_candidates.py -f <FILE> -m <NUMBER> [--ntrk_table]
+python utils/reduce_number_of_track_candidates.py -f <FILE_OR_DIR> [-p <PERCENT>]
 ```
 | Flag | Default | Description |
 |---|---|---|
-| `-f`, `--file` | *required* | Track-candidates Parquet file for one board combo, from step 6. |
-| `-m`, `--minimum` | `1000` | New, tighter minimum occurrence threshold. |
-| `--ntrk_table` | off | Print a table of surviving paths for thresholds 40–400 (step 40). |
+| `-f`, `--file` | *required* | Track-candidates Parquet file for one board combo (from step 6), or the per-run directory step 6 wrote them all into -- every combo file in the directory is reduced in one call. |
+| `-p`, `--percentile` | none | Keep only the top PCT% of candidates by occurrence count (e.g. `10` keeps candidates above the 90th percentile), applied per combo file processed. If omitted, only the table below is printed -- no reduced file is written, so you can look at the distribution before picking a cut. |
 
-Writes `<same file stem>_reduced.parquet` alongside the input, so each combo's reduced file stays distinct.
+Always prints a table of surviving paths for occurrence-count cuts at percentiles 10-90 plus a tail that keeps halving the gap to 100 (95th, 97.5th, 98.75th, ...) until it would separate less than one row -- so the finest cut shown adapts to each file's size instead of a fixed cutoff, per combo file if a directory was given. If `-p` was given, then keeps the top `-p`% and writes `<same file stem>_reduced.parquet` next to each input file, so each combo's reduced file stays distinct. Already-reduced files (`*_reduced.parquet`) are skipped when scanning a directory, so re-running against the same directory is safe.
 
 ### 8. Submit jobs for event selection by path
 ```bash
@@ -150,7 +149,7 @@ python submit/submit_extract_events_by_path.py -d <DIRNAME> -t <TRACK> -o <OUTNA
 | Flag | Default | Description |
 |---|---|---|
 | `-d`, `--inputdir` | *required* | Directory of step 6 output. |
-| `-t`, `--track` | *required* | Track-candidates Parquet file for one board combo, from step 7 (or step 6 if step 7 was skipped). |
+| `-t`, `--track` | *required* | Reduced track-candidates Parquet file for one board combo, from step 7. |
 | `-o`, `--outdir` | `extractEvents_outputs` | Output directory, after the EOS base path. |
 | `-c`, `--config` | *required* | Path to the board-config YAML file. |
 | `-r`, `--runName` | *required* | Key of the run's entry in the config YAML. |
