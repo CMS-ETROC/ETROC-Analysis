@@ -102,6 +102,7 @@ def write_parquet(df: pd.DataFrame, path: Union[str, Path], **kwargs) -> None:
     run of the same stage). Passes kwargs straight through -- callers keep
     specifying index=False etc. exactly as they did before."""
     path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
     _warn_if_exists(path)
     df.to_parquet(path, **kwargs)
 
@@ -109,5 +110,6 @@ def write_parquet(df: pd.DataFrame, path: Union[str, Path], **kwargs) -> None:
 def write_csv(df: pd.DataFrame, path: Union[str, Path], **kwargs) -> None:
     """df.to_csv, with the same overwrite warning as write_parquet."""
     path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
     _warn_if_exists(path)
     df.to_csv(path, **kwargs)
