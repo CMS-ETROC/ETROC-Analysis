@@ -90,6 +90,29 @@ def discover_time_dirs(mother_dir: Union[str, Path]) -> List[Path]:
     return time_dirs
 
 
+def combo_label_from_track_filename(track_path: Union[str, Path]) -> str:
+    """Extracts the board-combo label (e.g. 'dut0-trig1-ref2-extra3') from a
+    step 6/7 track-candidates filename of the form
+    '<run>_tracks_<combo_label>[_reduced].parquet' (see path_finder.py's
+    output_file and reduce_number_of_track_candidates.py's output_file).
+
+    Used to auto-namespace step 8's condor output directory per combo, so
+    two combos submitted with the same -o can never overwrite each other's
+    files or get merged together by step 9's track_id-based gather.
+    """
+    stem = Path(track_path).stem
+    if stem.endswith('_reduced'):
+        stem = stem[: -len('_reduced')]
+    marker = '_tracks_'
+    idx = stem.rfind(marker)
+    if idx == -1:
+        raise ValueError(
+            f"Could not parse board-combo label from track filename '{track_path}' "
+            f"(expected '..._tracks_<combo_label>[_reduced].parquet')"
+        )
+    return stem[idx + len(marker):]
+
+
 def _warn_if_exists(path: Path) -> None:
     if path.exists():
         prev_mtime = datetime.fromtimestamp(path.stat().st_mtime)

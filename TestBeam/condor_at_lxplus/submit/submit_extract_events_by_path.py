@@ -197,6 +197,17 @@ if __name__ == "__main__":
     except Exception as e:
         sys.exit(f"Configuration Error: {e}")
 
+    # Auto-namespace the output directory by board combo so two combos
+    # submitted with the same -o can never collide on EOS or get merged
+    # together by step 9's track_id-based gather (track_id restarts at 0
+    # independently per combo, so mixing combos in one directory silently
+    # corrupts the merge).
+    try:
+        combo_label = io_utils.combo_label_from_track_filename(args.track)
+    except ValueError as e:
+        sys.exit(f"Error: {e}")
+    args.outname = str(Path(args.outname) / combo_label)
+
     print('\n========= Submission Details =========')
     print(f'Input:       {args.dirname}')
     print(f'Input CAL table: {args.cal_table}')
