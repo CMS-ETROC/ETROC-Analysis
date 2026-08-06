@@ -103,7 +103,6 @@ def build_python_command_args(args: argparse.Namespace, script_to_run: str) -> s
         f'--TOAUpper {args.TOAUpper}',
         f'--TOALowerTime {args.TOALowerTime}',
         f'--TOAUpperTime {args.TOAUpperTime}',
-        f"--exclude_role {args.exclude_role}",
     ]
     if args.convert_first: cmd_parts.append("--convert-first")
     return " ".join(cmd_parts)
@@ -184,7 +183,6 @@ if __name__ == "__main__":
     parser.add_argument('--TOAUpperTime', type=float, default=10, help='Time ToA Upper (ns)')
 
     # Flags
-    parser.add_argument('--exclude_role', default='trig', help='Role to exclude from CUT calculations')
     parser.add_argument('--convert-first', action='store_true', help='Convert to time before cutting')
 
     # Condor options

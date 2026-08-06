@@ -1,5 +1,4 @@
 import argparse
-import re
 import sys
 import warnings
 import logging
@@ -182,25 +181,13 @@ def main():
 
     # 1. Metadata & Data Loading
     input_path = Path(args.file)
-    # apply_tdc_cuts.py names its output 'exclude_{role}_track_...', but only for a
-    # full (4-board) combo -- exclude_role is a full-combo-only concept there, so a
-    # reduced combo's file has no such tag and no role should be excluded here either.
-    role_match = re.search(rf"exclude_({'|'.join(ALL_ROLES)})_", input_path.stem)
-    excluded_role = role_match.group(1) if role_match else None
-
     df = pd.read_parquet(input_path)
 
     # Derive active roles from the columns actually present, not the hardcoded
-    # ALL_ROLES universe -- a reduced (e.g. 3-board) track file may already be
-    # missing a role other than excluded_role (e.g. 'dut0-trig1-extra3' has no
-    # 'ref'), and ALL_ROLES - {excluded_role} would wrongly keep that absent
-    # role "active", leading to KeyErrors/bad fits downstream.
-    roles_present = {role for role in ALL_ROLES if f'toa_{role}' in df.columns}
-    active_roles = sorted(roles_present - {excluded_role} if excluded_role else roles_present)
-    logger.info(
-        f"Processing {input_path.stem} | Active: {active_roles}"
-        + (f" (excluded: {excluded_role})" if excluded_role else " (no role excluded -- reduced combo)")
-    )
+    # ALL_ROLES universe -- path_finder.py only ever produces 3-board (leave-
+    # one-out) track files, each missing exactly one role entirely.
+    active_roles = sorted(role for role in ALL_ROLES if f'toa_{role}' in df.columns)
+    logger.info(f"Processing {input_path.stem} | Active: {active_roles}")
 
     # 2. Apply Neighbor Cut
     df = apply_neighbor_cut(df, args.neighbor_cut, args.neighbor_logic)

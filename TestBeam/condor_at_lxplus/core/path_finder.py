@@ -376,16 +376,25 @@ def main():
     counts_2d = np.bincount(combined, minlength=n_events * n_boards).reshape(n_events, n_boards)
     single_hit = counts_2d == 1  # shape (n_events, n_boards): True where that board has exactly 1 hit
 
-    # Board combinations to produce tracks for: the full board set, plus every
-    # smaller subset down to 3 boards (e.g. for 4 boards, that's the 4-board
-    # set and all four 3-board leave-one-out subsets). Each combo gets its own
-    # single-hit requirement -- a board left out of a combo isn't required to
-    # have a hit for that combo's tracks. extract_events_by_path.py requires
-    # at least 3 boards, so we never go below that.
+    # Board combinations to produce tracks for: every subset down to 3 boards
+    # (e.g. for 4 boards, that's the four 3-board leave-one-out subsets). Each
+    # combo gets its own single-hit requirement -- a board left out of a combo
+    # isn't required to have a hit for that combo's tracks. extract_events_by_
+    # path.py requires at least 3 boards, so we never go below that.
+    #
+    # The full board-set combo is deliberately NOT generated: requiring every
+    # board to have a hit only ever shrinks the qualifying event set relative
+    # to any smaller combo, so the full combo's tracks are already a strict
+    # subset of each leave-one-out combo's. apply_tdc_cuts.py/bootstrap.py no
+    # longer have an exclude_role mechanism to exploit that extra coincidence
+    # requirement, so producing it added a combo with no reachable use.
+    # Skip this only when the full set IS the minimum size (nothing smaller
+    # exists to subsume it).
     min_boards = min(MIN_BOARD_COMBO_SIZE, len(ids_to_process))
+    max_boards = len(ids_to_process) - 1 if len(ids_to_process) > min_boards else len(ids_to_process)
     board_combos = [
         combo
-        for size in range(len(ids_to_process), min_boards - 1, -1)
+        for size in range(max_boards, min_boards - 1, -1)
         for combo in combinations(ids_to_process, size)
     ]
 
@@ -478,10 +487,10 @@ def main():
 
             alignment_results[combo_label] = combo_alignment
 
-            # Only the full board-set combo's estimate feeds forward, applied
+            # Only the largest generated combo's estimate feeds forward, applied
             # in-memory only (never saved back to args.config), so subsequent
-            # combos' own track output uses the corrected geometry too.
-            if len(combo) == len(ids_to_process):
+            # (smaller) combos' own track output uses the corrected geometry too.
+            if len(combo) == max_boards:
                 for bid, new_translation in combo_alignment.items():
                     full_config[args.runName][bid].setdefault('transformation', {})['translation'] = new_translation
                 run_config = full_config[args.runName]

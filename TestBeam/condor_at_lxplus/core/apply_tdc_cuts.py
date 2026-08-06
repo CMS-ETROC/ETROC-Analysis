@@ -139,7 +139,6 @@ def get_tot_range(data, mad_factor=5.0, sigma_factor=3.0, max_iterations=10):
 def apply_raw_tdc_cuts(
     df: pd.DataFrame,
     all_roles: dict[str, int],
-    cut_roles: list[str],
     args: argparse.Namespace
 ) -> pd.DataFrame:
     """Filters raw TDC values using file-specific thresholds and config roles."""
@@ -153,9 +152,6 @@ def apply_raw_tdc_cuts(
         mask = pd.Series(True, index=sub.index)
 
         for role in all_roles.keys():
-            if role not in cut_roles:
-                continue
-
             tot_col = sub[f'tot_{role}']
             low, high = get_tot_range(tot_col)
 
@@ -180,7 +176,7 @@ def apply_raw_tdc_cuts(
 
 def apply_time_domain_cuts(
     df: pd.DataFrame,
-    cut_roles: list[str],
+    active_roles: list[str],
     args: argparse.Namespace
 ) -> pd.DataFrame:
     """Applies cuts in the physical time domain (picoseconds)."""
@@ -195,9 +191,9 @@ def apply_time_domain_cuts(
 
     mask = pd.Series(True, index=df.index)
 
-    for col in [c for c in df.columns if c.startswith('tot_')]:
-        role = col.replace('tot_', '')
-        if role not in cut_roles:
+    for role in active_roles:
+        col = f'tot_{role}'
+        if col not in df.columns:
             continue
 
         tot_col = df[col]
@@ -207,13 +203,12 @@ def apply_time_domain_cuts(
     # No reset here either: keep original row labels intact through the whole cut chain.
     df = df.loc[mask]
 
-    return apply_correlation_cut(df, args.distance_factor, cut_roles)
+    return apply_correlation_cut(df, args.distance_factor, active_roles)
 
 def process_single_file(
     filepath: Path,
     args: argparse.Namespace,
     all_roles: dict[str, int],
-    cut_roles: list[str],
 ) -> str:
     """Worker function for Parquet-only processing."""
     try:
@@ -225,34 +220,20 @@ def process_single_file(
         # --- NEW LOGIC: Dynamic Column Checking ---
         # Only keep roles if their actual data columns exist in THIS file
         # We check for 'tot_{role}' as a proxy for the board's data being present
+        # (e.g. a reduced 3-board track file is missing one role entirely).
         valid_all_roles = {
             role: bid for role, bid in all_roles.items()
             if f'tot_{role}' in df.columns
         }
-
-        # --exclude_role only makes sense for a full combo (all roles defined
-        # in the config present), where the excluded board is there but its
-        # ToT shouldn't drive the cut/correlation calculation. A reduced
-        # combo (e.g. a 3-board track file missing one board entirely) has
-        # fewer boards to spare, so use every role actually present instead
-        # of also dropping the excluded one. Also drives the output filename
-        # below -- exclude_role is a full-combo-only concept.
-        is_full_combo = len(valid_all_roles) >= len(all_roles)
-        if is_full_combo:
-            valid_cut_roles = [
-                role for role in cut_roles
-                if f'tot_{role}' in df.columns
-            ]
-        else:
-            valid_cut_roles = list(valid_all_roles.keys())
+        active_roles = list(valid_all_roles.keys())
 
         # 1. Routing logic for conversion and cuts
         if args.convert_first:
             time_df = convert_to_time(df, valid_all_roles)
-            final_df = apply_time_domain_cuts(time_df, valid_cut_roles, args)
+            final_df = apply_time_domain_cuts(time_df, active_roles, args)
         else:
-            cut_df = apply_raw_tdc_cuts(df, valid_all_roles, valid_cut_roles, args)
-            correlated_df = apply_correlation_cut(cut_df, args.distance_factor, valid_cut_roles)
+            cut_df = apply_raw_tdc_cuts(df, valid_all_roles, args)
+            correlated_df = apply_correlation_cut(cut_df, args.distance_factor, active_roles)
             final_df = convert_to_time(correlated_df, valid_all_roles)
 
         # Neither cut path resets the index anywhere upstream, so final_df.index is
@@ -274,10 +255,7 @@ def process_single_file(
 
             final_df = final_df.reset_index(drop=True)  # tidy index for the saved output
 
-            # exclude_role is a full-combo-only concept (see is_full_combo above) --
-            # a reduced combo's output isn't tagged, since no role was excluded.
-            prefix = f'exclude_{args.exclude_role}_' if is_full_combo else ''
-            out_name = f"{prefix}{filepath.stem}.parquet"
+            out_name = f"{filepath.stem}.parquet"
             io_utils.write_parquet(final_df, out_name, compression='lz4')
 
             return f"Saved: {out_name}"
@@ -302,7 +280,6 @@ def main():
     parser.add_argument('--TOALowerTime', type=float, default=2)
     parser.add_argument('--TOAUpperTime', type=float, default=10)
 
-    parser.add_argument('--exclude_role', default='trig')
     parser.add_argument('--convert-first', action='store_true')
 
     args = parser.parse_args()
@@ -312,13 +289,10 @@ def main():
         config = yaml.safe_load(f)
 
     all_roles = {}
-    cut_roles = []
     for bid, info in config[args.runName].items():
         role = info.get('role')
         if role:
             all_roles[role] = bid
-            if role != args.exclude_role:
-                cut_roles.append(role)
 
     # 2. Find Files (Parquet Only)
     input_path = Path(args.inputdir)
@@ -331,7 +305,7 @@ def main():
     # 3. Process
     failures = 0
     for f in tqdm(files, desc="Processing Tracks"):
-        result = process_single_file(f, args, all_roles, cut_roles)
+        result = process_single_file(f, args, all_roles)
         print(result)
         if result.startswith("Error"):
             failures += 1

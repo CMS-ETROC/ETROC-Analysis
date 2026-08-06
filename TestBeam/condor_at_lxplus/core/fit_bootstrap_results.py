@@ -105,7 +105,7 @@ def parse_filename_metadata(filename: str) -> dict:
             pixel_dict[full_role] = (int(row), int(col))
     return pixel_dict
 
-def process_single_boot_file(ifile: Path, excluded_role: str, args: argparse.Namespace) -> dict:
+def process_single_boot_file(ifile: Path, args: argparse.Namespace) -> dict:
     """
     Processes one *_boot.parquet file and returns its contribution to the merged
     result dict as a plain dict (one file = one row), or {} if there's nothing to
@@ -122,10 +122,6 @@ def process_single_boot_file(ifile: Path, excluded_role: str, args: argparse.Nam
     anchor_df = df.loc[df['is_bootstrap'] == False]
 
     contribution = {}
-
-    if excluded_role in pixel_dict:
-        contribution[f'row_{excluded_role}'] = pixel_dict[excluded_role][0]
-        contribution[f'col_{excluded_role}'] = pixel_dict[excluded_role][1]
 
     for col in boot_df.columns:
         if col == 'is_bootstrap': continue
@@ -178,14 +174,13 @@ def process_group(input_dir: Path, output_dir: Path, label, args: argparse.Names
     files = natsorted(input_dir.glob('*_boot.parquet'))
     if not files: return 0
 
-    excluded_role = files[0].name.split('_')[1] if '_' in files[0].name else 'trig'
     boot_dict = defaultdict(list)
 
     desc = f'{label}' if label else input_dir.name
     failures = 0
     for ifile in tqdm(files, desc=f"  Merging {desc}"):
         try:
-            contribution = process_single_boot_file(ifile, excluded_role, args)
+            contribution = process_single_boot_file(ifile, args)
         except Exception as e:
             print(f"  Warning: failed to process {ifile.name}: {e}")
             failures += 1
