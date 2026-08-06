@@ -112,22 +112,22 @@ python utils/merge_feathers.py -d <INPUT_DIR> -n <NUMBER_OF_MERGE> --dryrun
 
 ### 6. Path finding
 ```bash
-python core/path_finder.py -p <PATH> --cal-label <CAL_LABEL> --track-label <TRACK_LABEL> -c <CONFIG> -r <RUNNAME> -s <SAMPLING> -m <NTRACKS> [--max_diff_pixel <N>] [--mask_config <MASK_YAML>] [--cal_table_only] [--find_alignment] [--exclude_role <EXCLUDE_ROLE>]
+python core/path_finder.py -p <PATH> --cal-label <CAL_LABEL> --track-label <TRACK_LABEL> -c <CONFIG> -r <RUNNAME> -s <SAMPLING> [--max_diff_pixel <N>] [--mask_config <MASK_YAML>] [--cal_table_only] [--find_alignment]
 ```
+Produces one Parquet track-candidates file per board combo: the full board set plus every smaller subset down to 3 boards (the minimum `extract_events_by_path.py` can process), e.g. for 4 boards (ids 0-3, with roles trig/ref/dut/extra) that's a `trig0-ref1-dut2-extra3` file and all four 3-board leave-one-out combos (`trig0-ref1-dut2`, `trig0-ref1-extra3`, `trig0-dut2-extra3`, `ref1-dut2-extra3`). Each board id is tagged with its role from the config YAML so filenames are legible without cross-referencing the config. Each combo's single-hit requirement only applies to the boards in that combo. To avoid every run's combo files piling up flat in one directory, they're nested under a per-run directory named after `--track-label`'s basename, e.g. `-t tracks_csv/desy2026aug_run1` writes to `tracks_csv/desy2026aug_run1/desy2026aug_run1_tracks_trig0-ref1-dut2-extra3.parquet` (created automatically). No count threshold is applied here -- every surviving track candidate is written; use step 7 to cut on occurrence count. Pick whichever combo file fits the analysis at step 7/8.
+
 | Flag | Default | Description |
 |---|---|---|
 | `-p`, `--path` | *required* | Directory containing feather files (output of step 4 or 5), after the EOS base path. |
 | `--cal-label` | *required* | Output filename for the CAL-code table CSV. |
-| `--track-label` | *required* | Output filename for the track-candidates CSV. |
+| `--track-label` | *required* | Base name for the per-run directory of per-combo track-candidates Parquet files. |
 | `-c`, `--config` | *required* | Path to the board-config YAML file. |
 | `-r`, `--runName` | *required* | Key of the run's entry in the config YAML. |
 | `-s`, `--sampling` | `3` | Percent of data to read from each file. |
-| `-m`, `--minimum` | `1000` | Minimum occurrence threshold for a track candidate. |
 | `--max_diff_pixel` | `1` | Max allowed pixel-position spread across boards for spatial alignment. |
 | `--mask_config` | none | Path to a noisy-pixel mask YAML (see `mask_pixel_configs/`). |
 | `--cal_table_only` | off | Stop right after building the CAL-code table. |
-| `--find_alignment` | off | Report per-board pixel offsets relative to the trigger board. |
-| `--exclude_role` | none | Board role to exclude from path finding. One of `trig`, `dut`, `ref`, `extra`. |
+| `--find_alignment` | off | Report per-board pixel offsets relative to the trigger board, computed separately for every combo that includes it (only the full board-set combo's estimate is actually applied to this run's own track output; smaller combos' numbers are for cross-checking). Written to `alignment/{TRACK_LABEL basename}_alignment.yaml` (its own directory, separate from the tracks/cal_table output), keyed by combo, not saved back into `--config` -- merge in manually. |
 
 ### 7. Check path-finding output (optional)
 
@@ -137,9 +137,11 @@ python utils/reduce_number_of_track_candidates.py -f <FILE> -m <NUMBER> [--ntrk_
 ```
 | Flag | Default | Description |
 |---|---|---|
-| `-f`, `--file` | *required* | Track-candidates CSV from step 6. |
+| `-f`, `--file` | *required* | Track-candidates Parquet file for one board combo, from step 6. |
 | `-m`, `--minimum` | `1000` | New, tighter minimum occurrence threshold. |
 | `--ntrk_table` | off | Print a table of surviving paths for thresholds 40–400 (step 40). |
+
+Writes `<same file stem>_reduced.parquet` alongside the input, so each combo's reduced file stays distinct.
 
 ### 8. Submit jobs for event selection by path
 ```bash
@@ -148,7 +150,7 @@ python submit/submit_extract_events_by_path.py -d <DIRNAME> -t <TRACK> -o <OUTNA
 | Flag | Default | Description |
 |---|---|---|
 | `-d`, `--inputdir` | *required* | Directory of step 6 output. |
-| `-t`, `--track` | *required* | Track-candidates CSV from step 7 (or step 6 if step 7 was skipped). |
+| `-t`, `--track` | *required* | Track-candidates Parquet file for one board combo, from step 7 (or step 6 if step 7 was skipped). |
 | `-o`, `--outdir` | `extractEvents_outputs` | Output directory, after the EOS base path. |
 | `-c`, `--config` | *required* | Path to the board-config YAML file. |
 | `-r`, `--runName` | *required* | Key of the run's entry in the config YAML. |
