@@ -1,7 +1,6 @@
 import argparse
 import sys
 import logging
-import time
 import warnings
 import random, getpass
 from itertools import combinations
@@ -346,7 +345,6 @@ def main():
     # a ~1k-row cal_table. Bounds are taken from both cal_table and df so a
     # pixel present only in df (no cal_table entry) still indexes safely and
     # simply falls out via the NaN check below (same as the old how='left').
-    _t0 = time.perf_counter()
     max_board = max(int(cal_table['board'].max()), int(df['board'].max())) + 1
     max_row = max(int(cal_table['row'].max()), int(df['row'].max())) + 1
     max_col = max(int(cal_table['col'].max()), int(df['col'].max())) + 1
@@ -359,11 +357,8 @@ def main():
     cal_dev = df['cal'].astype('int32').to_numpy() - cal_mode_vals
     valid_cal = (np.abs(cal_dev) <= 3) & ~np.isnan(cal_mode_vals)
     df = df.loc[valid_cal].reset_index(drop=True)
-    logging.info(f"[timing] CAL-deviation lookup+filter: {time.perf_counter() - _t0:.2f}s")
 
-    _t0 = time.perf_counter()
     df = reindex_events(df) # Renumber after filtering
-    logging.info(f"[timing] reindex_events: {time.perf_counter() - _t0:.2f}s")
     check_empty_df(df, "CAL deviation filtering")
 
     ids_to_process = sorted(roles.values())
@@ -373,7 +368,6 @@ def main():
     # evt is contiguous 0..n-1 after reindex_events, so a bincount over
     # (evt, board) pairs reproduces the old groupby+unstack matrix without
     # pandas' hashing/pivoting overhead -- much faster for a large event count.
-    _t0 = time.perf_counter()
     board_vals = df['board'].to_numpy()
     evt_vals = df['evt'].to_numpy()
     n_events = int(evt_vals.max()) + 1
@@ -382,7 +376,6 @@ def main():
     combined = evt_vals.astype(np.int64) * n_boards + board_vals.astype(np.int64)
     counts_2d = np.bincount(combined, minlength=n_events * n_boards).reshape(n_events, n_boards)
     single_hit = counts_2d == 1  # shape (n_events, n_boards): True where that board has exactly 1 hit
-    logging.info(f"[timing] hit_counts bincount: {time.perf_counter() - _t0:.2f}s")
 
     # Board combinations to produce tracks for: the full board set, plus every
     # smaller subset down to 3 boards (e.g. for 4 boards, that's the 4-board
