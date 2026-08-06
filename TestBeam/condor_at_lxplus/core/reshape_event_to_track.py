@@ -220,6 +220,61 @@ def determine_size(files, num_groups):
     return batches
 
 # ------------------------------------
+def find_combo_dirs(mother_dir: Path, file_pattern: str) -> list[Path]:
+    """Resolves a step 9 -d path to the list of per-combo directories to process.
+
+    If mother_dir itself contains files matching file_pattern, it's already a
+    single combo directory (step 8 writes one such directory per board combo)
+    and is returned as the sole entry -- this keeps pointing -d directly at a
+    combo dir working exactly as before. Otherwise mother_dir is treated as
+    the shared parent of several combo dirs (e.g. "pathSel_run2" containing
+    "dut0-trig1-ref2/" and "trig1-ref2-extra3/"), and each subdirectory that
+    actually contains matching files is entered -- a stray empty folder left
+    behind by a prior run doesn't produce a spurious empty output.
+    """
+    if list(mother_dir.glob(file_pattern)):
+        return [mother_dir]
+
+    combo_dirs = [d for d in sorted(mother_dir.iterdir()) if d.is_dir() and list(d.glob(file_pattern))]
+    if not combo_dirs:
+        sys.exit(f"Error: No files matching '{file_pattern}' found in {mother_dir} or its subdirectories.")
+    return combo_dirs
+
+# ------------------------------------
+def process_combo(combo_dir: Path, combo_label: str, args, eos_base_dir: Path,
+                   nickname_dict: dict, tmp_root: Path) -> int:
+    """Runs the pack -> scatter -> gather pipeline for one board combo's
+    input directory, writing its output under <outdir>/<combo_label>/.
+    Returns the number of failed tasks (0 on full success)."""
+    all_files = natsorted(combo_dir.glob(args.file_pattern))
+    final_output_dir = str(eos_base_dir / args.outdir / combo_label)
+    print(f'\n=== Processing combo: {combo_label} ({len(all_files)} files) ===')
+    print(f'Output directory: {final_output_dir}')
+
+    out_tmp_dir = tmp_root / uuid.uuid4().hex
+    out_tmp_dir.mkdir(parents=True, exist_ok=True)
+
+    partitions = determine_size(all_files, args.partitions)
+    flat_tasks = []
+    for p_idx, partition_files in enumerate(partitions):
+        batches = determine_size(partition_files, args.batches)
+        for b_idx, batch_files in enumerate(batches):
+            file_list_str = [str(f) for f in batch_files]
+            flat_tasks.append((p_idx, b_idx, file_list_str, out_tmp_dir))
+
+    packing_failures = run_parallel_packing(flat_tasks)
+    run_native_scatter(out_tmp_dir, args.partitions)
+    gather_failures = run_parallel_gather(final_output_dir, out_tmp_dir, nickname_dict, args.partitions)
+
+    print(f"--- Cleaning up temporary files in {out_tmp_dir} ---")
+    try:
+        shutil.rmtree(out_tmp_dir)
+    except Exception as e:
+        print(f"Warning: Cleanup failed: {e}")
+
+    return packing_failures + gather_failures
+
+# ------------------------------------
 def main():
     parser = argparse.ArgumentParser(description='Submit jobs to reshape event-based to track-based')
     parser.add_argument('-d', '--inputdir', required=True, dest='dirname', help='Input directory')
@@ -236,61 +291,44 @@ def main():
     username = getpass.getuser()
     eos_base_dir = io_utils.eos_base_dir(username)
 
-    all_files = natsorted((eos_base_dir / args.dirname).glob(args.file_pattern))
-
-    if not all_files:
-        print('No input files found')
-        sys.exit(1)
-
-    # Auto-namespace the output directory by board combo, mirroring step 8's
-    # combo_label_from_track_filename(). -d is expected to be step 8's
-    # combo-labeled output subdirectory (e.g. ".../dut0-trig1-ref2-extra3"),
-    # so its basename is the combo label. Without this, two combos pointed
-    # at the same -o would land in the same tracks/ folder and silently
-    # collide/mix in gather_track_worker's unguarded pq.write_table.
-    combo_label = Path(args.dirname).name
-    final_output_dir = str(eos_base_dir / args.outdir / combo_label)
-    print(f'Output directory: {final_output_dir}')
+    # -d may point directly at a step 8 combo directory, or at their shared
+    # mother directory -- find_combo_dirs() tells the two apart and, in the
+    # mother-directory case, auto-detects every combo subdirectory to process.
+    # Each combo's output is auto-namespaced under <outdir>/<combo_label>/
+    # (mirroring step 8's combo_label_from_track_filename()) so combos never
+    # collide or get their tracks silently mixed by gather_track_worker's
+    # unguarded pq.write_table.
+    mother_dir = eos_base_dir / args.dirname
+    combo_dirs = find_combo_dirs(mother_dir, args.file_pattern)
 
     # Unique per invocation and nested below a per-user wrapper folder, so concurrent
-    # runs (or retries) never collide or delete each other's in-flight data, and the
-    # end-of-run "remove empty parent" cleanup below can never reach the system temp
-    # dir itself. Uses tempfile.gettempdir() (honors $TMPDIR) rather than a hardcoded
-    # /tmp, since shared lxplus nodes often expect scratch space to go elsewhere.
+    # runs (or retries) never collide or delete each other's in-flight data. Uses
+    # tempfile.gettempdir() (honors $TMPDIR) rather than a hardcoded /tmp, since
+    # shared lxplus nodes often expect scratch space to go elsewhere.
     tmp_root = Path(tempfile.gettempdir()) / f'reshape_events_to_tracks_{username}'
     tmp_root.mkdir(parents=True, exist_ok=True)
-    out_tmp_dir = tmp_root / uuid.uuid4().hex
-    out_tmp_dir.mkdir(parents=True, exist_ok=True)
 
     _, nickname_dict = load_config_and_roles(args.config, args.runName)
 
-    partitions = determine_size(all_files, args.partitions)
-    flat_tasks = []
-    for p_idx, partition_files in enumerate(partitions):
-        batches = determine_size(partition_files, args.batches)
-        for b_idx, batch_files in enumerate(batches):
-            file_list_str = [str(f) for f in batch_files]
-            flat_tasks.append((p_idx, b_idx, file_list_str, out_tmp_dir))
+    total_failures = 0
+    for combo_dir in combo_dirs:
+        combo_label = combo_dir.name
+        total_failures += process_combo(
+            combo_dir, combo_label, args, eos_base_dir, nickname_dict, tmp_root
+        )
 
-    packing_failures = run_parallel_packing(flat_tasks)
-    run_native_scatter(out_tmp_dir, args.partitions)
-    gather_failures = run_parallel_gather(final_output_dir, out_tmp_dir, nickname_dict, args.partitions)
-
-    print(f"\n--- Final Step: Cleaning up temporary files in {out_tmp_dir} ---")
+    # Remove this run's per-user wrapper folder if it's now empty
     try:
-        shutil.rmtree(out_tmp_dir)
-        # Also remove this run's per-user wrapper folder if it's now empty
-        if out_tmp_dir.parent.exists() and not any(out_tmp_dir.parent.iterdir()):
-            out_tmp_dir.parent.rmdir()
+        if tmp_root.exists() and not any(tmp_root.iterdir()):
+            tmp_root.rmdir()
     except Exception as e:
         print(f"Warning: Cleanup failed: {e}")
 
-    total_failures = packing_failures + gather_failures
     if total_failures:
         print(f"\nReshaping FINISHED WITH {total_failures} FAILED TASK(S) -- output is incomplete.")
         sys.exit(1)
 
-    print("\nReshaping Complete!")
+    print(f"\nReshaping Complete! ({len(combo_dirs)} combo(s) processed)")
 
 if __name__ == "__main__":
     main()
