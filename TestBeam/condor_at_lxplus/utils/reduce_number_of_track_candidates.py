@@ -101,8 +101,8 @@ for file in input_files:
     track_output_df.reset_index(drop=True, inplace=True)
 
     ## Use the full stem (not just a '_tracks'-split prefix) so each board combo's
-    ## file (e.g. ..._tracks_0-1-2-3.parquet vs ..._tracks_0-1-2.parquet) gets its
-    ## own reduced output instead of colliding on the same name.
+    ## file (e.g. tracks_0-1-2-3.parquet vs tracks_0-1-2.parquet) gets its own
+    ## reduced output instead of colliding on the same name.
     output_file = file.with_name(f'{file.stem}_reduced.parquet')
     track_output_df.to_parquet(output_file, index=False)
 

@@ -93,8 +93,13 @@ def discover_time_dirs(mother_dir: Union[str, Path]) -> List[Path]:
 def combo_label_from_track_filename(track_path: Union[str, Path]) -> str:
     """Extracts the board-combo label (e.g. 'dut0-trig1-ref2-extra3') from a
     step 6/7 track-candidates filename of the form
-    '<run>_tracks_<combo_label>[_reduced].parquet' (see path_finder.py's
+    'tracks_<combo_label>[_reduced].parquet' (see path_finder.py's
     output_file and reduce_number_of_track_candidates.py's output_file).
+    The run name isn't repeated in the filename -- it's already the name of
+    the per-run directory the file lives in.
+
+    Also accepts the older '<run>_tracks_<combo_label>[_reduced].parquet'
+    naming, for files written before that rename.
 
     Used to auto-namespace step 8's condor output directory per combo, so
     two combos submitted with the same -o can never overwrite each other's
@@ -103,12 +108,16 @@ def combo_label_from_track_filename(track_path: Union[str, Path]) -> str:
     stem = Path(track_path).stem
     if stem.endswith('_reduced'):
         stem = stem[: -len('_reduced')]
+
+    if stem.startswith('tracks_'):
+        return stem[len('tracks_'):]
+
     marker = '_tracks_'
     idx = stem.rfind(marker)
     if idx == -1:
         raise ValueError(
             f"Could not parse board-combo label from track filename '{track_path}' "
-            f"(expected '..._tracks_<combo_label>[_reduced].parquet')"
+            f"(expected 'tracks_<combo_label>[_reduced].parquet')"
         )
     return stem[idx + len(marker):]
 

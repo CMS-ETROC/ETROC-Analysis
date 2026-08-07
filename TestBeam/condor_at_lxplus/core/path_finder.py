@@ -407,7 +407,8 @@ def main():
     # pile up flat in one directory across every run. Nest them under a
     # per-run directory named after --track-label's basename instead --
     # e.g. -t tracks_csv/desy2026aug_run1 writes into
-    # tracks_csv/desy2026aug_run1/desy2026aug_run1_tracks_<combo>.parquet.
+    # tracks_csv/desy2026aug_run1/tracks_<combo>.parquet. The run name isn't
+    # repeated in the filename itself since it's already the directory name.
     tracks_out_dir = Path(args.track_label)
     tracks_out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -504,7 +505,7 @@ def main():
         coord_cols = [c for c in final_tracks.columns if c.split('_')[0] in ['x', 'y', 'z']]
         final_tracks[coord_cols] = final_tracks[coord_cols].round(2)
 
-        output_file = tracks_out_dir / f'{tracks_out_dir.name}_tracks_{combo_label}.parquet'
+        output_file = tracks_out_dir / f'tracks_{combo_label}.parquet'
         io_utils.write_parquet(final_tracks, output_file, index=False)
         logging.info(f"Combo ({combo_label}): {len(final_tracks)} tracks saved to {output_file}")
         n_written += 1
