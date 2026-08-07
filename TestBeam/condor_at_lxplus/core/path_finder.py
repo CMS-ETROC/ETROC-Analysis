@@ -21,7 +21,6 @@ warnings.filterwarnings("ignore")
 PIXEL_PITCH = 1.3
 PIXEL_OFFSET = 7.5
 MAX_MEMORY_USAGE_MB = 2600
-SINGLE_FILE_MEMORY_LIMIT_MB = 26
 MIN_BOARD_COMBO_SIZE = 3  # extract_events_by_path.py (step 8) requires at least 3 boards
 
 # --- Helper Functions ---
@@ -150,7 +149,7 @@ def load_and_sample_data(file_paths: List[Path], sampling_rate: float) -> pd.Dat
 
     logging.info(f'Avg usage: {avg_use:.2f} MB, Est total: {total_est:.2f} MB')
 
-    if avg_use > SINGLE_FILE_MEMORY_LIMIT_MB or total_est > MAX_MEMORY_USAGE_MB:
+    if total_est > MAX_MEMORY_USAGE_MB:
         logging.error('Memory limit exceeded. Reduce sampling rate or file count.')
         sys.exit(1)
 
