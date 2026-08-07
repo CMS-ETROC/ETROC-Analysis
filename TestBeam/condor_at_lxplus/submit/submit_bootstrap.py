@@ -28,6 +28,12 @@ set -u
 # 1. Determine local file name
 LOCAL_FILENAME=$(basename "$INPUT_FILE_EOS")
 
+# Cleanup the local copy on any exit -- success, a `set -e` abort from a
+# failing command below, or bootstrap.py's own sys.exit (e.g. too few events
+# to run bootstrap on). A plain step-4-at-the-end `rm` never ran in the
+# failure cases, since `set -e` jumps straight past it to script exit.
+trap 'rm -f "$LOCAL_FILENAME"' EXIT
+
 # 2. Copy input data from EOS to local work node
 echo "Transferring: $INPUT_FILE_EOS"
 xrdcp root://eosuser.cern.ch/$INPUT_FILE_EOS ./$LOCAL_FILENAME
@@ -35,11 +41,6 @@ xrdcp root://eosuser.cern.ch/$INPUT_FILE_EOS ./$LOCAL_FILENAME
 # 3. Construct and Run Bootstrap Analysis
 echo "\nRunning: {{ command }} -f $LOCAL_FILENAME"
 {{ command }} -f $LOCAL_FILENAME
-
-# 4. Cleanup: Delete the local copy of the input file
-if [ -f $LOCAL_FILENAME ]; then
-    rm $LOCAL_FILENAME
-fi
 
 echo "\n--- Job finished successfully ---"
 """
