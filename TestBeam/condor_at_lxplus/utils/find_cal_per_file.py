@@ -16,7 +16,7 @@ parser.add_argument(
     '--input_dir',
     metavar = 'NAME',
     type = str,
-    help = 'input directory containing .bin',
+    help = 'input directory containing .feather files',
     required = True,
     dest = 'input_dir',
 )
@@ -31,16 +31,9 @@ parser.add_argument(
     dest = 'output',
 )
 
-parser.add_argument(
-    '--make_plot',
-    action = 'store_true',
-    help = 'If set, make the plot and save it',
-    dest = 'make_plot',
-)
-
 args = parser.parse_args()
 
-file_list = natsorted(Path(args.input_dir).glob('loop*.feather'))
+file_list = natsorted(Path(args.input_dir).glob('*.feather'))
 outname = f'{args.output}.sqlite'
 
 for ifile in tqdm(file_list):
