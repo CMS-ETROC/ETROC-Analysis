@@ -91,9 +91,8 @@ for file in input_files:
     track_output_df = pd.read_parquet(file)
     previous_num = track_output_df.shape[0]
 
-    print_ntrk_table(file.name, track_output_df['count'], previous_num)
-
     if args.top_percentile is None:
+        print_ntrk_table(file.name, track_output_df['count'], previous_num)
         continue
 
     cut = int(round(np.percentile(track_output_df['count'], 100 - args.top_percentile)))
