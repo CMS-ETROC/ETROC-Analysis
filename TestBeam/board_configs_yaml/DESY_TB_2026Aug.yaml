@@ -10,13 +10,13 @@ defaults:
   # PT-IH2_60deg:  &PT-IH2_60deg  {<<: *PT-IH2,  angle: 60}
 
 run2: &run2
-  0: {<<: *B1-P1-9, temp: 15C}
-  1: {<<: *PT-IH3,  temp: 25C}
-  2: {<<: *PT-IH5,  temp: 25C}
-  3: {<<: *B1-P1-6, temp: 25C}
+  0: {<<: *B1-P1-9, temp: 15C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  1: {<<: *PT-IH3,  temp: 25C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  2: {<<: *PT-IH5,  temp: 25C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  3: {<<: *B1-P1-6, temp: 25C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
 
 run3: &run3
-  0: {<<: *B1-P1-9, HV: 190, temp: -20C}
-  1: {<<: *PT-IH3,  HV: 220, temp: 0C}
-  2: {<<: *PT-IH5,  HV: 220, temp: 0C}
-  3: {<<: *B1-P1-6, HV: 220, temp: 0C}
+  0: {<<: *B1-P1-9, HV: 190, temp: -20C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  1: {<<: *PT-IH3,  HV: 220, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  2: {<<: *PT-IH5,  HV: 220, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  3: {<<: *B1-P1-6, HV: 220, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
