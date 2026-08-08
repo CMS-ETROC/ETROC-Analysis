@@ -24,6 +24,7 @@ run4: *run3
 
 run5: &run5
   0: {<<: *B1-P1-9, HV: 190, angle: 60, temp: -20C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
-  1: {<<: *PT-IH3,  HV: 220, gle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
-  2: {<<: *PT-IH5,  HV: 220, gle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
-  3: {<<: *B1-P1-6, HV: 220, gle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  1: {<<: *PT-IH3,  HV: 220, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  2: {<<: *PT-IH5,  HV: 220, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  3: {<<: *B1-P1-6, HV: 220, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+run6: *run5
