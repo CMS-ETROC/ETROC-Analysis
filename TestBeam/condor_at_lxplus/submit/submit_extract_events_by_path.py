@@ -1,7 +1,7 @@
 import argparse
 import getpass
 import subprocess
-import sys, yaml
+import sys
 import uuid
 from datetime import datetime
 
@@ -38,8 +38,8 @@ xrdcp -r root://eosuser.cern.ch/$path_to_copy ./
 echo "Will process input file from {{ runname }} $input_file (index $file_index)"
 
 # Run the python script
-echo "python extract_events_by_path.py -f $input_file -r {{ runname }} -t {{ track }} -c {{ config }} --trigID {{ trigID }} --cal_table {{ cal_table }} --neighbor_search_method {{ search_method }} --file-index $file_index"
-python extract_events_by_path.py -f $input_file -r {{ runname }} -t {{ track }} -c {{ config }} --trigID {{ trigID }} --cal_table {{ cal_table }} --neighbor_search_method {{ search_method }} --file-index $file_index
+echo "python extract_events_by_path.py -f $input_file -r {{ runname }} -t {{ track }} -c {{ config }} --cal_table {{ cal_table }} --neighbor_search_method {{ search_method }} --file-index $file_index"
+python extract_events_by_path.py -f $input_file -r {{ runname }} -t {{ track }} -c {{ config }} --cal_table {{ cal_table }} --neighbor_search_method {{ search_method }} --file-index $file_index
 
 ls -ltrh
 echo ""
@@ -71,20 +71,6 @@ Queue idx,fname from {{ script_dir }}/input_list.txt
 
 # --- Helper Functions ---
 
-def get_trigger_id_from_config(config_path: Path, run_name: str) -> int:
-    """Parses the YAML config to find the board ID with role 'trig'."""
-    with open(config_path) as f:
-        config_data = yaml.safe_load(f)
-
-    if run_name not in config_data:
-        raise ValueError(f"Run config '{run_name}' not found in {config_path}")
-
-    for board_id, board_info in config_data[run_name].items():
-        if board_info.get('role') == 'trig':
-            return board_id
-
-    raise ValueError(f"No board with role 'trig' found in config for {run_name}")
-
 def find_track_files(track_arg: Path) -> list[Path]:
     """Resolves -t to the list of track files to submit jobs for.
 
@@ -105,7 +91,7 @@ def find_track_files(track_arg: Path) -> list[Path]:
         return track_files
     sys.exit(f"Error: Track path '{track_arg}' not found.")
 
-def create_submission_files(args, trig_id, script_dir, log_dir, eos_base, track_path, out_dir):
+def create_submission_files(args, script_dir, log_dir, eos_base, track_path, out_dir):
 
     config_path = Path(args.config)
     cal_path = Path(args.cal_table)
@@ -129,7 +115,6 @@ def create_submission_files(args, trig_id, script_dir, log_dir, eos_base, track_
         runname=args.runName,
         track=track_path.name,
         cal_table=cal_path.name,
-        trigID=trig_id,
         search_method=args.search_method,
         config=config_path.name,
     )
@@ -214,17 +199,11 @@ if __name__ == "__main__":
         sys.exit(f"Error: Config file '{args.config}' not found.")
 
     # --- Logic ---
-    try:
-        trig_id = get_trigger_id_from_config(Path(args.config), args.runName)
-    except Exception as e:
-        sys.exit(f"Configuration Error: {e}")
-
     track_files = find_track_files(track_arg)
 
     print('\n========= Submission Details =========')
     print(f'Input:       {args.dirname}')
     print(f'Input CAL table: {args.cal_table}')
-    print(f'Trigger ID:  {trig_id}')
     if args.search_method != 'none':
         print(f'Neighbor search method: {args.search_method}')
     if len(track_files) > 1:
@@ -259,7 +238,7 @@ if __name__ == "__main__":
         print(f'    Output:     {eos_base_dir}/{out_dir}')
 
         jdl_file, bash_file, list_file = create_submission_files(
-            args, trig_id, combo_script_dir, combo_log_dir, eos_base_dir, track_path, out_dir
+            args, combo_script_dir, combo_log_dir, eos_base_dir, track_path, out_dir
         )
 
         if args.dryrun:
