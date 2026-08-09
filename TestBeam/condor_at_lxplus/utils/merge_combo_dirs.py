@@ -4,6 +4,23 @@ from pathlib import Path
 from natsort import natsorted
 
 
+def expand_sources(patterns: list[str], root: Path) -> list[Path]:
+    """Expands each -s token against root: a plain relative path is used as-is,
+    a glob pattern (containing *, ?, or []) is expanded to every matching
+    subdirectory of root, natsorted. Lets e.g. 'path_F1_run[5-9]' stand in for
+    five separate -s directories instead of spelling each one out."""
+    resolved: list[Path] = []
+    for pattern in patterns:
+        if any(ch in pattern for ch in '*?['):
+            matches = natsorted(root.glob(pattern))
+            if not matches:
+                sys.exit(f"Error: No directories matched source pattern '{pattern}' under {root}")
+            resolved.extend(matches)
+        else:
+            resolved.append(root / pattern)
+    return resolved
+
+
 def find_combo_dirs(mother_dir: Path, file_pattern: str) -> list[Path]:
     """Resolves one -s source to the list of per-combo directories it contains.
 
@@ -72,13 +89,24 @@ def main():
         required=True,
         help='Two or more step 8 output directories to merge. Each can be a single combo '
              "directory or a combo mother directory (one subdirectory per board combo) -- "
-             'auto-detected the same way step 9 does.',
+             "auto-detected the same way step 9 does. An entry may also be a glob pattern "
+             "(e.g. 'path_F1_run[5-9]' or 'path_F1_run*') to match several directories at "
+             'once, resolved relative to --base.',
     )
 
     parser.add_argument(
         '-d', '--dest',
         required=True,
         help='Destination mother directory. Each combo is merged into <dest>/<combo_label>/.',
+    )
+
+    parser.add_argument(
+        '--base',
+        default=None,
+        help='Common parent directory for --sources and --dest, so each can be given '
+             'relative to it instead of repeating a shared prefix (e.g. --base '
+             "ETROC_Irrad_2026Jul/F1 -s path_F1_run5 path_F1_run6 -d path_F1_merged). "
+             'Defaults to the eos home directory.',
     )
 
     parser.add_argument(
@@ -95,14 +123,15 @@ def main():
 
     args = parser.parse_args()
 
-    if len(args.sources) < 2:
-        sys.exit('Error: Give at least two -s/--sources to merge.')
-
     username = getpass.getuser()
     eos_base_dir = Path(f'/eos/user/{username[0]}/{username}')
+    root = (eos_base_dir / args.base) if args.base else eos_base_dir
 
-    sources = [Path(f'{eos_base_dir}/{s}').resolve() for s in args.sources]
-    dest = Path(f'{eos_base_dir}/{args.dest}').resolve()
+    sources = [s.resolve() for s in expand_sources(args.sources, root)]
+    dest = (root / args.dest).resolve()
+
+    if len(sources) < 2:
+        sys.exit('Error: Give at least two -s/--sources (after glob expansion) to merge.')
 
     for source in sources:
         if not source.is_dir():
