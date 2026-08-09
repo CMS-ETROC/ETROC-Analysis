@@ -94,7 +94,7 @@ def combo_label_from_track_filename(track_path: Union[str, Path]) -> str:
     """Extracts the board-combo label (e.g. 'dut0-trig1-ref2-extra3') from a
     step 6/7 track-candidates filename of the form
     'tracks_<combo_label>[_reduced].parquet' (see path_finder.py's
-    output_file and reduce_number_of_track_candidates.py's output_file).
+    output_file and select_tracks_by_coverage.py's output_file).
     The run name isn't repeated in the filename -- it's already the name of
     the per-run directory the file lives in.
 

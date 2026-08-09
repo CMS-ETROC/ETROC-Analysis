@@ -77,7 +77,7 @@ def find_track_files(track_arg: Path) -> list[Path]:
     If track_arg is a file, it's a single combo's track file and is returned
     as the sole entry -- unchanged from before. If it's a directory (the
     per-run directory path_finder.py writes combo track files into, and
-    reduce_number_of_track_candidates.py writes '_reduced' files alongside),
+    select_tracks_by_coverage.py writes '_reduced' files alongside),
     every '*_reduced.parquet' file in it is auto-detected -- one submission
     per combo. All of them share the same --cal_table, since CAL mode values
     are computed once per run (not per combo) by path_finder.py.
@@ -153,7 +153,7 @@ if __name__ == "__main__":
     parser.add_argument('-d', '--inputdir', required=True, dest='dirname', help='Input directory containing feather files')
     parser.add_argument('-t', '--track', required=True, dest='track',
                         help='Parquet file with track candidates for one board combo. Can also be the '
-                             'per-run directory path_finder.py / reduce_number_of_track_candidates.py '
+                             'per-run directory path_finder.py / select_tracks_by_coverage.py '
                              'wrote them into -- every "*_reduced.parquet" file in it is then '
                              'auto-detected and submitted as a separate job, one per combo, all sharing '
                              'the same --cal_table.')
