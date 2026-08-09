@@ -1,5 +1,6 @@
 import argparse
 import getpass
+import logging
 import re
 import subprocess
 import sys
@@ -189,20 +190,26 @@ def build_indexed_file_list(final_input_dir: Path) -> list[tuple[int, Path]]:
     return indexed
 
 
-# Local runs share a real interactive node (not a dedicated condor slot), so a
-# few cores is fine but grabbing all of them isn't -- same reasoning as
-# reshape_event_to_track.py's own worker pool.
-
-
-def _limit_pyarrow_threads():
+def _init_local_worker():
     """ProcessPoolExecutor(initializer=...): runs once per worker process at
-    startup. Without this, each of the _LOCAL_MAX_WORKERS processes would let
-    its own parquet/feather reads spin up pyarrow's default multi-threaded
-    pool (one per core), oversubscribing well past the cap. Same fix
-    reshape_event_to_track.py already applies to its own worker processes."""
+    startup.
+
+    1. Caps pyarrow's own internal threading -- without this, each of the 3
+       worker processes would let its own parquet/feather reads spin up
+       pyarrow's default multi-threaded pool (one per core), oversubscribing
+       well past the cap. Same fix reshape_event_to_track.py already applies
+       to its own worker processes.
+    2. Quiets extract_events_by_path.py's own per-file INFO logging (it calls
+       logging.basicConfig(level=INFO) at import time) -- useful for a single
+       condor job's own captured stdout, but with 3 workers running
+       concurrently here it's an interleaved flood that buries the shared
+       tqdm progress bar. WARNING+ (actual problems) still comes through per
+       file.
+    """
     import pyarrow as pa
     pa.set_cpu_count(1)
     pa.set_io_thread_count(1)
+    logging.getLogger().setLevel(logging.WARNING)
 
 
 def run_local(args, track_path: Path, eos_base: str, out_dir: str) -> int:
@@ -233,7 +240,10 @@ def run_local(args, track_path: Path, eos_base: str, out_dir: str) -> int:
         )
 
     failures = 0
-    with ProcessPoolExecutor(max_workers=3, initializer=_limit_pyarrow_threads) as executor:
+    # Local runs share a real interactive node (not a dedicated condor slot),
+    # so a few cores is fine but grabbing all of them isn't -- same reasoning
+    # as reshape_event_to_track.py's own worker pool.
+    with ProcessPoolExecutor(max_workers=3, initializer=_init_local_worker) as executor:
         futures = {
             executor.submit(extract_events_by_path.run, make_args(file_idx, file_path)): file_path
             for file_idx, file_path in indexed_files
