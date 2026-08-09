@@ -3,14 +3,17 @@ import getpass
 import subprocess
 import sys
 import uuid
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime
 
 from pathlib import Path
 from jinja2 import Template
 from natsort import natsorted
+from tqdm import tqdm
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'core'))
 import io_utils
+import extract_events_by_path
 
 # --- Configuration & Templates ---
 
@@ -91,6 +94,86 @@ def find_track_files(track_arg: Path) -> list[Path]:
         return track_files
     sys.exit(f"Error: Track path '{track_arg}' not found.")
 
+def build_indexed_file_list(final_input_dir: Path) -> list[tuple[int, Path]]:
+    """(file_index, file_path) pairs for every loop*.feather file in
+    final_input_dir, parsed the same way both condor's input_list.txt and
+    local in-process runs need it -- matches extract_events_by_path.py's
+    --file-index semantics either way."""
+    indexed = []
+    for file_path in natsorted(final_input_dir.glob('loop*feather')):
+        try:
+            file_idx = int(file_path.stem.split('_')[1])
+        except (IndexError, ValueError):
+            print(f"Warning: Could not parse index from {file_path.name}, skipping.")
+            continue
+        indexed.append((file_idx, file_path))
+    return indexed
+
+
+# Local runs share a real interactive node (not a dedicated condor slot), so a
+# few cores is fine but grabbing all of them isn't -- same reasoning as
+# reshape_event_to_track.py's own worker pool.
+
+
+def _limit_pyarrow_threads():
+    """ProcessPoolExecutor(initializer=...): runs once per worker process at
+    startup. Without this, each of the _LOCAL_MAX_WORKERS processes would let
+    its own parquet/feather reads spin up pyarrow's default multi-threaded
+    pool (one per core), oversubscribing well past the cap. Same fix
+    reshape_event_to_track.py already applies to its own worker processes."""
+    import pyarrow as pa
+    pa.set_cpu_count(1)
+    pa.set_io_thread_count(1)
+
+
+def run_local(args, track_path: Path, eos_base: str, out_dir: str) -> int:
+    """Runs extract_events_by_path.py's logic for every input file on a small
+    local process pool, instead of submitting one condor job per file. No
+    xrdcp transfer needed -- /eos is already mounted on lxplus interactive
+    nodes -- and output is written directly to its final destination instead
+    of relying on condor's output_destination copy-back. Returns the number
+    of files that failed."""
+    final_input_dir = Path(eos_base) / args.dirname
+    indexed_files = build_indexed_file_list(final_input_dir)
+    if not indexed_files:
+        print(f"    No input files found in {final_input_dir}. Nothing to process.")
+        return 0
+
+    final_output_dir = str(Path(eos_base) / out_dir)
+
+    def make_args(file_idx, file_path):
+        return argparse.Namespace(
+            inputfile=str(file_path),
+            runinfo=args.runName,
+            config=args.config,
+            track=str(track_path),
+            search_method=args.search_method,
+            cal_table=args.cal_table,
+            file_index=file_idx,
+            outdir=final_output_dir,
+        )
+
+    failures = 0
+    with ProcessPoolExecutor(max_workers=3, initializer=_limit_pyarrow_threads) as executor:
+        futures = {
+            executor.submit(extract_events_by_path.run, make_args(file_idx, file_path)): file_path
+            for file_idx, file_path in indexed_files
+        }
+        for future in tqdm(as_completed(futures), total=len(futures), desc="Local run"):
+            file_path = futures[future]
+            try:
+                future.result()
+            except SystemExit as e:
+                if e.code not in (0, None):
+                    print(f"    !!! ERROR processing {file_path.name}: exited with code {e.code}")
+                    failures += 1
+            except Exception as e:
+                print(f"    !!! ERROR processing {file_path.name}: {e}")
+                failures += 1
+
+    return failures
+
+
 def create_submission_files(args, script_dir, log_dir, eos_base, track_path, out_dir):
 
     config_path = Path(args.config)
@@ -99,15 +182,10 @@ def create_submission_files(args, script_dir, log_dir, eos_base, track_path, out
 
     # 2. No unlink() needed
     input_list_path = script_dir / 'input_list.txt'
-    feather_files = natsorted(final_input_dir.glob('loop*feather'))
+    indexed_files = build_indexed_file_list(final_input_dir)
 
     with open(input_list_path, 'w') as f:
-        for file_path in feather_files:
-            try:
-                file_idx = int(file_path.stem.split('_')[1])
-            except (IndexError, ValueError):
-                print(f"Warning: Could not parse index from {file_path.name}, skipping.")
-                continue
+        for file_idx, file_path in indexed_files:
             f.write(f"{file_idx},{file_path.name}\n")
 
     # 3. Pass Path objects directly to Template
@@ -165,6 +243,14 @@ if __name__ == "__main__":
                         help="Search method for neighbor hit checking, default is 'none'. possible argument: 'row_only', 'col_only', 'cross', 'square'")
     parser.add_argument('--condor_tag', dest='condor_tag', help='Tag appended to filenames to avoid collisions')
     parser.add_argument('--dryrun', action='store_true', help='Generate files but do not submit')
+    parser.add_argument('--local', action='store_true',
+                        help='Run in-process on this machine instead of submitting to condor -- no JDL/bash '
+                             'files, no xrdcp transfer (/eos is already mounted on lxplus interactive nodes), '
+                             'output written directly to its final destination. Only worth it when '
+                             'n_files x per_file_time is short enough to just wait out serially (a handful of '
+                             'minutes); condor still wins once that stretches to tens of minutes or hours, or '
+                             'you want it running unattended. Ignored together with --dryrun -- --local runs '
+                             'immediately and does not generate condor submission files at all.')
 
     args = parser.parse_args()
 
@@ -226,16 +312,24 @@ if __name__ == "__main__":
         except ValueError as e:
             sys.exit(f"Error: {e}")
 
-        combo_script_dir = base_scripts_dir / combo_label
-        combo_log_dir = base_log_dir / combo_label
-        combo_script_dir.mkdir(parents=True, exist_ok=True)
-        combo_log_dir.mkdir(parents=True, exist_ok=True)
-
         out_dir = str(Path(base_outname) / combo_label)
 
         print(f'>>> Combo: {combo_label}')
         print(f'    Track file: {track_path}')
         print(f'    Output:     {eos_base_dir}/{out_dir}')
+
+        if args.local:
+            local_failures = run_local(args, track_path, eos_base_dir, out_dir)
+            if local_failures:
+                print(f"    !!! {local_failures} file(s) FAILED for {combo_label}.")
+                failures += local_failures
+            print()
+            continue
+
+        combo_script_dir = base_scripts_dir / combo_label
+        combo_log_dir = base_log_dir / combo_label
+        combo_script_dir.mkdir(parents=True, exist_ok=True)
+        combo_log_dir.mkdir(parents=True, exist_ok=True)
 
         jdl_file, bash_file, list_file = create_submission_files(
             args, combo_script_dir, combo_log_dir, eos_base_dir, track_path, out_dir
@@ -257,5 +351,6 @@ if __name__ == "__main__":
         print()
 
     if failures:
-        print(f"{failures}/{len(track_files)} combo(s) FAILED to submit.")
+        verb = 'process' if args.local else 'submit'
+        print(f"{failures}/{len(track_files)} combo(s) FAILED to {verb}.")
         sys.exit(1)
