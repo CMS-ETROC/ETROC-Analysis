@@ -145,8 +145,10 @@ Selects a subset of candidates that guarantees every pixel is backed by at least
 
 ### 8. Submit jobs for event selection by path
 ```bash
-python submit/submit_extract_events_by_path.py -d <DIRNAME> -t <TRACK> -o <OUTNAME> -c <CONFIG> -r <RUNNAME> --cal_table <CAL_TABLE> --condor_tag <CONDOR_TAG> [--neighbor_search_method <METHOD>] [--dryrun]
+python submit/submit_extract_events_by_path.py -d <DIRNAME> -t <TRACK> -o <OUTNAME> -c <CONFIG> -r <RUNNAME> --cal_table <CAL_TABLE> --condor_tag <CONDOR_TAG> [--neighbor_search_method <METHOD>] [--dryrun | --local]
 ```
+Per-track extraction is vectorized across every track candidate at once rather than looping one at a time, so a single file's worth of work is now typically a couple of seconds rather than several -- see `--local` below for when that's fast enough to skip condor entirely.
+
 | Flag | Default | Description |
 |---|---|---|
 | `-d`, `--inputdir` | *required* | Directory of step 6 output. |
@@ -158,6 +160,7 @@ python submit/submit_extract_events_by_path.py -d <DIRNAME> -t <TRACK> -o <OUTNA
 | `--neighbor_search_method` | `none` | Neighbor-hit search method: `row_only`, `col_only`, `cross`, or `square`. |
 | `--condor_tag` | auto-generated | String to identify the job submission. |
 | `--dryrun` | off | Generate the input list, bash script, and condor JDL, but skip actual submission. |
+| `--local` | off | Skip condor entirely and process every file on this machine instead, using a small local process pool (3 workers) -- no JDL/xrdcp, output written straight to its final directory (`/eos` is already mounted on lxplus interactive nodes). Worth it once processing got fast enough that `n_files x per_file_time` is only a few minutes serially; condor still wins once that stretches to tens of minutes/hours, or you want it running unattended. |
 
 ### 9. Reshape output from event-based to track-based
 ```bash
