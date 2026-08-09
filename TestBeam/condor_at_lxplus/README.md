@@ -133,14 +133,15 @@ Produces one Parquet track-candidates file per board combo: every subset down to
 
 Step 6 writes every surviving track candidate for each combo unfiltered so this step is required before step 8, not optional; skipping it means step 8 processes the full unreduced candidate set.
 ```bash
-python utils/reduce_number_of_track_candidates.py -f <FILE_OR_DIR> [-p <PERCENT>]
+python utils/select_tracks_by_coverage.py -f <FILE_OR_DIR> [-d <TARGET_DEPTH>] [-n <MAX_CANDIDATES>]
 ```
 | Flag | Default | Description |
 |---|---|---|
 | `-f`, `--file` | *required* | Track-candidates Parquet file for one board combo (from step 6), or the per-run directory step 6 wrote them all into -- every combo file in the directory is reduced in one call. |
-| `-p`, `--percentile` | none | Keep only the top PCT% of candidates by occurrence count (e.g. `10` keeps candidates above the 90th percentile), applied per combo file processed. If omitted, only the table below is printed -- no reduced file is written, so you can look at the distribution before picking a cut. |
+| `-d`, `--target-depth` | `4` | Minimum number of candidates required at every pixel on each board's 16x16 grid. Higher values guarantee deeper per-pixel statistics at the cost of more total candidates; the total needed to satisfy a given depth differs per combo/run since it's derived from that file's own data, not a fixed count. |
+| `-n`, `--max-candidates` | none | Hard ceiling on candidates kept per file. If `-d` would exceed this, the depth is lowered by 1 and retried (down to depth 1, i.e. coverage only) until it fits. If even depth 1 exceeds `N`, that result is kept anyway with a warning -- coverage is never sacrificed to force a fit. |
 
-Always prints a table of surviving paths for occurrence-count cuts at percentiles 10-90 plus a tail that keeps halving the gap to 100 (95th, 97.5th, 98.75th, ...) until it would separate less than one row -- so the finest cut shown adapts to each file's size instead of a fixed cutoff, per combo file if a directory was given. If `-p` was given, then keeps the top `-p`% and writes `<same file stem>_reduced.parquet` next to each input file, so each combo's reduced file stays distinct. Already-reduced files (`*_reduced.parquet`) are skipped when scanning a directory, so re-running against the same directory is safe.
+Selects a subset of candidates that guarantees every pixel is backed by at least `-d` candidates, instead of a plain top-N-by-count cut (which can leave whole regions of the grid uncovered, especially on lower-statistics runs, while piling many redundant candidates onto a few hot pixels). Candidates are walked in descending occurrence-count order to first reach full coverage using as few as possible, then water-filled -- always topping up whichever pixel currently has the fewest candidates -- until every reachable pixel meets the target depth. Prints per-board pixel coverage, min/max depth achieved, and any pixels never reached by any candidate (worth checking against `mask_pixel_configs/` if any show up). Writes `<same file stem>_reduced.parquet` next to each input file. Already-reduced files (`*_reduced.parquet`) are skipped when scanning a directory, so re-running against the same directory is safe.
 
 ### 8. Submit jobs for event selection by path
 ```bash
