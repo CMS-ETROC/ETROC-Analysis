@@ -1,10 +1,13 @@
 import argparse
 import getpass
+import re
 import subprocess
 import sys
 import uuid
+import yaml
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime
+from itertools import combinations
 
 from pathlib import Path
 from jinja2 import Template
@@ -14,6 +17,10 @@ from tqdm import tqdm
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'core'))
 import io_utils
 import extract_events_by_path
+
+# Mirrors path_finder.py's own constant -- combo indices below are only ever
+# meaningful if both scripts agree on how board combos are generated.
+MIN_BOARD_COMBO_SIZE = 3
 
 # --- Configuration & Templates ---
 
@@ -74,16 +81,22 @@ Queue idx,fname from {{ script_dir }}/input_list.txt
 
 # --- Helper Functions ---
 
-def find_track_files(track_arg: Path) -> list[Path]:
+def find_track_files(track_arg: Path, combos: list[str] = None) -> list[Path]:
     """Resolves -t to the list of track files to submit jobs for.
 
     If track_arg is a file, it's a single combo's track file and is returned
-    as the sole entry -- unchanged from before. If it's a directory (the
-    per-run directory path_finder.py writes combo track files into, and
-    select_tracks_by_coverage.py writes '_reduced' files alongside),
-    every '*_reduced.parquet' file in it is auto-detected -- one submission
-    per combo. All of them share the same --cal_table, since CAL mode values
-    are computed once per run (not per combo) by path_finder.py.
+    as the sole entry -- unchanged from before (combos is ignored in this
+    case, since there's nothing to filter). If it's a directory (the per-run
+    directory path_finder.py writes combo track files into, and
+    select_tracks_by_coverage.py writes '_reduced' files alongside), every
+    '*_reduced.parquet' file in it is auto-detected -- one submission per
+    combo. All of them share the same --cal_table, since CAL mode values are
+    computed once per run (not per combo) by path_finder.py.
+
+    combos, when given, restricts that auto-detection to just the named
+    board-combo labels (e.g. ['dut1-ref2-trig3', 'extra0-dut1-ref2']) instead
+    of every combo found -- for processing a subset without having to move
+    the other combos' files out of the directory first.
     """
     if track_arg.is_file():
         return [track_arg]
@@ -91,8 +104,74 @@ def find_track_files(track_arg: Path) -> list[Path]:
         track_files = natsorted(track_arg.glob('*_reduced.parquet'))
         if not track_files:
             sys.exit(f"Error: No '*_reduced.parquet' files found in {track_arg}.")
+        if combos:
+            by_label = {io_utils.combo_label_from_track_filename(f): f for f in track_files}
+            missing = [c for c in combos if c not in by_label]
+            if missing:
+                sys.exit(
+                    f"Error: --combos requested label(s) not found in {track_arg}: {missing}. "
+                    f"Available: {sorted(by_label)}"
+                )
+            track_files = [by_label[c] for c in combos]
         return track_files
     sys.exit(f"Error: Track path '{track_arg}' not found.")
+
+def board_ids_from_combo_label(label: str) -> tuple[int, ...]:
+    """'dut1-ref2-trig3' -> (1, 2, 3) -- parses the trailing board id off each
+    role-tagged token in a combo label (see io_utils.combo_label_from_track_filename)."""
+    return tuple(sorted(int(re.search(r'\d+$', tok).group()) for tok in label.split('-')))
+
+def compute_expected_combos(config_path: str, run_name: str) -> list[tuple[int, ...]]:
+    """Reproduces path_finder.py's own board-combo generation (same board ids,
+    same combo sizes, same order: combinations() over every subset down to
+    MIN_BOARD_COMBO_SIZE, largest first) so a --combos index is derived purely
+    from the run's board config. That keeps index 0 always meaning the same
+    board combo across every invocation of this run -- unlike an index into
+    "whichever files happen to exist in the directory today", which would
+    shift if a combo hasn't been reduced yet or was deleted."""
+    with open(config_path) as f:
+        config = yaml.safe_load(f)
+    if run_name not in config:
+        sys.exit(f"Error: Run config '{run_name}' not found in {config_path}")
+    ids_to_process = sorted(int(b) for b in config[run_name].keys())
+
+    min_boards = min(MIN_BOARD_COMBO_SIZE, len(ids_to_process))
+    max_boards = len(ids_to_process) - 1 if len(ids_to_process) > min_boards else len(ids_to_process)
+    return [
+        combo
+        for size in range(max_boards, min_boards - 1, -1)
+        for combo in combinations(ids_to_process, size)
+    ]
+
+def print_combo_legend(track_files: list[Path], expected_combos: list[tuple[int, ...]]) -> None:
+    by_board_ids = {board_ids_from_combo_label(io_utils.combo_label_from_track_filename(f)): f for f in track_files}
+    print('Board combos for this run (pass to --combos by index or by label):')
+    for idx, board_ids in enumerate(expected_combos):
+        tag = io_utils.combo_label_from_track_filename(by_board_ids[board_ids]) if board_ids in by_board_ids else '(not reduced yet)'
+        print(f'  {idx}: {"-".join(map(str, board_ids))}  ({tag})')
+
+def resolve_combo_tokens(tokens: list[str], expected_combos: list[tuple[int, ...]], track_files: list[Path]) -> list[str]:
+    """Resolves --combos tokens to combo labels for find_track_files(). Each
+    token is either a plain integer -- an index into expected_combos -- or a
+    literal combo label, matched as-is (unchanged from before this existed)."""
+    by_board_ids = {board_ids_from_combo_label(io_utils.combo_label_from_track_filename(f)): f for f in track_files}
+
+    labels = []
+    for token in tokens:
+        if not token.isdigit():
+            labels.append(token)
+            continue
+        idx = int(token)
+        if idx < 0 or idx >= len(expected_combos):
+            sys.exit(f"Error: combo index {idx} out of range 0-{len(expected_combos) - 1}.")
+        board_ids = expected_combos[idx]
+        if board_ids not in by_board_ids:
+            sys.exit(
+                f"Error: combo index {idx} (boards {'-'.join(map(str, board_ids))}) has no matching "
+                f"'*_reduced.parquet' file in the input directory yet."
+            )
+        labels.append(io_utils.combo_label_from_track_filename(by_board_ids[board_ids]))
+    return labels
 
 def build_indexed_file_list(final_input_dir: Path) -> list[tuple[int, Path]]:
     """(file_index, file_path) pairs for every loop*.feather file in
@@ -234,7 +313,15 @@ if __name__ == "__main__":
                              'per-run directory path_finder.py / select_tracks_by_coverage.py '
                              'wrote them into -- every "*_reduced.parquet" file in it is then '
                              'auto-detected and submitted as a separate job, one per combo, all sharing '
-                             'the same --cal_table.')
+                             'the same --cal_table. Use --combos to process only some of them.')
+    parser.add_argument('--combos', dest='combos', default=None,
+                        help='Comma-separated combos to process when -t points at a directory, instead of '
+                             'every "*_reduced.parquet" file found -- restricts auto-detection to just these. '
+                             'Each entry is either a combo label (e.g. "dut1-ref2-trig3") or a plain integer '
+                             'index into the board-config-derived combo ordering printed at the top of every '
+                             'run (index 0 always means the same board combo for a given -c/-r, regardless of '
+                             'which combo files currently exist in the directory). Ignored when -t points '
+                             'directly at a single file.')
     parser.add_argument('-c', '--config', required=True, dest='config', help='YAML file with run config')
     parser.add_argument('-r', '--runName', required=True, dest='runName', help='Run name in YAML config')
     parser.add_argument('--cal_table', required=True, dest='cal_table', help='CSV file with CAL mode values')
@@ -285,7 +372,17 @@ if __name__ == "__main__":
         sys.exit(f"Error: Config file '{args.config}' not found.")
 
     # --- Logic ---
-    track_files = find_track_files(track_arg)
+    all_track_files = find_track_files(track_arg)
+
+    combos = None
+    if track_arg.is_dir():
+        expected_combos = compute_expected_combos(args.config, args.runName)
+        print_combo_legend(all_track_files, expected_combos)
+        if args.combos:
+            tokens = [c.strip() for c in args.combos.split(',')]
+            combos = resolve_combo_tokens(tokens, expected_combos, all_track_files)
+
+    track_files = find_track_files(track_arg, combos)
 
     print('\n========= Submission Details =========')
     print(f'Input:       {args.dirname}')
