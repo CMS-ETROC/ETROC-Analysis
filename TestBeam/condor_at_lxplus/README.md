@@ -145,14 +145,25 @@ Selects a subset of candidates that guarantees every pixel is backed by at least
 
 ### 8. Submit jobs for event selection by path
 ```bash
-python submit/submit_extract_events_by_path.py -d <DIRNAME> -t <TRACK> -o <OUTNAME> -c <CONFIG> -r <RUNNAME> --cal_table <CAL_TABLE> --condor_tag <CONDOR_TAG> [--neighbor_search_method <METHOD>] [--dryrun | --local]
+python submit/submit_extract_events_by_path.py -d <DIRNAME> -t <TRACK> -o <OUTNAME> -c <CONFIG> -r <RUNNAME> --cal_table <CAL_TABLE> --condor_tag <CONDOR_TAG> [--combos <INDICES_OR_LABELS>] [--neighbor_search_method <METHOD>] [--dryrun | --local]
 ```
 Per-track extraction is vectorized across every track candidate at once rather than looping one at a time, so a single file's worth of work is now typically a couple of seconds rather than several -- see `--local` below for when that's fast enough to skip condor entirely.
+
+Whenever `-t` points at a directory, a combo legend is printed first, e.g. for a 4-board run:
+```
+Board combos for this run (pass to --combos by index or by label):
+  0: 0-1-2  (extra0-dut1-ref2)
+  1: 0-1-3  (extra0-dut1-trig3)
+  2: 0-2-3  (extra0-ref2-trig3)
+  3: 1-2-3  (dut1-ref2-trig3)
+```
+The index is derived from the run's board config (the same combo generation `path_finder.py` itself uses), not from which `*_reduced.parquet` files happen to exist that day -- so index `0` always means board combo `0-1-2` for a given `-c`/`-r`, and stays correct even if that combo hasn't been reduced yet (shown as `(not reduced yet)` in the legend, and `--combos` errors clearly if you ask for it anyway).
 
 | Flag | Default | Description |
 |---|---|---|
 | `-d`, `--inputdir` | *required* | Directory of step 6 output. |
-| `-t`, `--track` | *required* | Reduced track-candidates Parquet file for one board combo, from step 7. Can also be the per-run directory step 6/7 wrote them into -- every `*_reduced.parquet` file in it is then auto-detected and submitted as a separate job, one per combo, all sharing the same `--cal_table` (CAL values are computed once per run, not per combo). |
+| `-t`, `--track` | *required* | Reduced track-candidates Parquet file for one board combo, from step 7. Can also be the per-run directory step 6/7 wrote them into -- every `*_reduced.parquet` file in it is then auto-detected and submitted as a separate job, one per combo, all sharing the same `--cal_table` (CAL values are computed once per run, not per combo). Use `--combos` to only process some of them. |
+| `--combos` | none | Comma-separated combos to process, restricting `-t` directory auto-detection instead of every combo found. Each entry is either the printed integer index (e.g. `0,2`) or a literal combo label (e.g. `dut1-ref2-trig3`) -- freely mixable (`1,extra0-ref2-trig3`). Ignored when `-t` points directly at a single file. |
 | `-o`, `--outdir` | `extractEvents_outputs` | Output directory, after the EOS base path. The board-combo label is parsed from each track file's filename and appended automatically (e.g. `extractEvents_outputs/dut0-trig1-ref2`), so different combos submitted with the same `-o` never collide or get merged together by step 9. |
 | `-c`, `--config` | *required* | Path to the board-config YAML file. |
 | `-r`, `--runName` | *required* | Key of the run's entry in the config YAML. |
