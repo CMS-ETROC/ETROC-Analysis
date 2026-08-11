@@ -30,8 +30,17 @@ run5: &run5
   3: {<<: *B1-P1-6, HV: 220, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
 run6: *run5
 
-## 3 GeV runs
+## 3 GeV runs, no BL scan
 run7: *run5
 run8: *run5
 run9: *run5
+
+## 3 GeV runs, BL scan
 run10: *run5
+run11: *run5
+
+run12: &run12
+  0: {<<: *B1-P1-9, HV: 150, angle: 60, temp: -20C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  1: {<<: *PT-IH3,  HV: 180, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  2: {<<: *PT-IH5,  HV: 180, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  3: {<<: *B1-P1-6, HV: 180, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
