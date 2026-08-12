@@ -44,3 +44,18 @@ run12: &run12
   1: {<<: *PT-IH3,  HV: 180, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
   2: {<<: *PT-IH5,  HV: 180, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
   3: {<<: *B1-P1-6, HV: 180, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+run13: *run13
+
+run14: &run14
+  0: {<<: *B1-P1-9, HV: 130, angle: 60, temp: -20C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  1: {<<: *PT-IH3,  HV: 160, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  2: {<<: *PT-IH5,  HV: 160, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  3: {<<: *B1-P1-6, HV: 160, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+run15: *run14
+run16: *run14
+
+run17: &run17
+  0: {<<: *B1-P1-9, HV: 110, angle: 60, temp: -20C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  1: {<<: *PT-IH3,  HV: 140, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  2: {<<: *PT-IH5,  HV: 140, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  3: {<<: *B1-P1-6, HV: 140, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
