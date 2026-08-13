@@ -4,6 +4,7 @@ import logging
 import re
 import subprocess
 import sys
+import time
 import uuid
 import yaml
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -78,10 +79,13 @@ MY.XRDCP_CREATE_DIR   = True
 output_destination    = root://eosuser.cern.ch/{{ eos_base }}/{{ out_dir }}
 +JobFlavour           = "microcentury"
 {% if concurrency_limit -%}
-concurrency_limits    = etroc_extract_events:{{ concurrency_limit }}
+JobBatchName          = "etroc_extract_events"
+max_materialize        = {{ concurrency_limit }}
 {% endif -%}
 Queue idx,fname from {{ script_dir }}/input_list.txt
 """
+
+CONCURRENCY_TAG = 'etroc_extract_events'
 
 # --- Helper Functions ---
 
@@ -266,6 +270,28 @@ def run_local(args, track_path: Path, eos_base: str, out_dir: str) -> int:
     return failures
 
 
+def wait_for_condor_capacity(tag: str, limit: int, poll_interval: int = 60) -> None:
+    """Blocks until this user has fewer than `limit` jobs queued (idle +
+    running) under JobBatchName `tag`. Each cluster caps its own concurrency
+    via max_materialize, but that only bounds a single condor_submit call --
+    this additionally serializes separate calls (different combos, or
+    separate runs of this script) sharing the same tag, so their per-cluster
+    caps don't just stack on top of each other on the pool.
+    """
+    username = getpass.getuser()
+    while True:
+        result = subprocess.run(
+            ['condor_q', username, '-constraint', f'JobBatchName=="{tag}"', '-af', 'ClusterId'],
+            capture_output=True, text=True,
+        )
+        queued = len([line for line in result.stdout.splitlines() if line.strip()])
+        if queued < limit:
+            return
+        print(f"    Waiting for condor capacity: {queued} job(s) already queued under '{tag}' "
+              f"(limit {limit}). Rechecking in {poll_interval}s...")
+        time.sleep(poll_interval)
+
+
 def create_submission_files(args, script_dir, log_dir, eos_base, track_path, out_dir):
 
     config_path = Path(args.config)
@@ -344,11 +370,13 @@ if __name__ == "__main__":
                         help="Search method for neighbor hit checking, default is 'none'. possible argument: 'row_only', 'col_only', 'cross', 'square'")
     parser.add_argument('--condor_tag', dest='condor_tag', help='Tag appended to filenames to avoid collisions')
     parser.add_argument('--concurrency_limit', type=int, default=None,
-                        help='Cap on concurrently running jobs, shared pool-wide across every '
-                             'submission of this script (via HTCondor concurrency_limits). Unset '
-                             'by default -- a single run submission is not throttled. Set this when '
-                             'you are about to submit several runs around the same time and want to '
-                             'bound their combined memory footprint on the condor pool (e.g. 30).')
+                        help='Cap on concurrently queued (idle+running) jobs, shared across every '
+                             'submission of this script: caps each cluster with max_materialize, and '
+                             'self-throttles (polls condor_q, blocking) before submitting the next combo/run '
+                             'until earlier ones have dropped under the cap. Unset by default -- a single '
+                             'run submission is not throttled. Set this when you are about to submit several '
+                             'runs around the same time and want to bound their combined memory footprint '
+                             'on the condor pool (e.g. 30).')
     parser.add_argument('--dryrun', action='store_true', help='Generate files but do not submit')
     parser.add_argument('--local', action='store_true',
                         help='Run in-process on this machine instead of submitting to condor -- no JDL/bash '
@@ -459,6 +487,8 @@ if __name__ == "__main__":
             continue
 
         if list_file.stat().st_size > 0:
+            if args.concurrency_limit:
+                wait_for_condor_capacity(CONCURRENCY_TAG, args.concurrency_limit)
             result = subprocess.run(['condor_submit', str(jdl_file)])
             if result.returncode != 0:
                 print(f"    !!! ERROR: condor_submit failed for {combo_label} with exit code {result.returncode}.")
