@@ -77,6 +77,7 @@ MY.WantOS             = "el9"
 MY.XRDCP_CREATE_DIR   = True
 output_destination    = root://eosuser.cern.ch/{{ eos_base }}/{{ out_dir }}
 +JobFlavour           = "microcentury"
+concurrency_limits    = etroc_extract_events:30
 Queue idx,fname from {{ script_dir }}/input_list.txt
 """
 
