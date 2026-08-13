@@ -57,6 +57,9 @@ error                 = {{ log_dir }}/$(ClusterId).$(ProcId).bootstrap.stderr
 log                   = {{ log_dir }}/bootstrap.log
 MY.WantOS             = "el9"
 +JobFlavour           = "workday"
+{% if concurrency_limit -%}
+concurrency_limits    = etroc_bootstrap:{{ concurrency_limit }}
+{% endif -%}
 Queue stem from {{ script_dir }}/{{ master_list_file_name }}
 """
 
@@ -143,7 +146,8 @@ def create_submission_files(
         'transfer_files': io_utils.build_transfer_files(WORKER_SCRIPT_NAME),
         'unique_tag': unique_tag,
         'logical_dir': logical_dir, # Pass the directory to Jinja
-        'ext': ext                  # Pass the extension to Jinja
+        'ext': ext,                 # Pass the extension to Jinja
+        'concurrency_limit': args.concurrency_limit
     })
 
     jdl_path = paths['scripts'] / f'condor_bootstrap{unique_tag}.jdl'
@@ -230,6 +234,12 @@ if __name__ == "__main__":
 
     # Options
     parser.add_argument('--condor_tag', dest='condor_tag', help='Tag for filenames')
+    parser.add_argument('--concurrency_limit', type=int, default=None,
+                        help='Cap on concurrently running jobs, shared pool-wide across every '
+                             'submission of this script (via HTCondor concurrency_limits). Unset '
+                             'by default -- a single run submission is not throttled. Set this when '
+                             'you are about to submit several runs around the same time and want to '
+                             'bound their combined memory footprint on the condor pool (e.g. 30).')
     parser.add_argument('--reproducible', action='store_true')
     parser.add_argument('--neighbor_cut', dest='neighbor_cut', default=['none'], nargs='+',
                         help='Specify one or more **space-separated** board columns to be used for neighbor cuts. '

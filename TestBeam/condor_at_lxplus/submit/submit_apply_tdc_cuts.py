@@ -89,6 +89,9 @@ error                 = {{ log_dir }}/$(ClusterId).$(ProcId).tdc.stderr
 log                   = {{ log_dir }}/tdc.log
 MY.WantOS             = "el9"
 +JobFlavour           = "workday"
+{% if concurrency_limit -%}
+concurrency_limits    = etroc_apply_tdc_cuts:{{ concurrency_limit }}
+{% endif -%}
 Queue {{ num_of_jobs }}
 """
 
@@ -153,6 +156,7 @@ def create_jdl_file(args, group_parent_dir, master_list_path, group_label, dir_n
         'log_dir': log_dir.as_posix(),
         'batch_size': args.batch_size,
         'num_of_jobs': njobs,
+        'concurrency_limit': args.concurrency_limit,
     })
 
     jdl_path = script_dir / f'condor_applyTDC_{group_label}.jdl'
@@ -191,6 +195,12 @@ if __name__ == "__main__":
     # Condor options
     parser.add_argument('--batch_size', type=int, default=10, dest='batch_size', help='Number of files per job')
     parser.add_argument('--condor_tag', dest='condor_tag', help='Tag appended to filenames to avoid collisions')
+    parser.add_argument('--concurrency_limit', type=int, default=None,
+                        help='Cap on concurrently running jobs, shared pool-wide across every '
+                             'submission of this script (via HTCondor concurrency_limits). Unset '
+                             'by default -- a single run submission is not throttled. Set this when '
+                             'you are about to submit several runs around the same time and want to '
+                             'bound their combined memory footprint on the condor pool (e.g. 30).')
     parser.add_argument('--dryrun', action='store_true', help='Generate files but do not submit')
 
     args = parser.parse_args()

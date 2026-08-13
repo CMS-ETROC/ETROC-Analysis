@@ -77,7 +77,9 @@ MY.WantOS             = "el9"
 MY.XRDCP_CREATE_DIR   = True
 output_destination    = root://eosuser.cern.ch/{{ eos_base }}/{{ out_dir }}
 +JobFlavour           = "microcentury"
-concurrency_limits    = etroc_extract_events:30
+{% if concurrency_limit -%}
+concurrency_limits    = etroc_extract_events:{{ concurrency_limit }}
+{% endif -%}
 Queue idx,fname from {{ script_dir }}/input_list.txt
 """
 
@@ -302,6 +304,7 @@ def create_submission_files(args, script_dir, log_dir, eos_base, track_path, out
         log_dir=log_dir,
         eos_base=eos_base,
         out_dir=out_dir,
+        concurrency_limit=args.concurrency_limit,
     )
 
     jdl_path = script_dir / f'condor_extract_events.jdl'
@@ -340,6 +343,12 @@ if __name__ == "__main__":
     parser.add_argument('--neighbor_search_method', default="none", dest='search_method',
                         help="Search method for neighbor hit checking, default is 'none'. possible argument: 'row_only', 'col_only', 'cross', 'square'")
     parser.add_argument('--condor_tag', dest='condor_tag', help='Tag appended to filenames to avoid collisions')
+    parser.add_argument('--concurrency_limit', type=int, default=None,
+                        help='Cap on concurrently running jobs, shared pool-wide across every '
+                             'submission of this script (via HTCondor concurrency_limits). Unset '
+                             'by default -- a single run submission is not throttled. Set this when '
+                             'you are about to submit several runs around the same time and want to '
+                             'bound their combined memory footprint on the condor pool (e.g. 30).')
     parser.add_argument('--dryrun', action='store_true', help='Generate files but do not submit')
     parser.add_argument('--local', action='store_true',
                         help='Run in-process on this machine instead of submitting to condor -- no JDL/bash '
