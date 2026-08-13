@@ -2,6 +2,7 @@ import argparse
 import getpass
 import subprocess
 import sys
+import time
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -90,10 +91,13 @@ log                   = {{ log_dir }}/tdc.log
 MY.WantOS             = "el9"
 +JobFlavour           = "workday"
 {% if concurrency_limit -%}
-concurrency_limits    = etroc_apply_tdc_cuts:{{ concurrency_limit }}
+JobBatchName          = "etroc_apply_tdc_cuts"
+max_materialize        = {{ concurrency_limit }}
 {% endif -%}
 Queue {{ num_of_jobs }}
 """
+
+CONCURRENCY_TAG = 'etroc_apply_tdc_cuts'
 
 def build_python_command_args(args: argparse.Namespace, script_to_run: str) -> str:
     """Constructs the python command arguments string dynamically."""
@@ -141,6 +145,28 @@ def create_master_file_list(input_group_dir: Path, output_dir: Path, label: str)
 
     print(f"    Generated master list with {len(absolute_filenames)} files: {list_file_path.name}")
     return list_file_path, len(absolute_filenames)
+
+def wait_for_condor_capacity(tag: str, limit: int, poll_interval: int = 60) -> None:
+    """Blocks until this user has fewer than `limit` jobs queued (idle +
+    running) under JobBatchName `tag`. Each cluster caps its own concurrency
+    via max_materialize, but that only bounds a single condor_submit call --
+    this additionally serializes separate calls (different groups, or
+    separate runs of this script) sharing the same tag, so their per-cluster
+    caps don't just stack on top of each other on the pool.
+    """
+    username = getpass.getuser()
+    while True:
+        result = subprocess.run(
+            ['condor_q', username, '-constraint', f'JobBatchName=="{tag}"', '-af', 'ClusterId'],
+            capture_output=True, text=True,
+        )
+        queued = len([line for line in result.stdout.splitlines() if line.strip()])
+        if queued < limit:
+            return
+        print(f"    Waiting for condor capacity: {queued} job(s) already queued under '{tag}' "
+              f"(limit {limit}). Rechecking in {poll_interval}s...")
+        time.sleep(poll_interval)
+
 
 def create_jdl_file(args, group_parent_dir, master_list_path, group_label, dir_name, njobs, script_to_run):
     jdl_content = Template(JDL_TEMPLATE).render({
@@ -196,11 +222,13 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', type=int, default=10, dest='batch_size', help='Number of files per job')
     parser.add_argument('--condor_tag', dest='condor_tag', help='Tag appended to filenames to avoid collisions')
     parser.add_argument('--concurrency_limit', type=int, default=None,
-                        help='Cap on concurrently running jobs, shared pool-wide across every '
-                             'submission of this script (via HTCondor concurrency_limits). Unset '
-                             'by default -- a single run submission is not throttled. Set this when '
-                             'you are about to submit several runs around the same time and want to '
-                             'bound their combined memory footprint on the condor pool (e.g. 30).')
+                        help='Cap on concurrently queued (idle+running) jobs, shared across every '
+                             'submission of this script: caps each cluster with max_materialize, and '
+                             'self-throttles (polls condor_q, blocking) before submitting the next group/run '
+                             'until earlier ones have dropped under the cap. Unset by default -- a single '
+                             'run submission is not throttled. Set this when you are about to submit several '
+                             'runs around the same time and want to bound their combined memory footprint '
+                             'on the condor pool (e.g. 30).')
     parser.add_argument('--dryrun', action='store_true', help='Generate files but do not submit')
 
     args = parser.parse_args()
@@ -307,6 +335,8 @@ if __name__ == "__main__":
             print(f"    [Dry Run] Generated Input text: {master_list_path}\n")
         else:
             # Standard Submission
+            if args.concurrency_limit:
+                wait_for_condor_capacity(CONCURRENCY_TAG, args.concurrency_limit)
             print(f"    Submitting {jdl_file}...")
             result = subprocess.run(['condor_submit', str(jdl_file)])
             if result.returncode != 0:
