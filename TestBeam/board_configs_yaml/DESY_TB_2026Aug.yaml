@@ -60,3 +60,31 @@ run17: &run17
   2: {<<: *PT-IH5,  HV: 140, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
   3: {<<: *B1-P1-6, HV: 140, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
 run18: *run17
+
+run19:
+  0: {<<: *B1-P1-9, HV: 90,  angle: 60, temp: -20C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  1: {<<: *PT-IH3,  HV: 120, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  2: {<<: *PT-IH5,  HV: 120, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  3: {<<: *B1-P1-6, HV: 120, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+
+run20:
+  0: {<<: *B1-P1-9, HV: 90,  RFSel: 3, angle: 60, offset: 6, temp: -20C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  1: {<<: *PT-IH3,  HV: 120, RFSel: 3, angle: 60, offset: 8, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  2: {<<: *PT-IH5,  HV: 120, RFSel: 3, angle: 60, offset: 6, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  3: {<<: *B1-P1-6, HV: 120, RFSel: 3, angle: 60, offset: 6, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+
+# 3 GeV beam
+run21: &run21
+  0: {<<: *B1-P1-9, HV: 90,  RFSel: 3, angle: 60, offset: 8,  temp: -20C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  1: {<<: *PT-IH3,  HV: 120, RFSel: 3, angle: 60, offset: 10, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  2: {<<: *PT-IH5,  HV: 120, RFSel: 3, angle: 60, offset: 8,  temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  3: {<<: *B1-P1-6, HV: 120, RFSel: 3, angle: 60, offset: 8,  temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+
+# 4 GeV beam
+run22: *run21
+
+run23:
+  0: {<<: *B1-P1-9, HV: 110, RFSel: 3, angle: 60, offset: 8,  temp: -20C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  1: {<<: *PT-IH3,  HV: 140, RFSel: 3, angle: 60, offset: 10, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  2: {<<: *PT-IH5,  HV: 140, RFSel: 3, angle: 60, offset: 8,  temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  3: {<<: *B1-P1-6, HV: 140, RFSel: 3, angle: 60, offset: 8,  temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
