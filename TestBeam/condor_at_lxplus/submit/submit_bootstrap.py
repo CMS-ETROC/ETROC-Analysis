@@ -77,6 +77,7 @@ def build_python_command(args: argparse.Namespace) -> str:
     cmd_parts = [
         f"python {WORKER_SCRIPT_NAME}",
         f"-n {args.num_bootstrap_output}",
+        f"--ks_pmin {args.ks_pmin}",
         f"--minimum_nevt {args.minimum_nevt}",
         f"--iteration_limit {args.iteration_limit}",
         f"--neighbor_cut {neighbor_cut_str}",
@@ -271,6 +272,8 @@ if __name__ == "__main__":
                              'runs around the same time and want to bound their combined memory footprint '
                              'on the condor pool (e.g. 30).')
     parser.add_argument('--reproducible', action='store_true')
+    parser.add_argument('--ks_pmin', type=float, default=1e-3,
+                        help='Minimum KS p-value for a pair mixture fit to be accepted in bootstrap.py (default 1e-3).')
     parser.add_argument('--neighbor_cut', dest='neighbor_cut', default=['none'], nargs='+',
                         help='Specify one or more **space-separated** board columns to be used for neighbor cuts. '
                         'The argument collects all values into a list. '
