@@ -78,6 +78,10 @@ def build_python_command(args: argparse.Namespace) -> str:
         f"python {WORKER_SCRIPT_NAME}",
         f"-n {args.num_bootstrap_output}",
         f"--ks_pmin {args.ks_pmin}",
+        f"--ks_pmin_floor {args.ks_pmin_floor}",
+        f"--ks_dmax {args.ks_dmax}",
+        f"--gmm_tol {args.gmm_tol}",
+        f"--gmm_max_iter {args.gmm_max_iter}",
         f"--minimum_nevt {args.minimum_nevt}",
         f"--iteration_limit {args.iteration_limit}",
         f"--neighbor_cut {neighbor_cut_str}",
@@ -273,7 +277,11 @@ if __name__ == "__main__":
                              'on the condor pool (e.g. 30).')
     parser.add_argument('--reproducible', action='store_true')
     parser.add_argument('--ks_pmin', type=float, default=1e-3,
-                        help='Minimum KS p-value for a pair mixture fit to be accepted in bootstrap.py (default 1e-3).')
+                        help='bootstrap.py --ks_pmin: a pair mixture fit is accepted if KS p-value >= this OR KS distance <= --ks_dmax (default 1e-3).')
+    parser.add_argument('--ks_pmin_floor', type=float, default=1e-6, help='bootstrap.py --ks_pmin_floor (default 1e-6).')
+    parser.add_argument('--ks_dmax', type=float, default=0.03, help='bootstrap.py --ks_dmax (default 0.03).')
+    parser.add_argument('--gmm_tol', type=float, default=1e-6, help='bootstrap.py --gmm_tol: EM convergence tolerance of the mixture fit (default 1e-6).')
+    parser.add_argument('--gmm_max_iter', type=int, default=2000, help='bootstrap.py --gmm_max_iter (default 2000).')
     parser.add_argument('--neighbor_cut', dest='neighbor_cut', default=['none'], nargs='+',
                         help='Specify one or more **space-separated** board columns to be used for neighbor cuts. '
                         'The argument collects all values into a list. '
@@ -286,6 +294,8 @@ if __name__ == "__main__":
     parser.add_argument('--dryrun', action='store_true')
 
     args = parser.parse_args()
+    if args.ks_pmin_floor > args.ks_pmin:
+        parser.error('--ks_pmin_floor must not exceed --ks_pmin')
 
     # --- 1. Identify Groups ---
     username = getpass.getuser()
