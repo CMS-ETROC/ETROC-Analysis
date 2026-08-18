@@ -90,7 +90,7 @@ def find_neighbor_hits(
     return final_df
 
 
-def extract_all_tracks_vectorized(
+def _extract_batch_vectorized(
     run_df: pd.DataFrame,
     track_df: pd.DataFrame,
     board_ids: List[int],
@@ -116,14 +116,22 @@ def extract_all_tracks_vectorized(
     ToT-based quality cuts are intentionally left to apply_tdc_cuts.py
     (step 10), which runs after reshaping and can compute a robust per-role
     ToT range instead of a single-file, trig-only window.
+
+    Called per track batch by extract_all_tracks_vectorized() -- see there
+    for why this is chunked rather than run once over the full track_df.
     """
     # 1. Long-format (track_id, board, row, col) -- tiny, n_tracks * n_boards rows.
+    # Dtypes are pinned to match run_df's merge-key columns (board/row/col are
+    # uint8 there): leaving these at the pandas default (int64, from
+    # track_df.index and bare .to_numpy()) silently widens run_df's uint8
+    # merge-key columns to int64 too once merged below, ~8x'ing 3 of the 9
+    # columns in the resulting hits_long.
     pixels_long = pd.concat([
         pd.DataFrame({
-            'track_id': track_df.index,
-            'board': bid,
-            'row': track_df[f'row_{bid}'].to_numpy(),
-            'col': track_df[f'col_{bid}'].to_numpy(),
+            'track_id': np.asarray(track_df.index, dtype='uint16'),
+            'board': np.uint8(bid),
+            'row': track_df[f'row_{bid}'].to_numpy(dtype='uint8'),
+            'col': track_df[f'col_{bid}'].to_numpy(dtype='uint8'),
         })
         for bid in board_ids
     ], ignore_index=True)
@@ -136,7 +144,22 @@ def extract_all_tracks_vectorized(
         return pd.DataFrame()
 
     # 3. Isolation: exactly 1 raw hit for this (track, board) in this event.
-    counts = hits_long.groupby(['track_id', 'board', 'evt'])['evt'].transform('size')
+    # Packed-key np.unique instead of groupby(...).transform('size'): same
+    # result, but avoids pandas' multi-column Grouper/hashing machinery.
+    # uint32 relies on two things holding together: track_id is batch-local
+    # (bounded by BATCH_SIZE=100 below, not by track_df's full length), and
+    # evt -- while declared uint32 -- never actually approaches its 4.3e9
+    # ceiling in real data (it's a per-file event count, observed max ~1.94M
+    # on this run). Packing 100 tracks * 4 boards * a ~2M-range evt keeps the
+    # worst case around 5.8e8, safely under uint32's limit; a per-file evt
+    # count anywhere near uint32's actual max would overflow this and needs
+    # reverting to int64.
+    n_boards_span = int(hits_long['board'].max()) + 1
+    n_evt_span = int(hits_long['evt'].max()) + 1
+    key = (hits_long['track_id'].to_numpy('uint32') * n_boards_span
+           + hits_long['board'].to_numpy('uint32')) * n_evt_span + hits_long['evt'].to_numpy('uint32')
+    _, inverse, key_counts = np.unique(key, return_inverse=True, return_counts=True)
+    counts = key_counts[inverse]
     isolated = hits_long.loc[counts == 1]
     if isolated.empty:
         return pd.DataFrame()
@@ -144,21 +167,34 @@ def extract_all_tracks_vectorized(
     # 4. CAL validity of that single hit -- dense-array lookup, same trick
     # path_finder.py uses for its own CAL-deviation filter (board/row/col are
     # small bounded integers, so this beats a merge-based join here too).
+    # cal_lookup uses -1 as the "no CAL-mode entry for this pixel" sentinel
+    # (real cal_mode values are always >= 0) since int16 can't hold NaN --
+    # int16 comfortably covers CAL's 0-1023 range at a quarter the size of
+    # the float64 this used to be.
     max_board = max(int(cal_df['board'].max()), int(isolated['board'].max())) + 1
     max_row = max(int(cal_df['row'].max()), int(isolated['row'].max())) + 1
     max_col = max(int(cal_df['col'].max()), int(isolated['col'].max())) + 1
-    cal_lookup = np.full((max_board, max_row, max_col), np.nan, dtype='float64')
+    cal_lookup = np.full((max_board, max_row, max_col), -1, dtype='int16')
     cal_lookup[cal_df['board'].to_numpy(), cal_df['row'].to_numpy(), cal_df['col'].to_numpy()] = cal_df['cal_mode'].to_numpy()
 
     cal_mode_vals = cal_lookup[isolated['board'].to_numpy(), isolated['row'].to_numpy(), isolated['col'].to_numpy()]
-    cal_dev = isolated['cal'].to_numpy(dtype='int32') - cal_mode_vals
-    valid_cal = (np.abs(cal_dev) <= 3) & ~np.isnan(cal_mode_vals)
+    cal_dev = isolated['cal'].to_numpy(dtype='int16') - cal_mode_vals
+    valid_cal = (np.abs(cal_dev) <= 3) & (cal_mode_vals != -1)
     valid = isolated.loc[valid_cal]
     if valid.empty:
         return pd.DataFrame()
 
     # 5. Every required board must be valid for the same (track_id, evt).
-    board_counts = valid.groupby(['track_id', 'evt'])['board'].transform('nunique')
+    # Isolation (step 3) already guarantees at most one row per
+    # (track_id, board, evt), so within a (track_id, evt) group, board
+    # values can't repeat -- a row count is therefore equivalent to a
+    # distinct-board count, without needing an actual nunique. uint32 is
+    # safe for the same reason as step 3's key (batch-local track_id,
+    # real-world evt range far under uint32's ceiling).
+    n_evt_span2 = int(valid['evt'].max()) + 1
+    key2 = valid['track_id'].to_numpy('uint32') * n_evt_span2 + valid['evt'].to_numpy('uint32')
+    _, inverse2, key_counts2 = np.unique(key2, return_inverse=True, return_counts=True)
+    board_counts = key_counts2[inverse2]
     survivors = valid.loc[board_counts == len(board_ids)]
     if survivors.empty:
         return pd.DataFrame()
@@ -174,6 +210,45 @@ def extract_all_tracks_vectorized(
         for c in pivot_table.columns
     ]
     return pivot_table.drop(columns=['evt'])
+
+
+# Tracks per _extract_batch_vectorized() call. Fixed rather than a caller
+# parameter because the uint32 packed-key dtype inside that function is only
+# safe for this specific bound (see step 3's comment there) -- raising this
+# would need those keys widened back to int64.
+BATCH_SIZE = 100
+
+
+def extract_all_tracks_vectorized(
+    run_df: pd.DataFrame,
+    track_df: pd.DataFrame,
+    board_ids: List[int],
+    cal_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """Runs _extract_batch_vectorized() over track_df in chunks of BATCH_SIZE
+    tracks and concatenates the results.
+
+    The (board,row,col)-only merge inside _extract_batch_vectorized() blows
+    up superlinearly with the number of tracks processed together -- every
+    hit at a pixel gets duplicated once per track that queries it, so more
+    tracks in one call means both more duplication per hit and more hits
+    matched overall. Measured on a real run (1083 tracks, ~6M hits after
+    board filtering): unbatched (all 1083 tracks in one call) peaked at
+    ~4.6GB RSS even after the dtype/np.unique fixes inside
+    _extract_batch_vectorized; BATCH_SIZE=100 brings that down to roughly
+    a third of that, with byte-for-byte identical output.
+    """
+    results = []
+    for start in range(0, len(track_df), BATCH_SIZE):
+        batch_result = _extract_batch_vectorized(
+            run_df, track_df.iloc[start:start + BATCH_SIZE], board_ids, cal_df
+        )
+        if not batch_result.empty:
+            results.append(batch_result)
+
+    if not results:
+        return pd.DataFrame()
+    return pd.concat(results, ignore_index=True)
 
 # --- Main Execution ---
 
@@ -211,7 +286,9 @@ def run(args: argparse.Namespace) -> None:
         run_df = pd.read_feather(args.inputfile, columns=['evt', 'board', 'row', 'col', 'toa', 'tot', 'cal'])
         # Stored as uint16 upstream; cast to signed so any cal-vs-cal_mode arithmetic
         # here can't silently wrap around like the equivalent code in path_finder.py did.
-        run_df['cal'] = run_df['cal'].astype('int32')
+        # int16 (not uint16) is enough headroom -- CAL codes are 0-1023, so any
+        # cal-cal_mode difference stays within +/-1023, far inside int16's +/-32767.
+        run_df['cal'] = run_df['cal'].astype('int16')
     except Exception as e:
         logging.error(f"Failed to read input file: {e}")
         sys.exit(1)
@@ -243,6 +320,12 @@ def run(args: argparse.Namespace) -> None:
     # 5. Load CAL table (used as a dense lookup array inside the vectorized extractor)
     logging.info("Loading CAL table...")
     cal_df = pd.read_csv(args.cal_table)
+    cal_df['row'] = cal_df['row'].astype('uint8')
+    cal_df['col'] = cal_df['col'].astype('uint8')
+    cal_df['board'] = cal_df['board'].astype('uint8')
+    # cal_mode is a mode over integer CAL codes, so it's always whole-valued
+    # despite arriving as float64 from the CSV.
+    cal_df['cal_mode'] = cal_df['cal_mode'].astype('int16')
 
     # 6. Process Tracks
     if args.file_index is not None:
