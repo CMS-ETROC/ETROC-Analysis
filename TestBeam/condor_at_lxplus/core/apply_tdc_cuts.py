@@ -66,7 +66,20 @@ def apply_correlation_cut(
     return df.loc[mask]
 
 def convert_to_time(df: pd.DataFrame, all_roles: dict[str, int]) -> pd.DataFrame:
-    """Calculates physical time units, ensuring bin_size is calculated per-file."""
+    """Calculates physical time units, ensuring bin_size is calculated per-file.
+
+    Besides the converted toa_<role>/tot_<role> (ps), the output carries two
+    provenance columns straight through from the input: the step-8/9 'file'
+    index and the raw per-event cal_<role> codes. 'file' is the only
+    time-ordering handle a track file has (rows are otherwise unordered
+    events from the whole run), so keeping it is what makes a
+    resolution-vs-time-in-run study possible after this step; cal_<role> is
+    the one input to the conversion that cannot be recovered from the ps
+    values (bin_size below is a per-file MEAN, so the per-event CAL is lost
+    otherwise), and lets the conversion be audited or redone per event.
+    Steps 11-13 only use toa_*/tot_*/HasNeighbor_*/trackNeighbor (or just
+    row counts) and ignore extra columns, so this is purely additive.
+    """
     processed_chunks = []
 
     # Group by 'file' to handle calibration drifts between data runs
@@ -84,6 +97,12 @@ def convert_to_time(df: pd.DataFrame, all_roles: dict[str, int]) -> pd.DataFrame
 
             raw_toa = group[f'toa_{role}']
             out_chunk[f'toa_{role}'] = (12.5 - raw_toa * bin_size) * 1e3
+
+        # Provenance pass-through (see docstring): same rows, same index, so the
+        # HasNeighbor merge-by-index in process_single_file() is unaffected.
+        out_chunk['file'] = group['file']
+        for role in all_roles.keys():
+            out_chunk[f'cal_{role}'] = group[f'cal_{role}']
 
         processed_chunks.append(out_chunk)
 
