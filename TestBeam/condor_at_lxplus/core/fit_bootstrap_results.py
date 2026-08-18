@@ -125,6 +125,12 @@ def process_single_boot_file(ifile: Path, args: argparse.Namespace) -> dict:
 
     for col in boot_df.columns:
         if col == 'is_bootstrap': continue
+        if col.startswith('ksp'):
+            # the per-sample KS p-value floor is a diagnostic, not a resolution: carry its
+            # single-shot value and its median over the accepted resamples, no Gaussian fit
+            contribution['ksp_min_single_shot'] = float(anchor_df[col].iloc[0]) if len(anchor_df) else float('nan')
+            contribution['ksp_min_boot_median'] = float(boot_df[col].median())
+            continue
 
         # FIT STEP
         stats = perform_robust_unbinned_fit(boot_df[col], args.sigma_cut)
@@ -144,8 +150,17 @@ def process_single_boot_file(ifile: Path, args: argparse.Namespace) -> dict:
         contribution[f'fit_valid_{col}'] = stats['valid']
 
     for col in anchor_df.columns:
-        if col == 'is_bootstrap': continue
+        if col == 'is_bootstrap' or col.startswith('ksp'): continue
         contribution[f'single_shot_res_{col}'] = anchor_df[col].iloc[0]
+        # A -1 single-shot means step 12 failed every full-sample attempt for this
+        # track (KS or imaginary 3-board solve); its res_/err_ above still come from
+        # whatever bootstrap resamples were accepted and can be far from physical
+        # (e.g. an imaginary solve barely turned real) -- flag it so downstream
+        # tables/plots can exclude or mark such tracks instead of trusting them.
+        contribution[f'single_shot_failed_{col}'] = int(anchor_df[col].iloc[0] < 0)
+    boot_failed = int(len(boot_df) == 1 and (boot_df.iloc[0].drop(labels=['is_bootstrap'], errors='ignore') < 0).all())
+    contribution['boot_failed'] = boot_failed
+    contribution['n_boot'] = 0 if boot_failed else int(len(boot_df))   # accepted resamples (the -1 placeholder is not one)
 
     return contribution
 
@@ -174,7 +189,10 @@ def process_group(input_dir: Path, output_dir: Path, label, args: argparse.Names
     files = natsorted(input_dir.glob('*_boot.parquet'))
     if not files: return 0
 
-    boot_dict = defaultdict(list)
+    # One dict per file, framed at the end: files with different column sets (e.g. boot
+    # files written before/after bootstrap.py started recording pair widths and ksp_min)
+    # then simply get NaN in the columns they lack instead of a ragged-lists crash.
+    rows = []
 
     desc = f'{label}' if label else input_dir.name
     failures = 0
@@ -189,19 +207,18 @@ def process_group(input_dir: Path, output_dir: Path, label, args: argparse.Names
         if not contribution:
             continue
 
-        for key, value in contribution.items():
-            boot_dict[key].append(value)
+        rows.append(contribution)
 
     if failures:
         print(f"  Warning: {failures}/{len(files)} file(s) FAILED to process in {desc}")
 
-    if boot_dict:
+    if rows:
         # Combo/group label (if any) goes right after "resolution_table" so two
         # combos/groups saved to the same -o never overwrite each other's CSV --
         # same convention as step 11's nevt_<combo_label>_... filenames.
         base = f"resolution_table_{label}" if label else "resolution_table"
         out_path = output_dir / f"{base}{args.tag}.csv"
-        io_utils.write_csv(pd.DataFrame(boot_dict), out_path, index=False)
+        io_utils.write_csv(pd.DataFrame(rows), out_path, index=False)
 
     return failures
 
