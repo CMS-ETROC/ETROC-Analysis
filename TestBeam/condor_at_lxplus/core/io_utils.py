@@ -44,19 +44,46 @@ def eos_base_dir(username: Optional[str] = None) -> Path:
 COMMON_TRANSFER_FILES = ['core/io_utils.py']
 
 
+# xrootd endpoint for CERN user EOS. CERN's standard batch schedds reject a
+# plain /eos/... path anywhere in the submit file (transfer_Input_Files or
+# output_destination) with "Standard batch schedds cannot use /eos paths
+# directly within the submit file"; the supported way is to reference the
+# same file as root://eosuser.cern.ch//eos/... so condor's xrootd transfer
+# plugin fetches it. output_destination in the submit templates already does
+# this; build_transfer_files() below applies the same rewrite to inputs.
+EOS_XROOTD_PREFIX = 'root://eosuser.cern.ch/'
+
+
+def _as_condor_transfer_path(path: Union[str, Path]) -> str:
+    """Path as it must appear in transfer_Input_Files: /eos/... files become
+    root://eosuser.cern.ch//eos/... URLs (see EOS_XROOTD_PREFIX); everything
+    else (AFS / repo-relative) is passed through unchanged. Condor delivers a
+    URL-transferred file into the sandbox under its basename, exactly like a
+    plain path, so worker command lines that use basenames keep working."""
+    posix = Path(path).as_posix()
+    if posix.startswith('/eos/'):
+        return f'{EOS_XROOTD_PREFIX}{posix}'
+    return posix
+
+
 def build_transfer_files(worker_script: str, *extra_paths: Union[str, Path]) -> str:
     """Builds a condor transfer_Input_Files value for a core/ worker script.
 
     Validates that every referenced file actually exists before submission,
     so a missing dependency fails loudly at submit time instead of deep
-    inside a condor job's stderr log.
+    inside a condor job's stderr log. Existence is checked on the local
+    (AFS/FUSE) path; files that live on /eos are then rendered as xrootd URLs
+    in the returned string, because the standard schedds refuse plain /eos
+    paths in the submit file (see EOS_XROOTD_PREFIX). This is what lets a
+    submitter take step-6/7 outputs (track files, CAL tables) that were
+    written to the user's EOS area instead of the AFS repo checkout.
     """
     files = [f'core/{worker_script}', *COMMON_TRANSFER_FILES,
              *(Path(p).as_posix() for p in extra_paths)]
     missing = [f for f in files if not Path(f).is_file()]
     if missing:
         raise FileNotFoundError(f"transfer_Input_Files references missing file(s): {missing}")
-    return ", ".join(files)
+    return ", ".join(_as_condor_transfer_path(f) for f in files)
 
 
 def discover_time_dirs(mother_dir: Union[str, Path]) -> List[Path]:
