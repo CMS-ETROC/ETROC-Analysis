@@ -359,8 +359,26 @@ def main():
                              'includes trig) and "global_relative" (every combo\'s boards vs. that combo\'s '
                              'own median board id, combined across all combos into one least-squares fit). '
                              'Purely diagnostic -- never mutates the config or affects saved track output.')
+    parser.add_argument('--seed', type=int, default=None,
+                        help='Seed for every random draw in this script (per-file event sampling, the memory-check '
+                             'file sample and the --max_files subset). Default: unseeded, i.e. not reproducible run-to-run.')
+    parser.add_argument('--max_files', type=int, default=100,
+                        help='Cap on the number of input feather files read; above it a random subset is taken '
+                             '(reported in the log). Default 100 keeps the previous hard-coded behaviour; '
+                             'pass 0 to read every file.')
 
     args = parser.parse_args()
+
+    # Reproducibility: every random draw below (the per-file event sample in
+    # load_and_sample_data, the memory-check file sample and the --max_files
+    # subset) goes through the global `random` / `np.random` state. Seeding
+    # both makes the CAL table, the candidate lists and the alignment
+    # reproducible run-to-run; left unseeded (the default) the outputs differ
+    # slightly on every invocation.
+    if args.seed is not None:
+        random.seed(args.seed)
+        np.random.seed(args.seed)
+    logging.info(f"Random seed: {args.seed if args.seed is not None else 'none (unseeded, not reproducible)'}")
 
     # 1. Setup & Config with modern API
     yaml = YAML(typ='rt')  # 'rt' = Round Trip
@@ -385,8 +403,21 @@ def main():
     username = getpass.getuser()
     eos_base_dir = io_utils.eos_base_dir(username)
 
-    files = list((eos_base_dir / args.path).glob('loop*feather'))
-    if len(files) > 100: files = random.sample(files, 100)
+    # sorted(): glob order is filesystem-dependent, and a deterministic order
+    # is what makes the --max_files subset reproducible under --seed.
+    input_dir = eos_base_dir / args.path
+    files = sorted(input_dir.glob('loop*feather'))
+    n_found = len(files)
+    # Previously a silent, hard-coded `if len(files) > 100: files = random.sample(files, 100)`:
+    # runs with more than 100 files had a random subset of their files dropped with no
+    # log line. Same default, but configurable, seedable and always reported.
+    if args.max_files > 0 and n_found > args.max_files:
+        files = random.sample(files, args.max_files)
+        logging.warning(f"{n_found} input files found in {input_dir} but --max_files={args.max_files}: "
+                        f"reading a random subset of {len(files)} ({n_found - len(files)} not read). "
+                        f"Pass --max_files 0 to read all, or --seed N to make the subset reproducible.")
+    else:
+        logging.info(f"Reading all {n_found} input files from {input_dir}")
 
     if not files:
         logging.error("No input files found.")
