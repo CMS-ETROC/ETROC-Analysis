@@ -230,37 +230,43 @@ def generate_cal_table(df: pd.DataFrame, output_name: str) -> pd.DataFrame:
     io_utils.write_csv(cal_table, f'{output_name}_cal_table.csv', index=False)
     return cal_table
 
-def check_spatial_alignment(df: pd.DataFrame, roles: Dict[str, int], max_diff_pixel: float) -> pd.Series:
+def check_spatial_alignment(df: pd.DataFrame, combo: Tuple[int, ...], roles: Dict[str, int], max_diff_pixel: float) -> pd.Series:
 
     """
-    Checks if hits are spatially aligned across boards using Euclidean distance.
+    Checks if every board in combo is spatially aligned with a single
+    reference board, via Euclidean distance: the trig board when it's in
+    this combo (unchanged from before), otherwise combo's own median board
+    id -- same fallback used for the global_relative alignment estimate --
+    so a combo that doesn't happen to include trig still gets a real
+    geometric-coincidence requirement instead of skipping the check
+    entirely (previously, looking for a trig board absent from this combo's
+    columns always found nothing to compare, silently returning "everything
+    passes").
     Logic: r = sqrt((x1-x2)^2 + (y1-y2)^2) <= limit
     """
 
     trig_id = roles.get('trig')
-
-    # We need a trigger board to compare against
-    if trig_id is None:
-        logging.warning("No 'trig' role found. Skipping spatial alignment check.")
-        return pd.Series(True, index=df.index)
-
-    # Identify other boards to compare with Trigger
-    # We compare Trig vs Ref, Trig vs DUT, Trig vs Extra
-    others = [r for r in ['ref', 'dut', 'extra'] if r in roles]
+    if trig_id is not None and trig_id in combo:
+        ref_id = trig_id
+    else:
+        sorted_combo = sorted(combo)
+        ref_id = sorted_combo[len(sorted_combo) // 2]
+        logging.info(f"No trig board in this combo; using board {ref_id} as the spatial-alignment reference instead.")
 
     conditions = []
     # Limit calculation: pixels * pitch (mm/pixel)
     limit = max_diff_pixel * PIXEL_PITCH
 
-    for role_name in others:
-        other_id = roles[role_name]
+    for bid in combo:
+        if bid == ref_id:
+            continue
 
         # Check if global coordinates exist for both
-        if f'x_{trig_id}' in df.columns and f'x_{other_id}' in df.columns:
+        if f'x_{ref_id}' in df.columns and f'x_{bid}' in df.columns:
 
             # Calculate deltas
-            dx = df[f'x_{trig_id}'] - df[f'x_{other_id}']
-            dy = df[f'y_{trig_id}'] - df[f'y_{other_id}']
+            dx = df[f'x_{ref_id}'] - df[f'x_{bid}']
+            dy = df[f'y_{ref_id}'] - df[f'y_{bid}']
 
             # Cartesian (Euclidean) Distance Check
             distance = np.sqrt(dx**2 + dy**2)
@@ -271,6 +277,68 @@ def check_spatial_alignment(df: pd.DataFrame, roles: Dict[str, int], max_diff_pi
 
     # Combine all conditions (must satisfy distance check for ALL pairs)
     return np.logical_and.reduce(conditions)
+
+def compute_peak_offset(track_candidates: pd.DataFrame, bid: int, ref_id: int) -> Tuple[float, float]:
+    """Histogram-peak estimate of (x_bid - x_ref, y_bid - y_ref), weighted by
+    each hit pattern's count -- the mode of the shift distribution, not the
+    mean, so a handful of outlier tracks can't pull the estimate off the bulk
+    of the distribution.
+    """
+    dx = track_candidates[f'x_{bid}'] - track_candidates[f'x_{ref_id}']
+    dy = track_candidates[f'y_{bid}'] - track_candidates[f'y_{ref_id}']
+
+    hist_counts, bin_edges = np.histogram(dx, weights=track_candidates['count'], bins=30)
+    max_index = np.argmax(hist_counts)
+    center_x = round(float(0.5 * (bin_edges[max_index] + bin_edges[max_index + 1])), 2)
+
+    hist_counts, bin_edges = np.histogram(dy, weights=track_candidates['count'], bins=30)
+    max_index = np.argmax(hist_counts)
+    center_y = round(float(0.5 * (bin_edges[max_index] + bin_edges[max_index + 1])), 2)
+
+    return center_x, center_y
+
+def corrected_translation(existing: Dict, dx: float, dy: float) -> Dict[str, float]:
+    """New translation.{x,y,z} for a board whose current geometry shows an
+    observed (dx, dy) offset from its reference -- keeps z untouched."""
+    return {
+        'x': round(existing.get('x', 0.0) - dx, 2),
+        'y': round(existing.get('y', 0.0) - dy, 2),
+        'z': round(existing.get('z', 0.0), 2),
+    }
+
+def solve_global_relative_alignment(edges: List[Tuple[int, int, float, float]], pin_id: int) -> Dict[int, Tuple[float, float]]:
+    """Combines per-combo relative offset measurements (bid, ref_id, dx, dy
+    meaning x_bid - x_ref ~= dx, same for y) from every combo into one
+    least-squares fit of every board's position, instead of anchoring to a
+    single combo's estimate. Solvable for any connected measurement graph
+    (unlike the resolution-unfolding sum-of-variances problem, a difference
+    system like this one doesn't need an odd cycle to be identifiable) -- but
+    only up to one arbitrary global additive constant, since relative offsets
+    alone can't fix an absolute origin. pin_id's fitted position is shifted
+    to exactly (0, 0) to remove that ambiguity; the choice of which board is
+    pinned doesn't affect any board's position *relative* to any other.
+    """
+    board_ids = sorted({b for e in edges for b in (e[0], e[1])} | {pin_id})
+    index = {b: i for i, b in enumerate(board_ids)}
+    n = len(board_ids)
+
+    A = np.zeros((len(edges), n))
+    bx = np.zeros(len(edges))
+    by = np.zeros(len(edges))
+    for row, (bid, ref_id, dx, dy) in enumerate(edges):
+        A[row, index[bid]] = 1
+        A[row, index[ref_id]] = -1
+        bx[row] = dx
+        by[row] = dy
+
+    x_sol, *_ = np.linalg.lstsq(A, bx, rcond=None)
+    y_sol, *_ = np.linalg.lstsq(A, by, rcond=None)
+
+    # Gauge-fix: shift the whole solution so pin_id reads exactly zero.
+    x_sol = x_sol - x_sol[index[pin_id]]
+    y_sol = y_sol - y_sol[index[pin_id]]
+
+    return {b: (float(x_sol[index[b]]), float(y_sol[index[b]])) for b in board_ids}
 
 # --- Main Execution ---
 
@@ -285,7 +353,12 @@ def main():
     parser.add_argument('-r', '--runName', required=True, help='Run name in YAML')
     parser.add_argument('--mask_config', type=Path, dest='mask_config_file', help='Mask config YAML')
     parser.add_argument('--cal_table_only', action='store_true', help='Only generate CAL table')
-    parser.add_argument('--find_alignment', action='store_true', help='Find the board offset alignments refer to trigger board')
+    parser.add_argument('--find_alignment', action='store_true',
+                        help='Compute board alignment offsets two ways for comparison, written to a '
+                             'diagnostic YAML: "legacy" (each board vs. the trig board, per combo that '
+                             'includes trig) and "global_relative" (every combo\'s boards vs. that combo\'s '
+                             'own median board id, combined across all combos into one least-squares fit). '
+                             'Purely diagnostic -- never mutates the config or affects saved track output.')
 
     args = parser.parse_args()
 
@@ -401,7 +474,8 @@ def main():
     trig_id = roles.get('trig')
     id_to_role = {v: k for k, v in roles.items()}
     n_written = 0
-    alignment_results = {} # combo_label -> {board_id: translation dict}, written once after the loop
+    alignment_results = {} # combo_label -> {board_id: translation dict} (legacy, trig-anchored), written once after the loop
+    relative_edges = []    # (bid, ref_id, dx, dy) per non-median board per combo (global_relative, median-anchored), combined into one fit after the loop
 
     # Each combo gets its own file, so with 5+ combos per run they'd otherwise
     # pile up flat in one directory across every run. Nest them under a
@@ -448,55 +522,38 @@ def main():
 
         # Alignment offsets are a property of the boards themselves, but the
         # estimate itself still depends on which combo's tracks it's computed
-        # from -- so compute (and record) it for every combo that includes the
-        # trigger board, keyed by combo, instead of overwriting one shared
-        # result. Only the full board-set combo's estimate (processed first)
-        # is ever fed back into run_config, so every combo's own track output
-        # stays on the same, consistent geometry; smaller combos' numbers are
-        # recorded purely so you can sanity-check that they agree.
-        if args.find_alignment and trig_id in combo:
-            shift_df = track_candidates.copy(deep=True)
-            combo_alignment = {}
+        # from -- so compute (and record) it for every eligible combo, keyed
+        # by combo, instead of overwriting one shared result. Both methods
+        # below are purely diagnostic: neither ever mutates run_config /
+        # full_config or affects this combo's saved track output, so track
+        # output is identical regardless of --find_alignment.
+        if args.find_alignment:
+            # Legacy method: every board's offset relative to the trig board
+            # -- only computable for combos that include it.
+            if trig_id in combo:
+                combo_alignment = {}
+                for bid in combo:
+                    if bid == trig_id:
+                        continue
+                    center_x, center_y = compute_peak_offset(track_candidates, bid, trig_id)
+                    existing = run_config.get(bid, {}).get('transformation', {}).get('translation', {'x': 0.0, 'y': 0.0, 'z': 0.0})
+                    combo_alignment[bid] = corrected_translation(existing, center_x, center_y)
+                alignment_results[combo_label] = combo_alignment
+
+            # global_relative method: every board's offset relative to *this
+            # combo's own* median board id -- doesn't need trig, so it runs
+            # for every combo. Collected here and solved once, globally,
+            # after the loop instead of being anchored to any single board or
+            # combo.
+            sorted_combo = sorted(combo)
+            median_id = sorted_combo[len(sorted_combo) // 2]
             for bid in combo:
-                if bid == trig_id:
+                if bid == median_id:
                     continue
+                dx, dy = compute_peak_offset(track_candidates, bid, median_id)
+                relative_edges.append((bid, median_id, dx, dy))
 
-                shift_df[f'x_{bid}'] = shift_df[f'x_{bid}'] - shift_df[f'x_{trig_id}']
-                shift_df[f'y_{bid}'] = shift_df[f'y_{bid}'] - shift_df[f'y_{trig_id}']
-
-                hist_counts, bin_edges = np.histogram(shift_df[f'x_{bid}'], weights=shift_df['count'], bins=30)
-                max_index = np.argmax(hist_counts)
-                max_bin_start = bin_edges[max_index]
-                max_bin_end = bin_edges[max_index + 1]
-
-                center_x = round(float(0.5*(max_bin_end+max_bin_start)), 2)
-
-                hist_counts, bin_edges = np.histogram(shift_df[f'y_{bid}'], weights=shift_df['count'], bins=30)
-                max_index = np.argmax(hist_counts)
-                max_bin_start = bin_edges[max_index]
-                max_bin_end = bin_edges[max_index + 1]
-
-                center_y = round(float(0.5*(max_bin_end+max_bin_start)), 2)
-
-                existing = run_config.get(bid, {}).get('transformation', {}).get('translation', {'x': 0.0, 'y': 0.0, 'z': 0.0})
-                combo_alignment[bid] = {
-                    'x': round(existing.get('x', 0.0) - center_x, 2),
-                    'y': round(existing.get('y', 0.0) - center_y, 2),
-                    'z': round(existing.get('z', 0.0), 2),
-                }
-
-            alignment_results[combo_label] = combo_alignment
-
-            # Only the largest generated combo's estimate feeds forward, applied
-            # in-memory only (never saved back to args.config), so subsequent
-            # (smaller) combos' own track output uses the corrected geometry too.
-            if len(combo) == max_boards:
-                for bid, new_translation in combo_alignment.items():
-                    full_config[args.runName][bid].setdefault('transformation', {})['translation'] = new_translation
-                run_config = full_config[args.runName]
-                apply_geometric_transformation_matrix(track_candidates, combo, run_config)
-
-        spatial_mask = check_spatial_alignment(track_candidates, roles, args.max_diff_pixel)
+        spatial_mask = check_spatial_alignment(track_candidates, combo, roles, args.max_diff_pixel)
         final_tracks = track_candidates[spatial_mask]
 
         # Remove duplicates if any remain based on pattern
@@ -510,21 +567,42 @@ def main():
         logging.info(f"Combo ({combo_label}): {len(final_tracks)} tracks saved to {output_file}")
         n_written += 1
 
-    if alignment_results:
+    if alignment_results or relative_edges:
         # Own directory, separate from wherever --track-label's tracks/cal_table
         # output goes, since alignment output is a different kind of artifact
         # (a diagnostic to review/merge by hand, not pipeline input).
         alignment_dir = Path('alignment')
         alignment_dir.mkdir(parents=True, exist_ok=True)
         alignment_file = alignment_dir / f'{Path(args.track_label).name}_alignment.yaml'
+
+        output = {}
+        if alignment_results:
+            output['legacy_per_combo'] = {
+                combo_label: {bid: {'transformation': {'translation': t}} for bid, t in combo_vals.items()}
+                for combo_label, combo_vals in alignment_results.items()
+            }
+        if relative_edges:
+            # Any board works as the gauge pin -- trig is used here only so
+            # the reported numbers line up with legacy_per_combo's convention
+            # (both report "what to add to the pinned/trig board's existing
+            # translation" for every other board), making the two sections
+            # directly comparable board-by-board.
+            pin_id = trig_id if trig_id is not None else min(ids_to_process)
+            fitted = solve_global_relative_alignment(relative_edges, pin_id)
+            global_alignment = {}
+            for bid, (fx, fy) in fitted.items():
+                if bid == pin_id:
+                    continue
+                existing = run_config.get(bid, {}).get('transformation', {}).get('translation', {'x': 0.0, 'y': 0.0, 'z': 0.0})
+                global_alignment[bid] = corrected_translation(existing, fx, fy)
+            output['global_relative'] = {
+                'pinned_board': pin_id,
+                'boards': {bid: {'transformation': {'translation': t}} for bid, t in global_alignment.items()},
+            }
+
         with open(alignment_file, 'w') as f:
-            yaml.dump({
-                args.runName: {
-                    combo_label: {bid: {'transformation': {'translation': t}} for bid, t in combo_vals.items()}
-                    for combo_label, combo_vals in alignment_results.items()
-                }
-            }, f)
-        logging.info(f"Alignment offsets for {len(alignment_results)} combo(s) written to {alignment_file} "
+            yaml.dump({args.runName: output}, f)
+        logging.info(f"Alignment comparison (legacy_per_combo vs. global_relative) written to {alignment_file} "
                      f"(not saved back to {args.config} -- merge in manually if desired).")
 
     if n_written == 0:
