@@ -1,3 +1,19 @@
+"""Per-track time-walk coefficients from the ALTERNATING loop, kept for the
+standalone studies that want the per-iteration coefficients.
+
+NOT THE PIPELINE'S CORRECTION ANY MORE.  Step 12 (core/bootstrap.py), the two
+diagnostics tools and BeamTestHelpers/twc.py all use the JOINT least-squares
+solve in core/twc_solver.py: all 3*N coefficients from one lstsq, which is the
+converged limit of the loop below.  The loop is a fixed-point iteration whose
+leftover after k passes is s1*rho^(k-1) with rho the inter-board TOT
+correlation, so its default of 2 iterations under-corrects by a run-dependent
+amount - 7-16 ps of pair width at rho ~ 0.35, < 0.25 ps at rho ~ 0.1
+(notes/twc-convergence-verify.md).  This file is deliberately left as it is
+because its output contract IS the per-iteration coefficient dictionary
+(`iter1`, `iter2`, ...), which the joint solve does not have; use it to study
+the iteration, not to reproduce what the pipeline applies.  For that, call
+`twc_solver.solve_timewalk_coefficients(tots, toas, roles)`.
+"""
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
@@ -104,7 +120,10 @@ if __name__ == "__main__":
         '--iteration',
         metavar = 'NUM',
         type = int,
-        help = 'Maximum iteration of TWC',
+        help = 'Number of alternating TWC passes. NOTE: this is NOT what the pipeline applies - '
+               'step 12 solves all coefficients jointly (core/twc_solver.py), which is this loop\'s '
+               'converged limit. The default of 2 reproduces the historical behaviour, which '
+               'under-corrects by a run-dependent amount; use a large value to approach the joint solve.',
         default = 2,
         dest = 'iteration',
     )
