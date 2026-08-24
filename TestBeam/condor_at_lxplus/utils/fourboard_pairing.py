@@ -167,9 +167,12 @@ def fit_gated(x, tries=6):
 
 def six_widths(toa, tot, idx, roles):
     """Joint four-board time-walk correction on `idx`, then a gated fit per pair."""
-    t = {r: toa[r][idx] for r in roles}
-    o = {r: tot[r][idx] for r in roles}
-    corr = TS.apply_timewalk_correction_arrays(t, o, roles)
+    # NOTE the argument order: apply_timewalk_correction_arrays takes (tots, toas).
+    # Passing them the other way round silently "corrects" TOT with a polynomial in
+    # TOA and returns TOT-like numbers, which shows up as ~200 ps pair widths.
+    sub_toa = {r: toa[r][idx] for r in roles}
+    sub_tot = {r: tot[r][idx] for r in roles}
+    corr = TS.apply_timewalk_correction_arrays(sub_tot, sub_toa, roles)
     w, ksp = {}, {}
     for a, b in combinations(roles, 2):
         res = fit_gated(corr[a] - corr[b])
