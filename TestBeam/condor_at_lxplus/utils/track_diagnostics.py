@@ -103,11 +103,12 @@ from natsort import natsorted
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from telescope_diagnostics import GRID, pixel_map, save_figure, set_output_options, add_output_arguments  # noqa: E402
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "core"))
+import twc_solver  # noqa: E402
 
 NICK = {"t": "trig", "d": "dut", "r": "ref", "e": "extra"}
 FNAME_RE = re.compile(r"(\w)-R(\d+)C(\d+)")
-N_TWC_ITER = 2          # bootstrap.py: `for _ in range(2)`
-TWC_ORDER = 2           # bootstrap.py: np.polyfit(..., 2)
+TWC_ORDER = twc_solver.TWC_ORDER   # bootstrap.py: quadratic in TOT
 MIN_BIN_EVENTS = 150    # below this a 2nd-order fit per bin is not attempted
 IQR_TO_SIGMA = 1.0 / 1.349
 
@@ -145,20 +146,13 @@ def twc_fit(tots, toas, roles):
     """bootstrap.apply_timewalk_correction, but returning the coefficients.
 
     tots/toas: dict role -> ndarray (ps).  Returns (eff, corrected_toas) where
-    eff[role] = summed polynomial coefficients [a2, a1, a0] over the
-    N_TWC_ITER iterations, i.e. the correction actually added to toa_role."""
-    toas = {r: np.array(toas[r], float, copy=True) for r in roles}
-    eff = {r: np.zeros(TWC_ORDER + 1) for r in roles}
-    for _ in range(N_TWC_ITER):
-        deltas = {}
-        for r in roles:
-            others = [toas[o] for o in roles if o != r]
-            deltas[r] = 0.5 * sum(others) - toas[r]
-        for r in roles:
-            c = np.polyfit(tots[r], deltas[r], TWC_ORDER)
-            eff[r] += c
-            toas[r] += np.poly1d(c)(tots[r])
-    return eff, toas
+    eff[role] = the polynomial coefficients [a2, a1, a0] of the correction
+    actually added to toa_role.  With the joint solve there is a single fit per
+    board rather than a sum over iterations, so `eff` is that fit directly; a
+    global constant common to all boards is unconstrained (it cancels in every
+    pair difference) and is fixed by the minimum-norm solution."""
+    return twc_solver.apply_timewalk_correction_arrays(
+        tots, toas, roles, order=TWC_ORDER, return_coefficients=True)[::-1]
 
 
 def pair_sigmas(toas, roles):

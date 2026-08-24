@@ -174,7 +174,11 @@ def create_submission_files(
         'master_list_file_name': master_list_file_name,
         'out_dir': str(group_out_dir),
         'log_dir': str(group_log_dir),
-        'transfer_files': io_utils.build_transfer_files(WORKER_SCRIPT_NAME),
+        # core/twc_solver.py holds the joint time-walk solve that bootstrap.py
+        # imports; it is not an io_utils dependency, so it is named here rather
+        # than in COMMON_TRANSFER_FILES.  build_transfer_files() checks it exists
+        # at submit time, so a forgotten file fails loudly here, not in a job.
+        'transfer_files': io_utils.build_transfer_files(WORKER_SCRIPT_NAME, 'core/twc_solver.py'),
         'unique_tag': unique_tag,
         'logical_dir': logical_dir, # Pass the directory to Jinja
         'ext': ext,                 # Pass the extension to Jinja

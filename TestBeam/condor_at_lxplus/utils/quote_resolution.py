@@ -65,6 +65,29 @@ RECIPE (per board, per step-13 table)
 6. Quoted number: the combined value +/- stat, +/- partner, +/- definition;
    the map, the spread and the halves alongside. With >= 4 boards, the
    least-squares solve of all pair widths is printed as a consistency check.
+7. TWO EVENT THRESHOLDS, always both. The tracks entering the quote are those
+   step 12 ran, i.e. >= --nevt-standard (100) events; the same number is also
+   recomputed on tracks with >= --nevt-conservative (300), with the pixel count
+   of each. 100 events is generous - the converged mixture fit is still ~5 %
+   low there (the GMM toy study) - so a run whose two numbers disagree is a run
+   whose value rests on low-occupancy pixels, and that is now visible in the
+   quote instead of having to be re-derived. Both are stored; the headline
+   number is unchanged (it is the standard one).
+8. PAIRING COVARIANCE (four boards, optional input). The 3-board algebra
+   assumes sigma_ab^2 = sigma_a^2 + sigma_b^2. On 4-board coincidences that
+   additivity is rejected (p = 8e-11 / 1e-30 on the two runs measured), and the
+   one covariance model the six pair widths CAN constrain - a single g shared by
+   the two pairs of one PAIRING of the four boards, 5 parameters and 1 d.o.f.
+   left to test it - fits them (chi2/dof 0.59 and 0.35) with g = +60 ps^2 at
+   1.5e15 and +619 ps^2 on F1 at 3.5e15. Under that model every 3-board solve is
+   v-g, v-g, v+g over the three combos, so the quoted value is low by g/3
+   (+0.2 ps at 1.5e15, +2 ps on F1 3.5e15). See notes/fourboard-lsq-test.md.
+   This block is computed when a four-board per-quadruple width table is
+   supplied (--fourboard, or fourboard_pairs_*.csv next to the input tables;
+   utils/fourboard_pairing.py builds it) AND the table clears
+   --pairing-min-events (500) events per quadruple on --pairing-min-quads (30)
+   quadruples. It is stored ALONGSIDE the standard solve, never instead of it;
+   when it cannot be computed the block records why.
 
 USAGE
   python utils/quote_resolution.py -i final_<run>/resolution_table_*.csv -o <outdir> [--label <run>]
@@ -194,6 +217,190 @@ def illumination(df, r, roles, nevt=None):
                 edge_event_share=float(w[~central].sum() / w.sum()), n_central=int(len(c)))
 
 
+# --------------------------------------------------------------------------
+# dual event threshold
+# --------------------------------------------------------------------------
+
+def nevt_quotes(pooled, r, a, has_nevt):
+    """The board value at two track-occupancy thresholds, with the pixel counts.
+
+    Returns a dict that always carries `present`; when the step-11 nevt CSV was
+    not found next to the tables there is no per-track event count to threshold
+    on, and the block says so rather than silently quoting one number twice.
+    """
+    if not has_nevt or "nevt" not in pooled.columns:
+        return dict(present=False, reason="no step-11 nevt_<combo>_*.csv next to the input tables, "
+                                          "so no per-track event count to threshold on")
+    out = dict(present=True, weights="nevt")
+    for name, thr in (("standard", a.nevt_standard), ("conservative", a.nevt_conservative)):
+        sub = pooled[pooled["nevt"] >= thr]
+        if len(sub) < 5:
+            out[name] = dict(nevt_min=int(thr), present=False,
+                             reason="only %d track(s) with >= %d events" % (len(sub), thr))
+            continue
+        P = per_pixel(sub, r)
+        st = board_summary(P, a)
+        out[name] = dict(nevt_min=int(thr), present=True, value=st["value"], stat=st["stat"],
+                         pixel_spread=st["pixel_spread"], n_pixels=st["n_pixels"], n_tracks=int(len(sub)))
+    if out.get("standard", {}).get("present") and out.get("conservative", {}).get("present"):
+        out["conservative_minus_standard"] = out["conservative"]["value"] - out["standard"]["value"]
+    return out
+
+
+# --------------------------------------------------------------------------
+# pairing-covariance fit on 4-board coincidences (notes/fourboard-lsq-test.md)
+# --------------------------------------------------------------------------
+
+def _pair_key(a, b):
+    return "-".join(sorted((a, b)))
+
+
+def _fourboard_design(boards, pair_keys):
+    X = np.zeros((6, 4))
+    for k, key in enumerate(pair_keys):
+        for b in key.split("-"):
+            X[k, boards.index(b)] = 1.0
+    return X
+
+
+def _calibrate(d, pair_keys):
+    """Per-run error scale from the two disjoint halves of each quadruple.
+
+    Under Var(w) ~ 1/n the half-sample difference has sd = 2 * sd(w_n), so
+    kcal = median(|w_h0 - w_h1| * sqrt(n) / w) / (2 * 0.6745) converts a
+    quadruple's n into the error on its pair widths.  Straight port of
+    fb_sum.calib.
+    """
+    u = []
+    for k in pair_keys:
+        if "h0_w_%s" % k not in d.columns or "h1_w_%s" % k not in d.columns:
+            continue
+        m = d[["w_%s" % k, "h0_w_%s" % k, "h1_w_%s" % k, "n"]].dropna()
+        if not len(m):
+            continue
+        u.append((np.abs(m["h0_w_%s" % k] - m["h1_w_%s" % k]) * np.sqrt(m["n"]) / m["w_%s" % k]).to_numpy())
+    if not u:
+        return None
+    return float(np.median(np.concatenate(u)) / (2 * 0.6745))
+
+
+def _lsq4(y, se, X):
+    W = np.diag(1.0 / np.asarray(se, float) ** 2)
+    cov = np.linalg.inv(X.T @ W @ X)
+    v = cov @ (X.T @ W @ np.asarray(y, float))
+    r = np.asarray(y, float) - X @ v
+    return v, cov, float(r @ W @ r)
+
+
+def _pairing_fit(y, se, X, pair_keys, ka, kb):
+    """5-parameter model y_ij = v_i + v_j - 2g for the two pairs of ONE pairing.
+
+    A g common to all six pairs is exactly degenerate with v_i -> v_i + g (the
+    design has rank 4 of 5), and so is one covariance per pair of a pairing;
+    one g per PAIRING is the largest covariance model six widths can constrain -
+    rank 5, leaving 1 d.o.f. to test it.  Port of fb_sum.pairing_fit.
+    """
+    X5 = np.zeros((6, 5))
+    X5[:, :4] = X
+    X5[pair_keys.index(ka), 4] = -2.0
+    X5[pair_keys.index(kb), 4] = -2.0
+    W = np.diag(1.0 / np.asarray(se, float) ** 2)
+    cov = np.linalg.inv(X5.T @ W @ X5)
+    th = cov @ (X5.T @ W @ np.asarray(y, float))
+    r = np.asarray(y, float) - X5 @ th
+    return th[:4], float(th[4]), float(np.sqrt(cov[4, 4])), float(r @ W @ r)
+
+
+def pairing_covariance(path, a):
+    """Fit the pairing covariance from a four-board per-quadruple width table.
+
+    Input schema (utils/fourboard_pairing.py, and the study's own fit_*.csv):
+    one row per pixel quadruple with `n`, `w_<a>-<b>` for the six pair widths in
+    ps, and `h0_w_*`/`h1_w_*` for the two disjoint halves (the error source).
+    Returns the JSON block; every early exit carries a `reason`.
+    """
+    from scipy.stats import chi2 as chi2dist
+    if path is None:
+        return dict(present=False, reason="no four-board per-quadruple width table given "
+                                          "(--fourboard, or fourboard_pairs_*.csv next to the tables); "
+                                          "build one with utils/fourboard_pairing.py")
+    d = pd.read_csv(path)
+    if "status" in d.columns:
+        d = d[d["status"] == "ok"]
+    wcols = [c for c in d.columns if c.startswith("w_") and "-" in c]
+    boards = sorted({b for c in wcols for b in c[2:].split("-")})
+    if len(boards) != 4 or len(wcols) != 6:
+        return dict(present=False, source=path,
+                    reason="table has %d board(s) and %d pair-width column(s); the pairing model needs "
+                           "exactly 4 boards and their 6 pair widths" % (len(boards), len(wcols)))
+    pair_keys = [_pair_key(x, y) for x, y in combinations(boards, 2)]
+    n_in = len(d)
+    d = d[d["n"] >= a.pairing_min_events].dropna(subset=["w_%s" % k for k in pair_keys])
+    if len(d) < a.pairing_min_quads:
+        return dict(present=False, source=path,
+                    cuts=dict(min_events_per_quadruple=int(a.pairing_min_events),
+                              min_quadruples=int(a.pairing_min_quads)),
+                    n_quadruples_input=int(n_in), n_quadruples_used=int(len(d)),
+                    reason="only %d quadruple(s) have >= %d four-board events (need %d); g is measurable "
+                           "below that but loose (+-35 %%), so quote it from a neighbouring run of the same "
+                           "configuration instead" % (len(d), a.pairing_min_events, a.pairing_min_quads))
+    kcal = _calibrate(d, pair_keys)
+    if kcal is None:
+        return dict(present=False, source=path,
+                    reason="table carries no h0_w_/h1_w_ half-sample columns, so the pair-width errors "
+                           "cannot be calibrated and no chi2 would mean anything")
+    X = _fourboard_design(boards, pair_keys)
+    pairings = [(_pair_key(boards[0], boards[1]), _pair_key(boards[2], boards[3])),
+                (_pair_key(boards[0], boards[2]), _pair_key(boards[1], boards[3])),
+                (_pair_key(boards[0], boards[3]), _pair_key(boards[1], boards[2]))]
+    rng = np.random.default_rng(11)
+    Y = np.array([[row["w_%s" % k] ** 2 for k in pair_keys] for _, row in d.iterrows()])
+    SE = np.array([[2 * row["w_%s" % k] * (kcal * row["w_%s" % k] / np.sqrt(row["n"])) for k in pair_keys]
+                   for _, row in d.iterrows()])
+    # 4-parameter closure (the additivity the 3-board algebra assumes)
+    c2_add, vv = [], []
+    for i in range(len(Y)):
+        v, _, c2 = _lsq4(Y[i], SE[i], X)
+        c2_add.append(c2)
+        vv.append(v)
+    vv = np.array(vv)
+    c2_add = np.array(c2_add)
+    out_pairings = []
+    for ka, kb in pairings:
+        gs, c2s = [], []
+        for i in range(len(Y)):
+            _, g, _, c2 = _pairing_fit(Y[i], SE[i], X, pair_keys, ka, kb)
+            gs.append(g)
+            c2s.append(c2)
+        gs, c2s = np.array(gs), np.array(c2s)
+        bs = np.array([np.median(rng.choice(gs, len(gs))) for _ in range(400)])
+        out_pairings.append(dict(pairing="%s | %s" % (ka, kb), g_ps2=float(np.median(gs)),
+                                 g_err_ps2=float(bs.std(ddof=1)), chi2_per_dof=float(np.median(c2s)),
+                                 pooled_chi2=float(c2s.sum()), pooled_dof=int(len(c2s)),
+                                 pooled_p=float(chi2dist.sf(c2s.sum(), len(c2s)))))
+    best = min(out_pairings, key=lambda x: x["pooled_chi2"])
+    g = best["g_ps2"]
+    sig_lsq = {b: float(np.sqrt(v)) if v > 0 else float("nan")
+               for b, v in zip(boards, np.median(vv, axis=0))}
+    sig_cor = {b: float(np.sqrt(v + g / 3.0)) if (v + g / 3.0) > 0 else float("nan")
+               for b, v in zip(boards, np.median(vv, axis=0))}
+    return dict(present=True, source=path,
+                cuts=dict(min_events_per_quadruple=int(a.pairing_min_events),
+                          min_quadruples=int(a.pairing_min_quads)),
+                n_quadruples_input=int(n_in), n_quadruples_used=int(len(d)),
+                median_events_per_quadruple=float(d["n"].median()), error_scale_kcal=kcal,
+                additivity=dict(chi2_per_dof=float(np.median(c2_add) / 2.0), pooled_chi2=float(c2_add.sum()),
+                                pooled_dof=int(2 * len(c2_add)),
+                                pooled_p=float(chi2dist.sf(c2_add.sum(), 2 * len(c2_add)))),
+                best_pairing=best, all_pairings=out_pairings,
+                sigma_lsq_ps=sig_lsq, sigma_pairing_corrected_ps=sig_cor,
+                bias_on_3board_quote_ps2=float(g / 3.0),
+                note="the 3-board solve is v-g in the two combos containing a board's partner and v+g in "
+                     "the one that leaves it out, so the combo-averaged quote is low by g/3; "
+                     "sigma_pairing_corrected_ps = sqrt(v_lsq + g/3). Stored alongside, never instead of, "
+                     "the standard solve. See notes/fourboard-lsq-test.md.")
+
+
 def lsq_pairs(tables):
     """Least-squares sigma per board from all pair widths (median over cleaned tracks per table); needs >= 4 boards."""
     rows, y, labels = [], [], []
@@ -232,6 +439,17 @@ def main():
     p.add_argument("--margin-lo", type=float, default=0.35, dest="margin_lo", help="near-degenerate: sigma / smallest pair width below this is dropped (default 0.35)")
     p.add_argument("--margin-hi", type=float, default=0.95, dest="margin_hi", help="near-degenerate: sigma / smallest pair width above this is dropped (default 0.95)")
     p.add_argument("--def-syst", type=float, default=0.01, dest="def_syst", help="relative definition/convergence systematic (default 0.01)")
+    p.add_argument("--nevt-standard", type=int, default=100, dest="nevt_standard",
+                   help="standard track-occupancy threshold for the quote (default 100, step 12's own --minimum_nevt)")
+    p.add_argument("--nevt-conservative", type=int, default=300, dest="nevt_conservative",
+                   help="conservative track-occupancy threshold, quoted alongside the standard one (default 300)")
+    p.add_argument("--fourboard", default=None,
+                   help="four-board per-quadruple pair-width table for the pairing-covariance fit "
+                        "(utils/fourboard_pairing.py output). Default: fourboard_pairs_*.csv next to the input tables.")
+    p.add_argument("--pairing-min-events", type=int, default=500, dest="pairing_min_events",
+                   help="minimum four-board events per pixel quadruple for the pairing fit (default 500)")
+    p.add_argument("--pairing-min-quads", type=int, default=30, dest="pairing_min_quads",
+                   help="minimum qualifying quadruples for the pairing fit (default 30)")
     add_output_arguments(p)
     a = p.parse_args()
     set_output_options(a.format, a.split)
@@ -293,6 +511,7 @@ def main():
         partner_pixel = sc["partner_pixel"]
         result["boards"][r] = dict(
             value=sc["value"], stat=sc["stat"], pixel_spread=sc["pixel_spread"],
+            nevt_thresholds=nevt_quotes(pooled, r, a, all(tables[c]["has_nevt"] for c in per_combo)),
             partner_pixel=partner_pixel, partner_board=partner_board,
             partner_quoted=partner_board if partner_board is not None else partner_pixel,
             partner_source=("per pixel across tables, %d px in >= 2 tables" % int(multi.sum())) if partner_board is not None else "partner-pixel spread within the run",
@@ -310,20 +529,32 @@ def main():
         if Pcen is not None:
             Pcen.rename(columns={"mean": "res", "err": "err"}).to_csv(os.path.join(a.outdir, "%s_map_%s_central.csv" % (label, r)))
     result["pair_lsq"] = lsq_pairs(tables)
+    fb = a.fourboard
+    if fb is None:
+        cand = sorted(glob(os.path.join(os.path.dirname(os.path.abspath(files[0])), "fourboard_pairs_*.csv")))
+        fb = cand[0] if cand else None
+    result["pairing_covariance"] = pairing_covariance(fb, a)
 
     # ---- outputs: json, markdown, figure
     with open(os.path.join(a.outdir, "%s_resolution_quote.json" % label), "w") as f:
         json.dump(result, f, indent=1, default=float)
     md = ["# %s - quoted resolutions\n" % label,
-          "| board | average (canonical) [ps] | stat | partner (%s) | definition | pixel spread | left−right | central-hit [ps] | central pixel spread | off-nominal − central | off-nominal event share | tables |" % ("board / pixel"),
-          "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+          "| board | average (canonical) [ps] | stat | partner (%s) | definition | pixel spread | left−right | central-hit [ps] | central pixel spread | off-nominal − central | off-nominal event share | nevt≥%d [ps] (px) | nevt≥%d [ps] (px) | tables |"
+          % ("board / pixel", a.nevt_standard, a.nevt_conservative),
+          "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for r, b in result["boards"].items():
         il = b["illumination"]
         cen = b["central"]
-        md.append("| %s | %.2f | ±%.2f | ±%.2f (%s) | ±%.2f | %.2f | %+.2f | %s | %s | %+.2f | %.0f %% | %d |" % (
+        nt = b["nevt_thresholds"]
+
+        def _nt(key):
+            if not nt.get("present") or not nt.get(key, {}).get("present"):
+                return "n/a"
+            return "%.2f (%d)" % (nt[key]["value"], nt[key]["n_pixels"])
+        md.append("| %s | %.2f | ±%.2f | ±%.2f (%s) | ±%.2f | %.2f | %+.2f | %s | %s | %+.2f | %.0f %% | %s | %s | %d |" % (
             r, b["value"], b["stat"], b["partner_quoted"], b["partner_source"], b["definition"], b["pixel_spread"], b["half_left_minus_right"],
             ("%.2f ± %.2f" % (cen["value"], cen["stat"])) if cen else "n/a", ("%.2f (%d px)" % (cen["pixel_spread"], cen["n_pixels"])) if cen else "n/a",
-            il["edge_minus_central"], 100 * il["edge_event_share"], b["n_tables"]))
+            il["edge_minus_central"], 100 * il["edge_event_share"], _nt("standard"), _nt("conservative"), b["n_tables"]))
     md.append("\nCoverage: " + "; ".join("%s: %s, union %d px, %d px in ≥2 tables" % (
         r, ", ".join("%s %d" % (c, k) for c, k in b["coverage"]["pixels_per_table"].items()), b["coverage"]["pixels_union"], b["coverage"]["pixels_in_2_or_more"]) for r, b in result["boards"].items()))
     md.append("\nPer table: " + "; ".join("%s: %s (kept %d/%d, dropped %d flagged + %d near-degenerate)" % (
@@ -331,6 +562,29 @@ def main():
     if result["pair_lsq"]:
         L = result["pair_lsq"]
         md.append("\nConsistency check (≥ 4 boards): least-squares solve of all pair widths → " + ", ".join("%s %.2f" % (b, v) for b, v in L["sigma"].items()) + " ps; rms residual %.2f ps." % L["rms_residual"])
+    pc = result["pairing_covariance"]
+    if pc.get("present"):
+        bp = pc["best_pairing"]
+        md.append("\nPairing covariance (4-board coincidences, %d quadruples with ≥ %d events, median %d): best-supported "
+                  "pairing %s, g = %+.0f ± %.0f ps², χ²/dof %.2f on the 1 d.o.f. it leaves (plain additivity: χ²/dof %.2f, "
+                  "p = %.1g). Per board σ_LSQ → σ corrected for the g/3 bias: %s. Stored alongside the standard solve, not "
+                  "instead of it."
+                  % (pc["n_quadruples_used"], pc["cuts"]["min_events_per_quadruple"], pc["median_events_per_quadruple"],
+                     bp["pairing"], bp["g_ps2"], bp["g_err_ps2"], bp["chi2_per_dof"],
+                     pc["additivity"]["chi2_per_dof"], pc["additivity"]["pooled_p"],
+                     ", ".join("%s %.2f → %.2f" % (b, pc["sigma_lsq_ps"][b], pc["sigma_pairing_corrected_ps"][b])
+                               for b in pc["sigma_lsq_ps"])))
+    else:
+        md.append("\nPairing covariance: not computed - %s." % pc["reason"])
+    nt0 = result["boards"][next(iter(result["boards"]))]["nevt_thresholds"]
+    if nt0.get("present"):
+        md.append("\nEvent thresholds: the last two columns are the same board value recomputed on tracks with at least "
+                  "%d and at least %d events (pixel counts in brackets). The headline number is the standard (%d) one - "
+                  "that is the set step 12 ran on; the conservative column exists because the converged mixture width is "
+                  "still ~5 %% low at ~300 events, so a board whose two numbers differ is a board resting on "
+                  "low-occupancy pixels." % (a.nevt_standard, a.nevt_conservative, a.nevt_standard))
+    else:
+        md.append("\nEvent thresholds: not computed - %s." % nt0.get("reason", "unknown"))
     md.append("\nTwo board-level numbers: the CANONICAL one is the average map (every track using the pixel, 1/err²-weighted = event-weighted, i.e. the operating resolution under this illumination); the central-hit one uses only tracks whose partners sit at the modal offset (one sub-region of the pixel) and is the more geometry-independent number for chip-to-chip comparisons. Both maps are written as CSV (<label>_map_<board>_{average,central}.csv).")
     md.append("\nIllumination: 'central-only' uses tracks whose partner pixels all sit at the modal offset (one sub-region of the pixel, set by the fractional inter-plane alignment); 'off-nominal − central' is the median over pixels of the same pixel's off-nominal minus central value (the complementary side sub-region, a few hundred µm wide at 1.3 mm pitch - not a charge-sharing edge); the value quoted above is the illumination-weighted average of both (weights: %s), i.e. the operating resolution under this beam geometry and alignment - with a different alignment, beam angle or a tracker the split moves." % result["boards"][next(iter(result["boards"]))]["illumination"]["weights"])
     md.append("\nConvention: FWHM/2.355 of the converged Gaussian mixture of the TWC-corrected pairwise TOA difference (a core width), 3-board solve per track, 1/err²-weighted per pixel, robust Gaussian mean over pixels; the definition systematic is the %.0f %% convergence softness of that width, the core-vs-RMS convention itself is not folded in." % (100 * a.def_syst))

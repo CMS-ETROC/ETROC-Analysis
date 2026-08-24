@@ -89,6 +89,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(os.path.dirname(HERE), "core"))
 import bootstrap as bs                       # noqa: E402  (the pipeline's own step-12 code)
+import twc_solver                            # noqa: E402  (the shared joint time-walk solve)
 import fit_bootstrap_results as fbr          # noqa: E402  (the pipeline's own step-13 code)
 from telescope_diagnostics import GRID, pixel_map, set_output_options, add_output_arguments   # noqa: E402
 from track_diagnostics import finish, parse_pixels, rc, robust_sigma  # noqa: E402
@@ -113,25 +114,22 @@ def combo_of(path):
 # faithful replays of bootstrap.py internals that also hand back what a plot needs
 # --------------------------------------------------------------------------
 
-def twc_iterations(df, roles):
-    """bootstrap.apply_timewalk_correction, keeping each iteration's deltas and fit.
-    Returns (iters, toas): iters = [ {role: (delta_before_fit, coeff)} per iteration ],
-    toas = corrected TOAs (identical to what apply_timewalk_correction returns)."""
+def twc_replay(df, roles):
+    """bootstrap.apply_timewalk_correction, keeping what a plot needs.
+
+    Step 12 no longer alternates (see core/twc_solver.py): all 9 coefficients
+    are solved at once, so there is ONE fit per board, not a sequence of
+    iterations.  Returns (fit, toas, tots) with
+    fit[role] = (delta_before_correction, coeff) - delta being the quantity the
+    solve balances, mean(TOA of the others) - TOA(role), so the left panel still
+    shows what is fitted and the fit that is added."""
     tots = {r: df["tot_%s" % r].to_numpy(float) for r in roles}
-    toas = {r: df["toa_%s" % r].to_numpy(float).copy() for r in roles}
-    iters = []
-    for _ in range(2):
-        deltas = {}
-        for r in roles:
-            others = [toas[o] for o in roles if o != r]
-            deltas[r] = (0.5 * sum(others)) - toas[r]
-        step = {}
-        for r in roles:
-            coeff = np.polyfit(tots[r], deltas[r], 2)
-            step[r] = (deltas[r].copy(), coeff)
-            toas[r] += np.poly1d(coeff)(tots[r])
-        iters.append(step)
-    return iters, toas, tots
+    toas0 = {r: df["toa_%s" % r].to_numpy(float) for r in roles}
+    toas, coeffs = twc_solver.apply_timewalk_correction_arrays(
+        tots, toas0, roles, return_coefficients=True)
+    deltas = twc_solver.timewalk_deltas(toas0, roles)
+    fit = {r: (deltas[r], coeffs[r]) for r in roles}
+    return fit, toas, tots
 
 
 def fit_gmm_verbose(data):
@@ -145,7 +143,8 @@ def fit_gmm_verbose(data):
     best_ks = 1.0
     for n_comp in components_to_try:
         try:
-            gmm = GaussianMixture(n_components=n_comp, n_init=3, tol=bs.GMM_TOL, max_iter=bs.GMM_MAX_ITER).fit(data_reshaped)
+            gmm = GaussianMixture(n_components=n_comp, n_init=3, tol=bs.GMM_TOL, max_iter=bs.GMM_MAX_ITER,
+                                  reg_covar=bs.GMM_REG_COVAR).fit(data_reshaped)
             ks_score, ks_p = kstest(data_sorted, lambda x: bs.calculate_gmm_cdf(x, gmm.weights_, gmm.means_, gmm.covariances_))
             x_range = np.linspace(data.min(), data.max(), 1000).reshape(-1, 1)
             pdf_range = np.exp(gmm.score_samples(x_range))
@@ -169,7 +168,7 @@ def single_shot_replay(df, roles, pmin=KS_PMIN, dmax=KS_DMAX):
     pair's fit fails the KS gate (p-value below pmin AND distance above dmax),
     has no usable FWHM, or the 3-board solve is imaginary (run_sample_analysis
     returns None in those cases and the caller retries)."""
-    iters, toas, tots = twc_iterations(df, roles)
+    fit, toas, tots = twc_replay(df, roles)
     pairs = {"%s-%s" % (a, b): toas[a] - toas[b] for a, b in combinations(roles, 2)}
     fits = {p: fit_gmm_verbose(v) for p, v in pairs.items()}
     sig, reasons = {}, []
@@ -188,7 +187,7 @@ def single_shot_replay(df, roles, pmin=KS_PMIN, dmax=KS_DMAX):
                 reasons.append("σ_%s imaginary/zero (3-board solve)" % r)
     else:
         res = {r: np.nan for r in roles}
-    return dict(iters=iters, toas=toas, tots=tots, pairs=pairs, fits=fits, sig=sig, res=res,
+    return dict(fit=fit, toas=toas, tots=tots, pairs=pairs, fits=fits, sig=sig, res=res,
                 accepted=(len(reasons) == 0), reasons=reasons)
 
 
@@ -197,7 +196,8 @@ def load_boot(path):
     written by bootstrap.py since the KS p-value gate) are kept in the frames but are not roles."""
     d = pd.read_parquet(path)
     cols = [c for c in d.columns if c != "is_bootstrap"]
-    roles = sorted(c for c in cols if not c.startswith("pair_") and not c.startswith("ksp"))
+    roles = sorted(c for c in cols
+                   if not c.startswith("pair_") and not c.startswith("ksp") and not c.startswith("trials_"))
     b = d.loc[d.is_bootstrap == True, cols]
     s = d.loc[d.is_bootstrap == False, cols]
     return roles, b, (s.iloc[0] if len(s) else None)
@@ -208,30 +208,29 @@ def load_boot(path):
 # --------------------------------------------------------------------------
 
 def fig_anatomy_twc(rep, roles, out, title):
-    fig, axs = plt.subplots(len(roles), 3, figsize=(16.5, 4.3 * len(roles) + 1.6), squeeze=False)
+    fig, axs = plt.subplots(len(roles), 2, figsize=(11.4, 4.3 * len(roles) + 1.6), squeeze=False)
     for i, r in enumerate(roles):
         tot = rep["tots"][r] / 1e3
         lo, hi = np.percentile(tot, [0.5, 99.5])
         g = np.linspace(lo, hi, 200)
-        for k in range(2):
-            ax = axs[i, k]
-            d, c = rep["iters"][k][r]
-            ax.hexbin(tot, d, gridsize=70, cmap="Greys", mincnt=1, bins="log")
-            ax.plot(g, np.poly1d(c)(g * 1e3), color=rc(r), lw=2.0,
-                    label="fit: %.3g·TOT² %+.3g·TOT %+.1f  (TOT in ps)" % (c[0], c[1], c[2]))
-            ax.set_xlim(lo, hi)
-            yl = np.percentile(d, [0.5, 99.5])
-            ax.set_ylim(yl[0] - 0.1 * (yl[1] - yl[0]), yl[1] + 0.1 * (yl[1] - yl[0]))
-            ax.set_xlabel("TOT of %s [ns]" % r)
-            ax.set_ylabel("½·(TOA others) − TOA(%s) [ps]\n%s" % (r, "before iteration 1" if k == 0 else "after iteration 1 (residual)"))
-            ax.set_title("%s - iteration %d: what is fitted and the fit" % (r, k + 1), fontsize=10)
-            ax.legend(fontsize=7.5, loc="upper right")
-            ax.grid(alpha=0.3)
-        ax = axs[i, 2]
-        # what the correction leaves: the iteration-2 fit residual (mean 0 by construction; a
-        # constant is irrelevant to any pair width, the SHAPE vs TOT is what matters)
-        d2, c2 = rep["iters"][1][r]
-        resid = d2 - np.poly1d(c2)(rep["tots"][r])
+        d, c = rep["fit"][r]
+        ax = axs[i, 0]
+        ax.hexbin(tot, d, gridsize=70, cmap="Greys", mincnt=1, bins="log")
+        ax.plot(g, np.poly1d(c)(g * 1e3), color=rc(r), lw=2.0,
+                label="joint fit: %.3g·TOT² %+.3g·TOT %+.1f  (TOT in ps)" % (c[0], c[1], c[2]))
+        ax.set_xlim(lo, hi)
+        yl = np.percentile(d, [0.5, 99.5])
+        ax.set_ylim(yl[0] - 0.1 * (yl[1] - yl[0]), yl[1] + 0.1 * (yl[1] - yl[0]))
+        ax.set_xlabel("TOT of %s [ns]" % r)
+        ax.set_ylabel("½·(TOA others) − TOA(%s) [ps]\nbefore the correction" % r)
+        ax.set_title("%s - what is fitted and the joint fit" % r, fontsize=10)
+        ax.legend(fontsize=7.5, loc="upper right")
+        ax.grid(alpha=0.3)
+        ax = axs[i, 1]
+        # what the correction leaves: the same quantity recomputed on the CORRECTED
+        # TOAs (a constant is irrelevant to any pair width, the SHAPE vs TOT is what
+        # matters, and least squares forces its own-TOT slope to zero)
+        resid = twc_solver.timewalk_deltas(rep["toas"], roles)[r]
         ax.hexbin(tot, resid, gridsize=70, cmap="Greys", mincnt=1, bins="log")
         # profile: median in TOT bins
         edges = np.linspace(lo, hi, 21)
@@ -248,24 +247,26 @@ def fig_anatomy_twc(rep, roles, out, title):
         yl = np.percentile(resid, [0.5, 99.5])
         ax.set_ylim(yl[0] - 0.1 * (yl[1] - yl[0]), yl[1] + 0.1 * (yl[1] - yl[0]))
         ax.set_xlabel("TOT of %s [ns]" % r)
-        ax.set_ylabel("iteration-2 fit residual [ps]")
+        ax.set_ylabel("½·(TOA others) − TOA(%s) after the correction [ps]" % r)
         ax.set_title("%s - what the correction leaves: flat in TOT?" % r, fontsize=10)
         ax.legend(fontsize=8, loc="upper right")
         ax.grid(alpha=0.3)
     fig.suptitle(title, fontsize=11, y=0.995)
     cap = ("The time-walk correction exactly as step 12 applies it, one row per board. Grey: 2D density of the "
-           "events (log colour scale). LEFT: the quantity step 12 fits - half the sum of the OTHER two boards' "
-           "TOA minus this board's TOA - against this board's TOT, with the 2nd-order polynomial of iteration 1 "
-           "on top (numpy polyfit, all events, no weights, no outlier rejection); it is ADDED to this board's TOA. "
-           "MIDDLE: the same quantity recomputed with the TOAs corrected once, and iteration 2's polynomial. "
-           "RIGHT: the residual of that second fit with its median per TOT bin - flat means the time walk is "
-           "gone; a bend at the TOT extremes is what a 2nd-order polynomial cannot follow (and is where the fit "
-           "is driven by few events). It is centred on 0 by construction of the fit; the recomputed offset "
-           "between a board and its partners' mean is NOT zero after two iterations (each coupled iteration halves "
-           "and flips it, a quarter survives) but a constant enters no pair width. Because each board is corrected "
-           "against the mean of its two partners, their jitter is in the vertical spread here and their own "
-           "time walk leaks into the fit; the horizontal range shown is the 0.5-99.5 percentile of TOT.")
-    return finish(fig, out, cap, wspace=0.30, hspace=0.42, top=0.94)
+           "events (log colour scale). LEFT: the quantity the correction balances - half the sum of the OTHER "
+           "two boards' TOA minus this board's TOA - against this board's TOT, with this board's 2nd-order "
+           "polynomial on top; that polynomial is ADDED to this board's TOA. All nine coefficients (three per "
+           "board) come from ONE least-squares solve of the three pairwise differences, not from a sequence of "
+           "alternating fits: the alternation used to be stopped after two passes, which left a fraction rho of "
+           "its own last step un-applied (rho = the inter-board TOT correlation, 0.32-0.38 on H1 3.5e15) and cost "
+           "7-16 ps of pair width there. RIGHT: the same quantity recomputed on the CORRECTED TOAs, with its "
+           "median per TOT bin - flat means the time walk is gone, and least squares forces its own-TOT slope to "
+           "exactly zero, so any structure left is what a 2nd-order polynomial in TOT cannot follow (typically at "
+           "the TOT extremes, where the fit is driven by few events). Its mean is not zero and need not be: a "
+           "constant enters no pair width. Because each board is balanced against the mean of its two partners, "
+           "their jitter is in the vertical spread here and their own time walk enters the same solve; the "
+           "horizontal range shown is the 0.5-99.5 percentile of TOT.")
+    return finish(fig, out, cap, wspace=0.34, hspace=0.42, top=0.94)
 
 
 def fig_anatomy_pairs(rep, roles, out, title, boot_ss=None, boot=None, proxy=None):
