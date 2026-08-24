@@ -310,12 +310,15 @@ def main():
         die("the two combos have no common events after the key join")
     print("four-board rows %d (%.3f of A)" % (len(M), len(M) / max(len(A), 1)), flush=True)
 
-    M = M.merge(aid.reset_index().rename(columns={"index": "ia"})[["ia", "row_%s" % ua, "col_%s" % ua]], on="ia")
+    # aid carries row_/col_ for every role of combo A (the two shared boards plus A's
+    # unique one); bidf only needs to add B's unique board, so the four-board pixel
+    # quadruple is fully labelled without either side's row/col having to live in M.
+    M = M.merge(aid.reset_index().rename(columns={"index": "ia"}), on="ia")
     M = M.merge(bidf.reset_index().rename(columns={"index": "ib"})[["ib", "row_%s" % ub, "col_%s" % ub]], on="ib")
     M["quad"] = M.groupby(["ia", "ib"]).ngroup().astype(np.int32)
-    q = M.groupby("quad").agg(ia=("ia", "first"), ib=("ib", "first"), n=("quad", "size")).reset_index()
-    for r in roles4:
-        q = q.merge(M.groupby("quad")[["row_%s" % r, "col_%s" % r]].first().reset_index(), on="quad")
+    pixcols = [c for r in roles4 for c in ("row_%s" % r, "col_%s" % r)]
+    q = M.groupby("quad").agg(**{"n": ("quad", "size")},
+                              **{c: (c, "first") for c in pixcols}).reset_index()
     print("quadruples %d;  n>=%d: %d" % (len(q), a.nmin, int((q["n"] >= a.nmin).sum())), flush=True)
 
     keep = ["quad"] + ["%s_%s" % (v, r) for r in roles4 for v in ("toa", "tot")]
