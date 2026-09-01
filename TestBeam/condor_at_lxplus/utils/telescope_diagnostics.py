@@ -203,8 +203,8 @@ def wmode(x, w):
 
 def wpeak(x, w):
     """Sub-pixel refinement of the mode: count-weighted centroid over mode +/- 1 px.
-    (path_finder.py --find_alignment reports the peak bin of a 30-bin histogram of the
-    same shifts in mm, a coarser estimator of the same peak.)"""
+    (The same estimator path_finder.py --find_alignment uses: count-weighted mode of the
+    integer pixel shift, then the centroid over mode +/- 1 px.)"""
     m = wmode(x, w)
     k = np.abs(x - m) <= 1
     if not k.any() or np.sum(w[k]) <= 0:
