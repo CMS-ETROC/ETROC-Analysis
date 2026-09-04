@@ -1,0 +1,12 @@
+n,quantity,unit,et2p01_bare,hybrid,et2p03_bare,et2p03_nominal_rail,comparable
+1,Preamp gain (charge-to-threshold) at the reference condition,DAC/fC,9.42 ± 0.89,5.96 ± 0.37,8.26 ± 1.19,8.69 ± 1.92,NO — DAC scale differs between revisions
+2,"Gain change, 0 → 400 MRad (paired per pixel)",%,-6.5 ± 3.2 (12 px),no dose series,-5.4 ± 4.3 (6 px),—,"YES — a fractional change, same estimator on both"
+3,"Baseline shift, 0 → 400 MRad",DAC,+46.2 at −25 °C,no dose series,-65.5 at VA 1.20 V,—,"sign yes, magnitude no"
+4,Turn-off above baseline at 15 fC,DAC,116.0,72.9,100.5,120.3,"offset cancels, scale does not"
+5,"TOT at BL+20, 15 fC",ns,1.83,3.04,1.55,1.51,YES in ns — but RFSel unrecorded on all three
+6,"TOA jitter at BL+20, 15 fC",ps,6.4,10.6,8.3,9.0,"near the floor, ×1.18 / ×2.02 / ×1.69 of it — limits, not resolutions"
+7,TDC quantisation floor,ps,5.37,5.24,4.88,—,a property of the TDC and CAL
+8,S-curve width σ,DAC,0.92,0.93,1.12,1.17,NO — DAC scale differs between revisions
+9,ENC = σ / preamp gain,electrons,610,974,847,840,YES — the only scale-free noise number
+10,Autocalibration NW (map),DAC,3.17,4.44,4.17,"one map only, at 0 MRad","same definition, different DAC scale"
+11,Gain range over the analog rail 0.85 → 1.40 V,DAC/fC,not recorded,not recorded,3.11 → 8.69,—,only ET2.03 measured it — and it dwarfs every other difference here

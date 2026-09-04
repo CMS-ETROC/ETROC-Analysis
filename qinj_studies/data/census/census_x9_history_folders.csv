@@ -1,0 +1,20 @@
+folder,n_entries,n_csv,sqlite_files,subdirs
+BelgiumFeb2025,8,0,BaselineHistory;InvalidFCCounterHistory;PowerHistory_v2;ti1080_sensor_data;and a pre_ copy of each,
+BelgiumJune2024,1,0,BaselineHistory,
+CERN_Aug_2024_CC_CTS,107,102,BaselineHistory;PowerHistory_v2;ti1080_sensor_data;vol_monitoring,csv_files
+CERN_Aug_2024_TB_Suitcase,197,192,ADCHistory_testboard;BaselineHistory;PowerHistoryHV_v2;PowerHistory_v2;ti1080_sensor_data,
+CERN_Sept_2024_TB_Suitcase,293,288,ADCHistory_testboard;BaselineHistory;PowerHistoryHV_v2;PowerHistory_v2;ti1080_sensor_data,
+CERN_Suitcase_Jul2025,3,0,ADCHistory;BaselineHistory;ti1080_sensor_data,
+CERN_Suitcase_Oct2025,1,0,BaselineHistory,
+CERN_Suitcase_Sept2025,1,0,BaselineHistory,
+DESY_Dec2024_AIDA,0,0,,
+DESY_Dec2024_Telescope,43,42,BaselineHistory,
+DESYJune2024,7,0,ADCHistory;BaselineHistory;ti1080_sensor_data;two garbage_ ti1080 copies,baseline_csv;HV_logging
+DESY_May2025,4,0,ADCHistory;BaselineHistory;HV_History;ti1080_sensor_data,
+DESY_TB_Mar_2025_Main,5,0,ADCHistory;BaselineHistory;ti1080_sensor_data,
+EFuse,1,0,BaselineHistory,
+NWSep2024,3,0,ADCHistory_testboard;BaselineHistory;PowerHistory_v2,
+NWSep2024_AtFNAL,2,0,BaselineHistory;PowerHistory_v2,
+NW_SEU_May2025,5,0,ADCHistory;BaselineHistory;InvalidFCCounterHistory;PowerHistory_v2;ti1080_sensor_data,
+NW_SEU_May2025_Pre,1,0,BaselineHistory,
+old_history,389,386,ACCScurveHistory;BaselineHistory;FailedPixelHistory,

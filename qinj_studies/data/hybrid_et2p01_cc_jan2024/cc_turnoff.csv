@@ -1,0 +1,541 @@
+config,day,tag,temperature_C,temperature_source,hv_state,hv_source,power_tag,chip,row,col,charge_fC,n_steps,header_max_median,dac_min,dac_max,final_dac,turnoff_dac_trigbit,n_above_half_trigbit,max_count_trigbit,turnoff_dac_tdc,n_above_half_tdc,max_count_tdc
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,0,14,15,11,11223.0,-1,707,423,423.0,6,21981,423.0,6,11223
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,0,14,22,10,11223.0,-1,707,444,443.0,3,11224,443.0,3,11223
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,0,14,27,10,11223.0,-1,707,456,455.0,4,11223,455.0,4,11223
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,0,14,5,10,11223.0,-1,707,415,415.0,2,11215,,0,0
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,0,14,6,10,11223.0,-1,707,415,415.0,3,8313,,0,0
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,0,14,8,10,11223.0,-1,707,415,414.0,2,10569,,0,0
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,12,14,15,9,11223.0,413,716,413,,0,0,,0,0
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,12,14,22,9,11224.0,413,716,413,,0,0,,0,0
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,12,14,27,9,11223.0,413,716,413,,0,0,,0,0
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,12,14,5,9,11223.0,413,716,413,,0,0,,0,0
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,12,14,6,9,11223.0,413,716,413,,0,0,,0,0
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,12,14,8,9,11223.0,413,716,413,,0,0,,0,0
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,3,14,15,10,11223.5,-1,718,471,470.0,5,16036,470.0,5,11224
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,3,14,22,10,11223.0,-1,718,506,506.0,5,11223,506.0,5,11224
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,3,14,27,11,11223.0,-1,718,528,528.0,8,11224,528.0,8,11224
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,3,14,5,10,11223.0,-1,718,450,450.0,4,11230,,0,7
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,3,14,6,10,11223.0,-1,718,450,449.0,4,17423,435.0,1,6212
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,3,14,8,10,11223.0,-1,718,450,450.0,4,22448,435.0,1,11224
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,0,2,15,10,11223.0,-1,712,467,466.0,4,11770,466.0,4,11224
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,0,2,22,10,11223.0,-1,712,510,509.0,4,11224,509.0,4,11224
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,0,2,27,10,11223.0,-1,712,539,539.0,5,11224,539.0,5,11224
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,0,2,5,10,11223.0,-1,712,438,437.0,3,11224,,0,0
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,0,2,6,10,11223.0,-1,712,438,437.0,3,20868,423.0,1,9650
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,0,2,8,10,11223.0,-1,712,438,437.0,3,22448,423.0,1,11224
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,12,2,15,9,11223.0,416,717,416,,0,0,,0,0
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,12,2,22,9,11223.0,416,717,416,,0,0,,0,0
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,12,2,27,9,11223.0,416,717,416,,0,0,,0,0
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,12,2,5,9,11223.0,416,717,416,,0,0,,0,0
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,12,2,6,9,11223.0,416,717,416,,0,0,,0,0
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,12,2,8,9,11223.0,416,717,416,,0,0,,0,0
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,3,2,15,11,11223.0,-1,713,471,470.0,6,18667,470.0,6,11224
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,3,2,22,3,11223.0,-1,713,559,-1.0,1,11224,-1.0,1,11223
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,3,2,27,9,11223.0,407,713,407,,0,0,,0,0
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,3,2,5,10,11223.0,-1,713,440,439.0,3,11234,,0,11
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,3,2,6,11,11223.0,-1,713,438,438.0,5,21134,425.0,1,9923
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,3,2,8,11,11223.0,-1,713,438,438.0,6,22448,434.0,2,11224
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,0,8,15,10,11223.0,-1,714,470,469.0,4,15670,469.0,4,11224
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,0,8,22,11,11223.0,-1,714,511,510.0,6,11224,510.0,6,11224
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,0,8,27,11,11223.0,-1,714,540,539.0,7,11224,539.0,7,11224
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,0,8,5,10,11223.0,-1,714,442,441.0,3,11223,,0,0
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,0,8,6,10,11223.0,-1,714,442,441.0,4,11706,,0,485
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,0,8,8,10,11223.0,-1,714,442,441.0,3,22448,427.0,1,11224
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,12,8,15,9,11223.0,428,723,428,,0,0,,0,0
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,12,8,22,9,11223.0,428,723,428,,0,0,,0,0
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,12,8,27,9,11223.0,428,723,428,,0,0,,0,0
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,12,8,5,9,11223.0,428,723,428,,0,0,,0,0
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,12,8,6,9,11223.0,428,723,428,,0,0,,0,0
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,12,8,8,9,11223.0,428,723,428,,0,0,,0,0
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,3,8,15,10,11223.0,-1,717,450,449.0,5,22446,449.0,5,11224
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,3,8,22,10,11223.0,-1,717,483,482.0,5,11224,482.0,5,11224
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,3,8,27,10,11223.5,-1,717,500,500.0,4,11224,500.0,4,11224
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,3,8,5,11,11223.0,-1,717,441,441.0,5,11224,,0,0
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,3,8,6,11,11223.0,-1,717,441,441.0,6,11223,,0,0
+2024-01-11__(none),2024-01-11_Array_Test_Results,(none),not recorded,not recorded,not recorded,not recorded,not recorded,ET2p01_Bar4,3,8,8,11,11223.0,-1,717,441,441.0,6,11243,,0,20
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,14,15,10,11223.0,511,749,544,543.0,6,22440,543.0,6,11223
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,14,15,9,11223.0,602,781,614,613.0,3,11224,613.0,3,11223
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,14,22,9,11223.0,545,749,582,581.0,3,11224,581.0,3,11224
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,14,22,9,11223.0,602,781,657,656.0,5,11223,656.0,5,11224
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,14,27,9,11223.0,545,749,611,610.0,6,11224,610.0,6,11224
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,14,27,9,11223.0,662,781,684,684.0,4,11224,684.0,4,11223
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,14,5,9,11223.0,511,749,516,515.0,2,11223,,0,0
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,14,5,9,11223.0,572,781,580,579.0,2,11224,,0,0
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,14,6,9,11223.0,511,749,514,514.0,3,11223,,0,0
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,14,6,9,11223.0,572,781,580,579.0,2,11223,,0,0
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,14,8,9,11223.0,511,749,516,515.0,2,11223,,0,0
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,14,8,9,11224.0,572,781,578,578.0,4,22426,572.0,1,11204
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,14,15,10,11223.5,529,739,554,553.0,5,11224,553.0,5,11224
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,14,15,9,11223.0,586,772,633,633.0,4,11224,633.0,4,11224
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,14,22,9,11223.0,599,739,612,611.0,3,11223,611.0,3,11223
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,14,22,9,11223.0,648,772,701,700.0,5,11224,700.0,5,11224
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,14,27,10,11223.0,599,739,650,650.0,7,11224,650.0,7,11223
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,14,27,8,11223.0,648,772,742,741.0,3,11223,741.0,3,11224
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,14,5,9,11223.0,494,739,497,497.0,3,11224,,0,0
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,14,5,9,11223.0,555,772,565,565.0,4,22010,555.0,1,10795
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,14,6,9,11223.0,494,739,499,498.0,2,14463,,0,3259
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,14,6,9,11223.0,555,772,565,565.0,4,22446,564.0,3,11224
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,14,8,9,11223.0,494,739,507,506.0,3,22448,506.0,3,11223
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,14,8,9,11223.0,555,772,579,579.0,4,22446,579.0,4,11224
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,14,15,9,11223.0,498,742,527,527.0,5,22445,527.0,5,11224
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,14,15,9,11223.0,589,774,597,596.0,2,11223,596.0,2,11223
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,14,22,9,11223.0,533,742,571,571.0,4,11224,571.0,4,11223
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,14,22,9,11223.0,589,774,642,641.0,5,11224,641.0,5,11224
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,14,27,9,11224.0,533,742,597,597.0,6,11224,597.0,6,11224
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,14,27,9,11223.0,651,774,668,668.0,4,11223,668.0,4,11224
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,14,5,9,11223.0,498,742,503,502.0,2,11223,,0,0
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,14,5,9,11224.0,558,774,568,567.0,3,11224,,0,0
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,14,6,9,11223.0,498,742,503,503.0,3,11224,,0,0
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,14,6,9,11223.0,558,774,568,568.0,4,11223,,0,0
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,14,8,9,11223.0,498,742,503,502.0,2,11226,,0,3
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,14,8,9,11223.0,558,774,568,567.0,3,22446,558.0,1,11223
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,2,15,9,11223.0,538,745,539,539.0,2,10282,539.0,2,10282
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,2,15,9,11223.0,597,778,609,609.0,4,11223,609.0,4,11224
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,2,22,9,11223.0,538,745,577,576.0,3,11224,576.0,3,11223
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,2,22,9,11223.0,597,778,650,650.0,5,11224,650.0,5,11224
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,2,27,10,11223.0,538,745,606,606.0,8,11224,606.0,8,11224
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,2,27,9,11223.0,657,778,680,679.0,3,11224,679.0,3,11223
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,2,5,9,11223.0,504,745,509,509.0,3,11224,,0,0
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,2,5,9,11223.0,567,778,575,574.0,2,11223,,0,0
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,2,6,9,11223.0,504,745,509,509.0,3,11223,,0,0
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,2,6,9,11223.0,567,778,573,573.0,4,11223,,0,0
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,2,8,9,11223.0,504,745,509,508.0,2,12506,,0,1293
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,2,8,9,11223.0,567,778,575,574.0,2,22375,567.0,1,11153
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,2,15,9,11223.0,514,731,528,528.0,4,11224,528.0,4,11223
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,2,15,9,11224.0,572,764,607,606.0,3,11224,606.0,3,11224
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,2,22,9,11223.0,514,731,578,577.0,4,11224,577.0,4,11224
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,2,22,9,11223.0,636,764,661,660.0,3,11224,660.0,3,11224
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,2,27,9,11223.0,586,731,614,614.0,4,11223,614.0,4,11224
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,2,27,9,11223.0,636,764,697,696.0,5,11224,696.0,5,11224
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,2,5,9,11223.0,478,731,485,484.0,3,11224,,0,0
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,2,5,9,11223.0,540,764,553,552.0,3,16833,540.0,1,5642
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,2,6,9,11223.0,478,731,485,484.0,3,11310,,0,90
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,2,6,9,11223.0,540,764,551,551.0,4,22446,540.0,1,11223
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,2,8,10,11223.0,478,731,486,486.0,5,22446,486.0,5,11223
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,2,8,9,11223.0,540,764,557,557.0,3,22448,557.0,3,11224
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,2,15,10,11223.5,537,744,553,553.0,6,11224,553.0,6,11224
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,2,15,9,11223.0,591,775,627,627.0,5,11224,627.0,5,11224
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,2,22,9,11223.0,606,744,609,609.0,3,11222,609.0,3,11222
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,2,22,9,11223.0,652,775,688,688.0,5,11224,688.0,5,11224
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,2,27,9,11223.0,606,744,636,636.0,5,11224,636.0,5,11224
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,2,27,9,11224.0,652,775,723,722.0,4,11224,722.0,4,11224
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,2,5,9,11223.0,502,744,503,503.0,2,9573,,0,0
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,2,5,9,11223.0,560,775,568,567.0,2,19558,560.0,1,8350
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,2,6,9,11223.0,502,744,503,503.0,2,10218,,0,0
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,2,6,9,11223.0,560,775,568,568.0,3,22446,560.0,1,11223
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,2,8,9,11223.0,502,744,507,507.0,3,22089,507.0,3,11220
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,2,8,9,11223.0,560,775,576,576.0,3,22448,576.0,3,11224
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,8,15,9,11223.0,548,750,563,563.0,5,11224,563.0,5,11223
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,8,15,9,11223.0,604,782,637,636.0,3,11223,636.0,3,11223
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,8,22,9,11223.0,548,750,611,610.0,5,11224,610.0,5,11223
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,8,22,9,11223.0,663,782,689,688.0,4,11223,688.0,4,11223
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,8,27,9,11223.0,615,750,642,642.0,5,11224,642.0,5,11223
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,8,27,9,11223.0,663,782,724,723.0,3,11224,723.0,3,11224
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,8,5,9,11223.0,514,750,521,520.0,3,11223,,0,0
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,8,5,9,11223.0,574,782,584,584.0,4,11403,,0,184
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,8,6,9,11223.0,514,750,521,520.0,3,11229,,0,5
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,8,6,9,11223.0,574,782,584,584.0,4,22447,574.0,1,11223
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,8,8,9,11223.0,514,750,521,521.0,4,22446,521.0,4,11223
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,8,8,9,11223.0,574,782,591,590.0,3,22446,590.0,3,11223
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,8,15,9,11223.0,525,737,536,536.0,4,11223,536.0,4,11223
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,8,15,9,11223.0,586,772,606,606.0,4,11224,606.0,4,11224
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,8,22,9,11223.0,525,737,574,573.0,4,11223,573.0,4,11224
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,8,22,9,11223.0,586,772,645,644.0,5,11224,644.0,5,11224
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,8,27,9,11223.0,596,737,609,609.0,4,11223,609.0,4,11224
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,8,27,8,11223.0,648,772,680,679.0,2,11223,679.0,2,11223
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,8,5,9,11224.0,490,737,497,496.0,3,11223,,0,0
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,8,5,9,11223.0,555,772,561,560.0,3,11224,,0,0
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,8,6,9,11223.0,490,737,497,496.0,3,11223,,0,0
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,8,6,9,11223.0,555,772,561,560.0,3,11266,,0,44
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,8,8,9,11223.0,490,737,497,497.0,4,22446,496.0,3,11223
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,8,8,9,11223.0,555,772,565,564.0,3,22448,564.0,3,11224
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,8,15,9,11223.0,509,747,537,537.0,5,22446,537.0,5,11223
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,8,15,9,11223.0,600,780,604,603.0,2,11221,603.0,2,11221
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,8,22,10,11223.0,543,747,576,575.0,6,11223,575.0,6,11223
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,8,22,9,11223.0,600,780,644,643.0,5,11224,643.0,5,11224
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,8,27,9,11223.0,543,747,601,600.0,5,11224,600.0,5,11223
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,8,27,9,11223.0,660,780,668,668.0,3,11224,668.0,3,11223
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,8,5,9,11223.0,509,747,516,515.0,3,11223,,0,0
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,8,5,9,11223.0,570,780,580,579.0,3,11223,,0,0
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,8,6,9,11223.0,509,747,516,515.0,3,11223,,0,0
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,8,6,9,11223.0,570,780,580,580.0,4,11224,,0,0
+2024-01-12__0c_v2,2024-01-12_Array_Test_Results,0c_v2,0,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,8,8,9,11223.0,509,747,516,515.0,3,13716,,0,2513
+2024-01-12__m25c_v4,2024-01-12_Array_Test_Results,m25c_v4,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,8,8,9,11223.0,570,780,580,579.0,3,22445,570.0,1,11222
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,0,14,15,11,11223.0,-1,707,423,423.0,6,21981,423.0,6,11223
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,0,14,22,10,11223.0,-1,707,444,443.0,3,11224,443.0,3,11223
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,0,14,27,10,11223.0,-1,707,456,455.0,4,11223,455.0,4,11223
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,0,14,5,10,11223.0,-1,707,415,415.0,2,11215,,0,0
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,0,14,6,10,11223.0,-1,707,415,415.0,3,8313,,0,0
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,0,14,8,10,11223.0,-1,707,415,414.0,2,10569,,0,0
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,12,14,15,11,11223.0,-1,716,477,476.0,6,19729,476.0,6,11224
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,12,14,22,11,11223.0,-1,716,520,519.0,6,11224,519.0,6,11223
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,12,14,27,10,11223.0,-1,716,548,548.0,6,11224,548.0,6,11224
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,12,14,5,11,11223.0,-1,716,444,444.0,5,11323,,0,100
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,12,14,6,10,11223.0,-1,716,446,445.0,4,20638,431.0,1,9425
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,12,14,8,11,11223.0,-1,716,444,444.0,5,22446,442.0,3,11223
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,3,14,15,10,11223.5,-1,718,471,470.0,5,16036,470.0,5,11224
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,3,14,22,10,11223.0,-1,718,506,506.0,5,11223,506.0,5,11224
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,3,14,27,11,11223.0,-1,718,528,528.0,8,11224,528.0,8,11224
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,3,14,5,10,11223.0,-1,718,450,450.0,4,11230,,0,7
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,3,14,6,10,11223.0,-1,718,450,449.0,4,17423,435.0,1,6212
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,3,14,8,10,11223.0,-1,718,450,450.0,4,22448,435.0,1,11224
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,0,2,15,10,11223.0,-1,712,467,466.0,4,11770,466.0,4,11224
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,0,2,22,10,11223.0,-1,712,510,509.0,4,11224,509.0,4,11224
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,0,2,27,10,11223.0,-1,712,539,539.0,5,11224,539.0,5,11224
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,0,2,5,10,11223.0,-1,712,438,437.0,3,11224,,0,0
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,0,2,6,10,11223.0,-1,712,438,437.0,3,20868,423.0,1,9650
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,0,2,8,10,11223.0,-1,712,438,437.0,3,22448,423.0,1,11224
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,12,2,15,10,11223.0,-1,717,472,471.0,3,12280,471.0,3,11223
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,12,2,22,11,11223.0,-1,717,508,507.0,6,11224,507.0,6,11224
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,12,2,27,10,11223.0,-1,717,533,533.0,5,11224,533.0,5,11224
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,12,2,5,10,11223.0,-1,717,448,448.0,4,11239,,0,16
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,12,2,6,10,11223.0,-1,717,448,447.0,4,15648,,0,4441
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,12,2,8,10,11223.5,-1,717,448,447.0,3,22446,433.0,1,11223
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,3,2,15,11,11223.0,-1,713,471,471.0,7,17332,471.0,7,11224
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,3,2,22,11,11224.0,-1,713,514,514.0,7,11223,514.0,7,11224
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,3,2,27,11,11223.0,-1,713,543,543.0,7,11224,543.0,7,11224
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,3,2,5,10,11223.5,-1,713,440,439.0,3,11279,,0,56
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,3,2,6,11,11223.0,-1,713,438,438.0,5,21340,425.0,1,10117
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,3,2,8,11,11223.0,-1,713,438,438.0,6,22446,434.0,2,11223
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,0,8,15,10,11223.0,-1,714,470,469.0,4,15670,469.0,4,11224
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,0,8,22,11,11223.0,-1,714,511,510.0,6,11224,510.0,6,11224
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,0,8,27,11,11223.0,-1,714,540,539.0,7,11224,539.0,7,11224
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,0,8,5,10,11223.0,-1,714,442,441.0,3,11223,,0,0
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,0,8,6,10,11223.0,-1,714,442,441.0,4,11706,,0,485
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,0,8,8,10,11223.0,-1,714,442,441.0,3,22448,427.0,1,11224
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,12,8,15,10,11223.0,-1,723,476,476.0,5,19501,476.0,5,11223
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,12,8,22,11,11223.0,-1,723,509,509.0,6,11223,509.0,6,11224
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,12,8,27,10,11223.0,-1,723,534,534.0,6,11224,534.0,6,11224
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,12,8,5,10,11223.0,-1,723,460,459.0,3,11224,,0,0
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,12,8,6,10,11223.0,-1,723,460,459.0,3,11254,,0,31
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,12,8,8,11,11223.0,-1,723,458,458.0,5,22448,445.0,1,11224
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,3,8,15,10,11223.0,-1,717,450,449.0,5,22446,449.0,5,11224
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,3,8,22,10,11223.0,-1,717,483,482.0,5,11224,482.0,5,11224
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,3,8,27,10,11223.5,-1,717,500,500.0,4,11224,500.0,4,11224
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,3,8,5,11,11223.0,-1,717,441,441.0,5,11224,,0,0
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,3,8,6,11,11223.0,-1,717,441,441.0,6,11223,,0,0
+2024-01-12_22C_ONR__(none),2024-01-12_Array_Test_Results_22C_ONR,(none),22,day_dir,not recorded,not recorded,not recorded,ET2p01_Bar4,3,8,8,11,11223.0,-1,717,441,441.0,6,11243,,0,20
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,14,15,9,11223.0,601,781,615,615.0,5,11223,615.0,5,11223
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,14,22,9,11223.0,601,781,658,658.0,6,11224,658.0,6,11224
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,14,27,9,11223.0,661,781,688,688.0,5,11224,688.0,5,11223
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,14,5,9,11223.0,571,781,583,582.0,3,11224,,0,0
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,14,6,9,11223.0,571,781,583,582.0,3,11225,,0,2
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,14,8,9,11223.0,571,781,583,582.0,3,22446,571.0,1,11224
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,14,15,9,11223.0,587,773,636,636.0,5,11223,636.0,5,11224
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,14,22,9,11223.0,649,773,702,701.0,5,11224,701.0,5,11224
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,14,27,9,11223.0,649,773,744,744.0,5,11224,744.0,5,11224
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,14,5,9,11223.0,556,773,568,567.0,3,22208,556.0,1,10991
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,14,6,9,11223.0,556,773,568,567.0,3,22446,563.0,2,11223
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,14,8,9,11223.0,556,773,582,582.0,5,22448,582.0,5,11224
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,14,15,9,11223.0,589,774,599,598.0,3,11223,598.0,3,11223
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,14,22,9,11223.0,589,774,644,644.0,5,11224,644.0,5,11224
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,14,27,9,11223.0,651,774,672,671.0,4,11224,671.0,4,11224
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,14,5,9,11223.0,558,774,570,570.0,4,11223,,0,0
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,14,6,9,11223.0,558,774,570,569.0,3,11226,,0,3
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,14,8,9,11223.0,558,774,570,570.0,4,22446,558.0,1,11223
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,2,15,9,11223.0,599,779,613,612.0,4,11224,612.0,4,11224
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,2,22,9,11223.0,599,779,654,653.0,5,11224,653.0,5,11224
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,2,27,9,11223.0,659,779,682,681.0,3,11223,681.0,3,11223
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,2,5,9,11223.0,569,779,577,576.0,2,11223,,0,0
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,2,6,9,11223.0,569,779,575,575.0,4,11223,,0,0
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,2,8,9,11223.0,569,779,575,575.0,4,21470,569.0,1,10261
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,2,15,9,11223.0,572,764,609,608.0,3,11223,608.0,3,11223
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,2,22,9,11223.0,636,764,665,665.0,5,11224,665.0,5,11224
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,2,27,9,11223.0,636,764,699,699.0,7,11224,699.0,7,11224
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,2,5,9,11223.0,540,764,553,553.0,4,22376,540.0,1,11155
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,2,6,9,11223.0,540,764,553,553.0,4,22448,540.0,1,11224
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,2,8,9,11223.0,540,764,559,559.0,4,22446,559.0,4,11223
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,2,15,9,11223.0,593,776,629,629.0,5,11224,629.0,5,11224
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,2,22,9,11223.0,654,776,692,691.0,3,11223,691.0,3,11223
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,2,27,9,11223.0,654,776,725,725.0,5,11224,725.0,5,11224
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,2,5,9,11223.0,562,776,570,569.0,2,16016,,0,4809
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,2,6,9,11223.0,562,776,570,570.0,3,22448,562.0,1,11224
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,2,8,9,11223.0,562,776,580,579.0,3,22446,579.0,3,11223
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,8,15,9,11224.0,606,783,639,639.0,4,11224,639.0,4,11224
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,8,22,9,11223.0,665,783,691,691.0,5,11224,691.0,5,11224
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,8,27,9,11223.0,665,783,726,726.0,4,11223,726.0,4,11223
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,8,5,9,11223.0,576,783,588,588.0,4,12358,,0,1155
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,8,6,9,11223.0,576,783,586,586.0,4,22446,576.0,1,11223
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,8,8,9,11223.0,576,783,593,592.0,3,22448,592.0,3,11223
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,8,15,9,11223.0,586,772,608,608.0,5,11224,608.0,5,11224
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,8,22,9,11223.0,586,772,647,646.0,6,11224,646.0,6,11224
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,8,27,9,11223.0,648,772,681,681.0,4,11223,681.0,4,11223
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,8,5,9,11223.0,555,772,563,562.0,2,11224,,0,0
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,8,6,9,11223.0,555,772,563,563.0,3,14425,,0,3219
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,8,8,9,11223.0,555,772,567,566.0,3,22448,566.0,3,11223
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,8,15,9,11223.0,602,781,606,606.0,3,11222,606.0,3,11222
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,8,22,9,11223.0,602,781,646,646.0,6,11224,646.0,6,11224
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,8,27,8,11223.0,662,781,670,669.0,2,11224,669.0,2,11223
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,8,5,9,11223.0,572,781,582,582.0,4,11223,,0,0
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,8,6,9,11223.0,572,781,582,581.0,3,11223,,0,0
+2024-01-13__m25c_v6,2024-01-13_Array_Test_Results,m25c_v6,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,8,8,9,11223.0,572,781,582,582.0,4,22446,572.0,1,11224
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,14,15,9,11223.0,602,781,616,615.0,4,11224,615.0,4,11223
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,14,22,9,11223.0,602,781,659,658.0,5,11224,658.0,5,11224
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,14,27,9,11223.0,662,781,688,687.0,4,11223,687.0,4,11224
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,14,5,9,11223.0,572,781,580,580.0,3,11223,,0,0
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,14,6,9,11223.0,572,781,582,582.0,4,11224,,0,0
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,14,8,9,11223.0,572,781,582,581.0,3,22448,572.0,1,11223
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,14,15,9,11223.0,588,773,637,636.0,4,11224,636.0,4,11224
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,14,22,9,11223.0,650,773,702,701.0,5,11224,701.0,5,11224
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,14,27,9,11223.0,650,773,744,744.0,5,11224,744.0,5,11224
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,14,5,9,11223.0,557,773,567,567.0,4,20740,557.0,1,9536
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,14,6,9,11223.0,557,773,567,567.0,4,22448,564.0,2,11224
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,14,8,9,11223.0,557,773,581,581.0,4,22446,581.0,4,11224
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,14,15,9,11223.0,589,774,599,598.0,3,11223,598.0,3,11223
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,14,22,9,11223.0,589,774,644,644.0,5,11224,644.0,5,11224
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,14,27,9,11223.0,651,774,672,671.0,4,11223,671.0,4,11224
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,14,5,9,11223.0,558,774,570,570.0,4,11224,,0,0
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,14,6,9,11223.0,558,774,570,570.0,4,12314,,0,1097
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,14,8,9,11223.0,558,774,570,570.0,4,22446,558.0,1,11223
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,2,15,9,11223.0,597,778,611,611.0,5,11223,611.0,5,11224
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,2,22,9,11223.0,597,778,654,653.0,5,11224,653.0,5,11224
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,2,27,9,11223.0,657,778,682,682.0,5,11224,682.0,5,11224
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,2,5,9,11223.0,567,778,577,576.0,3,11224,,0,0
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,2,6,9,11223.0,567,778,577,576.0,3,11460,,0,238
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,2,8,9,11223.0,567,778,577,576.0,3,22444,567.0,1,11221
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,2,15,9,11223.0,572,764,609,609.0,4,11224,609.0,4,11224
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,2,22,9,11223.0,636,764,665,664.0,4,11223,664.0,4,11224
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,2,27,9,11223.0,636,764,699,699.0,7,11224,699.0,7,11224
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,2,5,9,11223.0,540,764,553,552.0,3,21572,540.0,1,10365
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,2,6,9,11223.0,540,764,553,553.0,4,22446,540.0,1,11223
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,2,8,9,11223.0,540,764,559,559.0,4,22446,559.0,4,11224
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,2,15,9,11224.0,593,776,631,630.0,3,11223,630.0,3,11224
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,2,22,9,11223.0,654,776,692,691.0,3,11223,691.0,3,11224
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,2,27,9,11223.0,654,776,727,726.0,4,11224,726.0,4,11224
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,2,5,9,11224.0,563,776,569,568.0,3,12287,,0,1075
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,2,6,9,11223.0,563,776,569,568.0,3,22446,566.0,2,11223
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,2,8,9,11223.0,563,776,580,579.0,3,22448,579.0,3,11224
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,8,15,9,11223.0,604,782,639,639.0,5,11224,639.0,5,11224
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,8,22,9,11223.0,663,782,691,690.0,5,11224,690.0,5,11224
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,8,27,9,11223.0,663,782,726,726.0,4,11224,726.0,4,11223
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,8,5,9,11223.0,574,782,586,586.0,4,21607,574.0,1,10391
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,8,6,9,11223.0,574,782,588,587.0,4,22448,574.0,1,11224
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,8,8,9,11224.0,574,782,593,592.0,3,22446,592.0,3,11223
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,8,15,9,11223.0,586,772,608,608.0,5,11223,608.0,5,11223
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,8,22,9,11223.0,586,772,647,646.0,6,11224,646.0,6,11223
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,8,27,9,11223.0,648,772,681,681.0,4,11223,681.0,4,11223
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,8,5,9,11223.0,555,772,563,562.0,2,11224,,0,0
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,8,6,9,11223.0,555,772,563,563.0,3,13407,,0,2209
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,8,8,9,11223.0,555,772,567,566.0,3,22446,566.0,3,11223
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,8,15,9,11223.0,600,780,606,606.0,4,11223,606.0,4,11223
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,8,22,9,11223.0,600,780,647,646.0,4,11224,646.0,4,11223
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,8,27,9,11223.0,660,780,672,671.0,3,11223,671.0,3,11224
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,8,5,9,11223.0,570,780,582,582.0,4,11223,,0,0
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,8,6,9,11223.0,570,780,582,582.0,4,11287,,0,65
+2024-01-14__m25c_v8,2024-01-14_Array_Test_Results,m25c_v8,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,8,8,9,11223.0,570,780,582,581.0,3,22448,570.0,1,11224
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,14,14,15,9,11223.0,606,783,610,610.0,3,11223,610.0,3,11223
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,14,14,22,9,11223.0,606,783,649,649.0,6,11223,649.0,6,11224
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,14,14,27,9,11223.0,665,783,674,674.0,4,11223,674.0,4,11223
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,14,14,5,9,11223.0,576,783,580,580.0,3,11224,,0,0
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,14,14,6,9,11224.0,576,783,580,580.0,3,11222,,0,0
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,14,14,8,9,11223.0,576,783,582,581.0,3,11282,,0,61
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,2,14,15,9,11223.0,591,775,627,626.0,4,11224,626.0,4,11224
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,2,14,22,9,11223.0,652,775,686,686.0,4,11223,686.0,4,11223
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,2,14,27,9,11223.0,652,775,725,724.0,4,11223,724.0,4,11223
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,2,14,5,9,11223.0,560,775,568,567.0,2,11224,,0,0
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,2,14,6,9,11223.0,560,775,566,566.0,4,20730,560.0,1,9518
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,2,14,8,9,11223.0,560,775,576,576.0,3,22446,576.0,3,11223
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,8,14,15,9,11223.0,563,776,592,592.0,6,22446,592.0,6,11224
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,8,14,22,9,11223.0,593,776,635,634.0,4,11223,634.0,4,11223
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,8,14,27,9,11223.0,654,776,658,658.0,3,11222,658.0,3,11223
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,8,14,5,9,11223.0,563,776,571,571.0,3,11223,,0,0
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,8,14,6,9,11223.0,563,776,571,570.0,2,11224,,0,0
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,8,14,8,9,11223.0,563,776,571,571.0,3,14245,,0,3037
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,14,2,15,9,11223.0,601,781,605,604.0,2,11048,604.0,2,11048
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,14,2,22,9,11224.0,601,781,641,640.0,4,11224,640.0,4,11224
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,14,2,27,9,11223.0,661,781,669,669.0,3,11223,669.0,3,11223
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,14,2,5,9,11223.0,571,781,575,574.0,2,11218,,0,0
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,14,2,6,9,11223.0,571,781,575,574.0,2,11202,,0,0
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,14,2,8,9,11223.0,571,781,575,575.0,3,11341,,0,118
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,2,2,15,9,11224.0,578,767,598,598.0,4,11224,598.0,4,11224
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,2,2,22,9,11223.0,641,767,647,647.0,4,11223,647.0,4,11223
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,2,2,27,9,11223.0,641,767,683,683.0,5,11224,683.0,5,11224
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,2,2,5,9,11223.0,546,767,553,553.0,4,11223,,0,0
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,2,2,6,9,11223.0,546,767,553,553.0,4,11897,,0,682
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,2,2,8,9,11223.0,546,767,557,556.0,3,22448,556.0,3,11223
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,8,2,15,9,11223.0,598,779,621,621.0,4,11224,621.0,4,11224
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,8,2,22,9,11223.0,658,779,679,678.0,4,11223,678.0,4,11224
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,8,2,27,8,11223.0,658,779,704,703.0,3,11224,703.0,3,11224
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,8,2,5,9,11223.0,553,779,567,567.0,5,22448,553.0,1,11223
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,8,2,6,9,11223.0,553,779,567,567.0,5,22448,560.0,2,11224
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,8,2,8,9,11223.0,568,779,576,575.0,2,21753,575.0,2,11217
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,14,8,15,9,11223.0,610,786,630,630.0,5,11223,630.0,5,11223
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,14,8,22,9,11223.0,669,786,678,678.0,4,11223,678.0,4,11223
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,14,8,27,9,11223.0,669,786,709,708.0,4,11223,708.0,4,11224
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,14,8,5,9,11223.0,581,786,587,586.0,3,11223,,0,0
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,14,8,6,9,11223.0,581,786,587,586.0,3,11245,,0,22
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,14,8,8,9,11223.0,581,786,590,589.0,3,22446,589.0,3,11223
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,2,8,15,9,11223.0,591,775,599,598.0,2,11223,598.0,2,11224
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,2,8,22,9,11223.0,591,775,633,633.0,5,11224,633.0,5,11224
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,2,8,27,9,11223.0,652,775,669,668.0,3,11224,668.0,3,11224
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,2,8,5,9,11223.0,560,775,564,563.0,2,11223,,0,0
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,2,8,6,9,11223.0,560,775,564,563.0,2,11223,,0,0
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,2,8,8,9,11223.0,560,775,564,563.0,2,20867,560.0,1,10279
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,8,8,15,9,11223.0,572,781,601,601.0,6,22446,601.0,6,11224
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,8,8,22,9,11223.0,602,781,638,637.0,4,11224,637.0,4,11223
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,8,8,27,9,11223.0,602,781,659,659.0,6,11224,659.0,6,11224
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,8,8,5,9,11223.0,572,781,584,583.0,3,11223,,0,0
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,8,8,6,9,11223.0,572,781,582,582.0,4,11223,,0,0
+2024-01-16__m25c_v12_HV_off_CablePluggedIn,2024-01-16_Array_Test_Results,m25c_v12_HV_off_CablePluggedIn,-25,tag,"0 V, cable plugged in",tag,not recorded,ET2p01_Bar4_HV_0_CablePluggedIn_Jan_16,8,8,8,9,11223.0,572,781,582,581.0,3,20304,572.0,1,9088
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,14,15,9,11223.0,607,784,620,620.0,5,11224,620.0,5,11224
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,14,22,9,11223.0,607,784,665,664.0,6,11224,664.0,6,11224
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,14,27,9,11224.0,666,784,692,692.0,5,11223,692.0,5,11224
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,14,5,9,11223.0,577,784,587,587.0,4,11223,,0,0
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,14,6,9,11223.0,577,784,587,587.0,4,11223,,0,0
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,14,8,9,11223.0,577,784,587,587.0,4,22428,577.0,1,11206
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,14,15,9,11223.0,591,775,641,641.0,5,11223,641.0,5,11224
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,14,22,9,11223.0,652,775,708,707.0,5,11224,707.0,5,11223
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,14,27,9,11223.0,652,775,748,748.0,5,11224,748.0,5,11224
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,14,5,9,11223.0,560,775,572,572.0,4,22425,560.0,1,11203
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,14,6,9,11223.0,560,775,572,572.0,4,22446,567.0,2,11223
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,14,8,9,11223.0,560,775,588,587.0,4,22448,587.0,4,11223
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,14,15,9,11223.0,593,776,605,604.0,3,11223,604.0,3,11223
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,14,22,9,11223.0,593,776,651,650.0,5,11224,650.0,5,11224
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,14,27,9,11223.0,654,776,677,676.0,3,11223,676.0,3,11224
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,14,5,9,11223.0,563,776,575,575.0,4,11224,,0,0
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,14,6,9,11223.0,563,776,575,575.0,4,11227,,0,3
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,14,8,9,11223.0,563,776,577,576.0,4,22446,563.0,1,11223
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,2,15,9,11223.0,603,782,615,615.0,4,11223,615.0,4,11224
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,2,22,9,11223.0,603,782,660,659.0,5,11224,659.0,5,11224
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,2,27,9,11223.0,663,782,687,686.0,4,11224,686.0,4,11224
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,2,5,9,11223.0,573,782,583,582.0,3,11224,,0,0
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,2,6,9,11223.0,573,782,583,582.0,3,11224,,0,0
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,2,8,9,11223.0,573,782,581,580.0,2,22397,573.0,1,11178
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,2,15,9,11223.0,577,767,613,613.0,4,11224,613.0,4,11224
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,2,22,9,11223.0,640,767,670,670.0,6,11224,670.0,6,11224
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,2,27,9,11223.0,640,767,704,703.0,2,11223,703.0,2,11223
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,2,5,9,11223.0,545,767,558,558.0,4,22390,545.0,1,11167
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,2,6,9,11223.0,545,767,558,558.0,4,22448,545.0,1,11223
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,2,8,9,11223.0,545,767,564,564.0,4,22446,564.0,4,11224
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,2,15,9,11223.0,598,779,634,633.0,4,11224,633.0,4,11224
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,2,22,9,11223.0,658,779,696,696.0,4,11224,696.0,4,11224
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,2,27,9,11223.0,658,779,732,731.0,5,11224,731.0,5,11224
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,2,5,9,11223.0,568,779,574,573.0,3,11598,,0,381
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,2,6,9,11223.0,568,779,574,574.0,4,22448,571.0,2,11224
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,2,8,9,11223.0,568,779,585,585.0,4,22446,585.0,4,11223
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,8,15,9,11223.0,610,786,643,643.0,4,11223,643.0,4,11223
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,8,22,9,11223.0,669,786,695,695.0,5,11224,695.0,5,11224
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,8,27,9,11223.0,669,786,731,731.0,4,11223,731.0,4,11223
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,8,5,9,11223.0,581,786,592,591.0,3,11297,,0,74
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,8,6,9,11223.0,581,786,592,592.0,4,22332,581.0,1,11111
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,14,8,8,9,11223.0,581,786,597,597.0,4,22446,597.0,4,11223
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,8,15,9,11223.0,591,775,612,612.0,5,11224,612.0,5,11224
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,8,22,8,11223.0,652,775,653,652.0,1,8340,652.0,1,8340
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,8,27,9,11224.0,652,775,686,685.0,3,11224,685.0,3,11223
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,8,5,9,11223.0,560,775,568,567.0,2,11223,,0,0
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,8,6,9,11223.0,560,775,568,567.0,2,12304,,0,1091
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,2,8,8,9,11223.0,560,775,570,570.0,4,22448,570.0,4,11223
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,8,15,8,11223.0,605,783,613,612.0,2,11223,612.0,2,11224
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,8,22,9,11223.0,605,783,651,651.0,5,11224,651.0,5,11223
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,8,27,9,11223.0,664,783,677,676.0,4,11224,676.0,4,11223
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,8,5,9,11223.0,575,783,587,587.0,4,11224,,0,0
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,8,6,9,11223.0,575,783,587,586.0,3,11461,,0,244
+2024-01-16__m25c_v10,2024-01-16_Array_Test_Results,m25c_v10,-25,tag,not recorded,not recorded,not recorded,ET2p01_Bar4,8,8,8,9,11223.0,575,783,587,587.0,4,22448,575.0,1,11224
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,14,14,15,9,11223.0,521,754,548,547.0,4,11920,547.0,4,11223
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,14,14,22,10,11223.0,554,754,586,586.0,7,11224,586.0,7,11224
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,14,14,27,9,11223.0,554,754,617,616.0,5,11224,616.0,5,11223
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,14,14,5,9,11223.0,521,754,522,522.0,2,10806,,0,0
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,14,14,6,9,11223.0,521,754,522,522.0,2,10885,,0,0
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,14,14,8,9,11223.0,521,754,522,521.0,1,11061,,0,0
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,2,14,15,9,11223.0,538,745,562,561.0,4,11224,561.0,4,11223
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,2,14,22,9,11223.0,607,745,620,620.0,4,11224,620.0,4,11223
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,2,14,27,9,11223.0,607,745,661,660.0,4,11223,660.0,4,11223
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,2,14,5,9,11223.0,504,745,505,505.0,2,10900,,0,0
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,2,14,6,9,11223.0,504,745,507,506.0,2,11204,,0,12
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,2,14,8,9,11223.0,504,745,515,514.0,3,22435,514.0,3,11222
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,8,14,15,9,11223.0,507,746,535,535.0,5,22393,535.0,5,11224
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,8,14,22,9,11223.0,541,746,580,579.0,3,11223,579.0,3,11223
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,8,14,27,9,11223.0,541,746,605,604.0,5,11224,604.0,5,11224
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,8,14,5,9,11223.0,507,746,510,509.0,2,11223,,0,0
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,8,14,6,9,11223.0,507,746,512,511.0,2,11223,,0,0
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,8,14,8,9,11223.0,507,746,512,511.0,2,11223,,0,0
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,14,2,15,9,11223.0,516,751,544,544.0,5,12427,544.0,5,11223
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,14,2,22,9,11223.0,550,751,584,583.0,2,11223,583.0,2,11223
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,14,2,27,9,11223.0,550,751,613,612.0,5,11224,612.0,5,11223
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,14,2,5,10,11223.0,499,751,515,515.0,6,11225,,0,1
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,14,2,6,10,11223.5,499,751,515,514.0,5,20707,499.0,1,9493
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,14,2,8,10,11223.0,499,751,515,515.0,6,22446,507.0,2,11224
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,2,2,15,9,11223.0,525,737,538,538.0,4,11224,538.0,4,11224
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,2,2,22,10,11223.0,525,737,586,586.0,7,11223,586.0,7,11223
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,2,2,27,9,11223.0,596,737,623,622.0,3,11223,622.0,3,11224
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,2,2,5,9,11223.0,490,737,493,492.0,2,10517,,0,0
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,2,2,6,9,11223.0,490,737,491,491.0,2,10005,,0,0
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,2,2,8,9,11223.0,490,737,495,494.0,2,22260,494.0,2,11217
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,8,2,15,9,11223.0,545,749,560,559.0,4,11224,559.0,4,11223
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,8,2,22,9,11223.0,613,749,616,616.0,3,11220,616.0,3,11219
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,8,2,27,9,11223.0,613,749,645,644.0,5,11223,644.0,5,11224
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,8,2,5,9,11223.0,494,749,509,508.0,4,22446,494.0,1,11223
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,8,2,6,9,11223.0,494,749,509,508.0,4,22446,502.0,2,11223
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,8,2,8,9,11223.0,511,749,514,514.0,3,10309,514.0,3,10184
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,14,8,15,9,11223.0,556,755,571,570.0,4,11224,570.0,4,11224
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,14,8,22,9,11223.0,556,755,616,616.0,6,11224,616.0,6,11224
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,14,8,27,9,11223.0,622,755,651,650.0,4,11223,650.0,4,11224
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,14,8,5,9,11223.0,523,755,526,525.0,2,11208,,0,0
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,14,8,6,9,11223.0,523,755,526,525.0,2,11193,,0,0
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,14,8,8,9,11223.0,523,755,526,526.0,3,22361,526.0,3,11212
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,2,8,15,9,11223.0,536,743,545,544.0,2,11224,544.0,2,11223
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,2,8,22,9,11223.0,536,743,583,582.0,4,11224,582.0,4,11224
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,2,8,27,9,11224.0,605,743,616,616.0,4,11223,616.0,4,11223
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,2,8,5,9,11223.0,501,743,504,503.0,2,11005,,0,0
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,2,8,6,9,11223.0,501,743,504,503.0,2,10957,,0,0
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,2,8,8,9,11223.0,501,743,504,504.0,3,22212,504.0,3,11168
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,8,8,15,9,11223.0,518,752,545,544.0,4,22408,544.0,4,11224
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,8,8,22,9,11223.0,551,752,582,581.0,5,11224,581.0,5,11224
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,8,8,27,9,11224.0,551,752,606,606.0,5,11224,606.0,5,11224
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,8,8,5,9,11223.0,518,752,523,522.0,2,11224,,0,0
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,8,8,6,9,11223.0,518,752,523,522.0,2,11224,,0,0
+2024-01-18__0c_v15_HV_210_highpower,2024-01-18_Array_Test_Results,0c_v15_HV_210_highpower,0,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_17,8,8,8,9,11223.0,518,752,521,521.0,3,11223,,0,0
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,14,14,15,10,11223.0,467,725,484,484.0,6,11229,484.0,6,11223
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,14,14,22,10,11223.0,504,725,521,520.0,5,11224,520.0,5,11224
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,14,14,27,9,11223.0,504,725,546,545.0,3,11223,545.0,3,11223
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,14,14,5,9,11223.0,449,725,465,464.0,4,11224,,0,0
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,14,14,6,9,11223.0,449,725,463,463.0,4,11240,,0,17
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,14,14,8,9,11224.0,449,725,465,464.0,4,22446,449.0,1,11223
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,2,14,15,10,11223.0,452,717,489,489.0,7,11224,489.0,7,11223
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,2,14,22,9,11223.0,490,717,538,538.0,4,11223,538.0,4,11224
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,2,14,27,9,11223.0,566,717,573,572.0,3,11223,572.0,3,11223
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,2,14,5,9,11223.0,433,717,445,444.0,3,17978,433.0,1,6768
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,2,14,6,10,11223.0,433,717,446,445.0,4,22448,433.0,1,11223
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,2,14,8,9,11223.0,433,717,450,449.0,4,22446,449.0,4,11223
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,8,14,15,9,11223.0,454,718,469,469.0,4,11226,469.0,4,11223
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,8,14,22,9,11223.0,492,718,511,510.0,2,11223,510.0,2,11224
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,8,14,27,9,11223.0,492,718,534,534.0,4,11223,534.0,4,11223
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,8,14,5,9,11223.0,435,718,450,450.0,4,11224,,0,0
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,8,14,6,9,11223.0,435,718,450,450.0,4,12512,,0,1298
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,8,14,8,9,11223.0,435,718,452,451.0,4,22446,435.0,1,11223
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,14,2,15,10,11223.5,464,723,481,481.0,6,11224,481.0,6,11224
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,14,2,22,9,11223.0,501,723,513,513.0,4,11224,513.0,4,11223
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,14,2,27,9,11223.0,501,723,543,542.0,3,11223,542.0,3,11223
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,14,2,5,10,11223.5,445,723,458,457.0,4,11224,,0,0
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,14,2,6,10,11223.0,445,723,458,457.0,4,11224,,0,0
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,14,2,8,10,11223.0,445,723,458,457.0,4,22447,445.0,1,11223
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,2,2,15,9,11224.0,436,709,468,467.0,4,11223,467.0,4,11224
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,2,2,22,10,11223.0,475,709,508,507.0,5,11224,507.0,5,11224
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,2,2,27,9,11223.0,475,709,544,543.0,4,11224,543.0,4,11224
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,2,2,5,9,11223.0,417,709,432,431.0,3,19033,417.0,1,7819
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,2,2,6,9,11224.0,417,709,432,431.0,3,22448,417.0,1,11223
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,2,2,8,9,11223.0,417,709,432,431.0,3,22446,426.0,2,11224
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,8,2,15,10,11223.0,460,721,491,490.0,5,11223,490.0,5,11223
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,8,2,22,10,11223.0,497,721,542,541.0,5,11223,541.0,5,11223
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,8,2,27,9,11223.0,497,721,568,567.0,5,11224,567.0,5,11223
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,8,2,5,9,11223.0,441,721,453,452.0,3,11233,,0,10
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,8,2,6,9,11223.0,441,721,453,452.0,3,22374,441.0,1,11152
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,8,2,8,9,11223.0,441,721,451,451.0,3,22448,451.0,3,11223
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,14,8,15,9,11223.0,472,728,502,501.0,4,11224,501.0,4,11224
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,14,8,22,9,11223.0,509,728,546,545.0,2,11223,545.0,2,11223
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,14,8,27,10,11223.5,509,728,576,576.0,7,11224,576.0,7,11224
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,14,8,5,9,11223.0,454,728,468,468.0,4,11254,,0,32
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,14,8,6,9,11224.0,454,728,468,468.0,4,22373,454.0,1,11149
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,14,8,8,9,11223.0,454,728,468,467.0,3,22448,463.0,2,11224
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,2,8,15,10,11223.0,450,716,477,477.0,6,11224,477.0,6,11224
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,2,8,22,9,11224.0,488,716,512,512.0,4,11224,512.0,4,11224
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,2,8,27,9,11223.0,488,716,546,546.0,4,11224,546.0,4,11223
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,2,8,5,10,11223.0,431,716,444,443.0,4,11223,,0,0
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,2,8,6,10,11223.0,431,716,444,444.0,5,21827,431.0,1,10609
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,2,8,8,10,11223.0,431,716,444,444.0,5,22448,440.0,2,11224
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,8,8,15,9,11223.0,467,725,481,481.0,4,11224,481.0,4,11224
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,8,8,22,9,11223.0,504,725,516,515.0,3,11224,515.0,3,11223
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,8,8,27,10,11223.0,504,725,540,539.0,6,11223,539.0,6,11224
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,8,8,5,9,11223.0,449,725,463,462.0,3,11224,,0,0
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,8,8,6,9,11223.0,449,725,463,463.0,4,11664,,0,445
+2024-01-19__22c_v20_HV_210_highpower,2024-01-19_Array_Test_Results,22c_v20_HV_210_highpower,22,tag,210 V,tag,highpower,ET2p01_Bar4_HV_210_Jan_18,8,8,8,9,11223.0,449,725,463,463.0,4,22446,449.0,1,11223

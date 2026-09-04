@@ -1,0 +1,14 @@
+data_set,axis,step,shift_dac
+ET2.01 bare,dose at −25 °C,0 → 200 MRad,24.83333333333337
+ET2.01 bare,dose at −25 °C,200 → 400 MRad,21.41666666666663
+ET2.01 bare,dose at −25 °C,0 → 400 MRad,46.25
+ET2.01 bare,temperature at 0 MRad,+12 → −25 °C,76.91666666666663
+ET2.03 bare,dose at VA 0.85 V (supply),0 → 200 MRad,-61.5
+ET2.03 bare,dose at VA 0.85 V (supply),200 → 400 MRad,-3.8333333333333712
+ET2.03 bare,dose at VA 0.85 V (supply),0 → 400 MRad,-65.33333333333337
+ET2.03 bare,dose at VA 1.00 V (supply),200 → 400 MRad,-32.5
+ET2.03 bare,dose at VA 1.20 V (supply),0 → 200 MRad,-31.66666666666663
+ET2.03 bare,dose at VA 1.20 V (supply),200 → 400 MRad,-33.83333333333337
+ET2.03 bare,dose at VA 1.20 V (supply),0 → 400 MRad,-65.5
+ET2.03 bare,dose at VA 1.40 V (supply),200 → 400 MRad,-19.166666666666742
+"ET2.03 bare (BARE7, 2nd die)",dose at VA 1.20 V (supply),0 → 200 MRad,6.0

@@ -1,0 +1,13 @@
+quantity,recomputed,published,diff,tol,unit,agrees,|diff|
+money-plot points in the union table,29828.0,29828,0.0,0,,True,0.0
+"hits behind them, before the pixel selection",239969849.0,239969849,0.0,0,,True,0.0
+hits removed by the pixel selection,49194.0,49194,0.0,0,,True,0.0
+binary searches,450.0,450,0.0,0,,True,0.0
+noise scans,90.0,90,0.0,0,,True,0.0
+"map baseline, pixel (0,0)",822.0,822,0.0,0,DAC,True,0.0
+"map baseline, pixel (12,14)",849.0,849,0.0,0,DAC,True,0.0
+"turn-off DAC, BARE9 0 MRad VA 1.20, pixel (0,0), 6 fC",858.0,858,0.0,0,DAC,True,0.0
+"turn-off DAC, BARE9 0 MRad VA 1.20, pixel (0,0), 8 fC",877.0,877,0.0,0,DAC,True,0.0
+"turn-off DAC, BARE9 0 MRad VA 1.20, pixel (0,0), 10 fC",895.0,895,0.0,0,DAC,True,0.0
+"turn-off DAC, BARE9 0 MRad VA 1.20, pixel (0,0), 15 fC",950.0,950,0.0,0,DAC,True,0.0
+"turn-off DAC, BARE9 0 MRad VA 1.20, pixel (0,0), 22 fC",1019.0,1019,0.0,0,DAC,True,0.0

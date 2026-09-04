@@ -1,0 +1,17 @@
+n,quantity,value,unit,pixel_rms,label
+1,"Preamp gain (charge-to-threshold), 8–27 fC",5.96 ± 0.37,DAC/fC,1.10,DERIVED
+2,the same in volts,2.33 ± 0.14,mV/fC,0.43,DERIVED
+3,Turn-off above baseline at 15 fC,72.9,DAC,12.3,DERIVED from RAW FPGA counters
+4,"TOT at BL+20, 15 fC",84.9,code = 3.04 ns,6.4,DERIVED
+5,"TOA jitter at BL+20, 15 fC",10.6,ps,2.4,DERIVED — near the quantisation floor
+6,"TOA jitter at BL+20, 8 fC",27.7,ps,8.5,"DERIVED — above the floor, the useful one"
+7,"S-curve width σ (54 curves, shared σ)",0.93 ± 0.07,DAC = 0.363 mV,—,DERIVED
+8,ENC = σ / gain,974 ± 97,electrons,—,DERIVED — the sensor-loaded number
+9,Autocal noise width NW,4.44 ± 0.24,DAC,0.73,RAW (NW_map)
+10,Minimum charge reaching BL+20,5.5 ± 0.1,fC,0.4,"DERIVED, extrapolated"
+11,TOT-to-charge law at BL+20,TOT = -40.3 + 43.4 ln(Q/fC),χ²/ndf 9.0,—,DERIVED — a poor fit
+12,"TDC quantisation floor, LSB/√12",5.24,ps,—,"DERIVED, TOA LSB 18.14 ps"
+13,"Walk with charge, 5→27 fC at BL+20",+1384,ps,—,DERIVED
+14,"Bias bracket, gain ratio HV nominal → 0 V (cable in)",0.89,—,—,DERIVED — the only confound-free capacitance handle
+15,Gain ratio hybrid / bare,0.63,—,—,"DERIVED — conditions differ, section 12"
+16,ENC ratio hybrid / bare,1.60,—,—,DERIVED — entirely through the gain

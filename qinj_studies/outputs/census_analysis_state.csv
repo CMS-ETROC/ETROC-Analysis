@@ -1,0 +1,33 @@
+id,campaign,path,has_threshold_scan,analysed_in_notebook,state
+1,CERN Jan-2024 TID,root://cmseos.fnal.gov//store/group/lpcmtdstudies/cern_Jan2024/TID/,yes,01,analysed in 01
+2,CERN Jan-2024 TID,root://cmseos.fnal.gov//store/group/lpcmtdstudies/cern_Jan2024/TID/ET2p01_W36_6_TDC_summary_allMRad.feather,yes (reduced),01,analysed in 01
+3,CERN Jan-2024 climate chamber,root://cmseos.fnal.gov//store/group/lpcmtdstudies/cern_Jan2024/CC/,yes,02,analysed in 02
+4,DESY May-2025 beam,root://cmseos.fnal.gov//store/group/lpcmtdstudies/desy_tb_data_May2025/WS_beam/Run_PTNH3_230_OFF20_RFSel0_noReadOut_QInj30_del0_0,no,,not analysed — no threshold scan
+5,FNAL Jul-2024 bench,/run/media/daq/X9/et2p03_qinj_data/2024-07-*_Array_Test_Results/,yes,,not yet analysed — carries a threshold scan
+6,FNAL Aug-2024 TID,/run/media/daq/X9/et2p03_qinj_data/2024-08-*_Array_Test_Results/,yes,03 (in preparation),analysed in 03 (in preparation)
+7,FNAL Aug-2024 TID,/home/daq/tmp/TID_August/,yes (0 MRad only),03 (in preparation),analysed in 03 (in preparation)
+8,CERN Jan-2024 probe station,/home/daq/ETROC2/ETROC-Data-ProbeStationJan24/,no,,not analysed — no threshold scan
+9,FNAL Jun-2026 link stress,/home/daq/ETROC2/ETROC-Stress/,no,,not analysed — no threshold scan
+10,FNAL bench history,/home/daq/ETROC2/ETROC-History/,no,,not analysed — no threshold scan
+11,FNAL Apr-2025 EMI/EMC,/home/daq/ETROC2/i2c_gui/emi_emc_testing/configs/etroc_Scurve_config.yaml,no,,not analysed — no threshold scan
+12,wafer probe 2025-2026,"root://cmseos.fnal.gov//store/group/lpcmtdstudies/waferProbe_{Sep2025,Feb2026,Apr2026}/",no,,not analysed — no threshold scan
+13,CERN Jul-2026 IRRAD beam,"root://cmseos.fnal.gov//store/group/lpcmtdstudies/IRRad_CERN_2026Jul/{H1,F1}_telescope/",no,,not analysed — no threshold scan
+14,2023-2026 rendered figures,/home/daq/ETROC2/ETROC-figures/,no,,not analysed — no threshold scan
+15,CERN Jan-2024 climate chamber,/home/daq/ETROC2/tmp/money_plot_ET2p01_Bar4_m25c,no (gone),,not analysed — no threshold scan
+16,SEU 2024,/media/daq/T7/...; /media/daq/X9/SEUApril2024/...,no,,not analysed — no threshold scan
+17,FNAL 2026 module qualification,/home/daq/ETROC2_KCU105/ETROC-Data-CE/,no (single point),,not analysed — no threshold scan
+18,FNAL 2025-2026 bench history,/home/daq/ETROC2_KCU105/ETROC-History/,no,,not analysed — no threshold scan
+19,FNAL 2026 climate chamber,/home/daq/ETROC2_KCU105/ETROC-History/wh14_climate_chamber*.sqlite,no,,not analysed — no threshold scan
+20,FNAL/CERN/DESY 2026 VTemp,"/home/daq/ETROC2_KCU105/ETROC-History/{cern_2026_July,irrad_2026_July,desy_tb_2026May}/*.csv",no,,not analysed — no threshold scan
+21,FNAL 2025-2026 sensor IV,/home/daq/ETROC2_KCU105/IVscan/,no,,not analysed — no threshold scan
+22,2023 ETROC2 first revision,/eos/user/m/musafdar/CMS_ETROC2_DR2023/,no,,not analysed — no threshold scan
+23,DESY May-2025 long runs,/eos/user/m/musafdar/Run_PTNH1_230_OFF20_RFSel0_longruns.zip,no,,not analysed — no threshold scan
+24,all lxplus,"/eos/user/m/musafdar; /afs/cern.ch/{user,work}/m/musafdar",no,,not analysed — no threshold scan
+25,SEU Jan-2024 Northwestern (archive),root://cmseos.fnal.gov//store/group/lpcmtdstudies/SEU_Jan2024_NorthWestern/SEU_ETROC2.tar.gz,yes,,not yet analysed — carries a threshold scan
+26,SEU Apr-2024 Belgium,root://cmseos.fnal.gov//store/group/lpcmtdstudies/SEU_Apr24_2024_Belgium/,no,,not analysed — no threshold scan
+27,SEU Feb-2025 Belgium,root://cmseos.fnal.gov//store/group/lpcmtdstudies/SEU_Feb26_2025_Belgium/,no,,not analysed — no threshold scan
+28,SEU Jun-2024 Belgium,root://cmseos.fnal.gov//store/group/lpcmtdstudies/SEU_Jun28_2024_BelgiumJune/,no,,not analysed — no threshold scan
+29,SEU Sep-2024 Northwestern,root://cmseos.fnal.gov//store/group/lpcmtdstudies/SEU_Sep28_2024_NorthWestern/,no,,not analysed — no threshold scan
+30,SEU May-2024 Northwestern,root://cmseos.fnal.gov//store/group/lpcmtdstudies/SEU_May11_2024_NorthWestern/,no,,not analysed — no threshold scan
+31,SEU May-2025 Northwestern,root://cmseos.fnal.gov//store/group/lpcmtdstudies/SEU_May03_2025_NorthWestern/,no,,not analysed — no threshold scan
+32,CERN Aug-2024 climate chamber (CTS),/run/media/daq/X9/etroclaptop3_backup_20251127/ETROC-History/CERN_Aug_2024_CC_CTS/,no,00,analysed in 00

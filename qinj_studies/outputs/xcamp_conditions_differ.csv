@@ -1,0 +1,15 @@
+axis,et2p01_bare,hybrid,et2p03_bare,why_it_matters
+chip revision,ET2.01,ET2.01,ET2.03,"2.02 fixed the on-chip voltage reference (~167 mV low on 2.01); 2.03 added dummy bump pads. Source: ETROC2 Reference Manual rev 0.6, revision history"
+voltage reference,external 1.0 V,external 1.0 V,"internal generator, powered from VA","sets the DAC-to-mV scale; no read-back on any campaign, so no absolute DAC comparison is safe"
+die,W36_6,Bar4,BARE9 (0/200/400 MRad) and BARE7 (0/200 MRad),"notebook 03 measures a large gain difference between two dies of the SAME revision; but BARE7 now has its own dose step, so the SIGN of the baseline shift is checked on a second die"
+sensor,none,"LGAD, HV 210 V",none,the hybrid's input capacitance is the point of notebook 02 and a confound everywhere else
+temperature,"+12 °C (sweep), −25 °C (turn-off)",0 °C,"−23.6 °C, not scanned",the two January sets disagree on the SIGN of the gain temperature coefficient; August cannot arbitrate
+analog rail VA,not recorded,not recorded,0.85 / 1.00 / 1.20 / 1.40 V,on ET2.03 the rail moves gain by ~2.8x — larger than every inter-campaign difference here
+digital rail VD,not recorded,not recorded,1.20 V for every threshold scan; 0.90–1.45 V in the rail grid,below 1.00 V the August chip produces no hits at all
+power mode,not recorded,`highpower` (a directory tag),not recorded,notebook 02 shows the tag does not correspond to a repeatable supply current
+RFSel,not recorded,not recorded,not recorded,sets the feedback resistance and therefore gain AND TOT — the largest unquantified systematic in all three
+pixels,"12: rows 0,1,3,12 × cols 2,8,14","9: rows 2,8,14 × cols 2,8,14","6: rows 0,3,12 × cols 0,14","no pixel is common to all three; every comparison is set-to-set, never pixel-to-pixel"
+charges,"5, 6, 8, 15, 22, 27 fC","5, 6, 8, 15, 22, 27 fC","6, 8, 10, 15, 22 fC",gain fits run 8–27 fC on the January sets and 8–22 fC on the August one
+dates,2024-01-11 to 01-19,2024-01-11 to 01-19,2024-08-03 to 08-21,seven months and a different facility; dose rate and annealing history are unrecorded on both
+turn-off estimator,interpolated 50 % of the trigger bit,interpolated 50 % of the trigger bit,the search's own converged DAC — its binary search resolves a different feature,notebook 03 measures the two definitions to agree to 0.0 ± 0.7 DAC wherever both are computable
+monitoring,"LV supply log, 231 120 samples",LV supply log + baseline history,none — one sentence of prose,only the January sets can check whether the chip's operating point drifted during a scan

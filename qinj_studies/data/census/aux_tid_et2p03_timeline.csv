@@ -1,0 +1,9 @@
+step,edge,timestamp,source_in_notebook
+1,start,2024-08-04 23:48:00,cell 12 comment; plotted as lines[0] in cells 7 and 24
+1,stop,2024-08-07 02:46:00,cell 12 comment; plotted as lines[1] in cells 7 and 24
+2,start,2024-08-08 17:23:00,cell 12 comment; plotted as lines[2] in cells 7 and 24
+2,stop,2024-08-10 20:22:00,cell 12 comment; plotted as lines[3] in cells 7 and 24
+3,start,2024-08-14 21:27:00,cell 12 comment; the commented lines array of cell 24 gives 21:27:30
+3,stop,2024-08-19 01:30:00,"cell 12 comment; the commented lines array of cell 24 gives 02:30 -- DISAGREEMENT, both recorded"
+4,start,2024-08-19 01:30:00,cell 12 comment
+4,stop,2024-08-19 03:30:00,cell 12 comment; agrees with the commented lines array of cell 24

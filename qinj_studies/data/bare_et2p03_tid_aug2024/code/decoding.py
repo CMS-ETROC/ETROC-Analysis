@@ -1,0 +1,1193 @@
+from pathlib import Path
+from crc import Calculator, Configuration
+from tqdm import tqdm
+from natsort import natsorted
+
+import numpy as np
+import pandas as pd
+import json
+import struct, time
+import argparse
+import gc # Import the garbage collector
+
+## --------------- Tamalero Decoding Class -----------------------
+## --------------------------------------
+format_dict = {
+    'nbits': 40,
+    'bitorder': 'reversed',
+    'identifiers': {
+        'header': {
+            'frame': 0x3C5C000000,
+            'mask': 0xFFFFC00000,
+        },
+        'data': {
+          'frame': 0x8000000000,
+          'mask': 0x8000000000,
+        },
+        'filler': {
+          'frame': 0x3C5C800000,
+          'mask': 0xFFFFC00000,
+        },
+        'trailer': {
+          'frame': 0x0000000000,
+          'mask': 0x8000000000,
+        },
+    },
+    'types': ['ea', 'col_id', 'row_id', 'toa', 'cal', 'tot', 'elink', 'full', 'any_full', 'global_full'],
+    'data': {
+        'header': {
+            'elink': {
+                'mask': 0xFF0000000000,
+                'shift': 40,
+            },
+            'sof': {
+                'mask': 0x1000000000000,
+                'shift': 48,
+            },
+            'eof': {
+                'mask': 0x2000000000000,
+                'shift': 49,
+            },
+            'full': {
+                'mask': 0x4000000000000,
+                'shift': 50,
+            },
+            'any_full': {
+                'mask': 0x8000000000000,
+                'shift': 51,
+            },
+            'global_full': {
+                'mask': 0xF0000000000000,
+                'shift': 52,
+            },
+            'l1counter': {
+                'mask': 0x00003FC000,
+                'shift': 14,
+            },
+            'type': {
+                'mask': 0x0000003000,
+                'shift': 12,
+            },
+            'bcid': {
+                'mask': 0x0000000FFF,
+                'shift': 0,
+            },
+        },
+        'data': {
+            'elink': {
+                'mask': 0xFF0000000000,
+                'shift': 40
+            },
+            'sof': {
+                'mask': 0x1000000000000,
+                'shift': 48
+            },
+            'eof': {
+                'mask': 0x2000000000000,
+                'shift': 49
+            },
+            'full': {
+                'mask': 0x4000000000000,
+                'shift': 50
+            },
+            'any_full': {
+                'mask': 0x8000000000000,
+                'shift': 51
+            },
+            'global_full': {
+                'mask': 0xF0000000000000,
+                'shift': 52
+            },
+            'ea': {
+                'mask': 0x6000000000,
+                'shift': 37
+            },
+            'col_id': {
+                'mask': 0x1E00000000,
+                'shift': 33
+            },
+            'row_id': {
+                'mask': 0x01E0000000,
+                'shift': 29
+            },
+            # random test pattern specific
+            'col_id2': {
+                'mask': 0x001E000000,
+                'shift': 25
+            },
+            'row_id2': {
+                'mask': 0x0001E00000,
+                'shift': 21
+            },
+            'bcid': {
+                'mask': 0x00001FFE00,
+                'shift': 9
+            },
+            'counter_a': {
+                'mask': 0x00000001FF,
+                'shift': 0
+            },
+            'counter_b': {
+                'mask': 0x1FFE00,
+                'shift': 9
+            },
+            'test_pattern': {
+                'mask': 0xff,  # should be 9 bits according to manual, but bit 9 is (almost) always 1
+                'shift': 0
+            },
+            # generic portion of the data
+            'data': {
+                'mask': 0x001FFFFFFF,
+                'shift': 0
+            },
+            'toa': {
+                'mask': 0x1ff80000,
+                'shift': 19
+            },
+            'tot': {
+                'mask': 0x0007fc00,
+                'shift': 10
+            },
+            'cal': {
+                'mask': 0x000003ff,
+                'shift': 0
+            }
+        },
+        'trailer': {
+            'elink': {
+                'mask': 0xFF0000000000,
+                'shift': 40
+            },
+            'sof': {
+                'mask': 0x1000000000000,
+                'shift': 48
+            },
+            'eof': {
+                'mask': 0x2000000000000,
+                'shift': 49
+            },
+            'full': {
+                'mask': 0x4000000000000,
+                'shift': 50
+            },
+            'any_full': {
+                'mask': 0x8000000000000,
+                'shift': 51
+            },
+            'global_full': {
+                'mask': 0xF0000000000000,
+                'shift': 52
+            },
+            'chipid': {
+                'mask': 0x7FFFC00000,
+                'shift': 24
+            },
+            'status': {
+                'mask': 0x00003F0000,
+                'shift': 16
+            },
+            'hits': {
+                'mask': 0x000000FF00,
+                'shift': 8
+            },
+            'crc': {
+                'mask': 0x00000000FF,
+                'shift': 0
+            }
+        },
+        'filler': {
+            'elink': {
+                'mask': 0xFF0000000000,
+                'shift': 40
+            },
+            'sof': {
+                'mask': 0x1000000000000,
+                'shift': 48
+            },
+            'eof': {
+                'mask': 0x2000000000000,
+                'shift': 49
+            },
+            'full': {
+                'mask': 0x4000000000000,
+                'shift': 50
+            },
+            'any_full': {
+                'mask': 0x8000000000000,
+                'shift': 51
+            },
+            'global_full': {
+                'mask': 0xF0000000000000,
+                'shift': 52
+            },
+            'l1counter': {
+                'mask': 0x00003FC000,
+                'shift': 14
+            },
+            'ebs': {
+                'mask': 0x0000003000,
+                'shift': 12
+            },
+            'bcid': {
+                'mask': 0x0000000FFF,
+                'shift': 0
+            }
+        }
+    }
+}
+
+def create_tamalero_decoder(fmt_dict):
+    """Factory function with pre-compiled extractor lambdas."""
+
+    # 1. Pre-calculate ID rules
+    id_rules = [
+        (id_name, val['frame'], val['mask'])
+        for id_name, val in fmt_dict['identifiers'].items()
+    ]
+
+    # 2. Build the rule lists
+    raw_rules = {}
+    for data_type, fields in fmt_dict['data'].items():
+        raw_rules[data_type] = [
+            (d, fields[d]['mask'], fields[d]['shift']) for d in fields
+        ]
+
+    raw_rules['data'] = [
+        (d, fmt_dict['data']['data'][d]['mask'], fmt_dict['data']['data'][d]['shift'])
+        for d in fmt_dict['types']
+    ]
+
+    # 3. PRE-COMPILE EXTRACTORS
+    # We turn the rule lists into highly optimized lambda functions.
+    # The default argument `r=rules` binds the specific ruleset to the lambda's local scope,
+    # meaning the lambda doesn't have to look up `rules` in the outer scope.
+    extractors = {
+        d_type: lambda v, r=rules: {d: (v & m) >> s for d, m, s in r}
+        for d_type, rules in raw_rules.items()
+    }
+
+    # 4. Define the read function
+    def read(val, quiet=True):
+        data_type = None
+
+        # Identify type
+        for id_name, frame, mask in id_rules:
+            if frame == (val & mask):
+                data_type = id_name
+                break
+
+        if data_type is None:
+            if not quiet:
+                print("Found data of type None:", val)
+            return None, {}
+
+        # O(1) LOOKUP & EXECUTION: Instantly generate the dictionary
+        res = extractors[data_type](val)
+
+        if not quiet:
+            res['raw'] = hex(val & 0xFFFFFFFFFF)
+            res['raw_full'] = hex(val)
+            res['meta'] = hex((val >> 40) & 0xFFFFFF)
+            print(f"Found data of type {data_type}:", res)
+
+        return data_type, res
+
+    return read
+
+## --------------------------------------
+def merge_words(res):
+    """
+    Optimized merge_words: Converts to NumPy array only once and prevents
+    unnecessary memory copying during bitwise operations. (Optimization 1)
+    """
+    if not res:
+        return []
+
+    arr0 = np.array(res[0::2], dtype=np.uint64)
+    arr1 = np.array(res[1::2], dtype=np.uint64)
+
+    len_cut = min(len(arr0), len(arr1))
+    arr0, arr1 = arr0[:len_cut], arr1[:len_cut]
+
+    empty_frame_mask = arr0 > 256
+
+    # Return as a standard python list to feed the generator nicely
+    return (arr0[empty_frame_mask] | (arr1[empty_frame_mask] << 32)).tolist()
+
+def extract_event_data(unpacked_data_list):
+    """
+    Single-pass columnar accumulator that builds BOTH hit and status data simultaneously.
+    Allows status generation even if the packet contains zero hit data.
+    """
+    # Pre-allocate dictionaries for both DataFrames
+    hit_cols = {
+        'evt': [], 'bcid': [], 'l1a_counter': [], 'ea': [],
+        'row': [], 'col': [], 'toa': [], 'tot': [], 'cal': [], 'elink': []
+    }
+
+    status_cols = {
+        'evt': [], 'bcid': [], 'l1a_counter': [], 'elink': [],
+        'sof': [], 'eof': [], 'full': [], 'any_full': [], 'global_full': [],
+        'chipid': [], 'status': [], 'hits': [], 'crc': []
+    }
+
+    pending_packets = {}
+    event_counter = -1
+    current_bcid = -1
+    current_l1acounter = -1
+    dropped_packets = 0
+
+    for record_type, record_data in unpacked_data_list:
+        if not record_type or not record_data:
+            continue
+
+        elink = record_data.get('elink')
+        if elink is None:
+            continue
+
+        if record_type == 'header':
+            if elink in pending_packets:
+                # Previous header on this elink never got a matching trailer; its data is lost.
+                dropped_packets += 1
+            pending_packets[elink] = {'header': record_data, 'data': []}
+
+        elif record_type == 'data':
+            if elink in pending_packets:
+                pending_packets[elink]['data'].append(record_data)
+
+        elif record_type == 'trailer':
+            if elink in pending_packets:
+                packet = pending_packets.pop(elink)
+
+                packet_bcid = packet['header'].get('bcid')
+                packet_l1acounter = packet['header'].get('l1counter')
+
+                if packet_bcid is None:
+                    continue
+
+                # Event counter logic
+                if packet_bcid != current_bcid and packet_l1acounter != current_l1acounter:
+                    event_counter += 1
+                current_bcid = packet_bcid
+                current_l1acounter = packet_l1acounter
+
+                # 1. POPULATE HIT COLUMNS
+                # If packet['data'] is empty, this loop safely skips and nothing is appended to hit_cols
+                for data_hit in packet['data']:
+                    hit_cols['evt'].append(event_counter)
+                    hit_cols['bcid'].append(current_bcid)
+                    hit_cols['l1a_counter'].append(current_l1acounter)
+                    hit_cols['ea'].append(data_hit.get('ea'))
+                    hit_cols['row'].append(data_hit.get('row_id'))
+                    hit_cols['col'].append(data_hit.get('col_id'))
+                    hit_cols['toa'].append(data_hit.get('toa'))
+                    hit_cols['tot'].append(data_hit.get('tot'))
+                    hit_cols['cal'].append(data_hit.get('cal'))
+                    hit_cols['elink'].append(data_hit.get('elink'))
+
+                # 2. POPULATE STATUS COLUMNS
+                # This always runs for every valid header-trailer pair, regardless of hit count
+                status_cols['evt'].append(event_counter)
+                status_cols['bcid'].append(current_bcid)
+                status_cols['l1a_counter'].append(current_l1acounter)
+                status_cols['elink'].append(packet['header'].get('elink'))
+                status_cols['sof'].append(record_data.get('sof'))
+                status_cols['eof'].append(record_data.get('eof'))
+                status_cols['full'].append(record_data.get('full'))
+                status_cols['any_full'].append(record_data.get('any_full'))
+                status_cols['global_full'].append(record_data.get('global_full'))
+                status_cols['chipid'].append(record_data.get('chipid'))
+                status_cols['status'].append(record_data.get('status'))
+                status_cols['hits'].append(record_data.get('hits'))
+                status_cols['crc'].append(record_data.get('crc'))
+
+    if dropped_packets:
+        print(f"  -> Warning: {dropped_packets} packet(s) dropped (header without matching trailer).")
+
+    return hit_cols, status_cols
+
+## --------------------------------------
+def process_tamalero_outputs(input_files: list):
+
+    start_time = time.monotonic()
+    print("\n" + "="*35)
+    print("Decode binary format to feather")
+    print("="*35)
+
+    all_merged_data = []  # Changed name to reflect it's a flat list, not arrays
+    print("\n[1/5] Reading and merging binary data...")
+
+    for ifile in input_files:
+        with open(ifile, 'rb') as f:
+            bin_data = f.read()
+            # Fast binary unpacking
+            raw_data = struct.unpack(f'<{len(bin_data)//4}I', bin_data)
+            del bin_data
+
+        # Merge data and add directly to our master flat list
+        all_merged_data.extend(merge_words(raw_data))
+        del raw_data
+
+    print(f"  -> Total words merged: {len(all_merged_data):,}")
+
+    print("\n[2/5] Initializing functional decoder...")
+    fast_read_func = create_tamalero_decoder(format_dict)
+
+    print("\n[3/5] Decoding stream and accumulating columns...")
+    unpacked_data_gen = (fast_read_func(x) for x in all_merged_data)
+    hit_cols, status_cols = extract_event_data(unpacked_data_gen)
+
+    # Clean up the master list to free massive amounts of RAM
+    del all_merged_data
+    del unpacked_data_gen
+    gc.collect()
+
+    print("\n[4/5] Constructing initial DataFrames...")
+    hit_df = pd.DataFrame(hit_cols)
+    status_df = pd.DataFrame(status_cols)
+
+    del hit_cols
+    del status_cols
+    gc.collect()
+
+    print("\n[5/5] Downcasting and post-processing...")
+    # --- Post-processing for Hit DataFrame ---
+    if not hit_df.empty:
+        hit_df['board'] = hit_df['elink'] // 4
+        hit_df.drop(columns=['elink'], inplace=True)
+
+        dtype_map = {
+            'evt': np.uint32, 'bcid': np.uint16, 'l1a_counter': np.uint16,
+            'ea': np.uint8, 'board': np.uint8,
+            'row': np.uint8, 'col': np.uint8,  # Changed to Unsigned ints (uint8)
+            'toa': np.uint16, 'tot': np.uint16, 'cal': np.uint16,
+        }
+        hit_df = hit_df.astype(dtype_map, errors='ignore')
+    else:
+        print("No hit data found.")
+
+    # --- Post-processing for Status DataFrame ---
+    if not status_df.empty:
+        status_df['board'] = status_df['elink'] // 4
+        status_df.drop(columns=['elink'], inplace=True)
+
+        status_dtype_map = {
+            'evt': np.uint32, 'bcid': np.uint16, 'l1a_counter': np.uint16,
+            'sof': np.uint8, 'eof': np.uint8,
+            'full': np.uint8, 'any_full': np.uint8, 'global_full': np.uint8,
+            'chipid': np.uint16, 'status': np.uint8, 'hits': np.uint8, 'crc': np.uint8,
+            'board': np.uint8,
+        }
+        status_df = status_df.astype(status_dtype_map, errors='ignore')
+    else:
+        print("No status data found.")
+
+    elapsed_time = time.monotonic() - start_time
+    print("\n" + "="*35)
+    print(f"Processing complete in {elapsed_time:.2f} seconds.")
+    print("="*35 + "\n")
+
+    return hit_df, status_df
+
+
+## --------------- Decoding Class -----------------------
+## --------------------------------------
+class DecodeBinary:
+    def copy_dict_by_json(self, d):
+        return json.loads(json.dumps(d))
+
+    def __init__(self, firmware_key,
+                 board_id: list[int],
+                 file_list: list[Path],
+                 save_nem: Path = None,
+                 skip_fw_filler: bool = False,
+                 skip_event_df: bool = False,
+                 skip_crc_df: bool = False,
+        ):
+        self.firmware_key            = firmware_key
+        self.header_pattern          = 0xc3a3c3a
+        self.trailer_pattern         = 0b001011
+        self.channel_header_pattern  = 0x3c5c0 >> 2
+        self.firmware_filler_pattern = 0x5555
+        self.firmware_filler_pattern_new = 0x556
+        self.check_link_filler_pattern = 0x559
+        self.previous_event          = -1
+        self.event_counter           = 0
+        self.board_ids               = board_id
+        self.files_to_process        = file_list
+        self.save_nem                = save_nem
+        self.nem_file                = None
+        self.skip_fw_filler          = skip_fw_filler
+        self.skip_event_df           = skip_event_df
+        self.skip_crc_df             = skip_crc_df
+
+        self.file_count = 0
+        self.line_count = 0
+        self.max_file_lines = 1e6
+
+        self.in_event                = False
+        self.eth_words_in_event      = -1
+        self.words_in_event          = -1
+        self.current_word            = -1
+        self.event_number            = -1
+        self.enabled_channels        = -1
+        self.running_word            = None
+        self.position_40bit          = 0
+        self.current_channel         = -1
+        self.in_40bit                = False
+        self.data                    = {}
+        self.version                 = None
+        self.event_type              = None
+        self.reset_params()
+
+        self.data_template = {
+            'evt': [],
+            'bcid': [],
+            'l1a_counter': [],
+            'ea': [],
+            'board': [],
+            'row': [],
+            'col': [],
+            'toa': [],
+            'tot': [],
+            'cal': [],
+        }
+
+        self.crc_data_template = {
+            'evt': [],
+            'bcid': [],
+            'l1a_counter': [],
+            'board': [],
+            'CRC': [],
+            'CRC_calc': [],
+            'CRC_mismatch': [],
+        }
+
+        self.event_data_template = {
+            'evt': [],
+            'bcid': [],
+            'l1a_counter': [],
+            'fpga_evt_number': [],
+            'hamming_count': [],
+            'overflow_count': [],
+            'CRC': [],
+            'CRC_calc': [],
+            'CRC_mismatch': [],
+        }
+
+        self.data_to_load = self.copy_dict_by_json(self.data_template)
+        self.crc_data_to_load = self.copy_dict_by_json(self.crc_data_template)
+        self.event_data_to_load = self.copy_dict_by_json(self.event_data_template)
+
+        if not self.skip_crc_df:
+            config = Configuration(
+                width=8,
+                polynomial=0x2F, # Normal representation
+                #polynomial=0x97, # Reversed reciprocal representation (the library uses normal representation, so do not use this)
+                init_value=0x00,
+                final_xor_value=0x00,
+                reverse_input=False,
+                reverse_output=False,
+            )
+
+        if not self.skip_crc_df:
+            self.CRCcalculator = Calculator(config, optimized=True)
+
+        self.event_in_filler_counter = 0  # To count events between fillers
+        self.filler_idx = 0
+        self.filler_prev_event = -1
+
+        self.event_in_filler_40_counter = 0  # To count events between fillers
+        self.filler_40_idx = 0
+        self.filler_40_prev_event = -1
+
+        self.filler_data_template = {
+            'idx': [],
+            'type': [],
+            'events': [],
+            'prev_event': [],
+            'last_event': [],
+            'filler_data': [],
+        }
+
+        self.filler_data = self.copy_dict_by_json(self.filler_data_template)
+
+    def set_dtype(self):
+        tmp = self.data_to_load
+
+        self.data_to_load = {
+            'evt': np.array(tmp['evt'], dtype=np.uint64),
+            'bcid': np.array(tmp['bcid'], dtype=np.uint16),
+            'l1a_counter': np.array(tmp['l1a_counter'], dtype=np.uint8),
+            'ea': np.array(tmp['ea'], dtype=np.uint8),
+            'board': np.array(tmp['board'], dtype=np.uint8),
+            'row': np.array(tmp['row'], dtype=np.uint8),
+            'col': np.array(tmp['col'], dtype=np.uint8),
+            'toa': np.array(tmp['toa'], dtype=np.uint16),
+            'tot': np.array(tmp['tot'], dtype=np.uint16),
+            'cal': np.array(tmp['cal'], dtype=np.uint16),
+        }
+
+    def set_crc_dtype(self):
+        tmp = self.crc_data_to_load
+
+        self.crc_data_to_load = {
+            'evt': np.array(tmp['evt'], dtype=np.uint64),
+            'bcid': np.array(tmp['bcid'], dtype=np.uint16),
+            'l1a_counter': np.array(tmp['l1a_counter'], dtype=np.uint8),
+            'board': np.array(tmp['board'], dtype=np.uint8),
+            'CRC': np.array(tmp['CRC'], dtype=np.uint8),
+            'CRC_calc': np.array(tmp['CRC_calc'], dtype=np.uint8),
+            'CRC_mismatch': np.array(tmp['CRC_mismatch'], dtype=np.bool_),
+        }
+
+    def set_event_dtype(self):
+        tmp = self.event_data_to_load
+
+        self.event_data_to_load = {
+            'evt': np.array(tmp['evt'], dtype=np.uint64),
+            'bcid': np.array(tmp['bcid'], dtype=np.uint16),
+            'l1a_counter': np.array(tmp['l1a_counter'], dtype=np.uint8),
+            'fpga_evt_number': np.array(tmp['fpga_evt_number'], dtype=np.uint64),
+            'hamming_count': np.array(tmp['hamming_count'], dtype=np.uint8),
+            'overflow_count': np.array(tmp['overflow_count'], dtype=np.uint8),
+            'CRC': np.array(tmp['CRC'], dtype=np.uint8),
+            'CRC_calc': np.array(tmp['CRC_calc'], dtype=np.uint8),
+            'CRC_mismatch': np.array(tmp['CRC_mismatch'], dtype=np.bool_),
+        }
+
+    def set_filler_dtype(self):
+        tmp = self.filler_data
+
+        self.filler_data = {
+            'idx': np.array(tmp['idx'], dtype=np.uint64),
+            'type': np.array(tmp['type'], dtype=np.string_),
+            'events': np.array(tmp['events'], dtype=np.uint32),
+            'prev_event': np.array(tmp['prev_event'], dtype=np.int32),
+            'last_event': np.array(tmp['last_event'], dtype=np.int32),
+            'filler_data': np.array(tmp['filler_data'], dtype=np.string_),
+        }
+
+    def reset_params(self):
+        self.in_event                = False
+        self.eth_words_in_event      = -1
+        self.words_in_event          = -1
+        self.current_word            = -1
+        self.event_number            = -1
+        self.enabled_channels        = -1
+        self.running_word            = None
+        self.position_40bit          = 0
+        self.current_channel         = -1
+        self.in_40bit                = False
+        self.data                    = {}
+        self.crc_data                = {}
+        self.event_data              = {}
+        self.version                 = None
+        self.event_type              = None
+        self.CRCdata_40bit           = []
+        self.CRCdata                 = []  # Datao mentions the initial value for the event CRC is the CRC output value of the previous event... so it is hard to implement a CRC check for events if this is true
+
+    def open_next_file(self):
+        if self.save_nem is not None:
+            if self.nem_file is not None:
+                self.nem_file.close()
+
+            base_dir = self.save_nem.parent
+            file_name = self.save_nem.stem
+            suffix = self.save_nem.suffix
+
+            file_name = f'{file_name}_{self.file_count}{suffix}'
+
+            self.nem_file = open(base_dir / file_name, "w")
+            self.file_count += 1
+            self.line_count = 0
+        else:
+            self.nem_file = None
+            self.line_count = 0
+            self.file_count = 0
+
+    def close_file(self):
+        if self.save_nem is not None:
+            if self.nem_file is not None:
+                self.nem_file.close()
+        self.nem_file = None
+        self.line_count = 0
+        self.file_count = 0
+
+    def write_to_nem(self, write_str: str):
+        if self.nem_file is not None:
+            self.nem_file.write(write_str)
+            self.line_count += 1
+
+            if self.line_count >= self.max_file_lines:
+                self.open_next_file()
+
+    def div_ceil(self, x,y):
+        return -(x//(-y))
+
+    def decode_40bit(self, word):
+        # Header
+        if word >> 22 == self.channel_header_pattern and not self.in_40bit:
+            self.current_channel += 1
+            while not ((self.enabled_channels >> self.current_channel) & 0b1):
+                self.current_channel += 1
+                if self.current_channel > 3:
+                    print('Found more headers than number of channels')
+                    if self.nem_file is not None:
+                        self.write_to_nem(f"THIS IS A BROKEN EVENT SINCE MORE HEADERS THAN MASK FOUND\n")
+                    self.reset_params()
+                    return
+            self.bcid = (word & 0xfff)
+            self.l1acounter = ((word >> 14) & 0xff)
+            self.data[self.current_channel] = self.copy_dict_by_json(self.data_template)
+            self.crc_data[self.current_channel] = self.copy_dict_by_json(self.crc_data_template)
+            self.in_40bit = True
+            Type = (word >> 12) & 0x3
+
+            if not self.skip_crc_df:
+                self.CRCdata_40bit = [
+                    (word >> 32) & 0xff,
+                    (word >> 24) & 0xff,
+                    (word >> 16) & 0xff,
+                    (word >> 8) & 0xff,
+                    (word ) & 0xff,
+                    ]
+
+            if self.nem_file is not None:
+                self.write_to_nem(f"H {self.current_channel} {self.l1acounter} 0b{Type:02b} {self.bcid}\n")
+        # Data
+        elif (word >> 39) == 1 and self.in_40bit:
+            EA = (word >> 37) & 0b11
+            ROW = (word >> 29) & 0b1111
+            COL = (word >> 33) & 0b1111
+            TOA = (word >> 19) & 0x3ff
+            TOT = (word >> 10) & 0x1ff
+            CAL = (word) & 0x3ff
+            #self.data[self.current_channel]['evt_number'].append(self.event_number)
+            self.data[self.current_channel]['bcid'].append(self.bcid)
+            self.data[self.current_channel]['l1a_counter'].append(self.l1acounter)
+            self.data[self.current_channel]['evt'].append(self.event_counter)
+            self.data[self.current_channel]['ea'].append(EA)
+            self.data[self.current_channel]['board'].append(self.current_channel)
+            self.data[self.current_channel]['row'].append(ROW)
+            self.data[self.current_channel]['col'].append(COL)
+            self.data[self.current_channel]['toa'].append(TOA)
+            self.data[self.current_channel]['tot'].append(TOT)
+            self.data[self.current_channel]['cal'].append(CAL)
+
+            if not self.skip_crc_df:
+                self.CRCdata_40bit += [
+                    (word >> 32) & 0xff,
+                    (word >> 24) & 0xff,
+                    (word >> 16) & 0xff,
+                    (word >> 8) & 0xff,
+                    (word ) & 0xff,
+                    ]
+
+            if self.nem_file is not None:
+                self.write_to_nem(f"D {self.current_channel} 0b{EA:02b} {ROW} {COL} {TOA} {TOT} {CAL}\n")
+
+        # Trailer
+        elif (word >> 22) & 0x3ffff == self.board_ids[self.current_channel] and self.in_40bit:
+            hits   = (word >> 8) & 0xff
+            status = (word >> 16) & 0x3f
+            CRC    = (word) & 0xff
+            self.in_40bit = False
+
+            if len(self.data[self.current_channel]['evt']) != hits:
+                print('Number of hits does not match!')
+                self.reset_params()
+                return
+
+            if not self.skip_crc_df:
+                self.CRCdata_40bit += [
+                    (word >> 32) & 0xff,
+                    (word >> 24) & 0xff,
+                    (word >> 16) & 0xff,
+                    (word >> 8) & 0xff,
+                    #(word ) & 0xff,
+                    ]
+                data = bytes(self.CRCdata_40bit)
+                check = self.CRCcalculator.checksum(data)
+
+            if not self.skip_crc_df:
+                self.crc_data[self.current_channel]['bcid'].append(self.bcid)
+                self.crc_data[self.current_channel]['l1a_counter'].append(self.l1acounter)
+                self.crc_data[self.current_channel]['evt'].append(self.event_counter)
+                self.crc_data[self.current_channel]['board'].append(self.current_channel)
+                self.crc_data[self.current_channel]['CRC'].append(CRC)
+                self.crc_data[self.current_channel]['CRC_calc'].append(check)
+                self.crc_data[self.current_channel]['CRC_mismatch'].append(bool(CRC != check))
+
+            if self.nem_file is not None:
+                mismatch = ""
+                if CRC != check:
+                    mismatch = " CRC Mismatch"
+                self.write_to_nem(f"T {self.current_channel} {status} {hits} 0b{CRC:08b}{mismatch}\n")
+
+
+        # Something else
+        else:
+            binary = format(word, '040b')
+            print(f'Warning! Found 40 bits word which is not matched with the pattern {binary}')
+            self.reset_params()
+            return
+
+    def decode_files(self):
+        if self.save_nem is not None:
+            self.open_next_file()
+
+        self.data_to_load = self.copy_dict_by_json(self.data_template)
+        self.set_dtype()
+        df = pd.DataFrame(self.data_to_load)
+        self.data_to_load = self.copy_dict_by_json(self.data_template)
+
+        self.crc_data = self.copy_dict_by_json(self.crc_data_template)
+        self.set_crc_dtype()
+        crc_df = pd.DataFrame(self.crc_data_to_load)
+        self.crc_data_to_load = self.copy_dict_by_json(self.crc_data_template)
+
+        self.event_data_to_load = self.copy_dict_by_json(self.event_data_template)
+        self.set_event_dtype()
+        event_df = pd.DataFrame(self.event_data_to_load)
+        self.event_data_to_load = self.copy_dict_by_json(self.event_data_template)
+
+        self.filler_data = self.copy_dict_by_json(self.filler_data_template)
+        self.set_filler_dtype()
+        filler_df = pd.DataFrame(self.filler_data)
+        self.filler_data = self.copy_dict_by_json(self.filler_data_template)
+
+        decoding = False
+        for ifile in self.files_to_process:
+            with open(file=ifile, mode='rb') as infile:
+                while True:
+                    in_data = infile.read(4)
+                    # print(in_data)
+                    if in_data == b'':
+                        break
+                    word = int.from_bytes(in_data, byteorder='little')
+                    if not decoding and word == 0:
+                        continue
+                    if not decoding:
+                        decoding = True
+
+                    ## Event header
+                    if (word >> 4) == self.header_pattern:
+                        self.reset_params()
+                        self.enabled_channels = word & 0b1111
+                        self.in_event = True
+                        # print('Event header')
+                        if not self.skip_crc_df:
+                            self.CRCdata = [
+                                (word >> 24) & 0xff,
+                                (word >> 16) & 0xff,
+                                (word >> 8) & 0xff,
+                                (word ) & 0xff,
+                            ]
+                        continue
+
+                    # Event Header Line Two Found
+                    elif(self.in_event and (self.words_in_event == -1) and (word >> 28 == self.firmware_key)):
+                        self.current_word       = 0
+                        self.event_type         = (word) & 0x3
+                        self.event_number       = (word >> 12) & 0xffff
+                        self.words_in_event     = (word >> 2) & 0x3ff
+                        self.version            = (word >> 28) & 0xf
+                        self.eth_words_in_event = self.div_ceil(40*self.words_in_event, 32)
+                        # print(f"Num Words {self.words_in_event} & Eth Words {self.eth_words_in_event}")
+                        # Set valid_data to true once we see fresh data
+                        if(self.event_number==1 or self.event_number==0):
+                            self.valid_data = True
+                        self.event_data = self.copy_dict_by_json(self.event_data_template)
+                        if not self.skip_crc_df:
+                            self.CRCdata += [
+                                (word >> 24) & 0xff,
+                                (word >> 16) & 0xff,
+                                (word >> 8) & 0xff,
+                                (word ) & 0xff,
+                            ]
+                        # print('Event Header Line Two Found')
+                        # print(self.event_number)
+                        if self.nem_file is not None:
+                            self.write_to_nem(f"EH 0b{self.version:04b} {self.event_number} {self.words_in_event} {self.event_type:02b}\n")
+                        continue
+
+                    # Event Header Line Two NOT Found after the Header
+                    elif(self.in_event and (self.words_in_event == -1) and (word >> 28 != self.firmware_key)):
+                        # print('Event Header Line Two NOT Found after the Header')
+                        self.reset_params()
+                        continue
+
+                    # Event Trailer NOT Found after the required number of ethernet words was read
+                    elif(self.in_event and (self.eth_words_in_event==self.current_word) and (word >> 26 != self.trailer_pattern)):
+                        # print('Event Trailer NOT Found after the required number of ethernet words was read')
+                        self.reset_params()
+                        continue
+
+                    # Event Trailer Found - DO NOT CONTINUE
+                    elif(self.in_event and (self.eth_words_in_event==self.current_word) and (word >> 26 == self.trailer_pattern)):
+                        for key in self.data_to_load:
+                            for board in self.data:
+                                self.data_to_load[key] += self.data[board][key]
+                        for key in self.crc_data_to_load:
+                            for board in self.crc_data:
+                                self.crc_data_to_load[key] += self.crc_data[board][key]
+                        # print(self.event_number)
+                        # print(self.data)
+
+                        if not self.skip_crc_df:
+                            self.CRCdata += [
+                                (word >> 24) & 0xff,
+                                (word >> 16) & 0xff,
+                                (word >> 8) & 0xff,
+                            ]
+
+                            data = bytes(self.CRCdata)
+                            check = self.CRCcalculator.checksum(data)
+
+                        crc            = (word) & 0xff
+                        overflow_count = (word >> 11) & 0x7
+                        hamming_count  = (word >> 8) & 0x7
+
+                        if not self.skip_event_df:
+                            self.event_data['evt'].append(self.event_counter)
+                            self.event_data['bcid'].append(self.bcid)
+                            self.event_data['l1a_counter'].append(self.l1acounter)
+                            self.event_data['fpga_evt_number'].append(self.event_number)
+                            self.event_data['hamming_count'].append(hamming_count)
+                            self.event_data['overflow_count'].append(overflow_count)
+                            self.event_data['CRC'].append(crc)
+                            self.event_data['CRC_calc'].append(check)
+                            self.event_data['CRC_mismatch'].append(bool(crc != check))
+
+                        for key in self.event_data_to_load:
+                            self.event_data_to_load[key] += self.event_data[key]
+                        self.event_counter += 1
+                        self.event_in_filler_counter += 1
+                        self.event_in_filler_40_counter += 1
+
+                        if len(self.data_to_load['evt']) >= 10000:
+                            self.set_dtype()
+                            df = pd.concat([df, pd.DataFrame(self.data_to_load)], ignore_index=True)
+                            self.data_to_load = self.copy_dict_by_json(self.data_template)
+
+                            if not self.skip_crc_df:
+                                self.set_crc_dtype()
+                                crc_df = pd.concat([crc_df, pd.DataFrame(self.crc_data_to_load)], ignore_index=True)
+                                self.crc_data_to_load = self.copy_dict_by_json(self.crc_data_template)
+
+                            if not self.skip_event_df:
+                                self.set_event_dtype()
+                                event_df = pd.concat([event_df, pd.DataFrame(self.event_data_to_load)], ignore_index=True)
+                                self.event_data_to_load = self.copy_dict_by_json(self.event_data_template)
+
+                        if self.nem_file is not None:
+                            mismatch = ""
+                            if crc != check:
+                                mismatch = " CRC Mismatch"
+                            self.write_to_nem(f"ET {self.event_number} {overflow_count} {hamming_count} 0b{crc:08b}{mismatch}\n")
+
+                    # Event Data Word
+                    elif(self.in_event):
+                        # print(self.current_word)
+                        # print(format(word, '032b'))
+
+                        if not self.skip_crc_df:
+                            self.CRCdata += [
+                                (word >> 24) & 0xff,
+                                (word >> 16) & 0xff,
+                                (word >> 8) & 0xff,
+                                (word ) & 0xff,
+                            ]
+
+                        if self.position_40bit == 4:
+                            self.word_40 = self.word_40 | word
+                            self.decode_40bit(self.word_40)
+                            self.position_40bit = 0
+                            self.current_word += 1
+                            continue
+                        if self.position_40bit >= 1:
+                            self.word_40 = self.word_40 | (word >> (8*(4-self.position_40bit)))
+                            self.decode_40bit(self.word_40)
+                        self.word_40 = (word << ((self.position_40bit + 1)*8)) & 0xffffffffff
+                        self.position_40bit += 1
+                        self.current_word += 1
+                        continue
+
+                    # If Firmware filler
+                    elif (word >> 16) == self.firmware_filler_pattern:
+                        if self.nem_file is not None and not self.skip_fw_filler:
+                            self.write_to_nem(f"Filler: 0b{word & 0xffff:016b}\n")
+
+                    # New firmware filler
+                    elif (word >> 20) == self.firmware_filler_pattern_new:
+                        if not self.skip_fw_filler:
+                            self.filler_data['idx'].append(self.filler_idx)
+                            self.filler_data['type'].append("FW")
+                            self.filler_data['events'].append(self.event_in_filler_counter)
+                            self.filler_data['prev_event'].append(self.filler_prev_event)
+                            self.filler_data['last_event'].append(self.event_counter)
+                            self.filler_data['filler_data'].append(f"0b{word & 0xfffff:020b}")
+                            self.filler_idx += 1
+                            self.event_in_filler_counter = 0
+                            self.filler_prev_event = self.event_counter
+                        if self.nem_file is not None and not self.skip_fw_filler:
+                            self.write_to_nem(f"FW Filler: 0b{word & 0xfffff:020b}\n")
+
+                    # Check link filler
+                    elif (word >> 20) == self.check_link_filler_pattern:
+                        self.filler_data['idx'].append(self.filler_40_idx)
+                        self.filler_data['type'].append("40")
+                        self.filler_data['events'].append(self.event_in_filler_40_counter)
+                        self.filler_data['prev_event'].append(self.filler_40_prev_event)
+                        self.filler_data['last_event'].append(self.event_counter)
+                        self.filler_data['filler_data'].append(f"0b{word & 0xfffff:020b}")
+                        self.filler_40_idx += 1
+                        self.event_in_filler_40_counter = 0
+                        self.filler_40_prev_event = self.event_counter
+                        if self.nem_file is not None:
+                            self.write_to_nem(f"40Hz Filler: 0b{word & 0xfffff:020b}\n")
+
+                    if len(self.filler_data['idx']) > 10000:
+                        self.set_filler_dtype()
+                        filler_df = pd.concat([filler_df, pd.DataFrame(self.filler_data)], ignore_index=True)
+                        self.filler_data= self.copy_dict_by_json(self.filler_data_template)
+
+                    # Reset anyway!
+                    self.reset_params()
+
+                if len(self.data_to_load['evt']) > 0:
+                    self.set_dtype()
+                    df = pd.concat([df, pd.DataFrame(self.data_to_load)], ignore_index=True)
+                    self.data_to_load = self.copy_dict_by_json(self.data_template)
+
+                if len(self.crc_data_to_load['evt']) > 0:
+                    if not self.skip_crc_df:
+                        self.set_crc_dtype()
+                        crc_df = pd.concat([crc_df, pd.DataFrame(self.crc_data_to_load)], ignore_index=True)
+                        self.crc_data_to_load = self.copy_dict_by_json(self.crc_data_template)
+
+                if len(self.event_data_to_load['evt']) > 0:
+                    if not self.skip_event_df:
+                        self.set_event_dtype()
+                        event_df = pd.concat([event_df, pd.DataFrame(self.event_data_to_load)], ignore_index=True)
+                        self.event_data_to_load = self.copy_dict_by_json(self.event_data_template)
+
+                if len(self.filler_data['idx']) > 0:
+                    self.set_filler_dtype()
+                    filler_df = pd.concat([filler_df, pd.DataFrame(self.filler_data)], ignore_index=True)
+                    self.filler_data= self.copy_dict_by_json(self.filler_data_template)
+
+        self.close_file()
+        return df, event_df, crc_df, filler_df
+
+## --------------------------------------
+if __name__ == "__main__":
+
+
+    parser = argparse.ArgumentParser(
+                prog='convert',
+                description='converting binary to feather',
+            )
+
+    parser.add_argument(
+        '-d',
+        '--input_dir',
+        metavar = 'NAME',
+        type = str,
+        help = 'input directory containing .bin',
+        required = True,
+        dest = 'input_dir',
+    )
+
+    parser.add_argument(
+        '-o',
+        '--output_name',
+        metavar = 'NAME',
+        help = 'Name for output file',
+        default = None,
+        dest = 'output_name',
+    )
+
+    args = parser.parse_args()
+
+    input_path = Path(args.input_dir)
+    files_to_process = []
+    processing_mode = None
+
+    constellation_files = natsorted(input_path.glob('file*.bin'))
+    if constellation_files:
+        processing_mode = 'constellation'
+        files_to_process = constellation_files
+    else:
+        ce_files = natsorted(input_path.glob('file*.dat'))
+        if ce_files:
+            processing_mode = 'ce'
+            files_to_process = ce_files
+
+    if not processing_mode:
+        print(f"Error: No 'file*.bin' or 'file*.dat' files found in {input_path}.")
+        exit() # Use 'return' if in a function, 'exit()' if in a main script
+
+    print(f"--> Found {len(files_to_process)} files. Processing in '{processing_mode}' mode.")
+
+    # 3. Processing logic is now separated based on the detected mode.
+    #    Initialize dataframes to None.
+    df = None
+    filler_df = None
+
+    # Determine output name once. This is more concise.
+    output_base_name = args.output_name or input_path.name
+    output_path = f'{output_base_name}.feather'
+    status_output_path = f'status_{output_base_name}.feather'
+    filler_output_path = f'filler_{output_base_name}.feather'
+
+    if processing_mode == 'constellation':
+        decoder = DecodeBinary(
+            firmware_key=0b0001,
+            board_id=[0x17f0f, 0x17f0f, 0x17f0f, 0x17f0f],
+            file_list=files_to_process,
+            save_nem=None,
+            skip_fw_filler=True,
+            skip_event_df=True,
+            skip_crc_df=True,
+        )
+        # Use a try-except block for robustness in case decoding fails
+        try:
+            df, _, _, filler_df = decoder.decode_files()
+
+            # Save the main DataFrame
+            if df is not None and not df.empty:
+                df.to_feather(output_path)
+                print(f"Successfully saved main data to: {output_path}")
+            else:
+                print('No main data was recorded!')
+
+            # Save the filler DataFrame only if it was created (in constellation mode)
+            if filler_df is not None and not filler_df.empty:
+                filler_df.to_feather(filler_output_path)
+                print(f"Successfully saved filler data to: {filler_output_path}")
+
+        except Exception as e:
+            print(f"An error occurred during 'constellation' decoding: {e}")
+
+    elif processing_mode == 'ce':
+        try:
+            hit_df, status_df = process_tamalero_outputs(files_to_process)
+        except Exception as e:
+            print(f"An error occurred during 'ce' processing: {e}")
+
+        dir1 = Path('./hits')
+        dir2 = Path('./status')
+
+        dir1.mkdir(exist_ok=True)
+        dir2.mkdir(exist_ok=True)
+
+        if not hit_df.empty:
+            hit_df.to_feather(dir1 / output_path)
+
+        if not status_df.empty:
+            status_df.to_feather(dir2 / status_output_path)
+
+    # 4. Centralized and non-repetitive saving logic.
+    print("\n--- Saving Results ---")

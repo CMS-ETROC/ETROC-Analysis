@@ -1,0 +1,10 @@
+quantity,unit,BARE9,BARE7,ratio,note
+"Preamp gain, 8-22 fC",DAC/fC,8.239114917915705,10.205992972052892,1.2387244350555506,"both at VA 1.20 V, VD 1.20 V, 200 MRad; different dies, different dose history"
+Baseline,DAC,799.3333333333334,756.0,0.9457881567973311,"absolute DAC, so reference-scale sensitive"
+Turn-off above baseline at 15 fC,DAC,103.16666666666667,125.0,1.2116316639741518,tracks the gain
+S-curve width sigma,DAC,1.280000000000001,1.1900000000000008,0.9296875,"shared-sigma fit, same function as notebooks 01 and 02"
+ENC = sigma / gain,electrons,969.65894997142,727.7484640973662,0.7505200298711378,ratio of the two above
+Noise-peak FWHM,DAC,4.025390838785692,3.312819238799667,0.8229807667071203,in-configuration noise scan
+"TOT at BL+20, 15 fC",code,48.11249032233709,50.51664517957261,1.0499694536933863,RFSel is not recorded on either die
+"TOA jitter at BL+20, 15 fC",ps,9.83493377115771,6.431306096296628,0.653924698014471,both close to the quantisation floor
+Median CAL,code,185.29034847290546,189.65517556999603,1.0235566889104795,sets the ps-per-code conversion

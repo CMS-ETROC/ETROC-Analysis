@@ -1,0 +1,12 @@
+question,et2p01_bare,hybrid,et2p03_bare
+dose series (0/200/400 MRad),"yes, at −25 °C","no — 0 MRad only, TID history not recorded","yes, at −23.6 °C"
+temperature series,"+12 and −25 °C, turn-off only at −25 °C","−25, 0, +22 °C",no — −23.2 to −23.9 °C throughout
+supply-rail series,no,no,"yes — VA 0.85–1.40 V SUPPLY at four settings (~0.65–1.20 V at the chip: an under-voltage scan up to nominal), plus a 94-point VA × VD grid"
+sensor capacitance,no sensor,yes — and a confound-free 210 V → 0 V bias bracket,no sensor
+voltage reference,external 1.0 V,external 1.0 V,internal generator (VrefGen_PD = 0; wiring not recorded)
+in-configuration baseline at every condition,no — maps for 3 of 4 conditions,partly — maps plus NoiseOnly scans,yes — a noise scan at all 12
+supply-current monitoring,yes — 231 120 samples (notebook 00),yes — 233 576 samples,no — one sentence of prose in info.txt
+on-chip temperature (VTemp),no,no,"no — the sensor was powered, never read"
+RFSel,not recorded,not recorded,not recorded
+power mode,not recorded,`highpower` — a directory tag,not recorded
+same pixels across conditions,"yes, 12","yes, 9","yes, 6 — which is what makes a paired test possible"

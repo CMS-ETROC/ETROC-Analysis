@@ -1,0 +1,31 @@
+Nominal Analog 1.2V = 1.4V on power supply
+Nominal Digital 1.2V = 1.25V on power supply
+
+0 MRad, -25C plate findings:
+    0.9V on D results in stable links but no QInj, even though pixels calibrate
+
+200 MRad, -25C plate findings:
+    pixel auto calibration failed at 0.9V on D
+    no links and no QInj, even though pixels calibrate at 0.95V on D
+
+    VDD 1.3V, clearfifo after links is destructive. PLL calib recovers. then dont clear fifo
+    -> Why does clear fifo break the PLL lock? No such issues at 1.4VDD
+
+    at 0.95V, bitalign light is flickering, suggesting that bit positin is changing frequently. 
+    ->Might point to data quality issue. FLicker goes away after PLL calib. 
+    -> QInj events are empty but at right BCIDs
+
+400 MRad, -25C plate:
+    Calibration is taking longer by ~50s
+
+    WS current is down at 9.X mA level, which is what it was during both TID runs. Crcuially, it was not so during the Voltage / money plots after 200 MRad when we saw large large noise peak measurements. Is this a related phenomenon? Perhaps money plots will reveal all.
+
+    Aug 12 2pm calibration not taking long anymore, maybe notebook was reset or chip cooled down?
+    
+    At VDA=1.2V and VDD=1.1V (scanning down from VDD 1.4V), WS ANA went from .0095 to .0365 on repeated FC/PLL calib. Then powering off FPGA brings it back down.
+
+    Scanning up from VDD=1.0V, at 1.05V the bitalign error light switches state slowly, QInj possible.
+    But at VDD=1.1V, something breaks and bitalign error is solidly on. Data light solid on. No other LEDS.
+    At VDD=1.15V, things start working very  again, and no bitalign flicker or switch.
+
+    Empty QInj events at 0.95VDD, same as 200MRad case.

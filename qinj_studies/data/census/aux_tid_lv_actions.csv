@@ -1,0 +1,8 @@
+source_file,timestamp,system,type,message
+ph_2024-01-10.sqlite,2024-01-10 22:40:38.256038,Power,Logging,Start
+ph_2024-01-10.sqlite,2024-01-11 00:27:54.467337,Power,Logging,Stop
+ph_2024-01-12.sqlite,2024-01-12 16:02:32.247005,Power,Logging,Start
+ph_2024-01-12.sqlite,2024-01-14 22:02:49.920801,Power,Logging,Stop
+ph_2024-01-14.sqlite,2024-01-14 22:12:30.186369,Power,Logging,Stop
+ph_2024-01-14.sqlite,2024-01-14 22:15:37.933756,Power,Logging,Start
+ph_2024-01-14.sqlite,2024-01-22 18:00:21.372171,Power,Logging,Stop
