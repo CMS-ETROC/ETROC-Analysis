@@ -9,7 +9,9 @@
 # measurement in this folder**, here or in the hybrid notebook 02 — the charge is injected by the
 # chip's own internal injector directly at the preamplifier input, so a bonded LGAD contributes
 # its capacitance and nothing else.
-# **Campaign** FNAL bench, August 2024, total-ionising-dose (X-ray) test: 0, 200 and 400 MRad.
+# **Campaign** CERN X-ray total-ionising-dose test, August 2024 (the raw data were later parked on the
+# FNAL bench PC `fermilab-etroc3` and its removable disk, which is why they look like a bench campaign
+# on disk): 0, 200 and 400 MRad on `BARE9`; `BARE7` is treated separately in section 14.
 # **Temperature** −23.2 to −23.9 °C, from directory names only.
 # **Pixels** 6: (row, col) ∈ {(0,0), (0,14), (3,0), (3,14), (12,0), (12,14)}.
 # **Charges** 6, 8, 10, 15 and 22 fC. **Rails** VA 0.85–1.40 V at VD 1.20 V for the threshold
@@ -104,6 +106,7 @@ import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 import numpy as np
 import pandas as pd
 
@@ -297,12 +300,13 @@ print("temperatures seen      :", [float(t) for t in sorted(PTS.temperature_C.dr
 #   threshold sweep**, so it contributes a baseline and a gain and nothing else — and that is
 #   exactly what makes it useful: it is an independent repeat of the 0 MRad, VA 1.20 V condition
 #   and therefore a **repeatability floor** against which the dose differences can be judged.
-# * **`BARE7` now has both ends of a dose step.** Its 0 MRad day (`2024-08-14`, 8.88 GB) lived on
-#   the removable disk `X9` alone until it was copied and decoded; with it, BARE7 spans
-#   **0 → 200 MRad at VA 1.20 V** (and 0 MRad at VA 0.85 and 1.00 V as well). It does not reach
-#   400 MRad — only `BARE9` has all three doses — but it is a **second die of the same revision
-#   with a real dose difference**, which is the one direct handle this folder has on whether the
-#   sign of the baseline shift is a property of the revision or of one die. Section 14.
+# * **`BARE7` is quarantined.** Its 0 MRad day (`2024-08-14`, 8.88 GB) lived on the removable disk
+#   `X9` alone until it was copied and decoded, and a later acquisition (`2024-08-21`) carries the
+#   directory tag `200MRad`. **That tag is wrong**: the X-ray source failed before BARE7 reached
+#   200 MRad (operator statement, September 2026), so BARE7's dose after 2024-08-14 is unknown. The
+#   tables carry `dose_MRad = NaN` and a `dose_note` for those rows. BARE7 therefore contributes
+#   **no dose step** to this notebook: it is characterised on its own in section 14 and enters no
+#   comparison, no dose figure and nothing in notebook 04.
 
 # %% [markdown]
 # ### The three ET2.03 dies of August 2024, and what each one is for
@@ -314,12 +318,12 @@ print("temperatures seen      :", [float(t) for t in sorted(PTS.temperature_C.dr
 # | die | role | evidence |
 # |---|---|---|
 # | **`ET2p03_BARE9`** | the TID series proper: 0 / 200 / 400 MRad, four analog rails | the X9 day directories `2024-08-03` (0 MRad, untagged), `-07` and `-08` (200 MRad), `-11` and `-12` (400 MRad), plus the `TID_August` working copy; the conditions table above |
-# | **`ET2p03_BARE7`** | second TID die, 0 → 200 MRad only | 0 MRad money plot on `2024-08-14` — that session's register dump is stamped 21:21:53, five minutes before irradiation step 3 opened at 21:27 in the campaign's own `cern_TID.ipynb` timeline (notebook 00 §7.7) — and 200 MRad on `2024-08-21`. Sections 14 and 14.1 |
+# | **`ET2p03_BARE7`** | second die, **quarantined**: 0 MRad measured; its later dose is unknown (X-ray failure; the `200MRad` tag is wrong) | 0 MRad money plot on `2024-08-14` — that session's register dump is stamped 21:21:53, five minutes before irradiation step 3 opened at 21:27 in the campaign's own `cern_TID.ipynb` timeline (notebook 00 §7.7) — and 200 MRad on `2024-08-21`. Sections 14 and 14.1 |
 # | **`ET2p03_BARE4`** | **never irradiated**; the monitoring die | sat in the CERN climate chamber 2024-08-04 → 08-14, i.e. in parallel with BARE9's irradiation. All 140 of its baseline maps carry 0 MRad and `chip_name = ET2p03_BARE4`. It injected no charge, so it appears nowhere in this notebook — but it is the **only** ET2.03 internal-VRef and on-chip-VTemp record in existence, and notebook 00 §7.6 fits their temperature slopes from it |
 #
-# So this notebook's dose statements rest on BARE9 (all three doses) and BARE7 (0 → 200 MRad), and
-# every reference-drift argument that reaches beyond them borrows BARE4's calibration through
-# notebook 00.
+# So every dose statement in this notebook rests on `BARE9` alone. `BARE7` is described in isolation in
+# section 14, and the reference-drift discussion now rests on the campaign's own VRef log (section 15)
+# rather than on BARE4's calibration alone.
 
 # %%
 grid = (COND[COND.points.notna()]
@@ -1004,7 +1008,7 @@ def cfg_of(chip, dose, va):
 
 
 pair_rows = []
-for chip in ["ET2p03_BARE9", "ET2p03_BARE7"]:
+for chip in ["ET2p03_BARE9"]:   # BARE7 has no dose step (section 14)
   for va in [0.85, 1.00, 1.20, 1.40]:
     for d0, d1 in [(0, 200), (200, 400), (0, 400)]:
         ca, cb = cfg_of(chip, d0, va), cfg_of(chip, d1, va)
@@ -1030,69 +1034,8 @@ PAIR = pd.DataFrame(pair_rows)
 PAIR.to_csv(Q.OUTDIR / "et2p03_paired_dose_ratios.csv", index=False)
 print("paired per-pixel gain ratio and baseline shift with dose, at fixed VA and fixed die\n")
 print(PAIR.round(3).to_string(index=False))
-print("\nBARE7 is the second die of the SAME revision, so its 0 -> 200 MRad step is the one direct")
-print("test in this folder of whether the baseline-falls-with-dose behaviour is a property of the")
-print("revision or of the single die BARE9. Both dies are read by exactly the same code path above.")
-p7 = PAIR[(PAIR.chip == "ET2p03_BARE7") & (PAIR.dose_from == 0) & (PAIR.dose_to == 200)]
-p9 = PAIR[(PAIR.chip == "ET2p03_BARE9") & (PAIR.dose_from == 0) & (PAIR.dose_to == 200) & (PAIR.va == 1.20)]
-if len(p7) and len(p9):
-    r7, r9 = p7.iloc[0], p9.iloc[0]
-    print("\n0 -> 200 MRad at VA 1.20 V, the one dose step both dies have:")
-    for lab, r in [("BARE9", r9), ("BARE7", r7)]:
-        print("  %s: baseline %+7.2f +- %.2f DAC   gain %+6.2f +- %.2f %%   (%d pixels)"
-              % (lab, r.BL_shift_paired_dac, r.BL_shift_sem, r.gain_change_pct,
-                 100 * r.gain_ratio_sem, int(r.n_pixels)))
-    same = "the SAME direction" if r7.BL_shift_paired_dac * r9.BL_shift_paired_dac > 0 else "OPPOSITE directions"
-    print("  The two dies' baselines move in %s." % same)
-    RESULTS["bare7_bl_shift_0to200_dac"] = float(r7.BL_shift_paired_dac)
-    RESULTS["bare7_bl_shift_0to200_sem"] = float(r7.BL_shift_sem)
-    RESULTS["bare7_gain_change_0to200_pct"] = float(r7.gain_change_pct)
-    RESULTS["bare7_gain_change_0to200_sem_pct"] = float(100 * r7.gain_ratio_sem)
-
-print("\nTHE NOMINAL-CONDITION VERSION OF THE DOSE STEP.")
-print("VA 1.40 V (supply) is the ONLY setting that is nominal (~1.20 V) at the chip, and it has")
-print("200 and 400 MRad but no 0 MRad money plot, so 200 -> 400 MRad is the only dose step it can")
-print("supply. It is quoted here beside the same step at the VA 1.20 V (supply) reference, which")
-print("sits ~0.2 V UNDER nominal at the chip:\n")
-nom = PAIR[(PAIR.chip == "ET2p03_BARE9") & (PAIR.dose_from == 200) & (PAIR.dose_to == 400)]
-print("  %-34s  %-28s  %s" % ("condition", "baseline shift [DAC]", "paired preamp gain change [%]"))
-for _, r in nom.sort_values("va").iterrows():
-    tag = "  <- NOMINAL at the chip" if r.va == Q.VA_NOMINAL_SUPPLY_V else (
-          "  <- the dose-series reference" if r.va == 1.20 else "")
-    print("  VA %.2f V (supply, ~%.2f at chip)   %+7.2f +- %-16.2f  %+6.2f +- %.2f%s"
-          % (r.va, float(Q.va_at_chip(r.va)), r.BL_shift_paired_dac, r.BL_shift_sem,
-             r.gain_change_pct, 100 * r.gain_ratio_sem, tag))
-n14 = nom[nom.va == 1.40]
-n12 = nom[nom.va == 1.20]
-if len(n14) and len(n12):
-    a, b = n14.iloc[0], n12.iloc[0]
-    print("\n  At the nominal rail the 200 -> 400 MRad step costs %+.2f +- %.2f %% of preamp gain and"
-          % (a.gain_change_pct, 100 * a.gain_ratio_sem))
-    print("  moves the baseline by %+.1f +- %.1f DAC; ~0.2 V under nominal the same step costs"
-          % (a.BL_shift_paired_dac, a.BL_shift_sem))
-    print("  %+.2f +- %.2f %% and %+.1f +- %.1f DAC."
-          % (b.gain_change_pct, 100 * b.gain_ratio_sem, b.BL_shift_paired_dac, b.BL_shift_sem))
-    dg = a.gain_change_pct - b.gain_change_pct
-    eg = float(np.hypot(100 * a.gain_ratio_sem, 100 * b.gain_ratio_sem))
-    db = a.BL_shift_paired_dac - b.BL_shift_paired_dac
-    eb = float(np.hypot(a.BL_shift_sem, b.BL_shift_sem))
-    print("  nominal minus reference: gain %+.2f +- %.2f points (%.1f sigma), baseline"
-          % (dg, eg, abs(dg / eg)))
-    print("  %+.1f +- %.1f DAC (%.1f sigma) -- neither difference is resolved. No 0 MRad money"
-          % (db, eb, abs(db / eb)))
-    print("  plot exists at the nominal rail, so neither can be extended to the full 400 MRad.")
-    RESULTS["nominal_va140_gain_200to400_pct"] = float(a.gain_change_pct)
-    RESULTS["nominal_va140_gain_200to400_sem_pct"] = float(100 * a.gain_ratio_sem)
-    RESULTS["nominal_va140_bl_200to400_dac"] = float(a.BL_shift_paired_dac)
-    RESULTS["nominal_va140_bl_200to400_sem"] = float(a.BL_shift_sem)
-
-c0, c0b = cfg_of("ET2p03_BARE9", 0, 1.20), cfg_of("ET2p03_BARE9", None, 1.20)
-m, s, rms, n, _ = paired(c0, c0b)
-print("\nrepeatability floor: the two independent 0 MRad / VA 1.20 V acquisitions "
-      "(the TID_August run and the untagged 2024-08-03 day)")
-print("  paired per-pixel gain ratio %.4f +- %.4f over %d pixels (pixel RMS %.4f)" % (m, s, n, rms))
-print("  baseline difference %.1f DAC"
-      % (float(GB[GB.config == c0b].BL_mean.iloc[0]) - float(GB[GB.config == c0].BL_mean.iloc[0])))
+print("\nBARE7 does not appear in this table: its only dosed acquisition has an unknown dose")
+print("(section 14), so no paired dose step can be formed for it.")
 
 # %% [markdown]
 # Three things come out of that table and they are worth separating.
@@ -1165,12 +1108,6 @@ for dose in [0.0, 200.0, 400.0]:
 ax.set_xlabel("analog supply SETTING VA  [V]   (~VA − 0.20 V at the chip)")
 ax.set_ylabel("gain  [DAC LSB / fC]")
 ax.legend(fontsize=13)
-s7g = GB[(GB.chip == "ET2p03_BARE7")].sort_values(["dose", "va"])
-for dose, mk in [(0.0, "*"), (200.0, "P")]:
-    ss = s7g[s7g.dose == dose]
-    if len(ss):
-        ax.plot(ss.va, ss.gain_dac_per_fc, ls="", marker=mk, ms=15, color=Q.C_MAG,
-                label=f"BARE7, {int(dose)} MRad")
 ax.text(0.03, 0.90, "filled: the charges actually measured\nhollow: the same fit with the DAC-ceiling\nlower limits put back in",
         transform=ax.transAxes, fontsize=11)
 ax.legend(fontsize=11)
@@ -1185,18 +1122,12 @@ for dose in [0.0, 200.0, 400.0]:
     ax.plot(s.va, s.BL_mean, "-", marker=DMK[dose], ms=12, lw=2.6, color=DCOL[dose],
             label=f"{int(dose)} MRad")
 ax.set_xlabel("analog supply SETTING VA  [V]   (~VA − 0.20 V at the chip)")
-for dose, mk in [(0.0, "*"), (200.0, "P")]:
-    ss = s7g[s7g.dose == dose]
-    if len(ss):
-        ax.plot(ss.va, ss.BL_mean, ls="", marker=mk, ms=15, color=Q.C_MAG,
-                label=f"BARE7, {int(dose)} MRad")
 ax.set_ylabel("baseline  [DAC LSB]")
 ax.legend(fontsize=11)
 ax.set_title("and so does the baseline — both are DAC-scale sensitive", loc="left", fontsize=14)
 fig.tight_layout()
 Q.fig_header(fig, "Turn-off, gain and baseline against dose and analog rail",
-             tag="ET2p03_BARE9 (lines), 6 pixels, VD 1.20 V (supply), −23.5 to −23.8 °C; "
-                 "ET2p03_BARE7 shown as isolated markers", scale=0.62,
+             tag="ET2p03_BARE9, 6 pixels, VD 1.20 V (supply), −23.5 to −23.8 °C", scale=0.62,
              campaign=Q.ET2P03_CAMPAIGN)
 Q.save_fig(fig, "et2p03_fig1_turnoff_and_gain")
 plt.show()
@@ -1715,10 +1646,7 @@ plt.show()
 
 # %%
 BD = BLS[(BLS.chip == "ET2p03_BARE9") & BLS.dose.notna()].copy()
-BD7 = BLS[(BLS.chip == "ET2p03_BARE7") & BLS.dose.notna()].copy()
 print(BD.round(2).to_string(index=False))
-print("\nthe second die, BARE7:")
-print(BD7.round(2).to_string(index=False))
 print("\nbaseline shift with dose at fixed analog rail [DAC]:")
 for va in [0.85, 1.00, 1.20, 1.40]:
     s = BD[BD.va == va].sort_values("dose")
@@ -1728,10 +1656,6 @@ for va in [0.85, 1.00, 1.20, 1.40]:
         "%d->%d MRad %+.1f" % (int(a), int(b), y - x)
         for a, b, x, y in zip(s.dose[:-1], s.dose[1:], s.BL_mean[:-1], s.BL_mean[1:]))
     print(txt + "   (total %+.1f)" % (s.BL_mean.iloc[-1] - s.BL_mean.iloc[0]))
-s7 = BD7[BD7.va == 1.20].sort_values("dose")
-if len(s7) > 1:
-    print("  BARE7, VA 1.20 V (supply): 0->200 MRad %+.1f   (2nd die, same revision)"
-          % (s7.BL_mean.iloc[-1] - s7.BL_mean.iloc[0]))
 print("\nnoise-peak FWHM against dose [DAC]:")
 print(BD.pivot_table(index="va", columns="dose", values="NW_fwhm_mean").round(2).to_string())
 bl0 = float(BD[(BD.va == 1.20) & (BD.dose == 0)].BL_mean.iloc[0])
@@ -1751,14 +1675,9 @@ for va in [0.85, 1.00, 1.20, 1.40]:
     ax.errorbar(s.dose, s.BL_mean, yerr=s.BL_rms, fmt="-o", ms=11, lw=2.6, color=VACOL[va],
                 capsize=6, label=f"VA {va:.2f} V (supply)")
 ax.set_xlabel("total ionising dose  [MRad]")
-s7p = BD7[BD7.va == 1.20].sort_values("dose")
-if len(s7p) > 1:
-    ax.errorbar(s7p.dose, s7p.BL_mean, yerr=s7p.BL_rms, fmt="--s", ms=11, lw=2.4, color=Q.C_MAG,
-                capsize=6, label="BARE7, VA 1.20 V (supply)")
 ax.set_ylabel("baseline  [DAC LSB]")
 ax.legend(fontsize=11)
-ax.set_title("the baseline falls with dose on every BARE9 rail — but not on BARE7",
-             loc="left", fontsize=13)
+ax.set_title("the baseline falls with dose on every BARE9 rail", loc="left", fontsize=14)
 
 ax = axs[1]
 for va in [0.85, 1.00, 1.20, 1.40]:
@@ -1769,9 +1688,6 @@ for va in [0.85, 1.00, 1.20, 1.40]:
             label=f"VA {va:.2f} V (supply)")
 ax.axhline(0, color="black", lw=1.6)
 ax.set_xlabel("total ionising dose  [MRad]")
-if len(s7p) > 1:
-    ax.plot(s7p.dose, s7p.BL_mean - s7p.BL_mean.iloc[0], "--s", ms=11, lw=2.4, color=Q.C_MAG,
-            label="BARE7, VA 1.20 V (supply)")
 ax.set_ylabel("baseline shift from that rail's lowest dose  [DAC LSB]")
 ax.legend(fontsize=11)
 ax.set_title("the shift, referred to each rail's own starting point", loc="left", fontsize=14)
@@ -1793,8 +1709,7 @@ ax.legend(fontsize=12)
 ax.set_title("the noise width does not move with dose", loc="left", fontsize=15)
 fig.tight_layout()
 Q.fig_header(fig, "Baseline and noise width against dose",
-             tag="ET2p03_BARE9 (solid) and ET2p03_BARE7 (dashed), 6 pixels each, "
-                 "from the in-configuration quietCB noise scans",
+             tag="ET2p03_BARE9, 6 pixels, from the in-configuration quietCB noise scans",
              scale=0.62, campaign=Q.ET2P03_CAMPAIGN)
 Q.save_fig(fig, "et2p03_fig9_baseline_nw_vs_dose")
 plt.show()
@@ -1808,15 +1723,13 @@ plt.show()
 # disagreement is much larger than either campaign's repeatability: the repeat 0 MRad acquisition
 # here reproduces the mean baseline to 0.0 DAC.
 #
-# **But it is a one-die result, and the second die does not confirm it.** `BARE7`, the other
-# ET2.03 die, now carries its own 0 → 200 MRad step at VA 1.20 V (section 14.1). Over that step
-# BARE9's baseline falls by −31.7 ± 7.2 DAC and BARE7's moves by **+6.0 ± 7.3 DAC** — consistent
-# with no shift at all, and 3.7 σ away from BARE9. The two dies agree on the paired *gain* change
-# over the same step (−0.83 ± 2.08 % against −0.45 ± 2.73 %) and disagree on the baseline. So what
-# this campaign establishes is that **BARE9's baseline fell**; that the ET2.03 *revision's*
-# baseline falls with dose is **not** established, because the only other die of that revision
-# with a dose step does not show it. Section 14.1 is the number; every statement about the sign
-# elsewhere in this notebook should be read with it.
+# **It is a one-die result.** The second irradiated die, `BARE7`, cannot check it: its only post-0 MRad
+# acquisition has an unknown dose (section 14), so there is no second dose step of this revision
+# anywhere in the folder. What section 15 adds is the campaign's own **VRef log**: the internal
+# reference of `BARE9` **rose by about 4.6 % over 0 → 400 MRad at constant plate temperature**, which
+# by itself moves every threshold code of a fixed analog level *down* by the same fraction — the
+# right sign and roughly half the size of the fall seen here. Section 15 does that arithmetic with
+# the 256-pixel autocalibration maps and states what is left over.
 #
 # What the ET2.01-against-ET2.03 comparison cannot do, separately, is attribute the difference. The two chips are different
 # revisions with different voltage references, which is the interesting hypothesis; they are also
@@ -1827,7 +1740,7 @@ plt.show()
 # condition's own baseline the turn-off curves coincide**, so re-running autocalibration and
 # working at a fixed offset above the new baseline recovers the response either way.
 #
-# The noise width does not move with dose on either die. The noise-peak FWHM is flat at 3–4 DAC across
+# The noise width does not move with dose on BARE9. The noise-peak FWHM is flat at 3–4 DAC across
 # 0 → 400 MRad at every rail except the VA 0.85 V, 400 MRad outlier noted in section 8, and it
 # tracks the one autocalibration `NW` map the campaign left behind to within about one DAC — two
 # different definitions of the same thing agreeing about as well as they can be expected to.
@@ -1887,8 +1800,6 @@ for dose, lab in [(0.0, "0 MRad"), (200.0, "200 MRad"), (400.0, "400 MRad")]:
     if not len(g):
         continue
     ax.plot(g.index, g.values / 1e5, "-o", ms=11, lw=2.6, color=DCOL[dose], label=lab)
-g7 = V2[(V2.chip_s == "BARE7") & (V2.vd_V == 1.20)].groupby("va_V").n_hits.mean()
-ax.plot(g7.index, g7.values / 1e5, "--s", ms=10, lw=2.2, color=Q.GREY, label="BARE7, 0 MRad")
 ax.set_xlabel("analog supply SETTING VA  [V]   (~VA − 0.20 V at chip; VD setting fixed at 1.20 V)")
 ax.set_ylabel("decoded hits per sub-run  [$10^5$]")
 ax.legend(fontsize=12)
@@ -1901,8 +1812,6 @@ for dose, lab in [(0.0, "0 MRad"), (200.0, "200 MRad"), (400.0, "400 MRad")]:
     if not len(g):
         continue
     ax.plot(g.index, g.values / 1e5, "-o", ms=11, lw=2.6, color=DCOL[dose], label=lab)
-g7 = V2[(V2.chip_s == "BARE7") & (V2.va_V == 1.20)].groupby("vd_V").n_hits.mean()
-ax.plot(g7.index, g7.values / 1e5, "--s", ms=10, lw=2.2, color=Q.GREY, label="BARE7, 0 MRad")
 ax.axvspan(0.885, 0.965, color=Q.C_MAG, alpha=0.16, lw=0)
 ax.text(0.90, 0.55, "VD 0.90 / 0.95 V:\nzero hits", fontsize=12, color=Q.C_MAG,
         transform=ax.get_xaxis_transform())
@@ -1912,7 +1821,7 @@ ax.legend(fontsize=12)
 ax.set_title("10 fC yield against the digital rail", loc="left", fontsize=15)
 
 ax = axs[2]
-for chip, mk, ls in [("BARE9", "o", "-"), ("BARE7", "s", "--")]:
+for chip, mk, ls in [("BARE9", "o", "-")]:
     s = V2[(V2.chip_s == chip) & (V2.vd_V == 1.20) & (~V2.dead)]
     g = s.groupby("va_V").cal_mean.mean()
     if len(g):
@@ -1972,200 +1881,371 @@ RESULTS["bl_by_va_200MRad"] = {float(v): float(g) for v, g in zip(b200.va, b200.
 RESULTS["bl_per_volt_va_dac"] = float(sl)
 
 # %% [markdown]
-# ## 14. BARE7 against BARE9, and BARE7's own dose step
+# ## 14. BARE7, in isolation
 #
-# The second die is now measured at **both ends of a dose step**: 0 MRad (VA 0.85, 1.00 and
-# 1.20 V, from the `2024-08-14` day recovered from the removable disk `X9`) and 200 MRad
-# (VA 1.20 V). It does not reach 400 MRad. That gives this section two jobs rather than one:
+# `ET2p03_BARE7` is the second die of this campaign and it is **deliberately kept apart from everything
+# else in this folder**. It was measured at 0 MRad on `2024-08-14` (VA 0.85, 1.00 and 1.20 V supply
+# settings; that session's register dump is stamped 21:21:53, five minutes before irradiation step 3
+# opened at 21:27, so the 0 MRad tag is corroborated by the campaign timeline). It was then put under
+# the X-ray, and a second acquisition on `2024-08-21` carries the directory tag `200MRad` and the
+# baseline-history note "200 MRad". **Both are wrong: the X-ray source failed before BARE7 reached
+# 200 MRad, and the dose it did receive is not recorded** (operator statement, September 2026). The
+# staged tables therefore carry `dose_MRad = NaN` and a `dose_note` on those rows.
 #
-# 1. **Chip against chip at matched conditions** — the same quantities on two dies of the same
-#    revision at the same dose and rail, which puts a number on the chip-to-chip spread. That is
-#    the systematic limiting every single-die dose statement in this notebook and in notebook 01,
-#    and it can now be done at **two** doses instead of one.
-# 2. **BARE7's own 0 → 200 MRad step**, formed by exactly the same paired per-pixel code path as
-#    BARE9's in section 6. This is the one direct test in the folder of whether the ET2.03
-#    baseline-falls-with-dose result is a property of the **revision** or of the single die
-#    `BARE9` — and section 14.1 shows it does not come out the tidy way.
-#
-# **The BARE7 0 MRad point really is pre-irradiation, and not only because its directory says
-# `0MRad`.** Notebook 00 section 7.7 carries the campaign's irradiation timeline, transcribed from
-# its own analysis notebook: **step 3 starts at 2024-08-14 21:27**, while that day's BARE7 register
-# dump — the read-back that closes the session — is stamped **2024-08-14 21:21:53**. The whole
-# `2024-08-14_Array_Test_Results` session therefore ended five minutes before the third
-# irradiation step began, and its three money-plot run directories precede that dump. That is an
-# independent record agreeing with the `0MRad` directory tag, and it is what lets the BARE7 dose
-# step be formed at all.
+# What can honestly be read off BARE7 is (a) a second ET2.03 die's un-irradiated response at three
+# analog-rail settings, which is a chip-to-chip data point for every absolute number section 6
+# quotes on BARE9 — reported here as numbers on their own, not as a comparison figure — and (b) the
+# change between its 0 MRad state and its unknown-dose state, labelled as exactly that. Nothing in
+# this section feeds sections 6, 11, 13, 15 or 16, and notebook 04 does not read it.
 
 # %%
-C7 = cfg_of("ET2p03_BARE7", 200, 1.20)
-C7_0 = cfg_of("ET2p03_BARE7", 0, 1.20)
-C9_0 = cfg_of("ET2p03_BARE9", 0, 1.20)
-C9 = cfg_of("ET2p03_BARE9", 200, 1.20)
-cmp_rows = []
+B7C = COND[COND.chip == "ET2p03_BARE7"].copy()
+B7C["dose_label"] = ["unknown (X-ray failure; the 200MRad tag is wrong)" if pd.isna(d) else f"{int(d)} MRad"
+                     for d in B7C.dose]
+print("BARE7 conditions in the staged tables:\n")
+print(B7C[["config", "va", "vd", "dose_label", "day", "n_turnoff", "points", "pixels", "charges"]].to_string(index=False))
 
+iso_rows = []
+for _, cnd in B7C.iterrows():
+    cfg = cnd.config
+    g = GB[GB.config == cfg]
+    sg = SIG[SIG.config == cfg]
+    to = TO[TO.config == cfg].groupby("charge_fC").turnoff_offset.mean()
+    tt = TOT[(TOT.config == cfg) & (TOT.offset == Q.OP_OFFSET)].set_index("charge_fC")
+    jj = JIT[(JIT.config == cfg) & (JIT.offset == Q.OP_OFFSET)].set_index("charge_fC")
+    iso_rows.append(dict(config=cfg, va_supply=cnd.va, dose=cnd.dose_label,
+                         gain_dac_per_fc=float(g.gain_dac_per_fc.iloc[0]) if len(g) else np.nan,
+                         gain_sem=float(g.gain_sem.iloc[0]) if len(g) else np.nan,
+                         gain_pixel_rms=float(g.gain_pixel_rms.iloc[0]) if len(g) else np.nan,
+                         BL_mean=float(g.BL_mean.iloc[0]) if len(g) else np.nan,
+                         sigma_dac=float(sg.sigma_dac.iloc[0]) if len(sg) else np.nan,
+                         ENC_e=float(sg.ENC_e.iloc[0]) if len(sg) else np.nan,
+                         NW_fwhm=float(sg.NW_fwhm.iloc[0]) if len(sg) else np.nan,
+                         turnoff_off_15fC=float(to.get(15, np.nan)),
+                         tot_BL20_15fC=float(tt.tot_code_mean.get(15, np.nan)) if len(tt) else np.nan,
+                         jitter_BL20_15fC_ps=float(jj.jitter_mean.get(15, np.nan)) if len(jj) else np.nan,
+                         cal_median=float(M[M.config == cfg].cal_mean.median())))
+B7ISO = pd.DataFrame(iso_rows)
+B7ISO.to_csv(Q.OUTDIR / "et2p03_bare7_isolated.csv", index=False)
+print("\nBARE7 on its own (DERIVED; same estimators as sections 5-10):\n")
+print(B7ISO.drop(columns=["config"]).round(3).to_string(index=False))
 
-def two(name, unit, a, b, note):
-    cmp_rows.append(dict(quantity=name, unit=unit, BARE9=a, BARE7=b,
-                         ratio=(b / a) if (a and a == a) else np.nan, note=note))
+# the change between BARE7's 0 MRad state and its unknown-dose state, at the one shared rail
+c7_0 = cfg_of("ET2p03_BARE7", 0, 1.20)
+c7_u = cfg_of("ET2p03_BARE7", None, 1.20)
+if c7_0 is not None and c7_u is not None:
+    m, se, rms, npx, nq = paired(c7_0, c7_u)
+    pa = BL[BL.config == c7_0].set_index(["row", "col"]).BL
+    pb = BL[BL.config == c7_u].set_index(["row", "col"]).BL
+    ix = pa.index.intersection(pb.index)
+    dbl = (pb[ix] - pa[ix]).astype(float)
+    print("\nBARE7, 0 MRad -> UNKNOWN dose at VA 1.20 V (supply), paired per pixel (%d pixels):" % npx)
+    print("  preamp gain ratio %.3f +- %.3f  (%+.1f +- %.1f %%)" % (m, se, 100 * (m - 1), 100 * se))
+    print("  baseline shift    %+.1f +- %.1f DAC (pixel RMS %.1f)" % (dbl.mean(), dbl.std(ddof=1) / np.sqrt(len(dbl)), dbl.std(ddof=1)))
+    print("  This is a change over an UNKNOWN, partial dose on ONE die. It is recorded here and used nowhere else.")
+    RESULTS["bare7_isolated"] = dict(gain_ratio_0_to_unknown=float(m), gain_ratio_sem=float(se),
+                                     bl_shift_0_to_unknown_dac=float(dbl.mean()),
+                                     bl_shift_sem=float(dbl.std(ddof=1) / np.sqrt(len(dbl))),
+                                     n_pixels=int(npx), dose_after="unknown (X-ray failure)")
+for k in [k for k in RESULTS if k.startswith("bare7_") and k != "bare7_isolated"]:
+    RESULTS.pop(k)
 
+# %%
+fig, axs = plt.subplots(1, 3, figsize=(22, 6.4))
+B7CFG = [(r.config, f"VA {r.va_supply:.2f} V, {r.dose}", c) for r, c in
+         zip(B7ISO.itertuples(), [Q.C_AQUA, Q.C_GREEN, Q.C_BLUE, Q.C_MAG, Q.C_ORANGE, Q.GREY])]
+ax = axs[0]
+for cfg, lab, cc in B7CFG:
+    g = TO[TO.config == cfg].groupby("charge_fC").turnoff_offset.agg(["mean", "std"])
+    if len(g):
+        ax.errorbar(g.index, g["mean"], yerr=g["std"], fmt="-o", ms=9, lw=2.2, color=cc, capsize=5, label=lab)
+ax.axhline(Q.OP_OFFSET, color=Q.GREY, ls="-.", lw=2)
+ax.set_xlabel("injected charge  [fC]")
+ax.set_ylabel("turn-off above baseline  [DAC LSB]")
+ax.legend(fontsize=10)
+ax.set_title("BARE7: turn-off against charge, every condition it has", loc="left", fontsize=13)
 
-g9, g7 = GB[GB.config == C9].iloc[0], GB[GB.config == C7].iloc[0]
-s9, s7 = SIG[SIG.config == C9].iloc[0], SIG[SIG.config == C7].iloc[0]
-t9 = TOT[(TOT.config == C9) & (TOT.offset == 20)].set_index("charge_fC")
-t7 = TOT[(TOT.config == C7) & (TOT.offset == 20)].set_index("charge_fC")
-j9 = JIT[(JIT.config == C9) & (JIT.offset == 20)].set_index("charge_fC")
-j7 = JIT[(JIT.config == C7) & (JIT.offset == 20)].set_index("charge_fC")
-to9 = TO[TO.config == C9].groupby("charge_fC").turnoff_offset.mean()
-to7 = TO[TO.config == C7].groupby("charge_fC").turnoff_offset.mean()
-two("Preamp gain, 8-22 fC", "DAC/fC", g9.gain_dac_per_fc, g7.gain_dac_per_fc,
-    "both at VA 1.20 V, VD 1.20 V, 200 MRad; different dies, different dose history")
-two("Baseline", "DAC", g9.BL_mean, g7.BL_mean, "absolute DAC, so reference-scale sensitive")
-two("Turn-off above baseline at 15 fC", "DAC", to9[15], to7[15], "tracks the gain")
-two("S-curve width sigma", "DAC", s9.sigma_dac, s7.sigma_dac, "shared-sigma fit, same function as notebooks 01 and 02")
-two("ENC = sigma / gain", "electrons", s9.ENC_e, s7.ENC_e, "ratio of the two above")
-two("Noise-peak FWHM", "DAC", s9.NW_fwhm, s7.NW_fwhm, "in-configuration noise scan")
-two("TOT at BL+20, 15 fC", "code", float(t9.loc[15, "tot_code_mean"]), float(t7.loc[15, "tot_code_mean"]),
-    "RFSel is not recorded on either die")
-two("TOA jitter at BL+20, 15 fC", "ps", float(j9.loc[15, "jitter_mean"]), float(j7.loc[15, "jitter_mean"]),
-    "both close to the quantisation floor")
-two("Median CAL", "code", float(M[M.config == C9].cal_mean.median()),
-    float(M[M.config == C7].cal_mean.median()), "sets the ps-per-code conversion")
-CMP7 = pd.DataFrame(cmp_rows)
-CMP7.to_csv(Q.OUTDIR / "et2p03_bare7_vs_bare9.csv", index=False)
-print("BARE7 against BARE9, both at 200 MRad, VA 1.20 V, VD 1.20 V\n")
-print(CMP7.round(3).to_string(index=False))
-print("\nBARE9 pixel-to-pixel gain RMS at this condition: %.2f DAC/fC (%.0f %% of the mean)"
-      % (g9.gain_pixel_rms, 100 * g9.gain_pixel_rms / g9.gain_dac_per_fc))
-print("BARE7 pixel-to-pixel gain RMS:                    %.2f DAC/fC (%.0f %%)"
-      % (g7.gain_pixel_rms, 100 * g7.gain_pixel_rms / g7.gain_dac_per_fc))
-print("chip-to-chip gain difference:                     %+.0f %%, i.e. %.2f of one pixel RMS"
-      % (100 * (g7.gain_dac_per_fc / g9.gain_dac_per_fc - 1),
-         abs(g7.gain_dac_per_fc - g9.gain_dac_per_fc) / g9.gain_pixel_rms))
+ax = axs[1]
+for cfg, lab, cc in B7CFG:
+    t = TOT[(TOT.config == cfg) & (TOT.offset == Q.OP_OFFSET)].sort_values("charge_fC")
+    if len(t):
+        ax.errorbar(t.charge_fC, t.tot_code_mean, yerr=t.tot_code_pixel_rms, fmt="-o", ms=9, lw=2.2,
+                    color=cc, capsize=5, label=lab)
+Q.charge_axis(ax, charges=Q.ET2P03_CHARGES)
+ax.set_xlabel("injected charge  [fC]")
+ax.set_ylabel("TOT at BL+20  [code]")
+ax.legend(fontsize=10)
+ax.set_title("BARE7: TOT at the operating point", loc="left", fontsize=13)
 
-# The same chip-against-chip comparison at the OTHER dose the two dies now share.
-if C7_0 is not None and C9_0 is not None:
-    g70, g90 = GB[GB.config == C7_0].iloc[0], GB[GB.config == C9_0].iloc[0]
-    print("\nthe same two dies at 0 MRad, VA 1.20 V (BARE7's recovered 2024-08-14 day):")
-    print("  gain     BARE9 %.2f   BARE7 %.2f   ratio %.3f" %
-          (g90.gain_dac_per_fc, g70.gain_dac_per_fc, g70.gain_dac_per_fc / g90.gain_dac_per_fc))
-    print("  baseline BARE9 %.1f   BARE7 %.1f   difference %+.1f DAC" %
-          (g90.BL_mean, g70.BL_mean, g70.BL_mean - g90.BL_mean))
-    print("  So the chip-to-chip gain ratio is %.3f at 0 MRad and %.3f at 200 MRad: the two dies"
-          % (g70.gain_dac_per_fc / g90.gain_dac_per_fc, g7.gain_dac_per_fc / g9.gain_dac_per_fc))
-    print("  differ by a similar factor at both doses, so the chip-to-chip term is a scale")
-    print("  offset between the dies rather than something the dose creates.")
+ax = axs[2]
+s7 = V2[(V2.chip_s == "BARE7") & (V2.vd_V == 1.20)].groupby("va_V").n_hits.mean()
+if len(s7):
+    ax.plot(s7.index, s7.values / 1e5, "-o", ms=10, lw=2.4, color=Q.C_BLUE, label="VA scan at VD 1.20 V")
+s7d = V2[(V2.chip_s == "BARE7") & (V2.va_V == 1.20)].groupby("vd_V").n_hits.mean()
+if len(s7d):
+    ax.plot(s7d.index, s7d.values / 1e5, "-s", ms=10, lw=2.4, color=Q.C_ORANGE, label="VD scan at VA 1.20 V")
+ax.set_xlabel("supply SETTING  [V]   (~−0.20 V analog, ~−0.05 V digital at the chip)")
+ax.set_ylabel("decoded hits per sub-run  [$10^5$]")
+ax.legend(fontsize=11)
+ax.set_title("BARE7: 10 fC yield against each rail, 0 MRad", loc="left", fontsize=13)
+fig.tight_layout()
+Q.fig_header(fig, "BARE7 on its own",
+             tag="ET2p03_BARE7, 6 pixels, VD 1.20 V (supply); the post-0 MRad dose is UNKNOWN (X-ray failure) "
+                 "and this die enters no comparison", scale=0.62, campaign=Q.ET2P03_CAMPAIGN)
+Q.save_fig(fig, "et2p03_fig11_bare7_isolated")
+plt.show()
 
 # %% [markdown]
-# ### 14.1 BARE7's own dose step, 0 → 200 MRad at VA 1.20 V
+# ## 15. Monitoring during irradiation: the reference, the temperature sensor, the rails and the
+# ## 256-pixel baseline maps
 #
-# Same six pixels, same estimator, same code path as BARE9's paired test in section 6. The three
-# quantities are the baseline (from the in-configuration noise scans), the paired per-pixel gain
-# ratio (from the binary searches), and the turn-off referred to each condition's own baseline —
-# the operational quantity, which on BARE9 barely moved with dose.
+# The campaign logged, every few seconds, the chip's **VRef pin** (the output of the internal
+# reference generator, `vol_monitoring.sqlite`), the **VTemp pin** through an external ADC
+# (`ADCHistory.sqlite`, channel 7; channel 8 is a room sensor that never moved), the **analog and
+# digital rail currents** (`PowerHistory_v2`, `NEW_PowerHistory_v2`, `WS_PowerHistory_v2`), and it
+# wrote a **full 256-pixel autocalibration map** (`BaselineHistory.sqlite`) at every condition
+# change, each tagged with the plate temperature, the dose, the time since the last dose step and the
+# rail settings. These logs were located in September 2026 and are staged, downsampled to one sample
+# per minute, under `data/bare_et2p03_tid_aug2024/aux/` with their provenance. The irradiation
+# timeline is the one the campaign's own plotting notebook carries.
+#
+# Two things this section can do that nothing else in the folder can: it **measures** how the internal
+# reference moved with dose, instead of inferring it, and it puts the dose steps on a common time axis
+# with the baseline, the currents and a temperature proxy — so the annealing after each step is
+# visible.
 
 # %%
-b7 = PAIR[(PAIR.chip == "ET2p03_BARE7") & (PAIR.dose_from == 0) & (PAIR.dose_to == 200)]
-b9 = PAIR[(PAIR.chip == "ET2p03_BARE9") & (PAIR.dose_from == 0) & (PAIR.dose_to == 200)
-          & (PAIR.va == 1.20)]
-d7rows = []
-for lab, r in [("ET2p03_BARE9", b9), ("ET2p03_BARE7", b7)]:
-    if not len(r):
-        continue
-    r = r.iloc[0]
-    d7rows.append(dict(chip=lab, dose_from=0, dose_to=200, va=1.20,
-                       BL_shift_dac=r.BL_shift_paired_dac, BL_shift_sem=r.BL_shift_sem,
-                       BL_shift_pixel_rms=r.BL_shift_pixel_rms,
-                       gain_change_pct=r.gain_change_pct,
-                       gain_change_sem_pct=100 * r.gain_ratio_sem,
-                       n_pixels=int(r.n_pixels)))
-# turn-off referred to each condition's own baseline, per charge, on both dies at both doses
-to_rows = []
-for lab, ca, cb in [("ET2p03_BARE9", C9_0, C9), ("ET2p03_BARE7", C7_0, C7)]:
-    if ca is None or cb is None:
-        continue
-    a = TO[TO.config == ca].groupby("charge_fC").turnoff_offset.mean()
-    b = TO[TO.config == cb].groupby("charge_fC").turnoff_offset.mean()
-    for ch in sorted(set(a.index) & set(b.index)):
-        to_rows.append(dict(chip=lab, charge_fC=ch, turnoff_off_0MRad=a[ch],
-                            turnoff_off_200MRad=b[ch], shift_dac=b[ch] - a[ch]))
-D7 = pd.DataFrame(d7rows)
-TO7 = pd.DataFrame(to_rows)
-D7.to_csv(Q.OUTDIR / "et2p03_bare7_dose.csv", index=False)
-TO7.to_csv(Q.OUTDIR / "et2p03_turnoff_shift_by_die.csv", index=False)
-print("0 -> 200 MRad at VA 1.20 V, the dose step both dies have\n")
-print(D7.round(3).to_string(index=False))
-print("\nturn-off above each condition's OWN baseline, 0 -> 200 MRad [DAC]\n")
-print(TO7.round(2).to_string(index=False))
-if len(D7) == 2:
-    r9 = D7[D7.chip.str.endswith("BARE9")].iloc[0]
-    r7 = D7[D7.chip.str.endswith("BARE7")].iloc[0]
-    dbl = r9.BL_shift_dac - r7.BL_shift_dac
-    ebl = np.hypot(r9.BL_shift_sem, r7.BL_shift_sem)
-    dg = r9.gain_change_pct - r7.gain_change_pct
-    eg = np.hypot(r9.gain_change_sem_pct, r7.gain_change_sem_pct)
-    print("\nTHE ANSWER, and it is not the tidy one:")
-    print("  baseline shift 0 -> 200 MRad:  BARE9 %+.1f +- %.1f DAC,  BARE7 %+.1f +- %.1f DAC"
-          % (r9.BL_shift_dac, r9.BL_shift_sem, r7.BL_shift_dac, r7.BL_shift_sem))
-    print("    BARE7's shift is %.1f sigma from zero -- consistent with NO baseline shift at all --"
-          % abs(r7.BL_shift_dac / r7.BL_shift_sem))
-    print("    and the two dies differ by %.1f +- %.1f DAC, i.e. %.1f sigma. The second die does"
-          % (dbl, ebl, abs(dbl / ebl)))
-    print("    NOT reproduce BARE9's falling baseline over the dose step they share.")
-    print("  paired gain change:            BARE9 %+.2f +- %.2f %%,  BARE7 %+.2f +- %.2f %%"
-          % (r9.gain_change_pct, r9.gain_change_sem_pct, r7.gain_change_pct, r7.gain_change_sem_pct))
-    print("    the two agree to %.2f +- %.2f points, i.e. %.1f sigma." % (dg, eg, abs(dg / eg)))
-    print("\n  So the two ET2.03 dies agree on the CHARGE response with dose and disagree on the")
-    print("  THRESHOLD reference with dose. Read against section 11, that means the falling")
-    print("  baseline is NOT established as a property of the revision: on the one dose step where")
-    print("  a second die of the same revision can check it, the second die does not show it.")
-    print("  The chip-to-chip term, which section 14 already measures as large on absolute gain, is")
-    print("  large on this too. BARE9's own 0 -> 400 MRad fall (-65.5 +- 14.6 DAC) remains a")
-    print("  measurement on ONE die, and BARE7 cannot test the 200 -> 400 half of it at all.")
-    RESULTS["bare7_vs_bare9_bl_shift_diff_dac"] = float(dbl)
-    RESULTS["bare7_vs_bare9_bl_shift_diff_sem"] = float(ebl)
-    RESULTS["bare7_bl_shift_sigma_from_zero"] = float(abs(r7.BL_shift_dac / r7.BL_shift_sem))
+AUX = Q.ET2P03_DIR / "aux"
+VREF = pd.read_csv(AUX / "aux_tid_vref_1min.csv.gz", parse_dates=["t"]).sort_values("t")
+ADC = pd.read_csv(AUX / "aux_tid_adc_1min.csv.gz", parse_dates=["t"]).sort_values("t")
+PWR = pd.read_csv(AUX / "aux_tid_power_1min.csv.gz", parse_dates=["t"]).sort_values("t")
+MAPS = pd.read_csv(AUX / "aux_tid_baseline_maps.csv", parse_dates=["t_first", "map_t"]).sort_values("t_first")
+TL = pd.read_csv(AUX / "aux_tid_irradiation_timeline_plot_ipynb.csv", parse_dates=["timestamp"])
+TLD = {(r.step, r.edge): r.timestamp for r in TL.itertuples()}
+print("irradiation timeline (RAW, transcribed from the campaign's plot.ipynb):")
+print(TL.to_string(index=False))
+
+# the campaign windows, defined from the timeline and the first cold baseline map of 2024-08-04
+WIN = [("0 MRad, cold, before irradiation", 0, pd.Timestamp("2024-08-04 22:10"), TLD[("To200MRad", "start")]),
+       ("irradiating to 200 MRad", np.nan, TLD[("To200MRad", "start")], TLD[("To200MRad", "stop")]),
+       ("200 MRad, between the steps", 200, TLD[("To200MRad", "stop")], TLD[("To400MRad", "start")]),
+       ("irradiating to 400 MRad", np.nan, TLD[("To400MRad", "start")], TLD[("To400MRad", "stop")]),
+       ("400 MRad, cold, until BARE9 was removed", 400, TLD[("To400MRad", "stop")], pd.Timestamp("2024-08-13 00:00"))]
+vref_s = VREF.set_index("t").vref_V_median
+vt_s = ADC[ADC.channel == 7].set_index("t").voltage
+ia_s = PWR[(PWR.Instrument == "Power") & (PWR.Channel == "Analog")].set_index("t").I
+id_s = PWR[(PWR.Instrument == "Power") & (PWR.Channel == "Digital")].set_index("t").I
+wrows = []
+for lab, dose, a, b in WIN:
+    v = vref_s[a:b]
+    wrows.append(dict(window=lab, dose_MRad=dose, t_start=a, t_stop=b, n_min=len(v),
+                      vref_V=v.median(), vref_p16=v.quantile(0.16), vref_p84=v.quantile(0.84),
+                      vtemp_pin_V=vt_s[a:b].median(), I_analog_A=ia_s[a:b].median(), I_digital_A=id_s[a:b].median()))
+VREFW = pd.DataFrame(wrows)
+VREFW.to_csv(Q.OUTDIR / "et2p03_vref_by_dose.csv", index=False)
+print("\nBARE9 monitoring, medians per campaign window (DERIVED from the 1-minute downsampled logs):\n")
+print(VREFW.drop(columns=["t_start", "t_stop"]).round(4).to_string(index=False))
+v0 = float(VREFW[VREFW.dose_MRad == 0].vref_V.iloc[0])
+v2 = float(VREFW[VREFW.dose_MRad == 200].vref_V.iloc[0])
+v4 = float(VREFW[VREFW.dose_MRad == 400].vref_V.iloc[0])
+f200, f400 = v2 / v0 - 1, v4 / v0 - 1
+print("\nVRef, BARE9, at constant plate temperature (−23.0 to −23.8 °C by the map notes):")
+print("  0 MRad %.4f V   200 MRad %.4f V (%+.1f mV, %+.2f %%)   400 MRad %.4f V (%+.1f mV, %+.2f %%)"
+      % (v0, v2, 1e3 * (v2 - v0), 100 * f200, v4, 1e3 * (v4 - v0), 100 * f400))
+print("  Between 0 and 400 MRad the internal reference ROSE. It did not fall.")
+RESULTS["vref_by_dose_V"] = {0: v0, 200: v2, 400: v4}
+RESULTS["vref_change_0_to_400_pct"] = 100 * f400
+
+# %% [markdown]
+# ### What a 4.6 % higher reference does to the threshold codes
+#
+# The threshold DAC spans a fixed fraction of the reference, so its LSB in millivolts scales with
+# VRef (**assumption stated**: the DAC full scale is proportional to the VRef pin voltage; nothing in
+# this campaign measures the transfer function directly — that is open question 1 of notebook 04). A
+# fixed analog level $V$ therefore maps to a code $V/\mathrm{LSB}$ that falls by the factor
+# $1/(1+f)$ when the reference rises by $f$. Two consequences follow, both computed below from the
+# 256-pixel autocalibration maps at the nominal rail settings and the 6-pixel in-configuration numbers
+# of section 11:
+#
+# 1. the baseline **code** of an unchanged analog baseline would fall by $\mathrm{BL}_0\,f/(1+f)$;
+#    whatever the measured fall exceeds that by is the front end's own drift, in DAC;
+# 2. the preamp gain in **DAC per fC** would read low by $f$, so the intrinsic (millivolt) gain change
+#    is the measured one plus $f$.
+
+# %%
+def parse_note(n):
+    m = re.match(r"\s*([+-]?[\d.]+)\s*C,\s*(\d+)\s*MRad(?:\s*\+\s*(\d+)h\s*(\d+)m)?[^,]*,\s*A:\s*([\d.]+)V,\s*D:\s*([\d.]+)V", str(n))
+    if not m:
+        return pd.Series(dict(plate_C=np.nan, dose_MRad=np.nan, anneal_h=np.nan, A_V=np.nan, D_V=np.nan))
+    T_, d, hh, mm, A_, D_ = m.groups()
+    return pd.Series(dict(plate_C=float(T_), dose_MRad=float(d),
+                          anneal_h=(float(hh) + float(mm) / 60.0) if hh is not None else (0.0 if d != "0" else np.nan),
+                          A_V=float(A_), D_V=float(D_)))
+
+
+import re
+MP = pd.concat([MAPS, MAPS.save_notes.apply(parse_note)], axis=1)
+M9 = MP[(MP.chip_name == "ET2p03_BARE9") & (MP.n_pix >= 200)].copy()
+NOM = M9[(M9.A_V == 1.2) & (M9.D_V == 1.2)]
+cold = NOM[NOM.plate_C < -20]
+bl_pre = cold[(cold.dose_MRad == 0) & (cold.t_first > pd.Timestamp("2024-08-04 22:00"))].bl_mean.mean()
+bl200 = cold[(cold.dose_MRad == 200) & (cold.anneal_h >= 12)].bl_mean.mean()
+bl400 = cold[(cold.dose_MRad == 400) & (cold.anneal_h >= 12)].bl_mean.mean()
+nw_pre = cold[(cold.dose_MRad == 0) & (cold.t_first > pd.Timestamp("2024-08-04 22:00"))].nw_mean.mean()
+nw200 = cold[(cold.dose_MRad == 200) & (cold.anneal_h >= 12)].nw_mean.mean()
+nw400 = cold[(cold.dose_MRad == 400) & (cold.anneal_h >= 12)].nw_mean.mean()
+print("BARE9 256-pixel autocalibration maps, A 1.2 V / D 1.2 V (supply), plate −23 to −24 °C, ≥ 12 h after each step:")
+print("  baseline  0 MRad %.1f   200 MRad %.1f (%+.1f)   400 MRad %.1f (%+.1f)   [DAC, mean over the map]"
+      % (bl_pre, bl200, bl200 - bl_pre, bl400, bl400 - bl_pre))
+print("  noise width  0 MRad %.2f   200 MRad %.2f   400 MRad %.2f   [DAC]" % (nw_pre, nw200, nw400))
+scale400 = -bl_pre * f400 / (1 + f400)
+scale200 = -bl_pre * f200 / (1 + f200)
+print("\nexpected code shift of an UNCHANGED analog baseline from the reference rise alone:")
+print("  0 -> 200 MRad: %+.1f DAC      0 -> 400 MRad: %+.1f DAC" % (scale200, scale400))
+print("measured shift of the 256-pixel map:          %+.1f DAC      %+.1f DAC" % (bl200 - bl_pre, bl400 - bl_pre))
+print("left over = front-end drift in DAC:           %+.1f DAC      %+.1f DAC" % (bl200 - bl_pre - scale200, bl400 - bl_pre - scale400))
+print("  (notebook 01's ET2.01 die, on an external reference, drifted %+.0f DAC over 0 -> 400 MRad at −25 °C)" % 46)
+bl6_0 = RESULTS["bl_by_dose_va120"][0]
+bl6_4 = RESULTS["bl_by_dose_va120"][400]
+print("\nthe same arithmetic on section 11's 6-pixel in-configuration numbers at VA 1.20 V (supply):")
+print("  measured %+.1f DAC, reference-scale part %+.1f DAC, front end %+.1f DAC"
+      % (bl6_4 - bl6_0, -bl6_0 * f400 / (1 + f400), (bl6_4 - bl6_0) + bl6_0 * f400 / (1 + f400)))
+p400_ref = PAIR[(PAIR.chip == "ET2p03_BARE9") & (PAIR.va == 1.20) & (PAIR.dose_from == 0) & (PAIR.dose_to == 400)]
+if len(p400_ref):
+    gm, ge = float(p400_ref.gain_change_pct.iloc[0]), float(100 * p400_ref.gain_ratio_sem.iloc[0])
+    print("\npreamp gain, BARE9, 0 -> 400 MRad at VA 1.20 V (supply), paired per pixel:")
+    print("  measured in DAC/fC  %+.1f +- %.1f %%" % (gm, ge))
+    print("  reference rose by   %+.1f %%, so the DAC/fC reading is LOW by that much" % (100 * f400))
+    print("  intrinsic (mV/fC)   %+.1f +- %.1f %%   -- consistent with no preamp-gain loss on this die" % (gm + 100 * f400, ge))
+    RESULTS["gain_change_0_to_400_intrinsic_pct"] = gm + 100 * f400
+SCALE = pd.DataFrame([dict(quantity="baseline, 256-px map, 0->400 MRad", measured_dac=bl400 - bl_pre, reference_scale_dac=scale400,
+                           front_end_dac=bl400 - bl_pre - scale400),
+                      dict(quantity="baseline, 256-px map, 0->200 MRad", measured_dac=bl200 - bl_pre, reference_scale_dac=scale200,
+                           front_end_dac=bl200 - bl_pre - scale200),
+                      dict(quantity="baseline, 6-px in-config, VA 1.20 supply, 0->400 MRad", measured_dac=bl6_4 - bl6_0,
+                           reference_scale_dac=-bl6_0 * f400 / (1 + f400), front_end_dac=(bl6_4 - bl6_0) + bl6_0 * f400 / (1 + f400))])
+SCALE["vref_change_pct"] = [100 * f400, 100 * f200, 100 * f400]
+SCALE.to_csv(Q.OUTDIR / "et2p03_reference_scale_decomposition.csv", index=False)
+RESULTS["bl_decomposition_0_to_400"] = SCALE.iloc[0].to_dict()
+
+# temperature coefficient of the BARE9 baseline from the 0 MRad maps taken while the plate warmed and cooled
+tmaps = NOM[(NOM.dose_MRad == 0) & NOM.plate_C.notna()]
+if len(tmaps) > 3:
+    kT, bT = np.polyfit(tmaps.plate_C, tmaps.bl_mean, 1)
+    print("\nBARE9 baseline against plate temperature, 0 MRad maps: %.2f DAC/°C over %.0f to %.0f °C (%d maps)"
+          % (kT, tmaps.plate_C.min(), tmaps.plate_C.max(), len(tmaps)))
+    RESULTS["bl_per_degC_bare9_0MRad"] = float(kT)
+
+# %%
+fig, axs = plt.subplots(4, 1, figsize=(18, 15), sharex=True)
+t0, t1 = pd.Timestamp("2024-08-03 12:00"), pd.Timestamp("2024-08-13 06:00")
+for ax in axs:
+    for stp, cc in (("To200MRad", Q.C_ORANGE), ("To400MRad", Q.C_MAG)):
+        ax.axvspan(TLD[(stp, "start")], TLD[(stp, "stop")], color=cc, alpha=0.12, lw=0)
+axs[0].plot(vref_s[t0:t1].index, vref_s[t0:t1].values, ".", ms=2, color=Q.C_BLUE)
+axs[0].set_ylabel("VRef pin  [V]")
+axs[0].set_ylim(0.85, 0.92)
+axs[0].set_title("the internal reference rises through both dose steps and does not come back", loc="left", fontsize=13)
+axs[1].plot(vt_s[t0:t1].index, vt_s[t0:t1].values, ".", ms=2, color=Q.C_GREEN)
+axs[1].set_ylabel("VTemp pin (ADC ch 7)  [V]")
+axs[1].set_title("the temperature-sensor pin rises during the first step at constant plate temperature", loc="left", fontsize=13)
+axs[2].plot(ia_s[t0:t1].index, ia_s[t0:t1].values, ".", ms=2, color=Q.C_AQUA, label="analog rail")
+axs[2].plot(id_s[t0:t1].index, id_s[t0:t1].values * 4, ".", ms=2, color=Q.GREY, label="digital rail × 4")
+axs[2].set_ylabel("supply current  [A]")
+axs[2].legend(fontsize=11, loc="upper right")
+axs[2].set_title("both rail currents fall slowly with dose", loc="left", fontsize=13)
+c9 = M9[(M9.t_first > t0) & (M9.t_first < t1)]
+sc = axs[3].scatter(c9.t_first, c9.bl_mean, c=c9.plate_C, cmap="coolwarm", s=48, edgecolor="black", lw=0.6)
+axs[3].set_ylabel("256-pixel map baseline  [DAC LSB]")
+axs[3].set_title("every autocalibration map, coloured by plate temperature (warm maps: before the cooldown, and at removal)", loc="left", fontsize=13)
+cb = fig.colorbar(sc, ax=axs[3], pad=0.01, fraction=0.03)
+cb.set_label("plate  [°C]")
+for ax, lab, y in ((axs[0], "0 → 200 MRad", 0.915), (axs[0], "200 → 400 MRad", 0.915)):
+    pass
+axs[0].text(TLD[("To200MRad", "start")], 0.913, " irradiating to 200 MRad", fontsize=11, color=Q.C_ORANGE)
+axs[0].text(TLD[("To400MRad", "start")], 0.913, " irradiating to 400 MRad", fontsize=11, color=Q.C_MAG)
+axs[-1].set_xlabel("date (2024)")
+axs[-1].xaxis.set_major_formatter(mdates.DateFormatter("%m-%d"))
+fig.tight_layout()
+Q.fig_header(fig, "Monitoring during the irradiation of BARE9",
+             tag="ET2p03_BARE9, plate −23.5 °C, A 1.2 / D 1.2 V supply settings; shaded = X-ray on; "
+                 "1-minute medians of the campaign logs", scale=0.62, campaign=Q.ET2P03_CAMPAIGN)
+Q.save_fig(fig, "et2p03_fig12_monitoring_timeline")
+plt.show()
 
 # %%
 fig, axs = plt.subplots(1, 3, figsize=(22, 6.4))
 ax = axs[0]
-for cfg, lab, cc, mk in [(C9, "BARE9, 200 MRad", Q.C_BLUE, "o"), (C7, "BARE7, 200 MRad", Q.C_ORANGE, "s")]:
-    g = TO[TO.config == cfg].groupby("charge_fC").turnoff_offset.agg(["mean", "std"])
-    ax.errorbar(g.index, g["mean"], yerr=g["std"], fmt="-", marker=mk, ms=11, lw=2.6, color=cc,
-                capsize=6, label=lab)
-ax.axhline(Q.OP_OFFSET, color=Q.GREY, ls="-.", lw=2)
-ax.set_xlabel("injected charge  [fC]")
-ax.set_ylabel("turn-off above baseline  [DAC LSB]")
-ax.legend(fontsize=13)
-ax.set_title("BARE7 turns off higher at every charge", loc="left", fontsize=15)
-
+for dose, cc in ((200, Q.C_ORANGE), (400, Q.C_MAG)):
+    a = cold[(cold.dose_MRad == dose) & cold.anneal_h.notna()].sort_values("anneal_h")
+    if len(a):
+        ax.plot(a.anneal_h, a.bl_mean, "-o", ms=9, lw=2.2, color=cc, label=f"after the step to {dose} MRad")
+ax.axhline(bl_pre, color=Q.GREY, ls="--", lw=2, label="0 MRad, cold")
+ax.set_xlabel("time since the dose step  [h]")
+ax.set_ylabel("256-pixel map baseline  [DAC LSB]")
+ax.legend(fontsize=11)
+ax.set_title("the baseline recovers a few DAC in the first day after each step", loc="left", fontsize=13)
 ax = axs[1]
-for cfg, lab, cc, mk in [(C9, "BARE9", Q.C_BLUE, "o"), (C7, "BARE7", Q.C_ORANGE, "s")]:
-    s = TOT[(TOT.config == cfg) & (TOT.offset == 20)].sort_values("charge_fC")
-    ax.errorbar(s.charge_fC, s.tot_code_mean, yerr=s.tot_code_pixel_rms, fmt="-", marker=mk,
-                ms=11, lw=2.6, color=cc, capsize=6, label=lab)
-Q.charge_axis(ax, charges=Q.ET2P03_CHARGES)
-ax.set_xlabel("injected charge  [fC]")
-ax.set_ylabel("TOT at BL+20  [code]")
-ax.legend(fontsize=13)
-ax.set_title("TOT at the operating point", loc="left", fontsize=15)
-
+for dose, cc in ((200, Q.C_ORANGE), (400, Q.C_MAG)):
+    a = cold[(cold.dose_MRad == dose) & cold.anneal_h.notna()].sort_values("anneal_h")
+    if len(a):
+        ax.plot(a.anneal_h, a.nw_mean, "-o", ms=9, lw=2.2, color=cc, label=f"after the step to {dose} MRad")
+ax.axhline(nw_pre, color=Q.GREY, ls="--", lw=2, label="0 MRad, cold")
+ax.set_xlabel("time since the dose step  [h]")
+ax.set_ylabel("256-pixel map noise width  [DAC LSB]")
+ax.set_ylim(3, 5.5)
+ax.legend(fontsize=11)
+ax.set_title("the autocal noise width is ~0.5 DAC wider after the first step", loc="left", fontsize=13)
 ax = axs[2]
-r = CMP7.dropna(subset=["ratio"]).sort_values("ratio")
-ax.barh(range(len(r)), r.ratio, color=Q.C_AQUA, edgecolor="black", lw=1.2)
-ax.axvline(1.0, color="black", lw=2)
-ax.set_yticks(range(len(r)))
-ax.set_yticklabels([q if len(q) < 32 else q[:30] + "…" for q in r.quantity], fontsize=11)
-ax.set_xlabel("BARE7 / BARE9, both at 200 MRad")
-ax.set_title("one die against another at one condition", loc="left", fontsize=14)
+labs = ["reference\nscale", "front end\n(left over)", "measured"]
+vals = [scale400, bl400 - bl_pre - scale400, bl400 - bl_pre]
+ax.bar(labs, vals, color=[Q.C_BLUE, Q.C_ORANGE, Q.GREY], edgecolor="black", lw=1.2)
+for i, v in enumerate(vals):
+    ax.text(i, v - 3 if v < 0 else v + 1, f"{v:+.0f}", ha="center", va="top" if v < 0 else "bottom", fontsize=13)
+ax.axhline(0, color="black", lw=1.6)
+ax.set_ylabel("baseline code shift, 0 → 400 MRad  [DAC LSB]")
+ax.set_title(f"VRef rose {100 * f400:+.1f} %: it explains part of the fall, not all of it", loc="left", fontsize=13)
 fig.tight_layout()
-Q.fig_header(fig, "BARE7 against BARE9 at 200 MRad",
-             tag="ET2.03 bare dies, VA/VD 1.20 V (supply settings); both dies at 0 and 200 MRad",
-             scale=0.62, campaign=Q.ET2P03_CAMPAIGN)
-Q.save_fig(fig, "et2p03_fig11_bare7_vs_bare9")
+Q.fig_header(fig, "Annealing after each dose step, and the reference-scale decomposition",
+             tag="ET2p03_BARE9, 256-pixel autocalibration maps at A 1.2 / D 1.2 V (supply), plate −23 to −24 °C; "
+                 "decomposition assumes DAC full scale proportional to VRef", scale=0.62, campaign=Q.ET2P03_CAMPAIGN)
+Q.save_fig(fig, "et2p03_fig13_annealing_and_scale")
 plt.show()
 
 # %% [markdown]
-# ## 15. Summary
+# ### What the monitoring establishes, and what it does not
+#
+# * **The internal reference of `BARE9` rose with dose**, by about +19 mV after 200 MRad and +40 mV
+#   (+4.6 %) after 400 MRad, at a plate temperature constant to better than 1 °C. It did not recover
+#   in the two days after the last step. This is a measurement, not an inference, and it replaces the
+#   estimate notebook 04 previously made under an assumption.
+# * **Half of the baseline fall is the reference, the other half is the front end.** Under the one
+#   stated assumption (DAC full scale ∝ VRef), the reference rise accounts for the fraction printed
+#   above; the remainder is a genuine downward drift of the front-end operating point in DAC — which
+#   is the *opposite* sign to the +46 DAC the ET2.01 die of notebook 01 showed on a fixed external
+#   reference. So the sign difference between the two dies survives the reference correction, and it
+#   remains a one-die-per-side observation.
+# * **The preamp gain of `BARE9`, corrected for the reference, barely moved**: the −5.4 ± 4.3 % measured
+#   in DAC per fC becomes about −1 % in millivolts per fC once the 4.6 % larger LSB is removed. The
+#   ET2.01 die lost 6.5 ± 3.2 %. Both statements carry the DAC-scale assumption.
+# * **The VTemp pin rose by about 30 mV during the first dose step and stayed there.** At the
+#   +2.27 mV/°C of the sister die BARE4 (notebook 00 section 7.6) that would read as +13 °C, which the
+#   plate did not do and the baseline maps do not show (a 13 °C warming would move the baseline by about
+#   −60 DAC by the temperature coefficient fitted above, and it would relax when the beam went off; it
+#   did not). The straightforward reading is that the temperature sensor itself shifted with dose, so
+#   **VTemp on an irradiated ETROC2 is not a thermometer without recalibration**.
+# * **The rail currents fell** by a few per cent over the campaign, analog and digital alike, and the
+#   autocal noise width widened by about 0.5 DAC after the first step and stayed wide.
+# * **Annealing** is visible in the maps: the baseline climbs back by several DAC in the first day after
+#   each step and then flattens. The 200 MRad and 400 MRad numbers quoted in this notebook are taken at
+#   least twelve hours after the step for that reason.
+#
+# What it does not establish: the DAC transfer function itself (assumed proportional to VRef), the
+# behaviour of a second die (BARE7's dose is unknown), or anything about the ET2.01 revision, whose
+# reference was external and fixed.
+
+# %% [markdown]
+# ## 16. Summary
 #
 # **Read every VA and VD in this table as a power-supply setting.** The reference condition below
 # is VA 1.20 V (supply) ≈ **1.00 V at the chip, about 0.2 V under the nominal 1.2 V**; it is the
@@ -2225,15 +2305,13 @@ SUMMARY = pd.DataFrame([
          pixel_rms="—", label="DERIVED, median over pixels"),
     dict(n=15, quantity="Baseline shift, 0 → 400 MRad at VA 1.20 V, BARE9",
          value=f"{bl4 - bl0:+.1f}", unit="DAC", pixel_rms="—",
-         label="DERIVED — sign opposite to ET2.01, but see row 17: the second die does not repeat it"),
-    dict(n=17, quantity="Baseline shift, 0 → 200 MRad at VA 1.20 V, BARE9 vs BARE7",
-         value=(f"{float(D7[D7.chip.str.endswith('BARE9')].BL_shift_dac.iloc[0]):+.1f} ± "
-                f"{float(D7[D7.chip.str.endswith('BARE9')].BL_shift_sem.iloc[0]):.1f}   vs   "
-                f"{float(D7[D7.chip.str.endswith('BARE7')].BL_shift_dac.iloc[0]):+.1f} ± "
-                f"{float(D7[D7.chip.str.endswith('BARE7')].BL_shift_sem.iloc[0]):.1f}")
-               if len(D7) == 2 else "not available",
-         unit="DAC", pixel_rms="—",
-         label="DERIVED — the two ET2.03 dies DISAGREE on the baseline shift (section 14.1)"),
+         label="DERIVED — sign opposite to ET2.01; section 15 attributes about half of it to the measured VRef rise"),
+    dict(n=17, quantity="VRef (internal reference) change, 0 → 400 MRad, BARE9",
+         value=f"{1e3 * (v4 - v0):+.1f} mV ({100 * f400:+.2f} %)", unit="mV", pixel_rms="—",
+         label="MEASURED from the campaign VRef log (section 15), constant plate temperature"),
+    dict(n=18, quantity="Preamp gain change, 0 → 400 MRad, BARE9, reference-corrected",
+         value=f"{RESULTS.get('gain_change_0_to_400_intrinsic_pct', float('nan')):+.1f}", unit="%", pixel_rms="—",
+         label="DERIVED — measured DAC/fC change plus the VRef rise, assuming DAC full scale ∝ VRef"),
     dict(n=16, quantity="Paired gain change, 0 → 400 MRad at VA 1.20 V",
          value=("%+.1f ± %.1f" % (p400.gain_change_pct, 100 * p400.gain_ratio_sem)) if p400 is not None else "—",
          unit="%", pixel_rms=f"{100 * p400.gain_ratio_pixel_rms:.1f}" if p400 is not None else "—",
@@ -2244,8 +2322,8 @@ print(SUMMARY.to_string(index=False))
 
 # %%
 RESULTS.update(
-    chip="ET2p03_BARE9", second_chip="ET2p03_BARE7", revision="ET2.03",
-    kind="bare die, no sensor", campaign="FNAL bench TID, August 2024",
+    chip="ET2p03_BARE9", second_chip="ET2p03_BARE7 (quarantined: dose after 0 MRad unknown)", revision="ET2.03",
+    kind="bare die, no sensor", campaign="CERN X-ray TID, August 2024",
     vref="internal (VrefGen_PD = 0; board wiring not recorded)",
     condition=REF.label, temperature_C_range=[float(PTS.temperature_C.min()), float(PTS.temperature_C.max())],
     n_pixels=int(REF.n_pixels), pixels=[f"({r},{c})" for r, c in Q.ET2P03_PIXELS],
@@ -2278,7 +2356,7 @@ for p in sorted(Q.OUTDIR.glob("et2p03_*")):
     print("  %-46s %8d B" % (p.name, p.stat().st_size))
 
 # %% [markdown]
-# ## 16. Reproduction ledger
+# ## 17. Reproduction ledger
 #
 # The reduction that produced these tables documents a handful of its own numbers — point counts,
 # hit counts, the autocalibration baselines, and the money-plot turn-off DACs of one pixel at one
@@ -2301,25 +2379,22 @@ if n_ok < len(LED):
 # %% [markdown]
 # ---
 #
-# ## 17. Caveats
+# ## 18. Caveats
 #
 # These limit what any number above can be used for, and none of them is removed by care in the
 # analysis.
 #
-# 1. **BARE7 reaches 200 MRad, not 400.** Its 0 MRad day (`2024-08-14`, 8.88 GB) was recovered
-#    from the removable disk `X9` and decoded, so the second die does now carry a real dose
-#    difference — but only 0 → 200 MRad, and only at VA 1.20 V (its 0 MRad day also covers
-#    VA 0.85 and 1.00 V, its 200 MRad day does not). Every 400 MRad statement in this notebook
-#    still rests on the single die `BARE9`.
+# 1. **BARE7 has no usable dose.** Its 0 MRad day (`2024-08-14`) is good; its `2024-08-21` acquisition
+#    is tagged `200MRad` but the X-ray source failed before it reached that dose, so the dose is
+#    unknown. BARE7 is described in isolation (section 14) and every dose statement rests on `BARE9`.
 # 2. **The `2024-08-03` acquisition carries no dose or temperature token.** Its run directory is
 #    simply `1p2VD_1p2VA`. It is treated here as an independent repeat of the 0 MRad, VA 1.20 V
 #    condition — which is what its position in the campaign says it is — and it is used to set a
 #    repeatability floor rather than as a dose point.
-# 3. **No monitoring data of any kind.** No power-supply or LV-current log, no temperature log, no
-#    `PowerHistory` sqlite, no baseline history — none of the auxiliary streams that notebooks 00
-#    and 02 plot for the January campaigns exists for August 2024. The only current measurement
-#    anywhere is one sentence of prose in `info.txt`. `TS_PD = 0` says the on-chip temperature
-#    sensor had power; no VTemp value was stored.
+# 3. **Monitoring exists, but not everything was logged.** VRef, the VTemp pin, both rail currents and
+#    the 256-pixel autocalibration maps were logged (section 15). Not logged: the chamber or plate
+#    temperature as a time series (only the per-map plate reading in the notes), the DAC transfer
+#    function, RFSel, and the dose rate. VTemp cannot be converted to a chip temperature after dose.
 # 4. **Temperature is name-parsed only**, to 0.1 °C, is a plate reading rather than a die reading,
 #    and was **not scanned**: every condition sits between −23.2 and −23.9 °C. So this campaign
 #    cannot say anything about the temperature coefficient of anything, and the ET2.01 campaigns'

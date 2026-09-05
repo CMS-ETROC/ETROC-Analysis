@@ -474,8 +474,10 @@ plt.show()
 # * **`unknown`** — **the scan did not check.** This is a hole in the census, not a negative
 #   result, and it must not be read as `no`.
 # * **`logged-missing`** — the campaign demonstrably **wrote** the log and the file has **not been
-#   located**. It appears once, on the ET2.03 dose campaign, and section 7.7 is what earns it: an
-#   analysis notebook opens five of that campaign's databases by name. "Recorded, not found" is a
+#   located**. It no longer appears in the matrix: the one campaign that carried it, the ET2.03 dose
+#   campaign, had its folder supplied on 2026-09-04 (section 7.7). The value stays in the vocabulary
+#   because the interval it names is real: an analysis notebook opened five databases by name months
+#   before anyone could find them. "Recorded, not found" is a
 #   different statement from "not recorded", and collapsing it into `no` would be wrong in the
 #   direction that matters.
 
@@ -544,7 +546,7 @@ print("         %d a vol_monitoring (the only direct VRef log anywhere): %s."
       % (int(X9.sqlite_files.str.contains("vol_monitoring").sum()),
          ", ".join(X9[X9.sqlite_files.str.contains("vol_monitoring")].folder)))
 print("\nNone of these campaigns is analysed in this folder. There is no CERN_Aug_2024_TID_history")
-print("folder on this disk — see section 7.7.")
+print("folder on this disk; it was supplied separately and now lives on LPC EOS — see section 7.7.")
 
 # %% [markdown]
 # ## 7. The auxiliary data itself
@@ -911,7 +913,7 @@ for ax, col, lab, cm in [(axes[0], "baseline_DAC", "baseline BL [DAC]", "viridis
 fig.tight_layout()
 fig.text(0.5, -0.02, "outlined: the six pixels this campaign scanned",
          ha="center", fontsize=14, color=INK)
-header(fig, "ET2.03 autocalibration maps", tag="ET2p03_BARE9, FNAL bench, 2024-08-03",
+header(fig, "ET2.03 autocalibration maps", tag="ET2p03_BARE9, CERN X-ray campaign, 2024-08-03",
        scale=0.66, y=1.02)
 Q.save_fig(fig, "census_fig7_et2p03_blnw")
 plt.show()
@@ -1373,7 +1375,7 @@ for rail, notecol, col in [("Analog", "va", "V_Analog"), ("Digital", "vd", "V_Di
 # quantity, and both of those are worth having written down.
 
 # %% [markdown]
-# ### 7.7 The ET2.03 dose campaign's monitoring logs were written. They have not been found.
+# ### 7.7 The ET2.03 dose campaign's monitoring logs were written — and, since 2026-09-04, found
 #
 # Section 7.3 says the ET2.03 August-2024 dose campaign's data tree contains no condition record
 # beyond its directory names. That is true of the tree, and it turns out to be the wrong conclusion
@@ -1393,8 +1395,11 @@ for rail, notecol, col in [("Analog", "va", "V_Analog"), ("Digital", "vd", "V_Di
 #
 # A notebook that reads five files by name, selects specific channels in them, and sets axis limits
 # that match the physical values is written **against data that existed**. It also carries the
-# campaign's irradiation timeline written out twice, and that is worth keeping even though the
-# databases are not in hand.
+# campaign's irradiation timeline written out twice. **The folder itself was supplied by the
+# campaign's operator on 2026-09-04** (as `CERN_Aug_2024_TID.zip`, together with a second
+# climate-chamber set, `CERN_Aug_2024_CC_Spirale3.zip`) and both now live on LPC EOS under
+# `cern_Aug2024_TID/ETROC-History/` and `cern_Aug2024_CC/ETROC-History/`. Notebook 03 section 15
+# analyses the TID logs; the aux matrix rows above reflect what they contain.
 
 # %%
 TL = Q.load_tid_et2p03_timeline()
@@ -1435,27 +1440,32 @@ print("  ChipConfig; that is a different clock offset, but the ORDER is the same
 print("  money-plot run of the day before the register dump.)")
 
 # %% [markdown]
-# **Where the folder has been looked for.** All read-only, all 2026-09-04 unless stated:
+# **Where the folder was looked for before it turned up** (all read-only, 2026-09-04): the whole
+# disk of `fermilab-etroc3`, the `etroclaptop3` backup on the X9 disk (whose nineteen history folders
+# section 3.1 lists — the neighbouring `CERN_Aug_2024_CC_CTS` was there, this one was not),
+# `fermilab-etroc5`, the lxplus EOS and AFS areas this account can read, and a full breadth-first
+# listing of LPC EOS `/store/group/lpcmtdstudies` including its tarballs. It was on the operator's own
+# laptop. The lesson the census keeps: a name-based search of shared storage can prove a file was
+# *written* (here, from the notebook that reads it) long before it can find the file, and the
+# `logged-missing` value exists for exactly that interval.
 #
-# | location | how it was searched | result |
-# |---|---|---|
-# | `fermilab-etroc3`, the whole disk | name search for the folder and for the five file names | not present |
-# | the `etroclaptop3` backup on the X9 disk | the nineteen history folders of section 3.1 listed in full | not present — the neighbouring `CERN_Aug_2024_CC_CTS` is there, the TID one is not |
-# | `fermilab-etroc5` | name search of the readable trees | not present |
-# | lxplus EOS and AFS | the areas this account can read, including the shared subfolders of a colleague's area | not present |
-# | LPC EOS `/store/group/lpcmtdstudies` | full listing, and the `SEU_*` and campaign trees | not present |
+# **What the folder contains, in one table** (the same files the notebook opens, plus two it does not):
 #
-# **This is not a statement that the logs are lost.** Two of the locations above are areas this
-# account cannot read in full, the search is by name and so cannot see inside an archive
-# (section 3), and the campaign's own laptop has been backed up more than once. The honest status
-# is **written, and not located**, which is why the auxiliary matrix carries it as its own value
-# `logged-missing` rather than as `no`. Searching continues.
+# | file | rows | span | what it is |
+# |---|---|---|---|
+# | `vol_monitoring.sqlite` | 287 647 | 2024-08-04 19:45 → 08-21 | the **VRef pin** of the chip under test, one sample every few seconds |
+# | `ADCHistory.sqlite` | 679 477 | 08-02 → 08-21 | external ADC: channel 7 = the **VTemp pin**, channel 8 = a room sensor (constant ~28 °C), channels 0/1 sparse |
+# | `PowerHistory_v2.sqlite` | 578 actions + rails | 08-02 → 08-21 | supply on/off/logging actions and the analog/digital rails |
+# | `NEW_PowerHistory_v2.sqlite` | 432 804 | 08-13 → 08-20 | rails, second logger instance (BARE7 era) |
+# | `WS_PowerHistory_v2.sqlite` | 304 498 | 08-04 → 08-13 | the waveform-sampler rail |
+# | `BaselineHistory.sqlite` | 34 304 | 08-03 → 08-21 | **134 full 256-pixel autocalibration maps** of BARE9 and BARE7; `save_notes` carry plate temperature, dose, hours since the step and the rail settings |
+# | `BaselineHistory_need_to_be_merged_later.sqlite` | 8 960 | 07-23 → 08-03 | pre-campaign maps of eleven chips |
+# | `plot.ipynb` | — | — | the campaign's own timeline plot (the four irradiation markers used above) |
 #
-# The practical consequence for this folder is small and specific: **notebook 03 cannot quote a
-# rail current, an on-chip temperature or a reference voltage for the dose campaign**, and must go
-# on treating its `va_V`/`vd_V` as supply settings with no measured current behind them. What it
-# can now say is that this is a *filing* problem and not a *measurement* problem, which is a
-# different sentence to write in a caveats list.
+# The practical consequence for this folder: **notebook 03 can now quote a reference voltage, a
+# temperature-sensor reading and both rail currents through the whole irradiation**, and it does
+# (section 15). What it still cannot do is convert VTemp to a chip temperature after dose, or
+# measure the DAC transfer function; those remain open.
 
 # %% [markdown]
 # ## 8. The voltage reference across the three revisions

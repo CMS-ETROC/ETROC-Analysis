@@ -1,10 +1,10 @@
-# Provenance — bare ET2.03 dies, FNAL bench TID campaign, August 2024
+# Provenance — bare ET2.03 dies, CERN X-ray TID campaign, August 2024 (raw data parked on the FNAL bench PC)
 
 **Chips** `ET2p03_BARE9` and `ET2p03_BARE7` — two ETROC2 version **2.03 bare dies, with no LGAD
 bonded to either**.
-**Campaign** FNAL bench, August 2024, total-ionising-dose (X-ray) test at 0, 200 and 400 MRad.
+**Campaign** CERN X-ray total-ionising-dose test, August 2024, at 0, 200 and 400 MRad (BARE9; BARE7's dose after 0 MRad is unknown, see the addendum).
 **Temperature** −23.2 to −23.9 °C, from directory names only; `info.txt` calls it a "−25 C plate"
-setpoint. There is no temperature log anywhere.
+setpoint. The plate temperature is recorded per autocalibration map in the monitoring logs (see the addendum); there is no continuous temperature log.
 **Pixels** 6: (row, col) ∈ {(0,0), (0,14), (3,0), (3,14), (12,0), (12,14)}.
 **Charges** 6, 8, 10, 15, 22 fC. **Rails** VD 1.20 V for every threshold scan; VA 0.85 / 1.00 /
 1.20 / 1.40 V, plus a separate 94-point VA × VD grid at a fixed 10 fC.
@@ -207,3 +207,41 @@ record, and it is why the auxiliary sections of notebooks 00 and 02 have no coun
 | The X9 day directories that carry the dosed money plots | 25.1 GB | X9 `et2p03_qinj_data/2024-08-{03,07,08,11,12,21}`; LPC copy at `…/raw_x9/` |
 | `2024-08-04` — `BARE9` 0 MRad, VA 1.00/1.20/1.40 V, the `_RoomT` control run | 5.86 GB | **X9 only** |
 | `2024-08-14` — `BARE7` 0 MRad money plots | 8.88 GB | **X9 only** |
+
+
+## Addendum 2026-09-04 — monitoring logs staged, campaign relabelled, BARE7 dose corrected
+
+**Campaign location.** The X-ray irradiation was done at **CERN** (the history folder is named `CERN_Aug_2024_TID`, its
+sister climate-chamber folders are `CERN_Aug_2024_CC_*`); the raw data were later parked on the FNAL bench PC, which is
+why earlier text here called it an FNAL bench campaign. Figure headers and prose now say CERN X-ray.
+
+**BARE7 dose.** The `2024-08-21` acquisition of `ET2p03_BARE7` is tagged `200MRad` in its directory name and in the
+baseline-history notes, but the X-ray source failed before BARE7 reached 200 MRad (operator statement, 2026-09-04). The
+staged `*_all` tables were edited in place on 2026-09-04: for those rows (3023 points, 30 turn-off searches, 6 noise scans,
+1 config) `dose_MRad` is `NaN`, `dose_source` is `unknown_xray_failure`, and a `dose_note` column carries the reason. No other
+value changed. Notebook 03 treats BARE7 in isolation (section 14).
+
+**`aux/` — the campaign's monitoring logs.** Supplied by the campaign operator as `CERN_Aug_2024_TID.zip` (md5
+`d9074110da3bf4f15a12120f65dd0d5d`, 23.5 MB) on 2026-09-04; the unpacked folder is on LPC EOS at
+`/eos/uscms/store/user/lpcmtdstudies/cern_Aug2024_TID/ETROC-History/CERN_Aug_2024_TID/` (8 files, 133 MB). What is staged here
+is downsampled to one sample per minute (medians) or grouped per autocalibration map; the full-rate originals are on EOS.
+
+| file | bytes | md5 | what it is |
+|---|---|---|---|
+| `aux/aux_tid_adc_1min.csv.gz` | 217,172 | `71fe7d2633261b777457f54b59ff34c7` | RAW, downsampled. External ADC channels 0/1/7/8, 1-minute medians of voltage and the logger's calibrated value; channel 7 = VTemp pin, channel 8 = room sensor |
+| `aux/aux_tid_baseline_maps.csv` | 25,860 | `f07f05c3231ad51240c7c79cdfe7dffc` | DERIVED. One row per autocalibration map (rows grouped by chip, note and 10-minute window): n_pix, mean/std of baseline and noise width |
+| `aux/aux_tid_baselines_full.csv.gz` | 380,071 | `21f9411b14eb98845d41ea123976571f` | RAW, verbatim. All 34 304 rows of BaselineHistory.sqlite (per-pixel baseline and noise width with the save_notes) |
+| `aux/aux_tid_baselines_pre_campaign.csv.gz` | 50,393 | `827473a742635a23dd8d398ad2bfa5ef` | RAW, verbatim. BaselineHistory_need_to_be_merged_later.sqlite: pre-campaign maps of eleven chips, 07-23..08-03 |
+| `aux/aux_tid_irradiation_timeline_plot_ipynb.csv` | 150 | `f2e2b479993f5aa54af760cfbc334708` | RAW, transcribed. The four irradiation start/stop markers from the campaign's plot.ipynb |
+| `aux/aux_tid_power_1min.csv.gz` | 375,414 | `cebc3dd8c377510657afeb429ffb7023` | RAW, downsampled. Analog/digital/WS rail V and I, 1-minute medians, from the three PowerHistory files (source_file column) |
+| `aux/aux_tid_power_actions.csv` | 26,408 | `2708d6e5b9298258c69be0838b0c33f2` | RAW, verbatim. The 578 supply on/off/logging actions |
+| `aux/aux_tid_vref_1min.csv.gz` | 184,059 | `87bbde4d5cfb12019023f87e058ca517` | RAW, downsampled. VRef pin of the chip under test, 1-minute medians (dropouts ≤ 0.5 V counted separately), from vol_monitoring.sqlite |
+
+**Edited table md5s after the BARE7 relabel:**
+
+| file | bytes | md5 |
+|---|---|---|
+| `tid_et2p03_points_all.feather` | 4,965,266 | `34ec6001da66d9a48103cc9981a70614` |
+| `tid_et2p03_turnoff_all.csv` | 186,895 | `482b9e457aae1d32a385fa23f3316e14` |
+| `tid_et2p03_noiseonly_all.csv` | 44,762 | `e18213b72eed3cbd5d27ff793955cd6b` |
+| `tid_et2p03_configs_all.csv` | 30,212 | `11a3cbc4035b63c6a6c42a11f7f3870e` |

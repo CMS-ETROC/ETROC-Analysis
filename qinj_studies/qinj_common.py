@@ -664,7 +664,7 @@ def load_et2p03_blnw():
 
 
 # ---------------------------------------------------------------- ET2.03 bare-die TID campaign
-# Notebook 03. The FNAL bench August-2024 total-ionising-dose campaign on two ETROC2 **v2.03**
+# Notebook 03. The CERN X-ray August-2024 total-ionising-dose campaign on two ETROC2 **v2.03**
 # bare dies, `ET2p03_BARE9` and `ET2p03_BARE7`. The staged tables are the reduction described in
 # `data/bare_et2p03_tid_aug2024/DECODE_README.md`, built to the same per-point definitions as the
 # two January-2024 campaigns above so that the three can be differenced directly.
@@ -672,7 +672,7 @@ def load_et2p03_blnw():
 # The additions below are strictly additive: nothing above this line changed when they were
 # written, so notebooks 00, 01 and 02 are unaffected.
 ET2P03_DIR = DATA / "bare_et2p03_tid_aug2024"
-ET2P03_CAMPAIGN = "FNAL bench TID campaign, August 2024"
+ET2P03_CAMPAIGN = "CERN X-ray TID campaign, August 2024"
 XCAMP_CAMPAIGN = "ET2.01 and ET2.03, January and August 2024"
 
 # The five charges and the six pixels this campaign scanned, at every one of its conditions.

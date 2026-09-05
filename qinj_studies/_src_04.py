@@ -14,29 +14,29 @@
 #
 # | | notebook 01 | notebook 02 | notebook 03 |
 # |---|---|---|---|
-# | chip | `ET2p01_W36_6` | `ET2p01_Bar4` | `ET2p03_BARE9` (+ `ET2p03_BARE7`) |
+# | chip | `ET2p01_W36_6` | `ET2p01_Bar4` | `ET2p03_BARE9` |
 # | revision | **ET2.01** | **ET2.01** | **ET2.03** |
 # | sensor | none | **LGAD bonded** | none |
 # | voltage reference | **external 1.0 V** | **external 1.0 V** | **internal generator** |
-# | campaign | CERN, Jan 2024 | CERN, Jan 2024 | FNAL bench, Aug 2024 |
+# | campaign | CERN, Jan 2024 | CERN, Jan 2024 | CERN X-ray, Aug 2024 |
 # | dose | 0 / 200 / 400 MRad | 0 MRad (history not recorded) | 0 / 200 / 400 MRad |
 # | temperature | +12 and −25 °C | −25, 0, +22 °C | −23.2 to −23.9 °C, not scanned |
 # | supply rails (POWER-SUPPLY settings) | not recorded | not recorded | **VA 0.85–1.40 V scanned** (~0.65–1.20 V at chip), VD 1.20 V (~1.15 V at chip) |
 # | pixels | 12 | 9 | 6 |
 # | charges | 5, 6, 8, 15, 22, 27 fC | 5, 6, 8, 15, 22, 27 fC | 6, 8, 10, 15, 22 fC |
 #
-# **Three ET2.03 dies, and only two of them are measured here.** The August-2024 campaign used
+# **Three ET2.03 dies, and only one of them is used here.** The August-2024 campaign used
 # three `ET2p03_*` bare dies, and they are easy to confuse:
 #
 # | die | role | evidence |
 # |---|---|---|
 # | **`ET2p03_BARE9`** | the TID series proper, 0 / 200 / 400 MRad at four analog rails | X9 day directories `2024-08-03` (0 MRad), `-07`/`-08` (200 MRad), `-11`/`-12` (400 MRad) |
-# | **`ET2p03_BARE7`** | second TID die, 0 → 200 MRad only | 0 MRad money plot on `2024-08-14`, whose session closed 5 minutes before irradiation step 3 opened at 21:27 in the campaign's own `cern_TID.ipynb` timeline (notebook 00 §7.7); 200 MRad on `2024-08-21` |
+# | **`ET2p03_BARE7`** | **quarantined** — 0 MRad measured on `2024-08-14`; its later dose is unknown (the X-ray source failed before it reached the tagged 200 MRad) | described on its own in notebook 03 section 14; enters nothing here |
 # | **`ET2p03_BARE4`** | **never irradiated** — the monitoring die | in the CERN climate chamber 2024-08-04 → 08-14, in parallel with BARE9's irradiation. All 140 of its baseline maps say 0 MRad and `chip_name = ET2p03_BARE4`. It injected no charge, so it contributes no measurement to this notebook — but it is the **only** ET2.03 internal-VRef and on-chip-VTemp record anywhere, and notebook 00 §7.6 fits their temperature slopes from it |
 #
-# Every ET2.03 number below therefore comes from BARE9 or BARE7. BARE4 enters once, in section 2b,
-# as the only available calibration of how this revision's internal reference moves with
-# temperature.
+# Every ET2.03 number below therefore comes from `BARE9`. BARE4 enters in section 2b as the
+# temperature cross-check on the reference, and BARE9's own VRef log (notebook 03 section 15) is
+# what section 2b is now built on.
 #
 # "Gain" throughout is the **preamp gain**: the charge-to-threshold response of the front end in
 # threshold-DAC LSB per fC. **No sensor multiplication enters any measurement in this folder** —
@@ -142,11 +142,10 @@ J03 = pd.read_csv(Q.OUTDIR / "et2p03_jitter_by_offset.csv")
 O03 = pd.read_csv(Q.OUTDIR / "et2p03_turnoff_all_conditions.csv")
 BL03 = pd.read_csv(Q.OUTDIR / "et2p03_baseline_by_condition.csv")
 P03_ALL = pd.read_csv(Q.OUTDIR / "et2p03_paired_dose_ratios.csv")
-# Notebook 03 now writes paired dose ratios for BOTH ET2.03 dies. Everything that was written
-# against a single ET2.03 die means BARE9, which has all three doses; BARE7 reaches 200 MRad and
-# is carried separately below as the second-die test.
+# Notebook 03 writes paired dose ratios for BARE9 only (BARE7 has no usable dose step).
 P03 = P03_ALL[P03_ALL.chip == "ET2p03_BARE9"]
-P03_B7 = P03_ALL[P03_ALL.chip == "ET2p03_BARE7"]
+VREF03 = pd.read_csv(Q.OUTDIR / "et2p03_vref_by_dose.csv")            # notebook 03 section 15
+SCALE03 = pd.read_csv(Q.OUTDIR / "et2p03_reference_scale_decomposition.csv")
 N03 = pd.read_csv(Q.OUTDIR / "et2p03_summary_numbers.csv")
 
 HYB_PRIMARY = "2024-01-18__0c_v15_HV_210_highpower"
@@ -163,10 +162,8 @@ CFG03_LBL = G03[G03.config == CFG03].label.iloc[0]
 K01, K02, K03 = "ET2.01 bare", "ET2.01 + LGAD", "ET2.03 bare"
 # Figure labels name the DIE. K01/K02/K03 stay as the campaign keys the output tables use, but
 # every number in this notebook that is labelled K01 or K03 comes from ONE die -- `ET2p01_W36_6`
-# and `ET2p03_BARE9` -- so the figures say so. `ET2p03_BARE7` is a second ET2.03 die and is never
-# folded into K03.
+# and `ET2p03_BARE9` -- so the figures say so. `ET2p03_BARE7` (quarantined) never appears here.
 DIE = {K01: "ET2p01_W36_6", K02: "ET2p01_Bar4 + LGAD", K03: "ET2p03_BARE9"}
-DIE7 = "ET2p03_BARE7"
 SCOL = {K01: Q.GREY, K02: Q.C_ORANGE, K03: Q.C_BLUE}
 SMK = {K01: "s", K02: "D", K03: "o"}
 
@@ -229,7 +226,6 @@ rows = [dict(data_set=K01, axis="dose at −25 °C", step="0 → 200 MRad", shif
         dict(data_set=K01, axis="dose at −25 °C", step="0 → 400 MRad", shift_dac=b01[(400, -25)] - b01[(0, -25)]),
         dict(data_set=K01, axis="temperature at 0 MRad", step="+12 → −25 °C", shift_dac=b01[(0, -25)] - b01[(0, 12)])]
 bl3 = BL03[(BL03.chip == "ET2p03_BARE9") & BL03.dose.notna()]
-bl7 = BL03[(BL03.chip == "ET2p03_BARE7") & BL03.dose.notna() & (BL03.va == 1.20)].sort_values("dose")
 for va in sorted(bl3.va.unique()):
     s = bl3[bl3.va == va].sort_values("dose")
     for i in range(len(s) - 1):
@@ -240,10 +236,6 @@ for va in sorted(bl3.va.unique()):
         rows.append(dict(data_set=K03, axis=f"dose at VA {va:.2f} V (supply)",
                          step=f"{int(s.dose.iloc[0])} → {int(s.dose.iloc[-1])} MRad",
                          shift_dac=s.BL_mean.iloc[-1] - s.BL_mean.iloc[0]))
-for i in range(len(bl7) - 1):
-    rows.append(dict(data_set=K03 + " (BARE7, 2nd die)", axis="dose at VA 1.20 V (supply)",
-                     step=f"{int(bl7.dose.iloc[i])} → {int(bl7.dose.iloc[i + 1])} MRad",
-                     shift_dac=bl7.BL_mean.iloc[i + 1] - bl7.BL_mean.iloc[i]))
 BLSHIFT = pd.DataFrame(rows)
 BLSHIFT.to_csv(Q.OUTDIR / "xcamp_baseline_shifts.csv", index=False)
 print(BLSHIFT.round(2).to_string(index=False))
@@ -257,31 +249,6 @@ print("                ET2.03 bare %+.1f DAC (%+.1f %% of its own baseline), at 
       % (d03, 100 * d03 / s3.BL_mean.iloc[0]))
 print("ET2.03 repeatability floor on the same quantity: %.1f DAC (two independent 0 MRad acquisitions)"
       % 0.0)
-if len(bl7) > 1:
-    d7 = float(bl7.BL_mean.iloc[-1] - bl7.BL_mean.iloc[0])
-    d9_200 = float(bl3[(bl3.va == 1.20) & (bl3.dose.isin([0, 200]))].sort_values("dose").BL_mean.diff().iloc[-1])
-    r7 = P03_B7[(P03_B7.va == 1.20) & (P03_B7.dose_from == 0) & (P03_B7.dose_to == 200)]
-    r9 = P03[(P03.va == 1.20) & (P03.dose_from == 0) & (P03.dose_to == 200)]
-    print("\nTHE SECOND DIE, and it does not confirm the sign.")
-    print("  ET2p03_BARE7 is the other ET2.03 die and now has both ends of a dose step:")
-    if len(r7) and len(r9):
-        r7, r9 = r7.iloc[0], r9.iloc[0]
-        dd = r9.BL_shift_paired_dac - r7.BL_shift_paired_dac
-        ee = float(np.hypot(r9.BL_shift_sem, r7.BL_shift_sem))
-        print("  0 -> 200 MRad at VA 1.20 V, paired over the same six pixels:")
-        print("    BARE9 %+.1f +- %.1f DAC      BARE7 %+.1f +- %.1f DAC"
-              % (r9.BL_shift_paired_dac, r9.BL_shift_sem, r7.BL_shift_paired_dac, r7.BL_shift_sem))
-        print("    BARE7 is %.1f sigma from zero -- consistent with NO baseline shift -- and the two"
-              % abs(r7.BL_shift_paired_dac / r7.BL_shift_sem))
-        print("    dies differ by %+.1f +- %.1f DAC, i.e. %.1f sigma." % (dd, ee, abs(dd / ee)))
-        print("    Their paired GAIN changes agree: %+.2f +- %.2f %% against %+.2f +- %.2f %%."
-              % (r9.gain_change_pct, 100 * r9.gain_ratio_sem,
-                 r7.gain_change_pct, 100 * r7.gain_ratio_sem))
-    print("  So the chip-to-chip item in the list above is no longer hypothetical: two dies of the")
-    print("  SAME revision, same rail, same pixels and same dose step disagree on the baseline")
-    print("  shift while agreeing on the gain. 'The ET2.03 baseline falls with dose' is therefore")
-    print("  a statement about BARE9, not about the revision, and the sign flip against ET2.01")
-    print("  rests on one die on each side.")
 print("\nThe percentages are NOT a like-for-like comparison: the threshold DAC counts up from a")
 print("600 mV floor, so a fraction of the DAC count is not a fraction of a voltage. They are given")
 print("only to show that the two effects are of comparable size and opposite sign.")
@@ -302,9 +269,6 @@ for va, cc in zip([0.85, 1.00, 1.20, 1.40], [Q.C_AQUA, Q.C_GREEN, Q.C_BLUE, Q.C_
     if len(s) < 2:
         continue
     ax.plot(s.dose, s.BL_mean, "-o", ms=11, lw=2.6, color=cc, label=f"{DIE[K03]}, VA {va:.2f} V (supply)")
-if len(bl7) > 1:
-    ax.plot(bl7.dose, bl7.BL_mean, "--s", ms=11, lw=2.4, color=Q.C_MAG,
-            label=f"{DIE7} (2nd ET2.03 die), VA 1.20 V (supply)")
 ax.set_xlabel("total ionising dose  [MRad]")
 ax.set_ylabel("baseline  [DAC LSB]")
 ax.legend(fontsize=10)
@@ -319,19 +283,15 @@ for va, cc in zip([0.85, 1.00, 1.20, 1.40], [Q.C_AQUA, Q.C_GREEN, Q.C_BLUE, Q.C_
         continue
     ax.plot(s.dose, s.BL_mean - s.BL_mean.iloc[0], "-o", ms=11, lw=2.6, color=cc,
             label=f"{DIE[K03]}, VA {va:.2f} V (supply), internal VRef")
-if len(bl7) > 1:
-    ax.plot(bl7.dose, bl7.BL_mean - bl7.BL_mean.iloc[0], "--s", ms=12, lw=2.6, color=Q.C_MAG,
-            label=f"{DIE7} (2nd ET2.03 die), VA 1.20 V (supply), internal VRef")
 ax.axhline(0, color="black", lw=1.8)
 ax.set_xlabel("total ionising dose  [MRad]")
 ax.set_ylabel("baseline shift from that series' first point  [DAC LSB]")
 ax.legend(fontsize=9, loc="upper left")
-ax.set_title("the shift: BARE9 falls on every rail; the second ET2.03 die BARE7 does not",
+ax.set_title("the shift: opposite signs on the two dies compared (one die per revision)",
              loc="left", fontsize=12)
 
 ax = axs[2]
-# Every bar is a PAIRED per-pixel baseline shift with its standard error, so the two ET2.03 dies
-# are compared over the dose step they actually share. The cooling shift is annotated in the left
+# Every bar is a PAIRED per-pixel baseline shift with its standard error. The cooling shift is annotated in the left
 # panel instead of drawn here: it is a temperature axis, not a dose one, and no error is exported
 # for it.
 def _bl(tab, **kw):
@@ -351,7 +311,6 @@ for lab, cc, v in [
     (f"{DIE[K03]}\n0→400 MRad\nVA 0.85 (supply)", Q.C_AQUA, _bl(P03, va=0.85, dose_from=0, dose_to=400)),
     (f"{DIE[K01]}\n0→200 MRad\n−25 °C", SCOL[K01], _bl(P01, dose_from=0, dose_to=200)),
     (f"{DIE[K03]}\n0→200 MRad\nVA 1.20 (supply)", SCOL[K03], _bl(P03, va=1.20, dose_from=0, dose_to=200)),
-    (f"{DIE7}\n0→200 MRad\nVA 1.20 (supply)", Q.C_MAG, _bl(P03_B7, va=1.20, dose_from=0, dose_to=200)),
 ]:
     if v is not None:
         bars.append((lab, cc, v[0], v[1]))
@@ -370,13 +329,12 @@ ax.set_ylim(lo - 0.28 * (hi - lo), hi + 0.28 * (hi - lo))
 ax.set_xticks(x)
 ax.set_xticklabels([b[0] for b in bars], fontsize=9)
 ax.set_ylabel("paired baseline shift  [DAC LSB]")
-ax.set_title("right of the dotted line: the SAME dose step on both ET2.03 dies —\n"
-             "BARE9 falls, BARE7 does not (error bars are the per-pixel s.e.m.)",
-             loc="left", fontsize=11)
+ax.set_title("paired per-pixel shifts; right of the dotted line the 0 → 200 MRad step\n"
+             "(error bars are the per-pixel s.e.m.)", loc="left", fontsize=11)
 fig.tight_layout()
-Q.fig_header(fig, "Baseline against dose on two chip revisions and two ET2.03 dies",
-             tag="ET2p01_W36_6 (external VRef) against ET2p03_BARE9 and ET2p03_BARE7 "
-                 "(internal VRef); shifts are paired per pixel",
+Q.fig_header(fig, "Baseline against dose on two chip revisions",
+             tag="ET2p01_W36_6 (external VRef) against ET2p03_BARE9 (internal VRef); "
+                 "shifts are paired per pixel",
              scale=0.62, campaign=Q.XCAMP_CAMPAIGN)
 Q.save_fig(fig, "xcamp_fig1_baseline_vs_dose")
 plt.show()
@@ -387,8 +345,8 @@ plt.show()
 # **What the data says.** Over 0 → 400 MRad the ET2.01 bare die `ET2p01_W36_6`'s baseline rises by
 # about +46 DAC at a fixed −25 °C; the ET2.03 die **`ET2p03_BARE9`'s** falls by about −65 DAC at
 # VA 1.20 V and by −65 DAC at VA 0.85 V, and it falls on every rail of **that die** that has two
-# dose points. The second ET2.03 die, `ET2p03_BARE7`, does not repeat it over the dose step they
-# share — see the cell above and section 14.1 of notebook 03. Both campaigns
+# dose points. No second die of either revision has a usable dose step (notebook 03 section 14
+# explains why BARE7 does not count), so this is one die against one die. Both campaigns
 # resolve their own shift comfortably: notebook 01's four conditions and notebook 03's repeated
 # 0 MRad acquisition, which reproduces its mean baseline to 0.0 DAC.
 #
@@ -396,23 +354,16 @@ plt.show()
 # comparison cannot rank them:
 #
 # 1. **The voltage reference** — external 1.0 V on ET2.01, the chip's own generator on ET2.03.
-#    This is the hypothesis the comparison was built to test and it is the one that would explain a
-#    sign flip in a *threshold-referred* quantity while leaving charge-referred quantities alone.
-#    It is not established: no reference read-back exists on either campaign.
+#    This is the hypothesis the comparison was built to test. **It is now measured on the ET2.03
+#    side**: the campaign logged BARE9's VRef pin, and it rose by 4.7 % over 0 → 400 MRad at constant
+#    plate temperature (notebook 03 section 15). Section 2b below uses that number.
 # 2. **Temperature** — −25 °C against −23.6 °C. Small, but notebook 01 measures the baseline's
 #    temperature coefficient as about −2.1 DAC/°C, which over 1.4 °C is only about 3 DAC, so
 #    temperature cannot account for a 111 DAC difference between the two shifts.
-# 3. **Chip to chip — and this one is now partly tested.** Notebook 03's BARE7-against-BARE9
-#    comparison finds a large gain difference between two dies of the *same* revision, so the
-#    chip-to-chip systematic on any absolute number is not small. But BARE7 now carries its own
-#    0 → 200 MRad step, so the *sign* of the baseline shift can be checked on a second die: the
-#    cell above prints both, and **they do not agree**: over 0 → 200 MRad at VA 1.20 V, BARE9's
-#    baseline falls by −31.7 ± 7.2 DAC while BARE7's moves by +6.0 ± 7.3 DAC, consistent with no
-#    shift and 3.7 σ away from BARE9. The same two dies agree on the paired *gain* change over
-#    that step to 0.1 σ. So the chip-to-chip term is small for the charge response and large for
-#    the threshold reference, and "the ET2.03 baseline falls with dose" is a statement about the
-#    die BARE9 rather than about the revision. That makes this the **largest** of the four items
-#    here, not the smallest.
+# 3. **Chip to chip.** Two dies, one of each revision. Notebook 03's three-rail comparison of BARE7's
+#    un-irradiated response against BARE9's (section 14, isolated numbers only) shows the chip-to-chip
+#    spread in absolute gain is not small; nothing tests the *sign* of the baseline shift on a second
+#    die, because BARE7's dose is unknown.
 # 4. **Dose rate, facility and annealing history**, none of which is recorded on either campaign.
 #
 # The one statement that survives all four is the operational one, and both campaigns reach it
@@ -421,239 +372,123 @@ plt.show()
 # baseline moved. That is section 4.
 
 # %% [markdown]
-# ### 2b. A reference-drift estimate under one stated assumption
+# ### 2b. The reference, measured: what the VRef log does to the ET2.03 baseline and gain
 #
-# **DERIVED. This is an estimate under an assumption, not a measurement.** It is written out
-# because the number it produces is the one a reader will otherwise do in their head, and doing it
-# explicitly makes its assumption and its failure modes visible.
+# Until the campaign's monitoring logs were located this subsection was an estimate under an
+# assumption. It is now built on a **measurement**: notebook 03 section 15 reads the VRef pin of
+# `ET2p03_BARE9` through the whole irradiation and finds it **rose** by +19.5 mV after 200 MRad and
+# +40.3 mV (+4.66 %) after 400 MRad, at a plate temperature constant to better than 1 °C. One
+# assumption remains, and it is stated on every number: **the threshold DAC full scale is
+# proportional to the VRef pin voltage**, so a rise of $f$ in the reference lowers the code of an
+# unchanged analog level by the factor $1/(1+f)$ and makes a gain measured in DAC per fC read low by
+# $f$. The DAC transfer function itself has never been measured (open question 1).
 #
-# The reasoning. On **ET2.01** the threshold reference is external and fixed, so nothing in the
-# DAC scale can move with dose: its +46 DAC baseline rise at a fixed −25 °C is **front-end DC
-# drift alone** — the discriminator and preamplifier operating point walking with total dose. On
-# **ET2.03** the reference is the chip's own generator, so its baseline shift contains both that
-# front-end drift and whatever the reference did.
-#
-# **The assumption**, and everything below rests on it: *the ET2.03 front end drifts with dose by
-# the same amount in DAC as the ET2.01 front end, and the two revisions' DAC LSB is the same
-# 0.390625 mV.* Under it, the difference between the two baseline shifts is what the internal
-# reference contributed, and it converts to millivolts at the nominal LSB.
-#
-# The cell below computes it, propagates the two shifts' standard errors, and states the two
-# systematics separately: the temperature difference (1.4 °C at notebook 01's measured baseline
-# temperature coefficient) and the pixel-set difference (twelve pixels on one die against six on
-# another, so the pixel-to-pixel RMS does not average away between the two campaigns).
-#
-# It then does the same arithmetic on **both ET2.03 dies**. `BARE9` supplies 0 → 400 MRad and
-# 0 → 200 MRad; `BARE7`, the second die of the same revision, supplies its own 0 → 200 MRad from
-# the recovered `2024-08-14` day. The BARE7 row is an independent repeat of the BARE9 0 → 200 row,
-# so the two together say whether this estimate is reproducible across dies at all, or whether the
-# chip-to-chip term swamps it. **It does not survive that test** — the cell prints by how much —
-# and the sign check after it fails independently. Both are printed rather than buried, because
-# the arithmetic is the one a reader will do anyway and it deserves its refutation attached.
+# On the **ET2.01** side the reference was external and fixed, so its +46 DAC baseline rise at −25 °C
+# is front-end drift alone. The cell below therefore compares *front end against front end* after
+# the ET2.03 number has had its reference part removed, and *intrinsic gain against intrinsic gain*.
+# The temperature cross-check from `BARE4` (the never-irradiated sister die whose VRef was logged
+# against chamber temperature, notebook 00 section 7.6) is kept: it bounds how much of the ET2.03
+# VRef change could be temperature rather than dose.
 
 # %%
 pr01 = P01[(P01.dose_from == 0) & (P01.dose_to == 400)].iloc[0]
 pr03b = P03[(P03.va == 1.20) & (P03.dose_from == 0) & (P03.dose_to == 400)].iloc[0]
-
-# The same arithmetic on every ET2.03 (die, dose step) that has an ET2.01 counterpart, so the
-# estimate is quoted on BOTH dies rather than on BARE9 alone.
-ref_rows = []
-for lab, src, va, d0, d1 in [("ET2p03_BARE9", P03, 1.20, 0, 400),
-                             ("ET2p03_BARE9", P03, 1.20, 0, 200),
-                             ("ET2p03_BARE9", P03, 1.20, 200, 400),
-                             ("ET2p03_BARE9", P03, 1.40, 200, 400),
-                             ("ET2p03_BARE7", P03_B7, 1.20, 0, 200)]:
-    r3 = src[(src.va == va) & (src.dose_from == d0) & (src.dose_to == d1)]
-    r1 = P01[(P01.dose_from == d0) & (P01.dose_to == d1)]
-    if not len(r3) or not len(r1):
-        continue
-    r3, r1 = r3.iloc[0], r1.iloc[0]
-    term = float(r3.BL_shift_paired_dac) - float(r1.BL_shift_paired_dac)
-    stat = float(np.hypot(r1.BL_shift_sem, r3.BL_shift_sem))
-    ref_rows.append(dict(et2p03_die=lab, va_supply=va,
-                         va_at_chip=round(float(Q.va_at_chip(va)), 2),
-                         nominal_at_chip=(va == Q.VA_NOMINAL_SUPPLY_V),
-                         step=f"{d0} → {d1} MRad",
-                         et2p01_bl_shift_dac=float(r1.BL_shift_paired_dac),
-                         et2p01_sem=float(r1.BL_shift_sem),
-                         et2p03_bl_shift_dac=float(r3.BL_shift_paired_dac),
-                         et2p03_sem=float(r3.BL_shift_sem),
-                         reference_term_dac=term, reference_term_stat_dac=stat,
-                         reference_term_mV=term * Q.LSB_MV,
-                         reference_term_pct_of_1V=100 * term * Q.LSB_MV / 1000.0,
-                         gain_measured_pct=float(r3.gain_change_pct),
-                         gain_measured_sem_pct=float(100 * r3.gain_ratio_sem)))
-REFEST = pd.DataFrame(ref_rows)
-# The sign, derived once and written without an absolute value, because `abs()` here happened to
-# give the right answer only while every row was negative:
-#   let f = reference_term_pct_of_1V, the fractional change in the reference (f < 0 = reference
-#   fell). The DAC LSB in millivolts scales with the reference, so LSB -> LSB*(1+f). A fixed input
-#   voltage step then spans 1/(1+f) ~= (1 - f) times as many codes, so the measured DAC-per-fC
-#   gain change over-reads the intrinsic one by -f per cent. Hence
-#       intrinsic = measured - (-f) = measured + f
-#   With f = -4.4 % and measured = -5.4 %, intrinsic = -9.8 %: a reference that fell inflates the
-#   measured gain, so the true loss is larger than the measured one.
-REFEST["gain_intrinsic_pct"] = REFEST.gain_measured_pct + REFEST.reference_term_pct_of_1V
-REFEST.to_csv(Q.OUTDIR / "xcamp_reference_drift_estimate_by_die.csv", index=False)
+v0 = float(VREF03[VREF03.dose_MRad == 0].vref_V.iloc[0])
+v2 = float(VREF03[VREF03.dose_MRad == 200].vref_V.iloc[0])
+v4 = float(VREF03[VREF03.dose_MRad == 400].vref_V.iloc[0])
+f400 = v4 / v0 - 1
+f200 = v2 / v0 - 1
+dec = SCALE03.set_index("quantity")
+map400 = dec.loc["baseline, 256-px map, 0->400 MRad"]
+six400 = dec.loc["baseline, 6-px in-config, VA 1.20 supply, 0->400 MRad"]
 s01, e01 = float(pr01.BL_shift_paired_dac), float(pr01.BL_shift_sem)
 s03, e03 = float(pr03b.BL_shift_paired_dac), float(pr03b.BL_shift_sem)
-dref = s03 - s01
-dref_stat = float(np.hypot(e01, e03))
-dT_C = 1.4
-sys_T = abs(B01["bl_per_degC_at_0MRad"]) * dT_C
-# A second, independent handle on the same temperature term, and the only ET2.03 one that exists:
-# the internal reference of ET2p03_BARE4 -- the third die of that campaign, never irradiated, sat
-# in the CERN climate chamber while BARE9 was being dosed -- was logged against chamber
-# temperature for ten days, and notebook 00 section 7.6 fits its slope. BARE4 is the ONLY ET2.03
-# VRef record in existence, so this is the nearest thing to a measurement of the effect.
-vref_slope = float(VFIT[VFIT.instrument == "VRef"].slope_mV_per_C.iloc[0])
-vref_slope_e = float(VFIT[VFIT.instrument == "VRef"].err_mV_per_C.iloc[0])
-vref_dT_mV = vref_slope * dT_C
-vref_dT_dac = vref_dT_mV / Q.LSB_MV
-sys_pix = max(float(pr01.BL_shift_pixel_rms), float(pr03b.BL_shift_pixel_rms))
-print("baseline shift, 0 -> 400 MRad, paired per pixel")
-print("  ET2.01 bare, external VRef, -25 C   : %+7.2f +- %.2f DAC  (%d pixels, RMS %.1f)"
-      % (s01, e01, int(pr01.BL_shift_n_pixels), pr01.BL_shift_pixel_rms))
-print("  ET2.03 bare, internal VRef, VA 1.20 : %+7.2f +- %.2f DAC  (%d pixels, RMS %.1f)"
-      % (s03, e03, int(pr03b.BL_shift_n_pixels), pr03b.BL_shift_pixel_rms))
-print("\nUNDER THE ASSUMPTION (same front-end TID drift in DAC on both revisions, same LSB):")
-print("  reference contribution = %+.2f - (%+.2f) = %+.1f DAC-equivalent" % (s03, s01, dref))
-print("                         = %+.1f +- %.1f (stat) +- %.1f (temperature) +- %.1f (pixel set) DAC"
-      % (dref, dref_stat, sys_T, sys_pix))
-mv = dref * Q.LSB_MV
-print("  at %.6f mV per LSB     = %+.1f +- %.1f (stat) +- %.1f (T) +- %.1f (pixel set) mV"
-      % (Q.LSB_MV, mv, dref_stat * Q.LSB_MV, sys_T * Q.LSB_MV, sys_pix * Q.LSB_MV))
-VREF_NOMINAL_MV = 1000.0
-frac = 100 * mv / VREF_NOMINAL_MV
-print("\nThe temperature systematic, cross-checked against the ONE ET2.03 reference record:")
-print("  ET2.01 is at -25.0 C and ET2.03 at -23.6 C, a %.1f C difference." % dT_C)
-print("  (a) notebook 01's measured baseline temperature coefficient, %.2f DAC/C -> %.1f DAC"
-      % (abs(B01["bl_per_degC_at_0MRad"]), sys_T))
-print("  (b) ET2p03_BARE4's internal VRef against chamber temperature (notebook 00 section 7.6,")
-print("      %d samples over 17 bins): %+.4f +- %.4f mV/C, so %.1f C moves VRef by %+.2f mV"
-      % (int(VFIT[VFIT.instrument == "VRef"].n_samples.iloc[0]), vref_slope, vref_slope_e,
-         dT_C, vref_dT_mV))
-print("      = %+.1f DAC at the nominal %.6f mV LSB." % (vref_dT_dac, Q.LSB_MV))
-print("  The two agree at the 2-3 DAC level and are both negligible against the %+.0f DAC"
-      % dref)
-print("  reference term above -- at most %.1f %% of it. Temperature is NOT what this subsection is"
-      % (100 * max(sys_T, abs(vref_dT_dac)) / abs(dref)))
-print("  seeing. (BARE4 is the third ET2.03 die of that campaign: never irradiated, in the CERN")
-print("  climate chamber 2024-08-04 to 08-14 while BARE9 was being dosed, and the only die of the")
-print("  revision whose internal reference was ever logged.)")
-RESULTS_2B_VREF = dict(vref_slope_mV_per_C=vref_slope, vref_slope_err_mV_per_C=vref_slope_e,
-                       dT_C=dT_C, vref_shift_mV=vref_dT_mV, vref_shift_dac=vref_dT_dac,
-                       source_die="ET2p03_BARE4")
-print("  against a %.0f mV nominal reference: %+.1f +- %.1f (stat) +- %.1f (pixel set) %%"
-      % (VREF_NOMINAL_MV, frac, 100 * dref_stat * Q.LSB_MV / VREF_NOMINAL_MV,
-         100 * sys_pix * Q.LSB_MV / VREF_NOMINAL_MV))
-
-# the same paired gain changes section 3 quotes, read here from the same two tables
+print("ET2.03 BARE9 internal reference (MEASURED, notebook 03 section 15):")
+print("  0 MRad %.4f V   200 MRad %.4f V (%+.2f %%)   400 MRad %.4f V (%+.2f %%)" % (v0, v2, 100 * f200, v4, 100 * f400))
+print("\nbaseline shift, 0 -> 400 MRad, paired per pixel:")
+print("  ET2.01 W36_6, external VRef, -25 C      : %+7.2f +- %.2f DAC  -> front end %+.1f DAC (the reference is fixed)"
+      % (s01, e01, s01))
+print("  ET2.03 BARE9, internal VRef, VA 1.20    : %+7.2f +- %.2f DAC" % (s03, e03))
+print("     of which reference scale (DAC full scale ∝ VRef): %+.1f DAC" % six400.reference_scale_dac)
+print("     front end, left over                             : %+.1f +- %.1f DAC" % (six400.front_end_dac, e03))
+print("  the same on the 256-pixel autocalibration maps      : measured %+.1f, reference %+.1f, front end %+.1f DAC"
+      % (map400.measured_dac, map400.reference_scale_dac, map400.front_end_dac))
+print("\n  So even after the measured reference rise is removed, the two front ends drift in OPPOSITE")
+print("  directions with dose (%+.0f DAC on the ET2.01 die, %+.0f DAC on the ET2.03 die). The sign" % (s01, six400.front_end_dac))
+print("  difference is not the reference. It remains a one-die-per-revision observation.")
+# gain
 g03m, g03e = float(pr03b.gain_change_pct), float(100 * pr03b.gain_ratio_sem)
 g01m, g01e = float(pr01.gain_change_pct), float(100 * pr01.gain_ratio_sem)
-print("\nConsequence for the gain, under the same assumption:")
-print("  the reference moves by %+.1f %%, so the mV per DAC code moves by %+.1f %%, a fixed input"
-      % (frac, frac))
-print("  step spans %+.1f %% as many codes and the measured DAC-per-fC gain reads %+.1f %% off."
-      % (-frac, -frac))
-print("  intrinsic = measured + (%+.1f) %%  -- the sign is derived in the cell comment below."
-      % frac)
-print("  measured  ET2.03 gain change 0 -> 400 MRad : %+.1f +- %.1f %% (paired, DAC units)"
-      % (g03m, g03e))
-print("  intrinsic, after removing the scale term   : %+.1f +- %.1f (stat) %%"
-      % (g03m + frac, g03e))
-print("  ET2.01, where no such term exists          : %+.1f +- %.1f %%" % (g01m, g01e))
-print("  the two differ by %.1f points against a combined error of %.1f -- still consistent."
-      % (abs((g03m + frac) - g01m), np.hypot(g03e, g01e)))
-
-# The sign check the rail axis makes possible, and it does not come out in favour of the estimate.
-gv = G03[(G03.chip == "ET2p03_BARE9") & (G03.dose == 200)].sort_values("va")
-bv = BL03[(BL03.chip == "ET2p03_BARE9") & (BL03.dose == 200)].sort_values("va")
-print("\nSIGN CHECK, from the rail axis (200 MRad, the dose with all four rails):")
-print("  VA %.2f -> %.2f V : baseline %.0f -> %.0f DAC (rises), gain %.2f -> %.2f DAC/fC (rises)"
-      % (bv.va.iloc[0], bv.va.iloc[-1], bv.BL_mean.iloc[0], bv.BL_mean.iloc[-1],
-         gv.gain_dac_per_fc.iloc[0], gv.gain_dac_per_fc.iloc[-1]))
-print("  The internal reference is powered from VA, so a pure DAC-scale picture says a HIGHER VA")
-print("  gives a LARGER mV per code and therefore a SMALLER baseline code. The measured baseline")
-print("  code RISES with VA. So on the one axis where the reference can be moved deliberately, the")
-print("  baseline code moves the way a front-end shift moves it and the OPPOSITE way to a pure")
-print("  scale change. The %+.0f DAC above therefore cannot be read as a reference drift without"
-      % dref)
-print("  also invoking a change in the DAC's offset or floor, or dropping the equal-front-end")
-print("  assumption. That is a falsification item, not a footnote.")
-print("\nThe same estimate on every (die, dose step) that has an ET2.01 counterpart:\n")
-print(REFEST[["et2p03_die", "va_supply", "va_at_chip", "nominal_at_chip", "step",
-              "et2p01_bl_shift_dac", "et2p03_bl_shift_dac",
-              "reference_term_dac", "reference_term_stat_dac", "reference_term_mV",
-              "reference_term_pct_of_1V", "gain_measured_pct", "gain_intrinsic_pct"]]
-      .round(2).to_string(index=False))
-nomrow = REFEST[REFEST.nominal_at_chip]
-refrow = REFEST[(REFEST.va_supply == 1.20) & (REFEST.step == "200 → 400 MRad")]
-if len(nomrow) and len(refrow):
-    a, b = nomrow.iloc[0], refrow.iloc[0]
-    print("\nWHICH ROW IS CLOSER TO NOMINAL: only VA 1.40 V (supply) is nominal (~1.20 V) at the")
-    print("chip, and it has 200 -> 400 MRad only. Over that step the estimate gives")
-    print("  VA 1.40 (supply, ~1.20 at chip, NOMINAL) : %+.1f +- %.1f DAC = %+.1f mV = %+.2f %%"
-          % (a.reference_term_dac, a.reference_term_stat_dac, a.reference_term_mV,
-             a.reference_term_pct_of_1V))
-    print("  VA 1.20 (supply, ~1.00 at chip, the dose reference) : %+.1f +- %.1f DAC = %+.1f mV = %+.2f %%"
-          % (b.reference_term_dac, b.reference_term_stat_dac, b.reference_term_mV,
-             b.reference_term_pct_of_1V))
-    d = a.reference_term_dac - b.reference_term_dac
-    e = float(np.hypot(a.reference_term_stat_dac, b.reference_term_stat_dac))
-    print("  difference %+.1f +- %.1f DAC (%.1f sigma). The 0 -> 400 MRad row can only be formed at"
-          % (d, e, abs(d / e)))
-    print("  VA 1.20 (supply), because no 0 MRad money plot exists at the nominal rail, so the")
-    print("  headline -112 DAC number is an UNDER-VOLTED-rail number and there is no nominal-rail")
-    print("  equivalent of it anywhere in this campaign.")
-print("\nBARE7 is a SECOND DIE of the same revision, and its 0 -> 200 MRad row is an independent")
-print("repeat of the BARE9 0 -> 200 MRad row above it. The two reference terms should agree if the")
-print("estimate means anything; the table says whether they do.")
-def _row(die, step, va=1.20):
-    m = REFEST[(REFEST.et2p03_die == die) & (REFEST.step == step) & (REFEST.va_supply == va)]
-    return None if not len(m) else m.iloc[0]
-
-
-w9 = _row("ET2p03_BARE9", "0 → 200 MRad")
-w7 = _row("ET2p03_BARE7", "0 → 200 MRad")
-if w9 is not None and w7 is not None:
-    d = float(w9.reference_term_dac - w7.reference_term_dac)
-    ee = float(np.hypot(w9.reference_term_stat_dac, w7.reference_term_stat_dac))
-    print("  BARE9 %+.1f +- %.1f DAC   BARE7 %+.1f +- %.1f DAC   difference %+.1f +- %.1f (%.1f sigma)"
-          % (w9.reference_term_dac, w9.reference_term_stat_dac,
-             w7.reference_term_dac, w7.reference_term_stat_dac, d, ee, abs(d / ee)))
-    print("\n  They DO NOT agree. The same arithmetic on two dies of the same revision, over the")
-    print("  same dose step, returns reference terms that differ by more than three sigma. That is")
-    print("  the subsection failing its own reproducibility check: whatever the -111 DAC on BARE9")
-    print("  is, it is not a property of the ET2.03 reference that a second die reproduces. Read")
-    print("  2b as an upper bound on what a reference drift could contribute on ONE die, not as a")
-    print("  measurement of the revision -- and note that the sign check below independently")
-    print("  disagrees with it too. Two independent reasons to distrust it is enough; the honest")
-    print("  position is that this folder cannot separate reference from front end at all.")
-
-RESULTS_2B = dict(bl_shift_et2p01_dac=s01, bl_shift_et2p01_sem=e01,
+print("\npreamp gain, 0 -> 400 MRad, paired per pixel:")
+print("  ET2.01 W36_6 (fixed reference)          : %+.1f +- %.1f %%" % (g01m, g01e))
+print("  ET2.03 BARE9 measured in DAC/fC         : %+.1f +- %.1f %%" % (g03m, g03e))
+print("  ET2.03 BARE9 intrinsic (mV/fC), + %.1f %%: %+.1f +- %.1f %%   -- consistent with no loss" % (100 * f400, g03m + 100 * f400, g03e))
+print("  difference ET2.01 - ET2.03 intrinsic    : %.1f points against a combined error of %.1f" % (abs(g01m - (g03m + 100 * f400)), np.hypot(g01e, g03e)))
+# temperature cross-check from BARE4
+dT_C = 1.4
+vref_slope = float(VFIT[VFIT.instrument == "VRef"].slope_mV_per_C.iloc[0])
+vref_slope_e = float(VFIT[VFIT.instrument == "VRef"].err_mV_per_C.iloc[0])
+print("\ntemperature cross-check (BARE4, notebook 00 section 7.6): VRef %+.3f +- %.3f mV/C, so the ~%.1f C"
+      % (vref_slope, vref_slope_e, dT_C))
+print("  campaign-to-campaign difference is %+.2f mV, and the <1 C plate stability within the ET2.03"
+      % (vref_slope * dT_C))
+print("  campaign is < %.1f mV -- both negligible against the %+.1f mV measured rise." % (vref_slope * 1.0, 1e3 * (v4 - v0)))
+RESULTS_2B_VREF = dict(vref_slope_mV_per_C=vref_slope, vref_slope_err_mV_per_C=vref_slope_e, dT_C=dT_C,
+                       vref_shift_from_dT_mV=vref_slope * dT_C, source_die="ET2p03_BARE4")
+RESULTS_2B = dict(vref_0MRad_V=v0, vref_200MRad_V=v2, vref_400MRad_V=v4, vref_change_0_to_400_pct=100 * f400,
+                  bl_shift_et2p01_dac=s01, bl_shift_et2p01_sem=e01,
                   bl_shift_et2p03_dac=s03, bl_shift_et2p03_sem=e03,
-                  reference_term_dac=dref, reference_term_stat_dac=dref_stat,
-                  reference_term_sys_temperature_dac=sys_T, reference_term_sys_pixelset_dac=sys_pix,
-                  reference_term_mV=mv, reference_term_pct_of_1V=frac,
-                  gain_measured_pct=g03m, gain_intrinsic_pct=g03m + frac)
+                  et2p03_reference_scale_dac=float(six400.reference_scale_dac),
+                  et2p03_front_end_dac=float(six400.front_end_dac),
+                  et2p03_map256_measured_dac=float(map400.measured_dac),
+                  et2p03_map256_reference_scale_dac=float(map400.reference_scale_dac),
+                  et2p03_map256_front_end_dac=float(map400.front_end_dac),
+                  gain_measured_pct=g03m, gain_intrinsic_pct=g03m + 100 * f400, gain_et2p01_pct=g01m,
+                  assumption="DAC full scale proportional to the VRef pin voltage")
 pd.DataFrame([RESULTS_2B]).to_csv(Q.OUTDIR / "xcamp_reference_drift_estimate.csv", index=False)
 
+# %%
+fig, axs = plt.subplots(1, 2, figsize=(16, 6.2))
+ax = axs[0]
+labs = ["ET2.01 W36_6\nfront end\n(reference fixed)", "ET2.03 BARE9\nreference scale\n(measured VRef)", "ET2.03 BARE9\nfront end\n(left over)", "ET2.03 BARE9\nmeasured"]
+vals = [s01, float(six400.reference_scale_dac), float(six400.front_end_dac), s03]
+errs = [e01, 0, e03, e03]
+ax.bar(range(4), vals, yerr=errs, color=[Q.GREY, Q.C_BLUE, Q.C_ORANGE, Q.C_BLUE], edgecolor="black", lw=1.3, capsize=7,
+       error_kw=dict(lw=2, ecolor="black"))
+for i, v in enumerate(vals):
+    ax.text(i, v + (5 if v > 0 else -5), f"{v:+.0f}", ha="center", va="bottom" if v > 0 else "top", fontsize=12)
+ax.axhline(0, color="black", lw=1.8)
+ax.set_xticks(range(4)); ax.set_xticklabels(labs, fontsize=10)
+ax.set_ylabel("baseline shift, 0 → 400 MRad  [DAC LSB]")
+ax.set_title("the reference explains half of the ET2.03 fall; the front ends still disagree in sign", loc="left", fontsize=12)
+ax = axs[1]
+labs2 = ["ET2.01 W36_6", "ET2.03 BARE9\nmeasured (DAC/fC)", "ET2.03 BARE9\nintrinsic (mV/fC)"]
+vals2 = [g01m, g03m, g03m + 100 * f400]
+errs2 = [g01e, g03e, g03e]
+ax.bar(range(3), vals2, yerr=errs2, color=[Q.GREY, Q.C_BLUE, Q.C_ORANGE], edgecolor="black", lw=1.3, capsize=7,
+       error_kw=dict(lw=2, ecolor="black"))
+for i, v in enumerate(vals2):
+    ax.text(i, v - 0.6, f"{v:+.1f} %", ha="center", va="top", fontsize=12)
+ax.axhline(0, color="black", lw=1.8)
+ax.set_xticks(range(3)); ax.set_xticklabels(labs2, fontsize=11)
+ax.set_ylabel("preamp gain change, 0 → 400 MRad  [%]")
+ax.set_title("after the reference correction the ET2.03 preamp gain is consistent with unchanged", loc="left", fontsize=12)
+fig.tight_layout()
+Q.fig_header(fig, "The measured reference rise, applied",
+             tag=f"ET2p03_BARE9 VRef +{100 * f400:.1f} % over 0 → 400 MRad (notebook 03 §15); decomposition assumes DAC full scale proportional to VRef; "
+                 "ET2p01_W36_6 on a fixed external reference", scale=0.62, campaign=Q.XCAMP_CAMPAIGN)
+Q.save_fig(fig, "xcamp_fig7_reference_measured")
+plt.show()
+
 # %% [markdown]
-# **What would falsify it, and what would replace it.**
+# **What would sharpen it.** A bench threshold-DAC transfer function against an external voltmeter at
+# several VA settings and before and after irradiation replaces the one assumption left here (open
+# question 1). A second die of the same revision with a *known* dose would test whether the
+# front-end sign is a die property or a revision property; BARE7 cannot, because its dose is unknown.
 #
-# * A **reference read-back** on an ET2.03-or-later part through the dose steps: it measures the
-#   term this subsection infers, and it settles the sign the rail axis casts doubt on above.
-# * A **bench threshold-DAC transfer function** against an external voltmeter, at several VA
-#   settings and before and after irradiation. That is open question 1, and it replaces both this
-#   estimate and the assumption underneath it.
-# * Dropping the equal-front-end assumption: if the ET2.03 front end simply drifts the other way
-#   with dose — a different revision, a different die, an unrecorded dose rate — the whole
-#   −111 DAC is front end and the reference term is zero. Nothing here excludes that.
-#
-# Until one of those exists, the honest summary is the one section 2 already reached: the two
-# revisions' baselines move in opposite directions with dose, their gains do not, and this folder
-# cannot say which of the reference, the revision, the die or the dose rate is responsible.
+# What it already settles: the ET2.03 internal reference does move with dose, upward, by a few per
+# cent; the preamp gain of that die, once the reference is removed, did not measurably change; and
+# the remaining baseline drift of its front end has the opposite sign to the ET2.01 die's.
 
 # %% [markdown]
 # ## 3. Gain against dose, and the rail axis that only ET2.03 has
@@ -708,14 +543,6 @@ print("  (ET2.01 as a ratio of pooled means, the estimator this notebook used to
       % pooled01)
 print("   no error — the two differ by %.1f points, which is the pairing, not the data)"
       % abs(f01 - pooled01))
-if len(P03_B7):
-    b7r = P03_B7[(P03_B7.va == 1.20) & (P03_B7.dose_from == 0) & (P03_B7.dose_to == 200)]
-    b9r = P03[(P03.va == 1.20) & (P03.dose_from == 0) & (P03.dose_to == 200)]
-    if len(b7r) and len(b9r):
-        print("  second ET2.03 die, 0 -> 200 MRad at VA 1.20 V: BARE7 %+.1f +- %.1f %%,"
-              " BARE9 %+.1f +- %.1f %%"
-              % (b7r.gain_change_pct.iloc[0], 100 * b7r.gain_ratio_sem.iloc[0],
-                 b9r.gain_change_pct.iloc[0], 100 * b9r.gain_ratio_sem.iloc[0]))
 print("  ET2.03 200 -> 400 MRad steps, all four rails: %s %%"
       % [round(v, 1) for v in P03[(P03.dose_from == 200)].gain_change_pct])
 print("\nThe two revisions lose the same few per cent of gain over 400 MRad, while their baselines")
@@ -752,10 +579,6 @@ for ds, sub in GCMP.dropna(subset=["rel_to_0MRad"]).groupby("data_set"):
 pp = P03[(P03.va == 1.20) & (P03.dose_from == 0)].sort_values("dose_to")
 ax.errorbar(pp.dose_to, pp.gain_change_pct, yerr=100 * pp.gain_ratio_sem, fmt="o--", ms=10,
             lw=2.2, color=Q.C_AQUA, capsize=6, label=f"{DIE[K03]}, paired per pixel")
-pp7 = P03_B7[(P03_B7.va == 1.20) & (P03_B7.dose_from == 0)].sort_values("dose_to")
-if len(pp7):
-    ax.errorbar(pp7.dose_to, pp7.gain_change_pct, yerr=100 * pp7.gain_ratio_sem, fmt="s", ms=13,
-                lw=2.2, color=Q.C_MAG, capsize=6, label=f"{DIE7} (2nd ET2.03 die), paired")
 pp1 = P01[P01.dose_from == 0].sort_values("dose_to")
 ax.errorbar(pp1.dose_to, pp1.gain_change_pct, yerr=100 * pp1.gain_ratio_sem, fmt="s--", ms=10,
             lw=2.2, color=Q.C_BLUE, capsize=6, label=f"{DIE[K01]}, paired per pixel")
@@ -789,7 +612,7 @@ ax.legend(fontsize=11, loc="lower right")
 ax.set_title("where the January chips sit on the August rail axis", loc="left", fontsize=14)
 fig.tight_layout()
 Q.fig_header(fig, "Preamp gain against dose, and the analog-rail axis",
-             tag="ET2p01_W36_6, ET2p01_Bar4 + LGAD, ET2p03_BARE9 (and ET2p03_BARE7 where marked); "
+             tag="ET2p01_W36_6, ET2p01_Bar4 + LGAD, ET2p03_BARE9; "
                  "all fitted by the same weighted least squares from 8 fC upward",
              scale=0.62, campaign=Q.XCAMP_CAMPAIGN)
 Q.save_fig(fig, "xcamp_fig2_gain")
@@ -1153,10 +976,10 @@ DIFFS = pd.DataFrame([
     dict(axis="chip revision", et2p01_bare="ET2.01", hybrid="ET2.01", et2p03_bare="ET2.03",
          why_it_matters="2.02 fixed the on-chip voltage reference (~167 mV low on 2.01); 2.03 added dummy bump pads. Source: ETROC2 Reference Manual rev 0.6, revision history"),
     dict(axis="voltage reference", et2p01_bare="external 1.0 V", hybrid="external 1.0 V",
-         et2p03_bare="internal generator, powered from VA",
-         why_it_matters="sets the DAC-to-mV scale; no read-back on any campaign, so no absolute DAC comparison is safe"),
-    dict(axis="die", et2p01_bare="W36_6", hybrid="Bar4", et2p03_bare="BARE9 (0/200/400 MRad) and BARE7 (0/200 MRad)",
-         why_it_matters="notebook 03 measures a large gain difference between two dies of the SAME revision; but BARE7 now has its own dose step, so the SIGN of the baseline shift is checked on a second die"),
+         et2p03_bare="internal generator, powered from VA; LOGGED through the irradiation (+4.7 % over 400 MRad)",
+         why_it_matters="sets the DAC-to-mV scale; the ET2.03 reference was logged (notebook 03 §15), the transfer function was not, so absolute DAC comparisons remain unsafe"),
+    dict(axis="die", et2p01_bare="W36_6", hybrid="Bar4", et2p03_bare="BARE9 (0/200/400 MRad); BARE7 quarantined (dose unknown)",
+         why_it_matters="notebook 03 measures a large gain difference between two ET2.03 dies at 0 MRad; no second die of either revision has a usable dose step, so every dose sign is a one-die statement"),
     dict(axis="sensor", et2p01_bare="none", hybrid="LGAD, HV 210 V", et2p03_bare="none",
          why_it_matters="the hybrid's input capacitance is the point of notebook 02 and a confound everywhere else"),
     dict(axis="temperature", et2p01_bare="+12 °C (sweep), −25 °C (turn-off)", hybrid="0 °C",
@@ -1219,7 +1042,7 @@ OPEN = pd.DataFrame([
          what_it_removes="The ambiguity in section 13 of notebook 03, and with it the interpretation of the whole VA axis."),
     dict(rank=6, question="Is the chip-to-chip spread really ~20 % in gain, and how many dies does it take to know?",
          settled_by="The same six-pixel, five-charge scan on five or more dies of one revision at one condition.",
-         what_it_removes="The die confound in every cross-campaign comparison here, currently bounded only by one BARE7-against-BARE9 pair."),
+         what_it_removes="The die confound in every cross-campaign comparison here, currently bounded only by BARE7's un-irradiated numbers against BARE9's."),
     dict(rank=7, question="Does the ~5 % gain loss per 400 MRad hold below 8 fC, where the operating point actually lives?",
          settled_by="Charges of 2–8 fC in 1 fC steps, which needs a threshold scan fine enough to resolve turn-offs 10 DAC apart.",
          what_it_removes="The extrapolation in every `Q_min` number in this folder; no campaign has injected below 5 fC."),
@@ -1319,27 +1142,20 @@ print(SUM.to_string(index=False))
 # %% [markdown]
 # ### The five things worth carrying away
 #
-# 1. **The baseline moves the opposite way with dose on the two dies compared, and the gain does
-#    not — but a second ET2.03 die does not reproduce the baseline result.**
-#    ET2.01 bare (`W36_6`): baseline +46 DAC over 400 MRad, gain −6.5 ± 3.2 % (paired, same twelve
-#    pixels). ET2.03 bare (`BARE9`): baseline −65 DAC over the same dose, gain −5.4 ± 4.3 %
-#    (paired, same six pixels) — the two gains are the same number inside their errors.
-#    **However**, `BARE7`, the second ET2.03 die, moves by +6.0 ± 7.3 DAC over 0 → 200 MRad where
-#    `BARE9` falls by −31.7 ± 7.2 DAC: consistent with no shift, 3.7 σ from the first die, while
-#    the two dies' gain changes agree to 0.1 σ. So the charge response and the threshold reference
-#    do move independently — that part is solid on both dies — but the *direction* of the
-#    threshold-reference drift is a one-die result on each side of the comparison, and the
-#    chip-to-chip systematic on it is demonstrably larger than the effect.
-#    Section 2b turns that into one arithmetic statement under one stated assumption: if the
-#    ET2.03 front end drifts with dose by the same DAC amount as ET2.01's, the internal reference
-#    contributed −112 ± 17 (stat) ± 3 (T) ± 36 (pixel set) DAC ≡ −43.7 ± 6.6 ± 1.1 ± 14.0 mV,
-#    about −4.4 % of a 1 V reference, which would make the intrinsic ET2.03 gain loss ≈ −9.8 %
-#    rather than the −5.4 ± 4.3 % measured in DAC units. **That estimate fails both of its own
-#    checks** and is kept only as an upper bound: the same arithmetic on the second die returns a
-#    reference term differing by more than 3 σ, and the rail axis contradicts its sign (a higher
-#    VA *raises* the baseline code, where a pure scale change would lower it).
-# 2. **Both revisions lose of order five per cent of gain per 400 MRad, and on ET2.03 the second
-#    dose step repeats at every rail setting the campaign used.** The four 200 → 400 MRad steps
+# 1. **The baseline moves the opposite way with dose on the two dies compared, and the measured
+#    reference explains only half of the ET2.03 side.** ET2.01 bare (`W36_6`, fixed external
+#    reference): baseline +46 DAC over 400 MRad, preamp gain −6.5 ± 3.2 % (paired, twelve pixels).
+#    ET2.03 bare (`BARE9`): baseline −65 DAC (6-pixel in-configuration) or −80 DAC (256-pixel
+#    autocalibration maps) over the same dose, while its internal reference **rose by +4.7 %** in the
+#    campaign's own VRef log. Under the one assumption that the DAC full scale follows VRef, that
+#    rise accounts for −37 DAC; the remaining −29 (6-pixel) to −43 DAC (map) is the ET2.03 front end
+#    drifting *down*, where the ET2.01 front end drifted *up*. The sign difference therefore survives
+#    the reference correction and stays a one-die-per-revision result: BARE7, the only other
+#    irradiated die, has an unknown dose and is kept out. The ET2.03 preamp gain, corrected for the
+#    same scale change, is −0.7 ± 4.3 %, consistent with no loss.
+# 2. **In DAC units both revisions lose of order five per cent of gain per 400 MRad, and on ET2.03 the
+#    second dose step repeats at every rail setting the campaign used** (the ET2.03 number is a
+#    DAC-scale artefact by item 1; the repeatability across rails still holds). The four 200 → 400 MRad steps
 #    come out at −5.25 ± 3.87, −5.39 ± 1.94, −5.34 ± 2.76 and −4.96 ± 2.04 % at VA 0.85, 1.00,
 #    1.20 and 1.40 V — a spread of 0.4 points against per-step standard errors of 1.9 to 3.9
 #    points. That is a consistency check, **not** four independent measurements: it is one die,

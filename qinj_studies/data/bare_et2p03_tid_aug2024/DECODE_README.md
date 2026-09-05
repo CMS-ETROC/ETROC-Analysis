@@ -590,3 +590,8 @@ the pooled voltage scans); **135 zero-hit points**; **0 decode errors**.
 `out_x9`; 31 GB of raw) ·
 `~/ETROC_viz_mirror/qinj_et2p03_tid/` (laptop) ·
 `lxplus:/afs/cern.ch/user/m/musafdar/CMS_ETROC/ETROC-Analysis/notes/qinj_et2p03_tid/`
+
+
+## Addendum 2026-09-04 — BARE7 dose relabel
+
+The `2024-08-21_Array_Test_Results` BARE7 acquisition is tagged `200MRad`, but the X-ray source failed before BARE7 reached 200 MRad (operator statement). In the `*_all` tables those rows now carry `dose_MRad = NaN`, `dose_source = unknown_xray_failure` and a `dose_note` column; nothing else changed. The campaign was at CERN (X-ray), not on the FNAL bench; the raw data were parked on the FNAL bench PC afterwards. The campaign's monitoring logs (VRef, VTemp pin, rails, 256-pixel baseline maps) are on LPC EOS under cern_Aug2024_TID/ETROC-History/CERN_Aug_2024_TID/.

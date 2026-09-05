@@ -83,10 +83,10 @@ campaign in the header's right block without editing the style file.
 
 | # | notebook | one-line hook |
 |---|---|---|
-| 00 | `00_census_and_aux_data.ipynb` | **The census.** Every Q_inj data set that exists — 31 of them, positive and negative — what each can and cannot answer, where it lives, and what each campaign was monitoring while it took the data. Carries the auxiliary logs that the measurement notebooks do not. |
+| 00 | `00_census_and_aux_data.ipynb` | **The census.** Every Q_inj data set that exists — 33 of them, positive and negative — what each can and cannot answer, where it lives, and what each campaign was monitoring while it took the data. Carries the auxiliary logs that the measurement notebooks do not. |
 | 01 | `01_bare_et2p01_tid_jan2024.ipynb` | **The bare-die reference.** `ET2p01_W36_6`, no sensor, through 0/200/400 MRad: gain, the noise-set threshold edge, ENC, TOT-versus-charge, the money plot, and the dose-versus-temperature confound resolved by a fourth measurement corner. |
 | 02 | `02_hybrid_et2p01_cc_jan2024.ipynb` | **What the sensor costs.** `ET2p01_Bar4` with an LGAD bonded, at −25/0/+22 °C and two bias states: the same measurements, the campaign's auxiliary logs, a confound-free bias bracket, and the bare-versus-hybrid comparison — where the answer inverts the usual expectation. |
-| 03 | `03_bare_et2p03_tid_aug2024.ipynb` | **The later revision, and a supply-rail axis.** `ET2p03_BARE9` and `ET2p03_BARE7`, no sensor, through 0/200/400 MRad at four analog-rail settings, with an **internal** voltage reference: the same measurements, an in-configuration baseline at every condition, a paired per-pixel dose test, a 94-point VA × VD map of where the chip stops working, a CAL decode artefact and the per-hit window that removes it (plus a smaller TOA-only class that survives the window and is flagged rather than cut) — and a baseline that moves with dose in the **opposite** direction to ET2.01 **on the die `BARE9`; the second die `BARE7` does not repeat it**. |
+| 03 | `03_bare_et2p03_tid_aug2024.ipynb` | **The later revision, a supply-rail axis, and the campaign's own monitoring.** `ET2p03_BARE9`, no sensor, through 0/200/400 MRad at four analog-rail settings with an **internal** voltage reference that the campaign **logged**: gain, ENC, TOT, the money plot, baseline against dose, the VA × VD rail grid, VRef/VTemp/rail currents through the irradiation with the 256-pixel baseline maps and their annealing, and the reference-scale decomposition of the baseline fall. `ET2p03_BARE7` is characterised in isolation (its post-0 MRad dose is unknown: the X-ray failed). |
 | 04 | `04_cross_campaign_synthesis.ipynb` | **The three on one axis.** Reads only the tables 01, 02 and 03 wrote. What survives the revision change, what does not, everything that differs between the three campaigns in one table, and eight open questions ranked by how much confounding each would remove. |
 
 **Notebook 00 is standalone** — it reads only `data/census/` and can be run first or last.
@@ -139,12 +139,15 @@ Four findings there are new rather than inventory, and all are in the notebook's
   the only direct temperature coefficient of ETROC2 analog supply current anywhere:
   **+0.112 %/°C**, i.e. *cooling lowers the current* — the opposite sign to the January-2024 step
   above, which therefore stays unexplained rather than being attributed to the cooldown.
-* **The ET2.03 dose campaign's monitoring logs were written and have not been found**
-  (section 7.7). An analysis notebook on the bench PC opens five databases of a
-  `CERN_Aug_2024_TID_history` folder by name — baselines, VTemp, both power logs and VRef — and
-  plots them with physical axis limits. The folder is not on the bench PC, its backup disk,
-  the newer bench PC, lxplus or LPC EOS. The auxiliary matrix carries this as its own value,
-  `logged-missing`, because "recorded, not found" is not "not recorded" and the search continues.
+* **The ET2.03 dose campaign's monitoring logs were written, and have now been found**
+  (section 7.7). An analysis notebook on the bench PC opened five databases of a
+  `CERN_Aug_2024_TID_history` folder by name; the folder was absent from the bench PC, its backup
+  disk, the newer bench PC, lxplus and LPC EOS, and was supplied by the campaign's operator on
+  2026-09-04. It now lives on LPC EOS under `cern_Aug2024_TID/ETROC-History/` (with a second
+  climate-chamber set, `CERN_Aug_2024_CC_Spirale3`, under `cern_Aug2024_CC/ETROC-History/`).
+  Notebook 03 section 15 analyses it: **VRef rose +4.7 % over 400 MRad**, the VTemp pin shifted
+  with dose, both rail currents fell a few per cent, and the baseline maps show a day of annealing
+  after each step. The aux matrix no longer carries a `logged-missing` cell.
 
 All values are recomputed by the notebooks. "Pixel RMS" is the pixel-to-pixel spread and is the
 dominant uncertainty throughout; the ± is the uncertainty on the mean over pixels.
@@ -244,10 +247,12 @@ here rather than twelve, so it is a noisier estimate of the spread than notebook
 | 12 | TOT-to-charge law at BL+20 | TOT = 9.5 + 13.1 ln(Q/fC), χ²/ndf 1.7 | — | DERIVED, valid 6–22 fC |
 | 13 | TDC quantisation floor, LSB/√12 | 4.88 ps (TOA LSB 16.9 ps at CAL 185) | — | DERIVED |
 | 14 | Walk with charge, 6→22 fC at BL+20 | +518 ps | — | DERIVED |
-| 15 | **Baseline shift, 0 → 400 MRad at VA 1.20 V (supply), `BARE9`** | **−65.5 DAC** | — | DERIVED — sign opposite to ET2.01, but see row 17 |
+| 15 | **Baseline shift, 0 → 400 MRad at VA 1.20 V (supply), `BARE9`** | **−65.5 DAC** (6-pixel in-config); **−80.1 DAC** on the 256-pixel autocal maps | — | DERIVED — sign opposite to ET2.01; row 17 attributes about half of it to the reference |
 | 16 | Paired preamp-gain change, 0 → 400 MRad at VA 1.20 V (supply) | **−5.4 ± 4.3 %** | 10.4 | DERIVED — same six pixels, paired ratio |
 | 16b | the same 200 → 400 MRad step at **VA 1.40 V (supply) = nominal at the chip** | **−4.96 ± 2.04 %**, baseline **−19.2 ± 8.2 DAC** | — | DERIVED — the nominal-rail version; no 0 MRad exists there |
-| 17 | Baseline shift, 0 → 200 MRad at VA 1.20 V (supply), **BARE9 vs BARE7** | **−31.7 ± 7.2 vs +6.0 ± 7.3 DAC** | — | DERIVED — the two ET2.03 dies **disagree**, 3.7 σ |
+| 17 | **VRef (internal reference) of `BARE9`, 0 → 200 → 400 MRad** | **0.864 → 0.883 → 0.904 V (+2.3 %, +4.7 %)** at constant plate temperature | — | MEASURED from the campaign's VRef log (section 15) |
+| 18 | Reference-scale part of row 15, assuming DAC full scale ∝ VRef | **−37 DAC** of the −65.5 (6-pixel) / −80.1 (map); the rest, **−29 / −43 DAC**, is front-end drift | — | DERIVED (section 15) |
+| 19 | Preamp-gain change 0 → 400 MRad, **reference-corrected** | **−0.7 ± 4.3 %** (measured −5.4 ± 4.3 % in DAC/fC, + 4.7 % scale) | — | DERIVED — consistent with no loss on this die |
 
 This campaign is also the only one with a **decode artefact big enough to matter**, and section
 4.4 is given over to it: on each pixel a contiguous run of one to six threshold DAC values, at a
@@ -275,14 +280,20 @@ Three further results are specific to this campaign because no other one has the
   change is at least as likely and probably the larger part. Separating them needs the
   threshold-DAC transfer function — open question 1.
 * **On `BARE9` the baseline falls with dose on every rail**, by −65 DAC over 400 MRad at both
-  VA 1.20 V and VA 0.85 V (supply). On ET2.01 it *rose*. The two independent 0 MRad acquisitions reproduce
-  the mean baseline to **0.0 DAC**, so the effect is far above the campaign's own repeatability —
-  **but the second ET2.03 die does not reproduce it.** Over 0 → 200 MRad at VA 1.20 V (supply), the step
-  both dies now have, `BARE9` falls by **−31.7 ± 7.2 DAC** and `BARE7` moves by **+6.0 ± 7.3 DAC**:
-  consistent with no shift, and 3.7 σ from `BARE9`. Their paired *gain* changes over the same step
-  agree to 0.1 σ (−0.83 ± 2.08 % against −0.45 ± 2.73 %). So the falling baseline is established
-  for the die `BARE9`, **not** for the ET2.03 revision, and the chip-to-chip systematic on it is
-  larger than the effect. Notebook 03 section 14.1.
+  VA 1.20 V and VA 0.85 V (supply), and by −80 DAC on the 256-pixel autocalibration maps. On ET2.01
+  it *rose*. The campaign's own VRef log now says why part of it happens: **the internal reference
+  rose by +4.7 % over the same dose**, and a larger reference lowers every threshold code of an
+  unchanged analog level. Under the one assumption that the DAC full scale follows VRef, that is
+  −37 DAC of the fall; the remaining −29 (6-pixel) to −43 DAC (map) is the front end itself drifting
+  *down*, where the ET2.01 front end drifted *up* on a fixed external reference. So the sign
+  difference survives the correction and stays a one-die-per-revision observation: the only other
+  irradiated ET2.03 die, `BARE7`, has an unknown dose (the X-ray source failed before the tagged
+  200 MRad) and is kept out of every comparison. Notebook 03 sections 11, 14 and 15.
+* **Corrected for the reference, `BARE9`'s preamp gain did not measurably change**: −5.4 ± 4.3 % in
+  DAC/fC becomes −0.7 ± 4.3 % in mV/fC. Its VTemp pin rose ~30 mV during the first step at
+  constant plate temperature and stayed there — the temperature sensor shifts with dose — and both
+  rail currents fell by a few per cent. The baseline maps anneal back by several DAC in the day after
+  each step; the quoted dose numbers are taken ≥ 12 h after a step.
 * **Running well below the nominal analog rail costs more than the dose does.** At VA 0.85 V
   (supply) ≈ 0.65 V at the chip the same 400 MRad costs **−17.1 ± 4.8 %** of preamp gain against
   −5.4 ± 4.3 % at VA 1.20 V (supply) ≈ 1.00 V at the chip; the noise scan at that corner
@@ -306,8 +317,8 @@ in *both* rail and dose, so the nominal column is a companion, not a correction.
 | # | quantity | unit | ET2.01 bare | ET2.01 + LGAD | ET2.03 bare | comparable across the three? |
 |---|---|---|---|---|---|---|
 | 1 | Preamplifier gain at each reference condition | DAC/fC | 9.42 ± 0.89 | 5.96 ± 0.37 | 8.26 ± 1.19 | **no** — the DAC scale differs between revisions |
-| 2 | Gain change, 0 → 400 MRad, **paired per pixel** | % | −6.5 ± 3.2 (12 px) | no dose series | −5.4 ± 4.3 (6 px) | **yes** — a fractional change, same estimator on both |
-| 3 | Baseline shift, 0 → 400 MRad | DAC | +46.2 at −25 °C | no dose series | −65.5 at VA 1.20 V supply (`BARE9`; `BARE7` shows +6.0 ± 7.3 over 0 → 200 where `BARE9` shows −31.7 ± 7.2) | **no** — the two ET2.03 dies disagree |
+| 2 | Gain change, 0 → 400 MRad, **paired per pixel** | % | −6.5 ± 3.2 (12 px) | no dose series | −5.4 ± 4.3 (6 px) in DAC/fC; **−0.7 ± 4.3 after the measured +4.7 % reference rise** | **yes** as a fractional change — but the ET2.03 value needs the reference correction |
+| 3 | Baseline shift, 0 → 400 MRad | DAC | +46.2 at −25 °C (front end; reference fixed) | no dose series | −65.5 at VA 1.20 V supply (`BARE9`): −37 reference scale (measured VRef +4.7 %) + −29 front end | front end against front end: **opposite signs**, one die per revision |
 | 4 | Turn-off above baseline at 15 fC | DAC | 116.0 | 72.9 | 100.5 | the offset cancels, the scale does not |
 | 5 | TOT at BL+20, 15 fC | ns | 1.83 | 3.04 | 1.55 | yes in ns — but RFSel is unrecorded on all three |
 | 6 | TOA jitter at BL+20, 15 fC | ps | 6.4 | 10.6 | 8.3 | near the floor, ×1.18 / ×2.02 / ×1.69 of it — limits, not resolutions |
@@ -319,24 +330,19 @@ in *both* rail and dose, so the nominal column is a companion, not a correction.
 
 **The five things worth carrying away**
 
-1. **The gain-with-dose result reproduces across dies; the baseline-with-dose result does not.**
-   ET2.01 bare (`W36_6`): baseline +46 DAC over 400 MRad, gain −6.5 ± 3.2 % (paired, same 12
-   pixels). ET2.03 bare (`BARE9`): baseline −65 DAC over the same dose, gain −5.4 ± 4.3 % (paired,
-   same 6 pixels) — the two gains are the same number inside their errors. **But the second ET2.03
-   die breaks the baseline half of it**: over 0 → 200 MRad at VA 1.20 V (supply), `BARE9` falls by
-   −31.7 ± 7.2 DAC and `BARE7` moves by +6.0 ± 7.3 DAC (3.7 σ apart), while their gain changes
-   agree to 0.1 σ. So the charge response and the threshold reference do move independently — that
-   part holds on both dies — but the *direction* of the reference drift is a one-die result on each
-   side of the comparison. Notebook 04 section 2b does the arithmetic anyway, under one stated
-   assumption (equal front-end TID drift on both revisions): the reference term would be
-   **−112 ± 17 (stat) ± 3 (T) ± 36 (pixel set) DAC ≡ −43.7 ± 6.6 ± 1.1 ± 14.0 mV**, ≈ −4.4 % of a
-   1 V reference, making the *intrinsic* ET2.03 gain loss ≈ **−9.8 %** rather than −5.4 ± 4.3 %.
-   **That estimate fails both of its own checks** and is kept only as an upper bound: repeated on
-   `BARE7` it returns −18.8 ± 8.5 DAC against `BARE9`'s −56.5 ± 8.4 over the same step (3.2 σ
-   apart), and the rail axis contradicts its sign, since a higher VA *raises* the baseline code
-   where a pure DAC-scale change would lower it.
-2. **Both revisions lose of order five per cent of gain per 400 MRad, and on ET2.03 the second
-   dose step repeats at every rail setting the campaign used.** The four 200 → 400 MRad steps are
+1. **The baseline moves the opposite way with dose on the two dies compared, and the measured
+   reference explains only half of the ET2.03 side.** ET2.01 bare (`W36_6`, fixed external
+   reference): baseline +46 DAC over 400 MRad, preamp gain −6.5 ± 3.2 % (paired, same 12 pixels).
+   ET2.03 bare (`BARE9`): baseline −65 DAC (6-pixel) / −80 DAC (256-pixel maps) over the same dose,
+   while its internal reference **rose by +4.7 %** in the campaign's own VRef log. If the DAC full
+   scale follows VRef, that accounts for −37 DAC; the remaining −29 to −43 DAC is the ET2.03 front end
+   drifting *down* where the ET2.01 front end drifted *up*. The ET2.03 preamp gain, corrected for the
+   same scale change, is −0.7 ± 4.3 %, consistent with no loss. No second die of either revision has a
+   usable dose step (`BARE7`'s dose is unknown), so every sign here is a one-die statement. Notebook 04
+   section 2b.
+2. **In DAC units both revisions lose of order five per cent of gain per 400 MRad, and on ET2.03 the
+   second dose step repeats at every rail setting the campaign used** (on ET2.03 that is largely the
+   reference-scale effect of item 1; the consistency across rails still holds). The four 200 → 400 MRad steps are
    −5.25 ± 3.87, −5.39 ± 1.94, −5.34 ± 2.76 and −4.96 ± 2.04 % at VA 0.85, 1.00, 1.20 and 1.40 V —
    a spread of 0.4 points against per-step standard errors of 1.9 to 3.9 points. That is a
    consistency check, **not four independent measurements**: one die, the same six pixels and the
@@ -474,10 +480,10 @@ below in its section 1.
 
 | file | bytes | md5 | what it is |
 |---|---|---|---|
-| `tid_et2p03_points_all.feather` | 4,949,330 | `c1a669ff60e88b8697ef233cf0402a21` | RAW + DERIVED. Per-point TOA/TOT/CAL mean and standard deviation in raw codes, plus the CAL-windowed repeat of them, 29 922 × 43. **The union table** — the only one carrying the dosed money plots. |
-| `tid_et2p03_turnoff_all.csv` | 181,335 | `96883ad1b698caba6a9fa94b9cc4807b` | RAW. The 450 discriminator binary searches, each written out in full as `search_trace`. |
-| `tid_et2p03_noiseonly_all.csv` | 43,642 | `7da9e2675ef3b38aa343a5e64c69be41` | RAW. The 90 `quietCB` noise scans — a dense threshold scan of the trigger-bit counter, taken inside every configuration. This is what gives a baseline at all fourteen conditions. |
-| `tid_et2p03_configs_all.csv` | 29,923 | `1fea689e9f16a8bfb9cb2858f82a3fb0` | RAW + DERIVED. The conditions grid, one row per run or rail sub-run. |
+| `tid_et2p03_points_all.feather` | 4,965,266 | `34ec6001da66d9a48103cc9981a70614` | RAW + DERIVED. Per-point TOA/TOT/CAL mean and standard deviation in raw codes, plus the CAL-windowed repeat of them, 29 922 × 43. **The union table** — the only one carrying the dosed money plots. |
+| `tid_et2p03_turnoff_all.csv` | 186,895 | `482b9e457aae1d32a385fa23f3316e14` | RAW. The 450 discriminator binary searches, each written out in full as `search_trace`. |
+| `tid_et2p03_noiseonly_all.csv` | 44,762 | `e18213b72eed3cbd5d27ff793955cd6b` | RAW. The 90 `quietCB` noise scans — a dense threshold scan of the trigger-bit counter, taken inside every configuration. This is what gives a baseline at all fourteen conditions. |
+| `tid_et2p03_configs_all.csv` | 30,212 | `11a3cbc4035b63c6a6c42a11f7f3870e` | RAW + DERIVED. The conditions grid, one row per run or rail sub-run. |
 | `tid_et2p03_points.feather` | 610,234 | `11832f9bef784d13102d9625180c068d` | RAW + DERIVED. The `TID_August` working copy alone, where the dosed data are the 10 fC rail scans only. Staged so the difference between the two table families is demonstrable. |
 | `tid_et2p03_turnoff.csv` | 21,696 | `a0cf7d157ac24337bd223c57c0cc42ca` | RAW. The same, working copy only. |
 | `tid_et2p03_noiseonly.csv` | 5,411 | `99257c0ca258a409cf814da5a2ee80d3` | RAW. The same, working copy only. |
@@ -486,6 +492,14 @@ below in its section 1.
 | `tid_et2p03_chipconfig.csv` | 3,164 | `5aef7758fd020bddf206430880301a20` | RAW, decoded. The three register read-backs, 135 fields plus the raw `PeriCfg0..31` bytes. Byte-identical to `data/census/aux_et2p03_chipconfig.csv`. |
 | `info_BARE9_voltage_scan.txt` | 1,703 | `d79ee484fd73b8d85b6c3824c96dce71` | RAW, verbatim. The campaign logbook of the BARE9 voltage scan. Its first two lines are the **supply-versus-chip mapping** every VA/VD label in this folder depends on; the rest is the contemporaneous record of the VD failures. |
 | `info_BARE7_voltage_scan.txt` | 1,694 | `b579ec8c8eb3ba7866e46eafb745f3e3` | RAW, verbatim. The same for BARE7 (its 0 MRad VD 0.90 V note differs: "stable links but no QInj" against BARE9's "highly unstable links"). |
+| `aux/aux_tid_adc_1min.csv.gz` | 217,172 | `71fe7d2633261b777457f54b59ff34c7` | RAW, downsampled. External ADC ch 0/1/7/8, 1-minute medians; ch 7 = VTemp pin, ch 8 = room sensor. Origin: the operator's `CERN_Aug_2024_TID.zip` (2026-09-04), full-rate originals on LPC EOS `cern_Aug2024_TID/ETROC-History/CERN_Aug_2024_TID/`. |
+| `aux/aux_tid_baseline_maps.csv` | 25,860 | `f07f05c3231ad51240c7c79cdfe7dffc` | DERIVED. One row per 256-pixel autocalibration map: mean/std of baseline and noise width. Origin: the operator's `CERN_Aug_2024_TID.zip` (2026-09-04), full-rate originals on LPC EOS `cern_Aug2024_TID/ETROC-History/CERN_Aug_2024_TID/`. |
+| `aux/aux_tid_baselines_full.csv.gz` | 380,071 | `21f9411b14eb98845d41ea123976571f` | RAW. All 34 304 rows of `BaselineHistory.sqlite`, per pixel, with the `save_notes`. Origin: the operator's `CERN_Aug_2024_TID.zip` (2026-09-04), full-rate originals on LPC EOS `cern_Aug2024_TID/ETROC-History/CERN_Aug_2024_TID/`. |
+| `aux/aux_tid_baselines_pre_campaign.csv.gz` | 50,393 | `827473a742635a23dd8d398ad2bfa5ef` | RAW. Pre-campaign maps of eleven chips, 07-23 → 08-03. Origin: the operator's `CERN_Aug_2024_TID.zip` (2026-09-04), full-rate originals on LPC EOS `cern_Aug2024_TID/ETROC-History/CERN_Aug_2024_TID/`. |
+| `aux/aux_tid_irradiation_timeline_plot_ipynb.csv` | 150 | `f2e2b479993f5aa54af760cfbc334708` | RAW, transcribed. The four irradiation markers from the campaign's `plot.ipynb`. Origin: the operator's `CERN_Aug_2024_TID.zip` (2026-09-04), full-rate originals on LPC EOS `cern_Aug2024_TID/ETROC-History/CERN_Aug_2024_TID/`. |
+| `aux/aux_tid_power_1min.csv.gz` | 375,414 | `cebc3dd8c377510657afeb429ffb7023` | RAW, downsampled. Analog/digital/WS rails V and I, 1-minute medians, three logger files. Origin: the operator's `CERN_Aug_2024_TID.zip` (2026-09-04), full-rate originals on LPC EOS `cern_Aug2024_TID/ETROC-History/CERN_Aug_2024_TID/`. |
+| `aux/aux_tid_power_actions.csv` | 26,408 | `2708d6e5b9298258c69be0838b0c33f2` | RAW. The 578 supply on/off/logging actions. Origin: the operator's `CERN_Aug_2024_TID.zip` (2026-09-04), full-rate originals on LPC EOS `cern_Aug2024_TID/ETROC-History/CERN_Aug_2024_TID/`. |
+| `aux/aux_tid_vref_1min.csv.gz` | 184,059 | `87bbde4d5cfb12019023f87e058ca517` | RAW, downsampled. VRef pin, 1-minute medians (`vol_monitoring.sqlite`). Origin: the operator's `CERN_Aug_2024_TID.zip` (2026-09-04), full-rate originals on LPC EOS `cern_Aug2024_TID/ETROC-History/CERN_Aug_2024_TID/`. |
 | `DECODE_README.md` | 38,569 | `d230a08548ff4d42fc75529613aa9c82` | The reduction's own documentation, verbatim: formats, decoder provenance, verification, caveats. |
 | `code/decoding.py` | 46,365 | `289ef6cb7b7e48589e02d817de5060ed` | **This repository's own `DecodeBinary`**, copied byte for byte from `TestBeam/condor_at_lxplus/core/decoding.py`. Notebook 03 prints that md5 against the repository's. |
 | `code/etroc2_regmap.py`, `reduce_tid.py`, `verify_hand.py`, `chipconfig_to_csv.py`, `merge_all.py`, `postfix_elapsed.py` | 100,254 | see `PROVENANCE.md` | The rest of the reduction, shipped for provenance. `verify_hand.py` is the independent decoder written from the format description alone. |
@@ -494,8 +508,8 @@ below in its section 1.
 
 | file | bytes | md5 | what it is |
 |---|---|---|---|
-| `qinj_census.csv` | 12,751 | `c7b4d74c93118ee7e8c81e62f269de39` | DERIVED. One row per data set, 32 × 24, positives and negatives. |
-| `qinj_aux_matrix.csv` | 5,412 | `267d5af1ff9e49f7299f0686c7f790af` | DERIVED. 15 campaigns × 8 kinds of monitoring, `logged-missing`/`na`/`no`/`partial`/`unknown`/`yes`. `logged-missing` is its own value and means *written, and not located* — it is the ET2.03 dose campaign of section 7.7, not a `no`. |
+| `qinj_census.csv` | 14,608 | `a9b347d8a3467067a1865f7e354eb5fe` | DERIVED. One row per data set, 32 × 24, positives and negatives. |
+| `qinj_aux_matrix.csv` | 6,769 | `401cb5c396b8bb4ebe1f02ad6a44c3a6` | DERIVED. 16 campaigns × 8 kinds of monitoring, `na`/`no`/`partial`/`unknown`/`yes` (`logged-missing` is defined but no longer used); `yes`. `logged-missing` is its own value and means *written, and not located* — it is the ET2.03 dose campaign of section 7.7, not a `no`. |
 | `aux_tid_lv_timeseries.csv.gz` | 153,597 | `6672b01ca9962224c36ba6873b8e0150` | RAW, downsampled. The TID campaign's analog and digital rails, 1 sample/rail/minute of 231 120. |
 | `aux_tid_lv_actions.csv` | 522 | `175bc9762152207a1afe27adac3115fe` | RAW. The logger's own Start/Stop rows. |
 | `aux_tid_baseline_history.csv` | 84,803 | `60f056bf91b1444efce65208a7a994ef` | RAW. That campaign's entire baseline log: 1 024 rows, 23 minutes. |
@@ -530,6 +544,7 @@ which the provenance note records.
 | The ET2.03 working copy (`TID_August`: 0 MRad money plots + all 94 rail scans, undecoded binary) | 6.2 GB | `fermilab-etroc3:/home/daq/tmp/TID_August/`; LPC copy at `/uscms_data/d3/murtazas/scratch/qinj_tid_et2p03/raw/` |
 | The ET2.03 dosed money plots (six `2024-08-*` day directories, undecoded binary) | 25.1 GB | the removable exFAT disk `X9`, `et2p03_qinj_data/`; LPC copy at `…/qinj_tid_et2p03/raw_x9/` |
 | `2024-08-04` — `BARE9` 0 MRad at VA 1.00/1.20/1.40 V plus a room-temperature control run | 5.86 GB | **`X9` only**, not copied |
+| the reduced points feather, tables, reducer/decoder and `DECODE_README` | 6 MB | **also on LPC EOS** at `/eos/uscms/store/user/lpcmtdstudies/cern_Aug2024_TID/reduced_qinj_feather/` (2026-09-04), with the hybrid CC reduction under `cern_Jan2024/CC/reduced_qinj_feather/` and the bare ET2.01 derived points under `cern_Jan2024/TID/reduced_qinj_feather/` |
 | `2024-08-14` — `BARE7` 0 MRad money plots | 8.88 GB | on `X9`, **now also copied to LPC** at `…/qinj_tid_et2p03/raw_x9/2024-08-14_Array_Test_Results` and decoded — it is what gives BARE7 a 0 → 200 MRad dose step |
 
 ## Not recorded by any of the three campaigns
