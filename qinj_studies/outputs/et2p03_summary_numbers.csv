@@ -15,5 +15,6 @@ n,quantity,value,unit,pixel_rms,label
 14,"Walk with charge, 6→22 fC at BL+20",+518,ps,—,"DERIVED, median over pixels"
 15,"Baseline shift, 0 → 400 MRad at VA 1.20 V, BARE9",-65.5,DAC,—,DERIVED — sign opposite to ET2.01; section 15 attributes about half of it to the measured VRef rise
 17,"VRef (internal reference) change, 0 → 400 MRad, BARE9",+40.3 mV (+4.66 %),mV,—,"MEASURED from the campaign VRef log (section 15), constant plate temperature"
+20,"X-ray footprint: baseline shift 0 → 400 MRad, rows 0-4 (outside) vs rows 7-15 (inside)",-37.3 vs -104.2,DAC,—,DERIVED (section 15b) — outside-beam rows match the reference-only prediction -37.1; inside-beam front end -67.1
 18,"Preamp gain change, 0 → 400 MRad, BARE9, reference-corrected",-0.7,%,—,"DERIVED — measured DAC/fC change plus the VRef rise, assuming DAC full scale ∝ VRef"
 16,"Paired gain change, 0 → 400 MRad at VA 1.20 V",-5.4 ± 4.3,%,10.4,"DERIVED — same six pixels, paired ratio"

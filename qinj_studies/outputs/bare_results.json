@@ -28,6 +28,54 @@
  "gain_change_0to400_paired_pct": -6.463793015579878,
  "gain_change_0to400_paired_sem_pct": 3.1804461872756247,
  "gain_change_0to400_pooled_pct": -5.4677371953677945,
+ "footprint": {
+  "rows_in_spot": [
+   0,
+   1,
+   2,
+   3
+  ],
+  "shift_in_0_200": 32.078125,
+  "shift_out_0_200": 0.7,
+  "split": [
+   {
+    "pixels": "inside the spot (rows 0, 1, 3)",
+    "n_pixels": 9,
+    "dose_to": 200,
+    "bl_shift_dac": 32.333333333333336,
+    "bl_shift_sem": 2.5495097567963927,
+    "gain_change_pct": -5.842179391562707,
+    "gain_change_sem_pct": 2.7220351396732787
+   },
+   {
+    "pixels": "inside the spot (rows 0, 1, 3)",
+    "n_pixels": 9,
+    "dose_to": 400,
+    "bl_shift_dac": 60.666666666666664,
+    "bl_shift_sem": 4.9749371855331,
+    "gain_change_pct": -9.063728906742297,
+    "gain_change_sem_pct": 3.854998821846864
+   },
+   {
+    "pixels": "outside the spot (row 12)",
+    "n_pixels": 3,
+    "dose_to": 200,
+    "bl_shift_dac": 2.3333333333333335,
+    "bl_shift_sem": 0.33333333333333337,
+    "gain_change_pct": 0.8900170279845243,
+    "gain_change_sem_pct": 1.3961705529641237
+   },
+   {
+    "pixels": "outside the spot (row 12)",
+    "n_pixels": 3,
+    "dose_to": 400,
+    "bl_shift_dac": 3.0,
+    "bl_shift_sem": 1.1547005383792517,
+    "gain_change_pct": 1.3360146579074472,
+    "gain_change_sem_pct": 1.9091998526129206
+   }
+  ]
+ },
  "chip": "ET2p01_W36_6",
  "kind": "bare die, no sensor",
  "campaign": "CERN TID, January 2024",

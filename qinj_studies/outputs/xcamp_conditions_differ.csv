@@ -3,7 +3,7 @@ chip revision,ET2.01,ET2.01,ET2.03,"2.02 fixed the on-chip voltage reference (~1
 voltage reference,external 1.0 V,external 1.0 V,"internal generator, powered from VA; LOGGED through the irradiation (+4.7 % over 400 MRad)","sets the DAC-to-mV scale; the ET2.03 reference was logged (notebook 03 §15), the transfer function was not, so absolute DAC comparisons remain unsafe"
 die,W36_6,Bar4,BARE9 (0/200/400 MRad); BARE7 quarantined (dose unknown),"notebook 03 measures a large gain difference between two ET2.03 dies at 0 MRad; no second die of either revision has a usable dose step, so every dose sign is a one-die statement"
 sensor,none,"LGAD, HV 210 V",none,the hybrid's input capacitance is the point of notebook 02 and a confound everywhere else
-temperature,"+12 °C (sweep), −25 °C (turn-off)",0 °C,"−23.6 °C, not scanned",the two January sets disagree on the SIGN of the gain temperature coefficient; August cannot arbitrate
+temperature,"+12 °C (sweep), −25 °C (turn-off)",0 °C,"−23.6 °C, not scanned","the two January sets disagree on the SIGN of the gain temperature coefficient; notebook 02 shows the hybrid series is internally consistent (untagged and tagged 0 C configs agree to 0.4 %) while the bare -25 C point is a different scan type, so the weight is on the hybrid; August cannot arbitrate"
 analog rail VA,not recorded,not recorded,0.85 / 1.00 / 1.20 / 1.40 V,on ET2.03 the rail moves gain by ~2.8x — larger than every inter-campaign difference here
 digital rail VD,not recorded,not recorded,1.20 V for every threshold scan; 0.90–1.45 V in the rail grid,below 1.00 V the August chip produces no hits at all
 power mode,not recorded,`highpower` (a directory tag),not recorded,notebook 02 shows the tag does not correspond to a repeatable supply current

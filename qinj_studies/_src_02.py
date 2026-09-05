@@ -1244,7 +1244,27 @@ plt.show()
 # bare die. That is the cleanest agreement anywhere between the two data sets, and it supports
 # the operational conclusion both campaigns reach — **autocalibrate, then work at a fixed offset
 # above the new baseline**, which is what the beam pipeline does with `threshold = BL + 20`.
-#
+
+# %%
+# Is the hybrid's rising-on-cooling gain a configuration artefact? The one check the data allow:
+# at 0 C the campaign has BOTH an untagged configuration and a fully tagged one (HV 210 V,
+# highpower), and at 22 C an untagged one and a tagged one. If the untagged -25 C configurations
+# were in a different power state, the untagged/tagged pairs should disagree.
+pairs = [("0 °C", "2024-01-12__0c_v2", "2024-01-18__0c_v15_HV_210_highpower"),
+         ("22 °C", "2024-01-12_22C_ONR__(none)", "2024-01-19__22c_v20_HV_210_highpower")]
+gb_ = GB.set_index("config").gain_dac_per_fc
+for T_, u, t in pairs:
+    if u in gb_.index and t in gb_.index:
+        print("%s: untagged %.3f  tagged (HV 210 V, highpower) %.3f  ratio %.3f" % (T_, gb_[u], gb_[t], gb_[u] / gb_[t]))
+print("\nAt 0 C the two agree to 0.4 %, so an untagged configuration is not by itself a different power state;")
+print("at 22 C they differ by 15 % (the 22C_ONR acquisition is a different session and setup). The -25 C")
+print("series (four untagged configurations agreeing with each other to 0.4 %) therefore most likely IS at")
+print("the tagged settings, and the +24 % rise on cooling is most likely real for this hybrid. The bare")
+print("die's -7.7 % on cooling rests on a different scan type at -25 C (turn-off files, not a sweep), so the")
+print("disagreement is between two methods as much as between two devices. It stays open, but the weight")
+print("of evidence is on the hybrid side; a same-method temperature scan is the test (notebook 04, question 4).")
+
+# %% [markdown]
 # ## 12. Bare against hybrid
 #
 # Everything on the bare side comes from `outputs/bare_results.json`, written by notebook 01, so

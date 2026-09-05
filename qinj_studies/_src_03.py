@@ -2213,21 +2213,134 @@ Q.save_fig(fig, "et2p03_fig13_annealing_and_scale")
 plt.show()
 
 # %% [markdown]
+# ### 15b. The X-ray footprint: which rows were actually irradiated
+#
+# The 256-pixel maps carry one more thing the six money-plot pixels cannot: **where the beam was**.
+# If the X-ray spot did not cover the whole die, the rows outside it saw only the chip-wide effects
+# (the reference rise), and the rows inside it saw those plus the dose. Comparing the two is a test
+# of the reference-scale assumption that needs no external transfer function at all.
+
+# %%
+BF = pd.read_csv(AUX / "aux_tid_baselines_full.csv.gz", parse_dates=["timestamp"])
+BF = BF[(BF.chip_name == "ET2p03_BARE9") & BF.save_notes.str.contains("A: 1.2V, D: 1.2V")]
+BF = pd.concat([BF, BF.save_notes.apply(parse_note)], axis=1)
+BFc = BF[BF.plate_C < -20]
+pre_px = BFc[(BFc.dose_MRad == 0) & (BFc.timestamp > pd.Timestamp("2024-08-04 22:00"))].groupby(["row", "col"]).baseline.mean()
+d200_px = BFc[(BFc.dose_MRad == 200) & (BFc.anneal_h >= 12)].groupby(["row", "col"]).baseline.mean()
+d400_px = BFc[(BFc.dose_MRad == 400) & (BFc.anneal_h >= 12)].groupby(["row", "col"]).baseline.mean()
+sh200 = (d200_px - pre_px).groupby(level="row").agg(["mean", "std"])
+sh400 = (d400_px - pre_px).groupby(level="row").agg(["mean", "std"])
+FOOT = pd.DataFrame({"row": sh200.index, "shift_0_200_dac": sh200["mean"].values, "shift_0_200_col_rms": sh200["std"].values,
+                     "shift_0_400_dac": sh400["mean"].values, "shift_0_400_col_rms": sh400["std"].values,
+                     "nw_0MRad": BFc[(BFc.dose_MRad == 0) & (BFc.timestamp > pd.Timestamp("2024-08-04 22:00"))].groupby("row").noise_width.mean().values,
+                     "nw_400MRad": BFc[(BFc.dose_MRad == 400) & (BFc.anneal_h >= 12)].groupby("row").noise_width.mean().values})
+FOOT["reference_only_prediction_0_400"] = scale400
+FOOT["reference_only_prediction_0_200"] = scale200
+FOOT.to_csv(Q.OUTDIR / "et2p03_footprint_by_row.csv", index=False)
+col400 = (d400_px - pre_px).groupby(level="col").mean()
+print("BARE9, 256-pixel maps, per-ROW baseline shift [DAC] (columns averaged; column-to-column RMS in the next column):\n")
+print(FOOT.round(1).to_string(index=False))
+print("\nper-COLUMN shift 0 -> 400 MRad: min %.1f, max %.1f -- no column structure at all" % (col400.min(), col400.max()))
+SHADOW = [0, 1, 2, 3, 4]
+DOSED = list(range(7, 16))
+sh_s = float(FOOT[FOOT.row.isin(SHADOW)].shift_0_400_dac.mean())
+sh_d = float(FOOT[FOOT.row.isin(DOSED)].shift_0_400_dac.mean())
+sh_s2 = float(FOOT[FOOT.row.isin(SHADOW)].shift_0_200_dac.mean())
+sh_d2 = float(FOOT[FOOT.row.isin(DOSED)].shift_0_200_dac.mean())
+print("\nrows 0-4  (outside the beam): 0->200 %+.1f, 0->400 %+.1f DAC" % (sh_s2, sh_s))
+print("rows 7-15 (inside the beam):  0->200 %+.1f, 0->400 %+.1f DAC" % (sh_d2, sh_d))
+print("rows 5-6: the edge (%+.1f, %+.1f at 400)" % tuple(FOOT[FOOT.row.isin([5, 6])].shift_0_400_dac))
+print("reference-only prediction (DAC full scale proportional to VRef): 0->200 %+.1f, 0->400 %+.1f DAC" % (scale200, scale400))
+print("\n  The rows OUTSIDE the beam moved by the reference prediction, to within %.0f DAC at 400 MRad and %.0f at 200." % (abs(sh_s - scale400), abs(sh_s2 - scale200)))
+print("  That is the reference-scale assumption checked from inside the data: un-irradiated pixels see only the reference.")
+print("  The rows INSIDE the beam then carry reference + front end: front end = %+.1f DAC at 400 MRad, %+.1f at 200." % (sh_d - scale400, sh_d2 - scale200))
+print("  Noise width rose on every row alike (chip-wide), so the NW change is not a footprint effect.")
+RESULTS["footprint"] = dict(shadow_rows=SHADOW, dosed_rows=DOSED, shift_shadow_0_400=sh_s, shift_dosed_0_400=sh_d,
+                            shift_shadow_0_200=sh_s2, shift_dosed_0_200=sh_d2,
+                            reference_prediction_0_400=float(scale400), reference_prediction_0_200=float(scale200),
+                            front_end_dosed_0_400=sh_d - float(scale400), front_end_dosed_0_200=sh_d2 - float(scale200))
+
+# the six money-plot pixels sit on rows 0, 3 and 12: four outside the beam, two inside
+C0v, C2v, C4v = cfg_of("ET2p03_BARE9", 0, 1.20), cfg_of("ET2p03_BARE9", 200, 1.20), cfg_of("ET2p03_BARE9", 400, 1.20)
+gpx = GF.set_index(["config", "row", "col"]).gain_dac_per_fc
+blpx = BL.set_index(["config", "row", "col"]).BL
+split_rows = []
+for grp, rows_ in (("outside the beam (rows 0, 3)", [0, 3]), ("inside the beam (row 12)", [12])):
+    for d1, cfgb in ((200, C2v), (400, C4v)):
+        rr, bb = [], []
+        for (r, c) in Q.ET2P03_PIXELS:
+            if r not in rows_:
+                continue
+            try:
+                rr.append(float(gpx.loc[(cfgb, r, c)] / gpx.loc[(C0v, r, c)]))
+                bb.append(float(blpx.loc[(cfgb, r, c)] - blpx.loc[(C0v, r, c)]))
+            except KeyError:
+                pass
+        rr, bb = pd.Series(rr), pd.Series(bb)
+        f = f200 if d1 == 200 else f400
+        split_rows.append(dict(pixels=grp, n_pixels=len(rr), dose_to=d1,
+                               bl_shift_dac=bb.mean(), bl_shift_sem=bb.std(ddof=1) / np.sqrt(len(bb)) if len(bb) > 1 else np.nan,
+                               reference_scale_dac=-float(bl6_0) * f / (1 + f),
+                               gain_change_pct=100 * (rr.mean() - 1), gain_change_sem_pct=100 * rr.std(ddof=1) / np.sqrt(len(rr)) if len(rr) > 1 else np.nan,
+                               gain_intrinsic_pct=100 * (rr.mean() - 1) + 100 * f))
+SPLIT = pd.DataFrame(split_rows)
+SPLIT["front_end_dac"] = SPLIT.bl_shift_dac - SPLIT.reference_scale_dac
+SPLIT.to_csv(Q.OUTDIR / "et2p03_footprint_split.csv", index=False)
+print("\nthe six money-plot pixels, split by where they sit (in-configuration baselines, per-pixel gain fits, VA 1.20 V supply):\n")
+print(SPLIT.round(2).to_string(index=False))
+print("\n  Every 'six-pixel' dose number in this notebook is therefore a mixture of four un-irradiated and two")
+print("  irradiated pixels. The baseline split above reproduces the map footprint; the per-pixel gain")
+print("  changes are too noisy (two pixels inside the beam) to resolve a footprint in the preamp gain.")
+
+# %%
+fig, axs = plt.subplots(1, 2, figsize=(17, 6.2))
+ax = axs[0]
+ax.errorbar(FOOT.row, FOOT.shift_0_200_dac, yerr=FOOT.shift_0_200_col_rms, fmt="-o", ms=9, lw=2.2, color=Q.C_ORANGE, capsize=4, label="0 → 200 MRad")
+ax.errorbar(FOOT.row, FOOT.shift_0_400_dac, yerr=FOOT.shift_0_400_col_rms, fmt="-o", ms=9, lw=2.2, color=Q.C_MAG, capsize=4, label="0 → 400 MRad")
+ax.axhline(scale200, color=Q.C_ORANGE, ls="--", lw=1.8)
+ax.axhline(scale400, color=Q.C_MAG, ls="--", lw=1.8)
+ax.text(15.2, scale400 + 2, "reference-only\nprediction", fontsize=10, color=Q.C_MAG, ha="right")
+ax.axvspan(-0.5, 4.5, color=Q.GREY, alpha=0.12, lw=0)
+ax.text(2, 5, "outside the beam", ha="center", fontsize=11, color=Q.GREY)
+ax.text(11, 5, "inside the beam", ha="center", fontsize=11, color=Q.GREY)
+for r_ in (0, 3, 12):
+    ax.axvline(r_, color=Q.C_BLUE, ls=":", lw=1.4)
+ax.text(12.15, -95, "money-plot\nrows 0, 3, 12", fontsize=10, color=Q.C_BLUE)
+ax.set_xlabel("pixel row")
+ax.set_ylabel("256-pixel map baseline shift  [DAC LSB]  (mean over 16 columns, bars = column RMS)")
+ax.legend(fontsize=11, loc="lower left")
+ax.set_title("the X-ray spot covered rows ~6 to 15; rows 0-4 moved by the reference alone", loc="left", fontsize=13)
+ax = axs[1]
+im = ax.imshow((d400_px - pre_px).unstack("col").values, cmap="coolwarm", vmin=-120, vmax=0, origin="lower")
+ax.set_xlabel("column"); ax.set_ylabel("row")
+ax.set_title("baseline shift 0 → 400 MRad, per pixel", loc="left", fontsize=13)
+fig.colorbar(im, ax=ax, fraction=0.046, pad=0.03).set_label("shift  [DAC LSB]")
+fig.tight_layout()
+Q.fig_header(fig, "The X-ray footprint on BARE9",
+             tag="ET2p03_BARE9, 256-pixel autocalibration maps at A 1.2 / D 1.2 V (supply), plate −23 to −24 °C, ≥ 12 h after each step",
+             scale=0.62, campaign=Q.ET2P03_CAMPAIGN)
+Q.save_fig(fig, "et2p03_fig14_footprint")
+plt.show()
+
+# %% [markdown]
 # ### What the monitoring establishes, and what it does not
 #
 # * **The internal reference of `BARE9` rose with dose**, by about +19 mV after 200 MRad and +40 mV
 #   (+4.6 %) after 400 MRad, at a plate temperature constant to better than 1 °C. It did not recover
 #   in the two days after the last step. This is a measurement, not an inference, and it replaces the
 #   estimate notebook 04 previously made under an assumption.
-# * **Half of the baseline fall is the reference, the other half is the front end.** Under the one
-#   stated assumption (DAC full scale ∝ VRef), the reference rise accounts for the fraction printed
-#   above; the remainder is a genuine downward drift of the front-end operating point in DAC — which
-#   is the *opposite* sign to the +46 DAC the ET2.01 die of notebook 01 showed on a fixed external
-#   reference. So the sign difference between the two dies survives the reference correction, and it
-#   remains a one-die-per-side observation.
+# * **The X-ray spot covered only part of the die, and that turns the reference-scale assumption into a
+#   measurement (section 15b).** Rows 0–4 were outside the beam and shifted by the amount the VRef rise
+#   alone predicts; rows 7–15 were inside it and shifted by that plus about −67 DAC of genuine front-end
+#   drift at 400 MRad (−31 at 200). The whole-map average (−80 DAC) and the six-pixel number (−65.5)
+#   are mixtures: four of the six money-plot pixels (rows 0 and 3) were never irradiated.
+# * **Front-end drift on the irradiated rows is downward on this die**, which is the *opposite* sign to
+#   the +46 DAC the ET2.01 die of notebook 01 showed on a fixed external reference. So the sign
+#   difference between the two dies survives the reference correction, and it remains a
+#   one-die-per-revision observation.
 # * **The preamp gain of `BARE9`, corrected for the reference, barely moved**: the −5.4 ± 4.3 % measured
 #   in DAC per fC becomes about −1 % in millivolts per fC once the 4.6 % larger LSB is removed. The
-#   ET2.01 die lost 6.5 ± 3.2 %. Both statements carry the DAC-scale assumption.
+#   ET2.01 die lost 6.5 ± 3.2 %. The two irradiated pixels alone are too few to say more (section 15b).
 # * **The VTemp pin rose by about 30 mV during the first dose step and stayed there.** At the
 #   +2.27 mV/°C of the sister die BARE4 (notebook 00 section 7.6) that would read as +13 °C, which the
 #   plate did not do and the baseline maps do not show (a 13 °C warming would move the baseline by about
@@ -2309,6 +2422,9 @@ SUMMARY = pd.DataFrame([
     dict(n=17, quantity="VRef (internal reference) change, 0 → 400 MRad, BARE9",
          value=f"{1e3 * (v4 - v0):+.1f} mV ({100 * f400:+.2f} %)", unit="mV", pixel_rms="—",
          label="MEASURED from the campaign VRef log (section 15), constant plate temperature"),
+    dict(n=20, quantity="X-ray footprint: baseline shift 0 → 400 MRad, rows 0-4 (outside) vs rows 7-15 (inside)",
+         value=f"{RESULTS['footprint']['shift_shadow_0_400']:+.1f} vs {RESULTS['footprint']['shift_dosed_0_400']:+.1f}", unit="DAC", pixel_rms="—",
+         label=f"DERIVED (section 15b) — outside-beam rows match the reference-only prediction {RESULTS['footprint']['reference_prediction_0_400']:+.1f}; inside-beam front end {RESULTS['footprint']['front_end_dosed_0_400']:+.1f}"),
     dict(n=18, quantity="Preamp gain change, 0 → 400 MRad, BARE9, reference-corrected",
          value=f"{RESULTS.get('gain_change_0_to_400_intrinsic_pct', float('nan')):+.1f}", unit="%", pixel_rms="—",
          label="DERIVED — measured DAC/fC change plus the VRef rise, assuming DAC full scale ∝ VRef"),

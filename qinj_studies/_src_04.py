@@ -435,7 +435,35 @@ print("  campaign-to-campaign difference is %+.2f mV, and the <1 C plate stabili
 print("  campaign is < %.1f mV -- both negligible against the %+.1f mV measured rise." % (vref_slope * 1.0, 1e3 * (v4 - v0)))
 RESULTS_2B_VREF = dict(vref_slope_mV_per_C=vref_slope, vref_slope_err_mV_per_C=vref_slope_e, dT_C=dT_C,
                        vref_shift_from_dT_mV=vref_slope * dT_C, source_die="ET2p03_BARE4")
-RESULTS_2B = dict(vref_0MRad_V=v0, vref_200MRad_V=v2, vref_400MRad_V=v4, vref_change_0_to_400_pct=100 * f400,
+# The X-ray footprints. Both campaigns' 256-pixel maps show a partial spot (notebook 01 §11.2, notebook 03 §15b):
+# January covered rows 0-3 of W36_6 (nine of the twelve pixels inside), August covered rows ~6-15 of
+# BARE9 (two of the six pixels inside). Un-irradiated rows are a null test of the reference: on the
+# fixed external reference they did not move; on the internal reference they moved by exactly the
+# VRef prediction. The front-end drift is read from the rows INSIDE each spot.
+FP01 = pd.read_csv(Q.OUTDIR / "bare_footprint_split.csv")
+FP03 = pd.read_csv(Q.OUTDIR / "et2p03_footprint_split.csv")
+FR03 = pd.read_csv(Q.OUTDIR / "et2p03_footprint_by_row.csv")
+FR01 = pd.read_csv(Q.OUTDIR / "bare_footprint_by_row.csv")
+in01 = FP01[(FP01.pixels.str.startswith("inside")) & (FP01.dose_to == 400)].iloc[0]
+out01 = FP01[(FP01.pixels.str.startswith("outside")) & (FP01.dose_to == 400)].iloc[0]
+in03 = FP03[(FP03.pixels.str.startswith("inside")) & (FP03.dose_to == 400)].iloc[0]
+out03 = FP03[(FP03.pixels.str.startswith("outside")) & (FP03.dose_to == 400)].iloc[0]
+print("\nTHE FOOTPRINT SPLIT, 0 -> 400 MRad, in-configuration pixels:")
+print("  ET2.01 W36_6  inside the spot (%d px): baseline %+.1f +- %.1f DAC = front end (reference fixed);  outside (%d px): %+.1f +- %.1f (null)"
+      % (in01.n_pixels, in01.bl_shift_dac, in01.bl_shift_sem, out01.n_pixels, out01.bl_shift_dac, out01.bl_shift_sem))
+print("  ET2.03 BARE9  inside the spot (%d px): baseline %+.1f DAC = reference %+.1f + front end %+.1f;  outside (%d px): %+.1f vs reference-only %+.1f"
+      % (in03.n_pixels, in03.bl_shift_dac, in03.reference_scale_dac, in03.front_end_dac, out03.n_pixels, out03.bl_shift_dac, out03.reference_scale_dac))
+print("  256-pixel maps, rows inside each spot: ET2.01 %+.1f DAC at 200 MRad (400 MRad map not saved); ET2.03 %+.1f at 200, %+.1f at 400 (front end %+.1f, %+.1f)"
+      % (FR01[FR01.row <= 3].shift_0_200_dac.mean(), FR03[FR03.row >= 7].shift_0_200_dac.mean(), FR03[FR03.row >= 7].shift_0_400_dac.mean(),
+         FR03[FR03.row >= 7].shift_0_200_dac.mean() - FR03.reference_only_prediction_0_200.iloc[0], FR03[FR03.row >= 7].shift_0_400_dac.mean() - FR03.reference_only_prediction_0_400.iloc[0]))
+print("  Front end against front end on the irradiated rows: ET2.01 UP, ET2.03 DOWN. The sign difference is real and")
+print("  larger than the mixed-pixel numbers suggested; it is still one die per revision.")
+print("  Gain inside each spot: ET2.01 %+.1f +- %.1f %% (%d px); ET2.03 %+.1f +- %.1f %% measured, %+.1f %% reference-corrected (%d px, too few)"
+      % (in01.gain_change_pct, in01.gain_change_sem_pct, in01.n_pixels, in03.gain_change_pct, in03.gain_change_sem_pct, in03.gain_intrinsic_pct, in03.n_pixels))
+RESULTS_2B_FOOTPRINT = dict(et2p01_inside_bl_0_400=float(in01.bl_shift_dac), et2p01_outside_bl_0_400=float(out01.bl_shift_dac),
+                            et2p03_inside_bl_0_400=float(in03.bl_shift_dac), et2p03_inside_front_end_0_400=float(in03.front_end_dac),
+                            et2p03_outside_bl_0_400=float(out03.bl_shift_dac), et2p03_outside_reference_prediction=float(out03.reference_scale_dac))
+RESULTS_2B = dict(**RESULTS_2B_FOOTPRINT, vref_0MRad_V=v0, vref_200MRad_V=v2, vref_400MRad_V=v4, vref_change_0_to_400_pct=100 * f400,
                   bl_shift_et2p01_dac=s01, bl_shift_et2p01_sem=e01,
                   bl_shift_et2p03_dac=s03, bl_shift_et2p03_sem=e03,
                   et2p03_reference_scale_dac=float(six400.reference_scale_dac),
@@ -488,7 +516,11 @@ plt.show()
 #
 # What it already settles: the ET2.03 internal reference does move with dose, upward, by a few per
 # cent; the preamp gain of that die, once the reference is removed, did not measurably change; and
-# the remaining baseline drift of its front end has the opposite sign to the ET2.01 die's.
+# the remaining baseline drift of its front end has the opposite sign to the ET2.01 die's. **The
+# X-ray footprints make the last point sharper, not weaker**: the un-irradiated rows of each die are a
+# null test that both pass (no motion on the fixed reference; exactly the VRef prediction on the
+# internal one), and the irradiated rows give front-end drifts of about +33 DAC (ET2.01, 200 MRad) and
+# −67 DAC (ET2.03, 400 MRad) — opposite signs, one die each.
 
 # %% [markdown]
 # ## 3. Gain against dose, and the rail axis that only ET2.03 has
@@ -984,7 +1016,7 @@ DIFFS = pd.DataFrame([
          why_it_matters="the hybrid's input capacitance is the point of notebook 02 and a confound everywhere else"),
     dict(axis="temperature", et2p01_bare="+12 °C (sweep), −25 °C (turn-off)", hybrid="0 °C",
          et2p03_bare="−23.6 °C, not scanned",
-         why_it_matters="the two January sets disagree on the SIGN of the gain temperature coefficient; August cannot arbitrate"),
+         why_it_matters="the two January sets disagree on the SIGN of the gain temperature coefficient; notebook 02 shows the hybrid series is internally consistent (untagged and tagged 0 C configs agree to 0.4 %) while the bare -25 C point is a different scan type, so the weight is on the hybrid; August cannot arbitrate"),
     dict(axis="analog rail VA", et2p01_bare="not recorded", hybrid="not recorded",
          et2p03_bare="0.85 / 1.00 / 1.20 / 1.40 V",
          why_it_matters="on ET2.03 the rail moves gain by ~2.8x — larger than every inter-campaign difference here"),
@@ -1034,7 +1066,7 @@ OPEN = pd.DataFrame([
     dict(rank=3, question="Does the baseline-versus-dose sign flip follow the reference, the revision or the die?",
          settled_by="Two dies of the same revision through the same dose steps, with the reference switchable between internal and external on the same board.",
          what_it_removes="The four-way confound of section 2. This is the one measurement that would turn the folder's most striking observation into a result."),
-    dict(rank=4, question="What is the temperature coefficient of gain, and what is its sign?",
+    dict(rank=4, question="What is the temperature coefficient of preamp gain, and what is its sign? (notebook 02 argues the hybrid's +24 % on cooling is probably real and the bare die's -7.7 % is a scan-type artefact; unproven)",
          settled_by="One chip, one pixel set, a temperature scan from −25 to +25 °C at a fixed rail and a fixed bias, with the on-chip VTemp actually read out.",
          what_it_removes="The open disagreement between notebooks 01 and 02, which the August campaign cannot arbitrate because it did not scan temperature."),
     dict(rank=5, question="How much of the analog-rail dependence of gain is the front end and how much is the reference?",

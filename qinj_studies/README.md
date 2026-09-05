@@ -252,6 +252,7 @@ here rather than twelve, so it is a noisier estimate of the spread than notebook
 | 16b | the same 200 → 400 MRad step at **VA 1.40 V (supply) = nominal at the chip** | **−4.96 ± 2.04 %**, baseline **−19.2 ± 8.2 DAC** | — | DERIVED — the nominal-rail version; no 0 MRad exists there |
 | 17 | **VRef (internal reference) of `BARE9`, 0 → 200 → 400 MRad** | **0.864 → 0.883 → 0.904 V (+2.3 %, +4.7 %)** at constant plate temperature | — | MEASURED from the campaign's VRef log (section 15) |
 | 18 | Reference-scale part of row 15, assuming DAC full scale ∝ VRef | **−37 DAC** of the −65.5 (6-pixel) / −80.1 (map); the rest, **−29 / −43 DAC**, is front-end drift | — | DERIVED (section 15) |
+| 20 | **X-ray footprint** (256-pixel maps): rows 0–4 outside the beam vs rows 7–15 inside, 0 → 400 MRad | **−37 vs −104 DAC**; the outside rows match the reference-only prediction (−37) | — | DERIVED (section 15b) — the reference-scale assumption checked from inside the data; four of the six money-plot pixels were outside the beam |
 | 19 | Preamp-gain change 0 → 400 MRad, **reference-corrected** | **−0.7 ± 4.3 %** (measured −5.4 ± 4.3 % in DAC/fC, + 4.7 % scale) | — | DERIVED — consistent with no loss on this die |
 
 This campaign is also the only one with a **decode artefact big enough to matter**, and section
@@ -289,6 +290,14 @@ Three further results are specific to this campaign because no other one has the
   difference survives the correction and stays a one-die-per-revision observation: the only other
   irradiated ET2.03 die, `BARE7`, has an unknown dose (the X-ray source failed before the tagged
   200 MRad) and is kept out of every comparison. Notebook 03 sections 11, 14 and 15.
+* **The X-ray spot covered only rows ~6–15 of `BARE9`.** Rows 0–4 shifted by exactly the amount the
+  VRef rise predicts (−37 vs −37 DAC), rows 7–15 by −104 DAC; so the un-irradiated rows validate the
+  reference-scale assumption from inside the data, and the irradiated rows carry a front-end drift of
+  about −67 DAC. Four of the six money-plot pixels (rows 0 and 3) were outside the beam, so every
+  six-pixel dose number is a 4:2 mixture; section 15b quotes the split. The January ET2.01 maps show
+  the same thing the other way round: the spot covered rows 0–3 of `W36_6` (nine of its twelve pixels),
+  the un-irradiated rows did not move on the fixed external reference, and the irradiated rows rose
+  by +33 DAC at 200 MRad (notebook 01 section 11.2).
 * **Corrected for the reference, `BARE9`'s preamp gain did not measurably change**: −5.4 ± 4.3 % in
   DAC/fC becomes −0.7 ± 4.3 % in mV/fC. Its VTemp pin rose ~30 mV during the first step at
   constant plate temperature and stayed there — the temperature sensor shifts with dose — and both
@@ -337,9 +346,11 @@ in *both* rail and dose, so the nominal column is a companion, not a correction.
    while its internal reference **rose by +4.7 %** in the campaign's own VRef log. If the DAC full
    scale follows VRef, that accounts for −37 DAC; the remaining −29 to −43 DAC is the ET2.03 front end
    drifting *down* where the ET2.01 front end drifted *up*. The ET2.03 preamp gain, corrected for the
-   same scale change, is −0.7 ± 4.3 %, consistent with no loss. No second die of either revision has a
-   usable dose step (`BARE7`'s dose is unknown), so every sign here is a one-die statement. Notebook 04
-   section 2b.
+   same scale change, is −0.7 ± 4.3 %, consistent with no loss. Both campaigns' 256-pixel maps show a
+   **partial X-ray spot** (rows 0–3 in January, rows ~6–15 in August): the un-irradiated rows are a null
+   test both dies pass, and the irradiated rows give front-end drifts of +33 DAC (ET2.01, 200 MRad) and
+   −67 DAC (ET2.03, 400 MRad). No second die of either revision has a usable dose step (`BARE7`'s dose
+   is unknown), so every sign here is a one-die statement. Notebook 04 section 2b.
 2. **In DAC units both revisions lose of order five per cent of gain per 400 MRad, and on ET2.03 the
    second dose step repeats at every rail setting the campaign used** (on ET2.03 that is largely the
    reference-scale effect of item 1; the consistency across rails still holds). The four 200 → 400 MRad steps are

@@ -80,6 +80,34 @@
   "vref_change_pct": 4.660570075160875
  },
  "bl_per_degC_bare9_0MRad": -4.6521279841126235,
+ "footprint": {
+  "shadow_rows": [
+   0,
+   1,
+   2,
+   3,
+   4
+  ],
+  "dosed_rows": [
+   7,
+   8,
+   9,
+   10,
+   11,
+   12,
+   13,
+   14,
+   15
+  ],
+  "shift_shadow_0_400": -37.31041666666666,
+  "shift_dosed_0_400": -104.21875000000001,
+  "shift_shadow_0_200": -13.94635416666667,
+  "shift_dosed_0_200": -49.262152777777786,
+  "reference_prediction_0_400": -37.12716543942833,
+  "reference_prediction_0_200": -18.417402431363744,
+  "front_end_dosed_0_400": -67.09158456057168,
+  "front_end_dosed_0_200": -30.844750346414042
+ },
  "chip": "ET2p03_BARE9",
  "second_chip": "ET2p03_BARE7 (quarantined: dose after 0 MRad unknown)",
  "revision": "ET2.03",

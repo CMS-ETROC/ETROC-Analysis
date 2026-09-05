@@ -1227,7 +1227,80 @@ plt.show()
 # contributes gain and baseline but nothing about TOT or jitter; the temperature effect is
 # bounded here only through the turn-off. And the 200 and 400 MRad blocks are the same die after
 # irradiation, with an annealing history that is not recorded anywhere in this data set.
+
+# %% [markdown]
+# ### 11.2 The X-ray footprint on W36_6
 #
+# The autocalibration maps of `2024-01-11` (0 MRad, +12 °C), `2024-01-12` (0 MRad, −25 °C) and
+# `2024-01-15` (200 MRad, −25 °C) are full 256-pixel maps, so they show **where the X-ray spot was**.
+# On a fixed external reference nothing chip-wide should move with dose, so rows outside the spot
+# are a null test and rows inside it carry the front-end drift alone.
+
+# %%
+bm = BN.pivot_table(index=["row", "col"], columns="day", values="baseline_dac")
+cool = (bm["2024-01-12"] - bm["2024-01-11"]).groupby(level="row").agg(["mean", "std"])
+d200 = (bm["2024-01-15"] - bm["2024-01-12"]).groupby(level="row").agg(["mean", "std"])
+FOOT01 = pd.DataFrame({"row": d200.index, "cooldown_12_to_m25_dac": cool["mean"].values, "cooldown_col_rms": cool["std"].values,
+                       "shift_0_200_dac": d200["mean"].values, "shift_0_200_col_rms": d200["std"].values})
+FOOT01.to_csv(Q.OUTDIR / "bare_footprint_by_row.csv", index=False)
+print("W36_6, 256-pixel maps, per-row baseline change [DAC]:\n")
+print(FOOT01.round(1).to_string(index=False))
+in_rows, out_rows = [0, 1, 2, 3], list(range(6, 16))
+s_in = float(FOOT01[FOOT01.row.isin(in_rows)].shift_0_200_dac.mean())
+s_out = float(FOOT01[FOOT01.row.isin(out_rows)].shift_0_200_dac.mean())
+print("\n0 -> 200 MRad: rows 0-3 %+.1f DAC, rows 4-5 the edge, rows 6-15 %+.1f DAC; the cooldown is %+.1f DAC on every row alike."
+      % (s_in, s_out, FOOT01.cooldown_12_to_m25_dac.mean()))
+print("So the X-ray spot covered rows 0-3 of this die, the rest of the die saw no dose, and on a FIXED external")
+print("reference the un-irradiated rows do not move (%+.1f DAC): the null test passes." % s_out)
+print("The twelve money-plot pixels are rows {0, 1, 3, 12} x columns {2, 8, 14}: NINE inside the spot, THREE (row 12) outside.")
+gpix_ = GF.set_index(["dose", "temp", "row", "col"]).gain_dac_per_fc
+blpix_ = BL.set_index(["dose", "temp", "row", "col"]).BL
+split_rows = []
+for grp, rows_ in (("inside the spot (rows 0, 1, 3)", [0, 1, 3]), ("outside the spot (row 12)", [12])):
+    for d1 in (200, 400):
+        a, b_ = gpix_.loc[(0, -25)], gpix_.loc[(d1, -25)]
+        ba, bb = blpix_.loc[(0, -25)], blpix_.loc[(d1, -25)]
+        ix = [k for k in a.index.intersection(b_.index) if k[0] in rows_]
+        r = (b_[ix] / a[ix]).astype(float); db = (bb[ix] - ba[ix]).astype(float)
+        split_rows.append(dict(pixels=grp, n_pixels=len(r), dose_to=d1, bl_shift_dac=db.mean(),
+                               bl_shift_sem=db.std(ddof=1) / np.sqrt(len(db)) if len(db) > 1 else np.nan,
+                               gain_change_pct=100 * (r.mean() - 1),
+                               gain_change_sem_pct=100 * r.std(ddof=1) / np.sqrt(len(r)) if len(r) > 1 else np.nan))
+SPLIT01 = pd.DataFrame(split_rows)
+SPLIT01.to_csv(Q.OUTDIR / "bare_footprint_split.csv", index=False)
+print("\nthe twelve pixels split by where they sit (in-configuration baselines and per-pixel gain fits, -25 C):\n")
+print(SPLIT01.round(2).to_string(index=False))
+print("\nEvery 'twelve-pixel' dose number above is therefore a 9:3 mixture. The inside-spot rows give the front-end")
+print("drift on this die; row 12 is a null.")
+RESULTS["footprint"] = dict(rows_in_spot=in_rows, shift_in_0_200=s_in, shift_out_0_200=s_out,
+                            split=SPLIT01.to_dict("records"))
+
+# %%
+fig, axs = plt.subplots(1, 2, figsize=(17, 6.2))
+ax = axs[0]
+ax.errorbar(FOOT01.row, FOOT01.shift_0_200_dac, yerr=FOOT01.shift_0_200_col_rms, fmt="-o", ms=9, lw=2.2, color=Q.C_ORANGE, capsize=4, label="0 → 200 MRad at −25 °C")
+ax.errorbar(FOOT01.row, FOOT01.cooldown_12_to_m25_dac, yerr=FOOT01.cooldown_col_rms, fmt="-s", ms=8, lw=2.0, color=Q.GREY, capsize=4, label="cooldown +12 → −25 °C at 0 MRad")
+ax.axhline(0, color="black", lw=1.4)
+ax.axvspan(-0.5, 3.5, color=Q.C_ORANGE, alpha=0.10, lw=0)
+ax.text(1.5, 60, "inside the spot", ha="center", fontsize=11, color=Q.C_ORANGE)
+for r_ in (0, 1, 3, 12):
+    ax.axvline(r_, color=Q.C_BLUE, ls=":", lw=1.3)
+ax.text(12.2, 45, "money-plot\nrows 0, 1, 3, 12", fontsize=10, color=Q.C_BLUE)
+ax.set_xlabel("pixel row"); ax.set_ylabel("256-pixel map baseline change  [DAC LSB]")
+ax.legend(fontsize=11)
+ax.set_title("the X-ray spot covered rows 0-3; un-irradiated rows do not move on a fixed reference", loc="left", fontsize=12)
+ax = axs[1]
+im = ax.imshow((bm["2024-01-15"] - bm["2024-01-12"]).unstack("col").values, cmap="coolwarm", vmin=-10, vmax=50, origin="lower")
+ax.set_xlabel("column"); ax.set_ylabel("row")
+ax.set_title("baseline shift 0 → 200 MRad, per pixel", loc="left", fontsize=13)
+fig.colorbar(im, ax=ax, fraction=0.046, pad=0.03).set_label("shift  [DAC LSB]")
+fig.tight_layout()
+Q.fig_header(fig, "The X-ray footprint on W36_6",
+             tag="ET2p01_W36_6, 256-pixel autocalibration maps, −25 °C; 400 MRad map not available", scale=0.62, campaign=Q.BARE_CAMPAIGN)
+Q.save_fig(fig, "bare_fig9_footprint")
+plt.show()
+
+# %% [markdown]
 # ## 12. Summary
 
 # %%
