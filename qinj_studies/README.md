@@ -50,13 +50,15 @@ qinj_studies/
 ├── 02_hybrid_et2p01_cc_jan2024.ipynb  ET2.01 + LGAD hybrid, and bare-versus-hybrid
 ├── 03_bare_et2p03_tid_aug2024.ipynb   bare ET2.03 die through 400 MRad, on a supply-rail axis
 ├── 04_cross_campaign_synthesis.ipynb  the three data sets on one axis; reads only outputs/
+├── 05_bench_jul2024_two_revisions.ipynb  four bare dies (three ET2.03, one ET2.01) on one bench; the pixel (0,14) artefact
 ├── data/
 │   ├── bare_et2p01_tid_jan2024/       + PROVENANCE.md
 │   ├── hybrid_et2p01_cc_jan2024/      + PROVENANCE.md
 │   ├── bare_et2p03_tid_aug2024/       + PROVENANCE.md, DECODE_README.md and code/
+│   ├── bench_jul2024/                 + DECODE_README.md and reduce_bench.py
 │   └── census/                        + PROVENANCE.md — the inventory and the aux logs
 ├── figures/                           every figure as PNG (screen) and PDF (print), written by the notebooks
-└── outputs/                           every table the notebooks write; 01, 02 and 03 write what 04 reads
+└── outputs/                           every table the notebooks write; 01, 02 and 03 write what 04 and 05 read
 ```
 
 `qinj_common.py` exists so that **the three measurement campaigns are analysed by literally the
@@ -88,13 +90,15 @@ campaign in the header's right block without editing the style file.
 | 02 | `02_hybrid_et2p01_cc_jan2024.ipynb` | **What the sensor costs.** `ET2p01_Bar4` with an LGAD bonded, at −25/0/+22 °C and two bias states: the same measurements, the campaign's auxiliary logs, a confound-free bias bracket, and the bare-versus-hybrid comparison — where the answer inverts the usual expectation. |
 | 03 | `03_bare_et2p03_tid_aug2024.ipynb` | **The later revision, a supply-rail axis, and the campaign's own monitoring.** `ET2p03_BARE9`, no sensor, through 0/200/400 MRad at four analog-rail settings with an **internal** voltage reference that the campaign **logged**: gain, ENC, TOT, the money plot, baseline against dose, the VA × VD rail grid, VRef/VTemp/rail currents through the irradiation with the 256-pixel baseline maps and their annealing, and the reference-scale decomposition of the baseline fall. `ET2p03_BARE7` is characterised in isolation (its post-0 MRad dose is unknown: the X-ray failed). |
 | 04 | `04_cross_campaign_synthesis.ipynb` | **The three on one axis.** Reads only the tables 01, 02 and 03 wrote. What survives the revision change, what does not, everything that differs between the three campaigns in one table, and eight open questions ranked by how much confounding each would remove. |
+| 05 | `05_bench_jul2024_two_revisions.ipynb` | **Four bare dies on one bench, July 2024.** `ET2p03_BARE1`, `ET2p03_BARE4`, `ET2p03_BARE9` and `ET2p01_BARE10`, one die per day, the six pixels of notebook 03 and the six charges of notebooks 01 and 02, no dose. The controlled v2.01-versus-v2.03 comparison (gain ratio 1.05 ± 0.09 against 0.86–0.89 if the DAC scale followed VRef — but 67 mV of unrecorded analog rail would close that gap, so it is a systematic, not a verdict); `BARE9` four days before its first day at CERN, reproducing notebook 03's reference chord slope to 2 % in the mean; and the finding that **pixel (0,14) has a compressive charge response on six dies of two revisions** — turn-off saturating at 80–100 DAC above baseline where the others reach 200–300 — which pulls every pooled gain in notebooks 01–03 low (×1.13 with six pixels, ×1.07 with twelve). Cause unresolved; the noise measurements point at the front end's operating point, not the injector. |
 
 **Notebook 00 is standalone** — it reads only `data/census/` and can be run first or last.
 **Run 01 before 02, and 01–03 before 04.** Notebook 01 writes `outputs/bare_*.csv` and
 `outputs/bare_results.json`, which notebook 02's bare-versus-hybrid section reads; notebook 03
 writes `outputs/et2p03_*`; notebook 04 reads all of them and **recomputes nothing**, so both sides
-of every comparison always went through the same code. Notebooks 02 and 04 stop with a clear
-message listing what is missing.
+of every comparison always went through the same code. Notebook 05 reads the per-pixel gain
+tables of 01, 02 and 03 (`outputs/*_gain_fits.csv`) for its pixel (0,14) section, so it runs after
+them too. Notebooks 02 and 04 stop with a clear message listing what is missing.
 
 ---
 
@@ -131,8 +135,8 @@ Four findings there are new rather than inventory, and all are in the notebook's
   they say. Internal versus external VRef is board wiring with no register bit, so the dump proves
   the generator was **on**, not that it was **used**.
 * **The ET2.03 internal reference has now been measured, on a different die** (census row 32,
-  section 7.6). `ET2p03_BARE4`, a **bare ET2.03 die that took no charge-injection data and was
-  never irradiated**, sat in the CERN climate chamber for ten days in August 2024 with its VRef
+  section 7.6). `ET2p03_BARE4`, a **bare ET2.03 die that was never irradiated** (its only charge
+  injection is three bench days three weeks earlier, notebook 05), sat in the CERN climate chamber for ten days in August 2024 with its VRef
   pin and its on-chip temperature sensor on a multimeter at 5 s. The reference sits near **0.878 V
   at 0 °C — not 1.0 V** — and drifts **+0.573 ± 0.007 mV/°C**; the on-chip sensor responds at
   **+2.270 ± 0.020 mV/°C**, which is the only VTemp calibration in the census. The same set gives
@@ -388,6 +392,62 @@ section 9 and in `outputs/xcamp_open_questions.csv`. The first three:
    dies of one revision through the same dose steps with the reference switchable on the board.
    This is the measurement that would turn the folder's most striking observation into a result.
 
+### 05 — four bare dies on one bench, FNAL, July 2024, 5 pixels ((0,14) excluded)
+
+The controlled comparison the census flagged (row 5): three v2.03 dies and one v2.01 die scanned
+one per day on the same bench, pixels and charges, with no dose, no rail setting, no temperature
+and no register read-back recorded. Everything below is printed by the notebook and written to
+`outputs/jul_*.csv`. Every "gain" is an 8–27 fC **chord slope**: the straight line is rejected on
+every pixel (χ²/ndf 10–250), the 15–27 fC chord is 10–20 % steeper than the 8–15 fC one, and
+slopes over different ranges are not interchangeable.
+
+| | v2.03 `BARE1` / `BARE4` / `BARE9` | v2.01 `BARE10` |
+|---|---|---|
+| preamp gain (chord), 8–27 fC, five pixels | 10.8 / 11.4 / 9.8 DAC/fC (die spread 8 %; day repeats to 0.1 %) | 11.2 ± 0.4 DAC/fC |
+| shared S-curve σ | 1.06 / 1.28 / 1.05 DAC | 1.10 DAC |
+| noise-scan FWHM | 2.68 / 2.66 / 2.34 DAC | 2.24 DAC |
+| ENC | 613 / 700 / 671 e | 612 e |
+| TOA jitter at BL+20, 15 fC | 6.6–8.1 ps | 5.8 ps |
+| quantisation floor (CAL ≈ 170) | 5.3 ps | 5.3 ps |
+
+* **Revision ratio v2.01 / v2.03: gain 1.05 ± 0.09, σ 0.97 ± 0.12, noise FWHM 0.88 ± 0.08,
+  ENC 0.93 ± 0.07.** If the threshold-DAC scale followed the reference voltage (external 1.0 V
+  on v2.01, internal 0.86–0.89 V on v2.03) with identical front ends, gain, σ and FWHM would all
+  read 0.86–0.89. Gain and σ read near 1.0; FWHM reads 0.88, on the prediction. The observables
+  disagree with each other. The gain tension is 1.7 σ on a die spread from three dies — a
+  Student-t on two degrees of freedom, ~1.2 σ Gaussian — and, more to the point, **67 mV of
+  unrecorded analog supply** (d ln gain / dVA ≈ 2.5 /V from notebook 03's rail scan) would
+  produce the whole gap. This comparison sizes the rail systematic; it does not resolve the
+  DAC-scale question. The bench transfer-function measurement, with rail and registers read
+  back, does.
+* **`BARE9` before its move.** Scanned on 29 and 30 July at FNAL and on 3 August at CERN
+  (notebook 03's untagged reference run, ladder 6–22 fC with three pixels at the DAC ceiling at
+  22 fC): on the one chord all three share, 8 → 15 fC, the five-pixel slope agrees in the mean to
+  2 % with a per-pixel spread of ±7 %, so notebook 03's "VA 1.20 V (supply)" reference condition
+  reproduces the bench response. The baselines step by +240 and +236 DAC between the three at
+  constant slope. From the rail that would need ~0.65 V and a ×5 slope change (notebook 03's
+  scan: 373 DAC/V and e^2.5 per volt), so it is not the rail; with no register read-back it is
+  not attributable. Between the two bench days the noise width also moved (ENC 626 → 716 e at
+  constant slope), which is a front-end state change, not a DC offset.
+* **Pixel (0,14) has a compressive response, on six dies.** Its 8–27 fC chord is 0.16–0.48
+  (median 0.30) of the other pixels' on every acquisition of every campaign in this folder —
+  `W36_6`, `Bar4`, `BARE9` (twice), `BARE1`, `BARE4`, `BARE10` — but it is not a scaled copy: at
+  5–8 fC it sits close to the others, then saturates at 80–100 DAC above baseline where they
+  reach 200–300 (the implied charge scale drifts from ~0.7 at 8 fC to ~0.4 at 27 fC). Four
+  256-pixel autocalibration maps exclude a 3× small-signal deficit at (0,14) and nothing finer
+  (NW is an integer with a 20–30 % array RMS); the finer probes — noise-scan FWHM against the
+  column-14 control (0.6–0.8) and S-curve σ against the other pixels (0.40–0.72) — say the front
+  end's operating point at (0,14) differs, as it would if the DAQ software configured that pixel
+  differently on every die. Cause unresolved; a register read-back at (0,14) is the test.
+  **Consequence for notebooks 01–03:** their pooled absolute gains include (0,14) and are low by
+  ×1.13 (six pixels, notebook 03) and ×1.07 (twelve pixels, notebook 01); the pixel RMS they
+  quote is dominated by it; the paired dose ratios are unaffected.
+  `outputs/jul_pooled_gain_with_without_0_14.csv` tabulates every condition both ways. January's
+  twelve-pixel data also put all of row 0 low, so a position dependence is not confined to the
+  corner; only same-pixel ratios between dies are free of it.
+* Two flawed days, stated: 07-18 (`BARE4`) has no usable noise scan and one pixel at the DAC
+  ceiling; 07-17 is a short day. `BARE4` rests on 07-16 with 07-17 as its repeat.
+
 ### Open discrepancies, stated rather than smoothed over
 
 * **The two campaigns disagree on the sign of the temperature coefficient of gain.** The hybrid
@@ -439,14 +499,16 @@ value, and the comparison is collected into a ledger at the end of each notebook
 | 01 | 37 | 35 | S-curve σ (0.92 vs 0.88) and the ENC that follows — see above |
 | 02 | 38 | 35 | low-charge gain cross-check, fit intercept, `Q_min` — all the turn-off-estimator shift |
 | 03 | 12 | 12 | — |
+| 05 | 12 | 12 | — (internal: per-day directory accounting, README totals, decode errors, the `BARE4` map against its noise scans) |
 
 Notebook 03's ledger is shorter because the August reduction documents fewer of its own numbers:
 the point and hit counts, the pixel-selection loss, the autocalibration baselines, and the
 money-plot turn-off DACs of one pixel at one rail. All twelve reproduce exactly. **Notebook 04 has
 no ledger** — it recomputes nothing, so there is nothing to reproduce.
 
-`outputs/bare_reproduction_ledger.csv`, `outputs/hybrid_reproduction_ledger.csv` and
-`outputs/et2p03_reproduction_ledger.csv` carry them machine-readably.
+`outputs/bare_reproduction_ledger.csv`, `outputs/hybrid_reproduction_ledger.csv`,
+`outputs/et2p03_reproduction_ledger.csv` and `outputs/jul_reproduction_ledger.csv` carry them
+machine-readably. Notebook 05's set has no independent hand decode behind it, unlike 03's.
 
 ---
 
@@ -515,6 +577,17 @@ below in its section 1.
 | `code/decoding.py` | 46,365 | `289ef6cb7b7e48589e02d817de5060ed` | **This repository's own `DecodeBinary`**, copied byte for byte from `TestBeam/condor_at_lxplus/core/decoding.py`. Notebook 03 prints that md5 against the repository's. |
 | `code/etroc2_regmap.py`, `reduce_tid.py`, `verify_hand.py`, `chipconfig_to_csv.py`, `merge_all.py`, `postfix_elapsed.py` | 100,254 | see `PROVENANCE.md` | The rest of the reduction, shipped for provenance. `verify_hand.py` is the independent decoder written from the format description alone. |
 
+### `data/bench_jul2024/` — reduction of the removable disk `X9`, `et2p03_qinj_data/2024-07-*_Array_Test_Results/`
+
+Seven bench days (48 659 files, 38.8 GB) streamed from `fermilab-etroc3` to LPC on 2026-09-07 with
+file count, content-byte sum and a 146-file md5 sample verified per day, then uploaded to
+`root://cmseos.fnal.gov//eos/uscms/store/user/lpcmtdstudies/fnal_Jul2024_bench/raw/` and verified
+again against EOS (`PROVENANCE.md` there). `reduce_bench.py` is notebook 03's `reduce_tid.py`
+with a flat directory walk; every per-point function is unchanged, so the five tables have the
+same column definitions as the ET2.03 ones. `DECODE_README.md` is the reduction's own account,
+including the two flawed days. The reduced tables are also on EOS under
+`fnal_Jul2024_bench/reduced_qinj_feather/`. There is no hand-decode cross-check for this set.
+
 ### `data/census/` — the inventory and the auxiliary logs no other notebook plots
 
 | file | bytes | md5 | what it is |
@@ -552,9 +625,10 @@ which the provenance note records.
 | The hybrid raw tree | ~12 GB | `root://cmseos.fnal.gov//store/group/lpcmtdstudies/cern_Jan2024/CC/`; a working copy is on LPC at `/uscms_data/d3/murtazas/scratch/qinj_cc/` |
 | `PowerHistory_v2.sqlite` (two files) | 15 MB | in the hybrid raw tree; `aux_lv_timeseries.csv.gz` is its reduction |
 | `BaselineHistory_CC_Jan2024_CERN.sqlite` | 3.2 MB | with the LPC working copy; `aux_baseline_history.csv.gz` is its reduction |
-| The ET2.03 working copy (`TID_August`: 0 MRad money plots + all 94 rail scans, undecoded binary) | 6.2 GB | `fermilab-etroc3:/home/daq/tmp/TID_August/`; LPC copy at `/uscms_data/d3/murtazas/scratch/qinj_tid_et2p03/raw/` |
-| The ET2.03 dosed money plots (six `2024-08-*` day directories, undecoded binary) | 25.1 GB | the removable exFAT disk `X9`, `et2p03_qinj_data/`; LPC copy at `…/qinj_tid_et2p03/raw_x9/` |
+| The ET2.03 working copy (`TID_August`: 0 MRad money plots + all 94 rail scans, undecoded binary) | 6.2 GB | `fermilab-etroc3:/home/daq/tmp/TID_August/`; **on LPC EOS** since 2026-09-07 at `/eos/uscms/store/user/lpcmtdstudies/cern_Aug2024_TID/raw/TID_August/`; LPC copy at `/uscms_data/d3/murtazas/scratch/qinj_tid_et2p03/raw/` |
+| The ET2.03 dosed money plots (six `2024-08-*` day directories, undecoded binary) | 25.1 GB | the removable exFAT disk `X9`, `et2p03_qinj_data/`; **on LPC EOS** since 2026-09-07 at `…/cern_Aug2024_TID/raw/x9/`; LPC copy at `…/qinj_tid_et2p03/raw_x9/` |
 | `2024-08-04` — `BARE9` 0 MRad at VA 1.00/1.20/1.40 V plus a room-temperature control run | 5.86 GB | **`X9` only**, not copied |
+| The July-2024 bench days, seven `2024-07-*` directories (five `.nem`, two `.bin`) | 38.8 GB | `X9`, `et2p03_qinj_data/`; **on LPC EOS** at `…/fnal_Jul2024_bench/raw/` (2026-09-07); LPC copy at `/uscms_data/d3/murtazas/scratch/qinj_bench_jul2024/raw_x9/` |
 | the reduced points feather, tables, reducer/decoder and `DECODE_README` | 6 MB | **also on LPC EOS** at `/eos/uscms/store/user/lpcmtdstudies/cern_Aug2024_TID/reduced_qinj_feather/` (2026-09-04), with the hybrid CC reduction under `cern_Jan2024/CC/reduced_qinj_feather/` and the bare ET2.01 derived points under `cern_Jan2024/TID/reduced_qinj_feather/` |
 | `2024-08-14` — `BARE7` 0 MRad money plots | 8.88 GB | on `X9`, **now also copied to LPC** at `…/qinj_tid_et2p03/raw_x9/2024-08-14_Array_Test_Results` and decoded — it is what gives BARE7 a 0 → 200 MRad dose step |
 
@@ -602,6 +676,7 @@ jupyter nbconvert --to notebook --execute --inplace 01_bare_et2p01_tid_jan2024.i
 jupyter nbconvert --to notebook --execute --inplace 02_hybrid_et2p01_cc_jan2024.ipynb
 jupyter nbconvert --to notebook --execute --inplace 03_bare_et2p03_tid_aug2024.ipynb
 jupyter nbconvert --to notebook --execute --inplace 04_cross_campaign_synthesis.ipynb
+jupyter nbconvert --to notebook --execute --inplace 05_bench_jul2024_two_revisions.ipynb
 ```
 
 **Nothing needs installing.** The repo's prescribed environment (`load_python39.sh`, LCG_104d,
@@ -634,12 +709,13 @@ jupyter nbconvert --to notebook --execute --inplace 01_bare_et2p01_tid_jan2024.i
 jupyter nbconvert --to notebook --execute --inplace 02_hybrid_et2p01_cc_jan2024.ipynb
 jupyter nbconvert --to notebook --execute --inplace 03_bare_et2p03_tid_aug2024.ipynb
 jupyter nbconvert --to notebook --execute --inplace 04_cross_campaign_synthesis.ipynb
+jupyter nbconvert --to notebook --execute --inplace 05_bench_jul2024_two_revisions.ipynb
 ```
 
 ### Editing the notebooks
 
 The committed `.ipynb` files carry their outputs so they can be read without running anything. The
-authoring source is the percent-format `_src_00.py` … `_src_04.py`, which is far easier to review
+authoring source is the percent-format `_src_00.py` … `_src_05.py`, which is far easier to review
 and diff than notebook JSON:
 
 ```bash
@@ -649,7 +725,7 @@ jupyter nbconvert --to notebook --execute --inplace 01_bare_et2p01_tid_jan2024.i
 
 Keep inline figures at `dpi=110` (`qinj_common.save_fig` does) so the executed notebooks stay
 under about 6 MB each; the print-quality copies go to `figures/*.pdf`. Figure names are prefixed by
-notebook: `census_*`, `bare_*`, `hyb_*`, `et2p03_*`, `xcamp_*`, and so are the tables in
+notebook: `census_*`, `bare_*`, `hyb_*`, `et2p03_*`, `xcamp_*`, `jul_*`, and so are the tables in
 `outputs/`.
 
 Executing a notebook **rewrites `figures/` and `outputs/` in place**, which is normally what you

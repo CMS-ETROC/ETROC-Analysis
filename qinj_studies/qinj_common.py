@@ -948,3 +948,63 @@ def load_x9_history_folders():
     """RAW: one `ls` per per-campaign history folder of the etroclaptop3 backup on the X9 disk,
     read-only, 2026-09-04. Listing only: none of these campaigns is analysed anywhere here."""
     return pd.read_csv(CENSUS_DIR / "census_x9_history_folders.csv").fillna("")
+
+
+# ---------------------------------------------------------------- FNAL July-2024 bench campaign
+# Notebook 05. Seven bench days at FNAL in July 2024 on four bare dies -- three ETROC2 v2.03
+# (`BARE1`, `BARE4`, `BARE9`) and one v2.01 (`BARE10`) -- on the same six pixels and the same six
+# charges as the two January-2024 campaigns. The staged tables are the reduction described in
+# `data/bench_jul2024/DECODE_README.md`, built with the August-2024 reduction's own code paths
+# (`reduce_bench.py` is `reduce_tid.py` with a flat directory walk), so every column has the
+# same definition as the ET2.03 tables above. Strictly additive: nothing above changed.
+JUL_DIR = DATA / "bench_jul2024"
+JUL_CAMPAIGN = "FNAL bench, July 2024"
+JUL_CHARGES = [5, 6, 8, 15, 22, 27]
+JUL_PIXELS = [(0, 0), (0, 14), (3, 0), (3, 14), (12, 0), (12, 14)]
+# Which bench day carried which die. RAW: the chip name is the first token of every
+# scan-directory name and is re-derived from the tables in notebook 05.
+JUL_DAYS = {
+    "2024-07-15": "ET2p03_BARE1", "2024-07-16": "ET2p03_BARE4", "2024-07-17": "ET2p03_BARE4",
+    "2024-07-18": "ET2p03_BARE4", "2024-07-22": "ET2p01_BARE10", "2024-07-29": "ET2p03_BARE9",
+    "2024-07-30": "ET2p03_BARE9",
+}
+JUL_QLO, JUL_QHI = 8, 27       # the gain-fit range of notebooks 01 and 02 (both reach 27 fC)
+
+
+def _jul_day(df):
+    d = df.copy()
+    d["date"] = d.day.str[:10]
+    d["acq"] = d.chip.str.replace("ET2p0", "v2.0", regex=False) + " " + d.date.str[5:]
+    return d
+
+
+def load_jul_points():
+    """RAW + DERIVED: one row per decoded July point directory. The feather on disk is 22 756 x 42,
+    the same columns as `tid_et2p03_points_all.feather` minus the `*_all`-only union bookkeeping;
+    every `_jul_day` loader returns two more DERIVED key columns, `date` (the day) and `acq`
+    (chip and day, the label the notebook groups by), so this frame is 22 756 x 44. The dose,
+    rail, temperature and elapsed-time columns are NaN / `not recorded` on every row: the
+    campaign wrote none of those tokens into its directory names."""
+    return _jul_day(pd.read_feather(JUL_DIR / "jul_et2p03_points.feather"))
+
+
+def load_jul_turnoff():
+    """RAW: the 252 discriminator binary searches (7 days x 6 pixels x 6 charges), with the
+    whole search as `search_trace`, exactly as the ET2.03 table carries it."""
+    return _jul_day(pd.read_csv(JUL_DIR / "jul_et2p03_turnoff.csv"))
+
+
+def load_jul_noiseonly():
+    """RAW: the 42 `quietCB` noise scans, one per day and pixel."""
+    return _jul_day(pd.read_csv(JUL_DIR / "jul_et2p03_noiseonly.csv"))
+
+
+def load_jul_configs():
+    """RAW + DERIVED: one row per bench day, with the point-directory count of that day."""
+    return _jul_day(pd.read_csv(JUL_DIR / "jul_et2p03_configs.csv"))
+
+
+def load_jul_blnw():
+    """RAW: the one autocalibration baseline and noise-width map of the campaign,
+    `ET2p03_BARE4` on 2024-07-17, all 256 pixels."""
+    return pd.read_csv(JUL_DIR / "jul_et2p03_blnw.csv")

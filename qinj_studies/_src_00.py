@@ -1000,8 +1000,9 @@ print("\nwritten: outputs/census_monitoring_gaps.csv")
 #   the dose campaign in time and sitting beside it on the bench;
 # * **it was never irradiated.** All 140 autocalibration maps carry `0 MRad` in their condition
 #   text, and the cell below prints that rather than asserting it;
-# * **it took no charge-injection data at all** — no `QInj` directory, no threshold scan, nothing
-#   this folder's other notebooks could fit. It is in the census as a monitoring set.
+# * **it took no charge-injection data in the chamber** — no `QInj` directory, no threshold scan.
+#   Its only threshold scans are the three FNAL bench days of row 5 (2024-07-16 to 07-18), three
+#   weeks earlier, which notebook 05 analyses. Here it is a monitoring set.
 #
 # What makes it worth a section is one file. `vol_monitoring.sqlite` logs two bench-multimeter
 # channels at about 5 s for ten days: **`VRef`**, the ET2.03 **internal** voltage reference read on
@@ -1546,8 +1547,8 @@ print("written: outputs/census_analysis_state.csv")
 #    more interesting is resolved in cell 7.1: those directories are a different chip.
 # 2. **Row 5, the ET2.03 July bench days** — the only place where an ET2.01 die and ET2.03 dies
 #    were scanned on the same bench, days apart, on the same six pixels and the same six charges.
-#    That is the controlled revision comparison nothing else in the census offers, and it lives on
-#    a removable disk.
+#    That is the controlled revision comparison nothing else in the census offers. Copied from the
+#    removable disk to LPC EOS on 2026-09-07 and analysed in notebook 05.
 # 3. **Rows 6 and 7, the ET2.03 dose series** — being reduced now, and the input to notebook 03.
 #
 # **Row 32 is a fourth kind of entry** and belongs in neither list: it carries no charge injection

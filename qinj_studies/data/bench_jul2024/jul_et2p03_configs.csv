@@ -1,0 +1,8 @@
+chip,vd_V,va_V,temperature_C,dose_MRad,elapsed_h,charge_tag_fC,repeat,temperature_source,dose_source,day,run_dir,sub_run_dir,config,scan_family,n_point_dirs
+ET2p03_BARE1,,,,,,,1,not recorded,not recorded,2024-07-15_Array_Test_Results,2024-07-15_Array_Test_Results,,2024-07-15_Array_Test_Results,money_plot,3712
+ET2p03_BARE4,,,,,,,1,not recorded,not recorded,2024-07-16_Array_Test_Results,2024-07-16_Array_Test_Results,,2024-07-16_Array_Test_Results,money_plot,4099
+ET2p03_BARE4,,,,,,,1,not recorded,not recorded,2024-07-17_Array_Test_Results,2024-07-17_Array_Test_Results,,2024-07-17_Array_Test_Results,money_plot,1143
+ET2p03_BARE4,,,,,,,1,not recorded,not recorded,2024-07-18_Array_Test_Results,2024-07-18_Array_Test_Results,,2024-07-18_Array_Test_Results,money_plot,3210
+ET2p01_BARE10,,,,,,,1,not recorded,not recorded,2024-07-22_Array_Test_Results,2024-07-22_Array_Test_Results,,2024-07-22_Array_Test_Results,money_plot,4155
+ET2p03_BARE9,,,,,,,1,not recorded,not recorded,2024-07-29_Array_Test_Results,2024-07-29_Array_Test_Results,,2024-07-29_Array_Test_Results,money_plot,3441
+ET2p03_BARE9,,,,,,,1,not recorded,not recorded,2024-07-30_Array_Test_Results,2024-07-30_Array_Test_Results,,2024-07-30_Array_Test_Results,money_plot,3290
