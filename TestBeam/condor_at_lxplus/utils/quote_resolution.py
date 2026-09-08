@@ -74,10 +74,11 @@ RECIPE (per board, per step-13 table)
    the map, the spread and the halves alongside. With >= 4 boards, the
    least-squares solve of all pair widths is printed as a consistency check.
 7. TWO EVENT THRESHOLDS, always both. The tracks entering the quote are those
-   step 12 ran, i.e. >= --nevt-standard (100) events; the same number is also
-   recomputed on tracks with >= --nevt-conservative (300), with the pixel count
-   of each. 100 events is generous - the converged mixture fit is still ~5 %
-   low there (the GMM toy study) - so a run whose two numbers disagree is a run
+   step 12 ran, i.e. >= --nevt-standard (300) events; the same number is also
+   recomputed on tracks with >= --nevt-conservative (1000), with the pixel count
+   of each. 300 events is the floor - the converged mixture fit is still ~5 %
+   low there (the width-vs-events study, notes/pipeline-pr-list.md 2026-09-07) -
+   so a run whose two numbers disagree is a run
    whose value rests on low-occupancy pixels, and that is now visible in the
    quote instead of having to be re-derived. Both are stored; the headline
    number is unchanged (it is the standard one).
@@ -656,10 +657,10 @@ def main():
     p.add_argument("--margin-lo", type=float, default=0.35, dest="margin_lo", help="near-degenerate: sigma / smallest pair width below this is dropped (default 0.35)")
     p.add_argument("--margin-hi", type=float, default=0.95, dest="margin_hi", help="near-degenerate: sigma / smallest pair width above this is dropped (default 0.95)")
     p.add_argument("--def-syst", type=float, default=0.01, dest="def_syst", help="relative definition/convergence systematic (default 0.01)")
-    p.add_argument("--nevt-standard", type=int, default=100, dest="nevt_standard",
-                   help="standard track-occupancy threshold for the quote (default 100, step 12's own --minimum_nevt)")
-    p.add_argument("--nevt-conservative", type=int, default=300, dest="nevt_conservative",
-                   help="conservative track-occupancy threshold, quoted alongside the standard one (default 300)")
+    p.add_argument("--nevt-standard", type=int, default=300, dest="nevt_standard",
+                   help="standard track-occupancy threshold for the quote (default 300, step 12's own --minimum_nevt)")
+    p.add_argument("--nevt-conservative", type=int, default=1000, dest="nevt_conservative",
+                   help="conservative track-occupancy threshold, quoted alongside the standard one (default 1000)")
     p.add_argument("--fourboard", default=None,
                    help="four-board per-quadruple pair-width table for the pairing-covariance fit "
                         "(utils/fourboard_pairing.py output). Default: fourboard_pairs_*.csv next to the input tables.")
@@ -898,8 +899,10 @@ def main():
         md.append("\nEvent thresholds: the last two columns are the same board value recomputed on tracks with at least "
                   "%d and at least %d events (pixel counts in brackets). The headline number is the standard (%d) one - "
                   "that is the set step 12 ran on; the conservative column exists because the converged mixture width is "
-                  "still ~5 %% low at ~300 events, so a board whose two numbers differ is a board resting on "
-                  "low-occupancy pixels." % (a.nevt_standard, a.nevt_conservative, a.nevt_standard))
+                  "still ~5 %% low at the %d-event standard threshold (~1 %% at %d), so a board whose two "
+                  "numbers differ is a board resting on "
+                  "low-occupancy pixels." % (a.nevt_standard, a.nevt_conservative, a.nevt_standard,
+                     a.nevt_standard, a.nevt_conservative))
     else:
         md.append("\nEvent thresholds: not computed - %s." % nt0.get("reason", "unknown"))
     md.append("\nTwo board-level numbers: the CANONICAL one is the average map (every track using the pixel, 1/err²-weighted = event-weighted, i.e. the operating resolution under this illumination); the central-hit one uses only tracks whose partners sit at the modal offset (one sub-region of the pixel) and is the more geometry-independent number for chip-to-chip comparisons. Both maps are written as CSV (<label>_map_<board>_{average,central}.csv).")

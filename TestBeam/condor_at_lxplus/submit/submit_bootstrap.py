@@ -266,7 +266,7 @@ if __name__ == "__main__":
 
     # Bootstrap Params
     parser.add_argument('-n', '--num_bootstrap_output', type=int, default=100)
-    parser.add_argument('--minimum_nevt', type=int, default=1000)
+    parser.add_argument('--minimum_nevt', type=int, default=300)
     parser.add_argument('--iteration_limit', type=int, default=7500)
 
     # Options

@@ -245,7 +245,7 @@ def main():
     parser.add_argument('-f', '--file', required=True, help='Input file')
     parser.add_argument('-n', '--num_bootstrap_output', type=int, default=200)
     parser.add_argument('--iteration_limit', type=int, default=7500)
-    parser.add_argument('--minimum_nevt', type=int, default=100)
+    parser.add_argument('--minimum_nevt', type=int, default=300)
     parser.add_argument('--reproducible', action='store_true',
                         help='Seed resampling (not the GMM fit) so results are reproducible run-to-run.')
     parser.add_argument('--ks_pmin', type=float, default=KS_PMIN_DEFAULT,
