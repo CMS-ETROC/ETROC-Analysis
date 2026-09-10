@@ -26,7 +26,7 @@ coefficients each, 9 in total for a three-board track), minimise
 
     S = sum_{a<b} sum_events [ (toa_a + p_a(tot_a)) - (toa_b + p_b(tot_b)) ]^2
 
-which is linear in the coefficients: one `np.linalg.lstsq` on a design of
+which is linear in the coefficients: one least-squares problem on a design of
 (n_pairs * n_events) rows by (N * (order+1)) columns.  For N = 3 the
 stationarity condition of S is precisely the alternation's fixed point
 (sum_r ||delta_r||^2 = 0.75 * sum_pairs ||toa_a - toa_b||^2), so the joint
@@ -40,6 +40,19 @@ difference unchanged, so the design is rank-deficient by exactly one (the
 global constant).  `np.linalg.lstsq` returns the minimum-norm solution, which
 is deterministic; every quantity the pipeline computes downstream is a pair
 difference, hence gauge invariant.
+
+MEMORY.  The design is never materialised.  This same function is called both
+on a per-track bootstrap sample (a few thousand rows, core/bootstrap.py) and on
+a whole merged run through the notebook helper (BeamTestHelpers/twc.py), where
+n is 1e6-1e7 and a dense (n_pairs*n) x 9 array would be 0.2-2 GB before lstsq
+makes its own copies.  Only the 9x9 (strictly (ncol+1)^2) triangular factor R
+of the augmented design [A | y] enters the answer, so the rows are streamed in
+blocks of `_CHUNK_EVENTS` events and folded into a running R by QR.  Because
+R^T R = [A|y]^T [A|y] exactly, R poses the identical least-squares problem -
+same singular values, same rank deficiency, hence the same minimum-norm
+solution - and the same `rcond` the dense call would have used is passed
+explicitly so the gauge direction is discarded at the same threshold.  Peak
+memory is O(_CHUNK_EVENTS) instead of O(n).
 
 CONDITIONING.  TOT is in ps (~1500-4000), so a raw [tot^2, tot, 1] basis spans
 seven orders of magnitude between its columns.  The fit is therefore done in a
@@ -69,6 +82,11 @@ __all__ = [
 ]
 
 TWC_ORDER = 2       # quadratic in TOT; unchanged by decision (see the run plan)
+
+# Events per streamed block of the design (see MEMORY above).  With three
+# boards a block is 3*100k = 300k rows of 10 doubles, ~24 MiB, and peak memory
+# stays there however long the run is.  The answer does not depend on it.
+_CHUNK_EVENTS = 100_000
 
 
 def _basis(x, order, mu, sd):
@@ -137,29 +155,42 @@ def solve_timewalk_coefficients(tots, toas, roles, order: int = TWC_ORDER):
     toa = {r: np.asarray(toas[r], dtype=float) for r in roles}
 
     scale = {}
-    V = {}
     for r in roles:
         mu = float(tot[r].mean())
         sd = float(tot[r].std())
         if not np.isfinite(sd) or sd <= 0:
             sd = 1.0
         scale[r] = (mu, sd)
-        V[r] = _basis(tot[r], order, mu, sd)
 
     pairs = list(combinations(roles, 2))
+    ncol = len(roles) * ncoef
+    col0 = {r: roles.index(r) * ncoef for r in roles}
     nrow = len(pairs) * n
-    A = np.zeros((nrow, len(roles) * ncoef))
-    y = np.empty(nrow)
-    for k, (a, b) in enumerate(pairs):
-        sl = slice(k * n, (k + 1) * n)
-        ia, ib = roles.index(a) * ncoef, roles.index(b) * ncoef
-        A[sl, ia:ia + ncoef] = V[a]
-        A[sl, ib:ib + ncoef] = -V[b]
-        # residual to minimise is (toa_a + p_a) - (toa_b + p_b), so the target is
-        # minus the raw pair difference
-        y[sl] = toa[b] - toa[a]
 
-    sol, *_ = np.linalg.lstsq(A, y, rcond=None)
+    # Stream the design [A | y] in blocks of events and keep only its running
+    # triangular factor R (see MEMORY in the module docstring): after each block
+    # R^T R equals the Gram matrix of every row seen so far, so the final R is
+    # the same least-squares problem as the full A, never built.
+    R = np.zeros((0, ncol + 1))
+    for start in range(0, n, _CHUNK_EVENTS):
+        stop = min(start + _CHUNK_EVENTS, n)
+        m = stop - start
+        blk = np.zeros((len(pairs) * m, ncol + 1))
+        V = {r: _basis(tot[r][start:stop], order, *scale[r]) for r in roles}
+        for k, (a, b) in enumerate(pairs):
+            sl = slice(k * m, (k + 1) * m)
+            blk[sl, col0[a]:col0[a] + ncoef] = V[a]
+            blk[sl, col0[b]:col0[b] + ncoef] = -V[b]
+            # residual to minimise is (toa_a + p_a) - (toa_b + p_b), so the target is
+            # minus the raw pair difference
+            blk[sl, ncol] = toa[b][start:stop] - toa[a][start:stop]
+        R = np.linalg.qr(np.vstack((R, blk)), mode='r')
+
+    # rcond is what np.linalg.lstsq(A, y, rcond=None) would have used on the
+    # full design, passed explicitly so that the one rank deficiency (the global
+    # gauge constant) is cut at the same threshold on the small system.
+    sol, *_ = np.linalg.lstsq(R[:, :ncol], R[:, ncol],
+                              rcond=np.finfo(float).eps * max(nrow, ncol))
 
     out = {}
     for i, r in enumerate(roles):
