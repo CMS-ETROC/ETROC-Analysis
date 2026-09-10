@@ -82,6 +82,7 @@ def build_python_command(args: argparse.Namespace) -> str:
         f"--ks_dmax {args.ks_dmax}",
         f"--gmm_tol {args.gmm_tol}",
         f"--gmm_max_iter {args.gmm_max_iter}",
+        f"--gmm_reg_covar {args.gmm_reg_covar}",
         f"--minimum_nevt {args.minimum_nevt}",
         f"--iteration_limit {args.iteration_limit}",
         f"--neighbor_cut {neighbor_cut_str}",
@@ -286,6 +287,8 @@ if __name__ == "__main__":
     parser.add_argument('--ks_dmax', type=float, default=0.03, help='bootstrap.py --ks_dmax (default 0.03).')
     parser.add_argument('--gmm_tol', type=float, default=1e-6, help='bootstrap.py --gmm_tol: EM convergence tolerance of the mixture fit (default 1e-6).')
     parser.add_argument('--gmm_max_iter', type=int, default=2000, help='bootstrap.py --gmm_max_iter (default 2000).')
+    parser.add_argument('--gmm_reg_covar', type=float, default=4.0,
+                        help='bootstrap.py --gmm_reg_covar: variance floor [ps^2] on every mixture component (default 4.0, i.e. a 2 ps sigma floor).')
     parser.add_argument('--neighbor_cut', dest='neighbor_cut', default=['none'], nargs='+',
                         help='Specify one or more **space-separated** board columns to be used for neighbor cuts. '
                         'The argument collects all values into a list. '
