@@ -297,12 +297,20 @@ def load_alignment(path):
     alignment_check()'s docstring for what is and is not corrected for. Every early exit / per-board gap
     is reported via a `reason` string rather than silently comparing against a wrong assumption.
 
-    Rejects, rather than silently mis-mapping, the OTHER alignment yaml layout in this repo:
-    telescope_diagnostics.py's section_alignment() documents (and reads) a
-    {run: {legacy_per_combo: {combo: {board: ...}}, global_relative: {pinned_board, boards: {...}}}}
-    layout that the current core/path_finder.py does not write, but that a yaml from a different
-    pipeline version could. Its combo-label keys ('legacy_per_combo', 'global_relative') do not match
-    the role+id token regex below, which would otherwise silently yield an empty role_to_id.
+    Two yaml layouts exist and both are read, keyed off the 'applied' block:
+
+    * {run: {legacy_per_combo: {combo: {board: ...}}, global_relative: {pinned_board, boards: {...}}}}
+      is what plain --find_alignment writes. It is PURELY DIAGNOSTIC - it records what each combo
+      measured, not what any track was cut with - so with no 'applied' block it is REJECTED rather
+      than silently mis-mapped: its top-level keys ('legacy_per_combo', 'global_relative') do not
+      match the role+id token regex below and would otherwise yield an empty role_to_id.
+    * With --apply_alignment the same yaml also carries 'applied' ({board: {from_combo,
+      transformation: {translation}}}), the translation each board's tracks WERE cut with. That is
+      exactly what this cross-check needs, so such a yaml is accepted: translations come from
+      'applied', and role<->id is inferred from the combo labels inside 'legacy_per_combo' (plus each
+      board's own 'from_combo').
+
+    A flat {run: {combo: {board: ...}}} layout (older pipeline versions) is read as before.
     """
     try:
         with open(path) as f:
@@ -313,23 +321,31 @@ def load_alignment(path):
         return dict(present=False, reason="expected exactly one top-level run name in %s, found %d" % (path, len(y or {})))
     run_name, block = next(iter(y.items()))
     block = block or {}
-    if "legacy_per_combo" in block or "global_relative" in block:
-        return dict(present=False, reason="%s uses the {legacy_per_combo, global_relative} alignment layout "
-                                          "(see utils/telescope_diagnostics.py section_alignment()), which "
-                                          "quote_resolution's role<->id combo-label inference does not support - "
-                                          "read it with telescope_diagnostics.py instead, or extend load_alignment()"
-                                          % path)
+    diagnostic_layout = "legacy_per_combo" in block or "global_relative" in block
+    applied = block.get("applied", {}) or {}
+    if diagnostic_layout and not applied:
+        return dict(present=False, reason="%s is a diagnostic-only {legacy_per_combo, global_relative} alignment "
+                                          "yaml (path_finder.py --find_alignment without --apply_alignment): it "
+                                          "records what each combo measured, not the translation any track was cut "
+                                          "with, and carries no 'applied' block for this check to compare against - "
+                                          "read it with utils/telescope_diagnostics.py instead, or re-run step 6 "
+                                          "with --apply_alignment if the tracks really were cut on a derived "
+                                          "alignment" % path)
+    # Combo labels to infer role<->id from: the top-level keys in the flat layout, the
+    # legacy_per_combo keys in the diagnostic one, plus every board's own from_combo.
+    if diagnostic_layout:
+        combo_labels = list((block.get("legacy_per_combo") or {}).keys())
+    else:
+        combo_labels = [k for k in block if k != "applied"]
+    combo_labels += [v.get("from_combo") for v in applied.values() if isinstance(v, dict) and v.get("from_combo")]
     role_to_id = {}
-    for combo_label in block:
-        if combo_label == "applied":
-            continue
+    for combo_label in combo_labels:
         for tok in str(combo_label).split("-"):
             m = re.match(r"^([A-Za-z]+)(\d+)$", tok)
             if m:
                 role_to_id.setdefault(m.group(1), int(m.group(2)))
-    applied = block.get("applied", {}) or {}
     translations = {bid: (v.get("transformation", {}) or {}).get("translation", {}) or {} for bid, v in applied.items()}
-    if not translations:
+    if not translations and not diagnostic_layout:
         # Observed in practice: some alignment yamls carry no 'applied' summary at all (every board's
         # estimate stayed keyed under its combo only). Conservative fallback: take each board's first
         # appearance across the combo blocks as this dict iterates them. NOTE that is NOT reliably
@@ -669,7 +685,10 @@ def main():
     p.add_argument("--pairing-min-quads", type=int, default=30, dest="pairing_min_quads",
                    help="minimum qualifying quadruples for the pairing fit (default 30)")
     p.add_argument("--alignment", default=None,
-                   help="optional step-6 --find_alignment yaml (core/path_finder.py's <track_label>_alignment.yaml); "
+                   help="optional step-6 alignment yaml (core/path_finder.py's <track_label>_alignment.yaml). "
+                        "Needs the translations the tracks were actually cut with, so it must come from a run "
+                        "with --apply_alignment (which writes the 'applied' block) or from the older flat "
+                        "per-combo layout; a diagnostic-only --find_alignment yaml is reported as unusable. "
                         "when given, the translation-implied pixel offset is compared to the weighted modal offset "
                         "per partner board and a mismatch is warned on. Conservative: role<->board-id is inferred "
                         "from the yaml's own combo-label keys, a board with no recorded translation that is not the "

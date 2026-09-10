@@ -30,6 +30,28 @@ A second defect with the same root: when the trigger is the highest-numbered boa
 the lexicographically first combo `(0,1,2)` contains no trigger and was cut before any estimate existed,
 on raw geometry.
 
+## How this landed in main
+
+The feed-forward described below is opt-in on main, behind `--apply_alignment` (which requires
+`--find_alignment`). Nothing changes for anyone who does not pass it: `--find_alignment` alone stays
+diagnostic-only and writes the same `legacy_per_combo` + `global_relative` yaml it always has, the
+coincidence window keeps its main-line anchor (the trigger board, else the combo's own median board
+id), the combo processing order is unchanged, and the track output of a run without the new flag is
+byte-identical to before. With `--apply_alignment` the per-board registry, the trigger-first ordering,
+the sub-pixel estimator, the "no board has role trig" error, `--alignment_core_warn` and the `applied:`
+block all switch on together, and the two diagnostic blocks keep being measured against the `--config`
+geometry so their numbers mean the same thing in both modes. `utils/quote_resolution.py --alignment`
+reads the `applied:` block when it is there and rejects a diagnostic-only yaml with a message saying
+why; `utils/telescope_diagnostics.py` reads `applied:` in either layout.
+
+The estimator is the one place where the two branches genuinely disagree rather than merely differing
+in scope. The diagnostic blocks use a 30-bin histogram of the continuous shift, whose bin width is
+about one pixel pitch on a full-grid candidate set, so their values are quantised to +/-0.65 mm; the
+applied value uses the count-weighted modal pixel plus a sub-pixel centroid. That quantisation is
+tolerable in a number a human reads out of a yaml and is not tolerable in a number fed back into the
+geometry, so the diagnostic blocks were left exactly as they are and `--apply_alignment` carries its
+own estimator. Expect the two to differ by up to half a pixel for the same board.
+
 ## Fix (all in `core/path_finder.py`)
 
 1. **Per-board registry instead of a run-level latch.** `alignment_source[board] = combo` records

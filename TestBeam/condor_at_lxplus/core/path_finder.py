@@ -22,7 +22,8 @@ PIXEL_PITCH = 1.3
 PIXEL_OFFSET = 7.5
 MAX_MEMORY_USAGE_MB = 2600
 MIN_BOARD_COMBO_SIZE = 3  # extract_events_by_path.py (step 8) requires at least 3 boards
-# Default for --alignment_core_warn, the --find_alignment peak-significance
+
+# Default for --alignment_core_warn, the --apply_alignment peak-significance
 # floor: the share of a combo's candidate weight that must sit within +/-1
 # pixel of the modal integer-pixel shift for the estimate to count as a clear
 # beam-spot peak. Below it the value is still applied (in the known low-purity
@@ -34,6 +35,7 @@ MIN_BOARD_COMBO_SIZE = 3  # extract_events_by_path.py (step 8) requires at least
 # triangular background can carry ~18 % of its weight in the modal core and
 # stay silent. The operator sets the tolerance per campaign with the flag; a
 # proper value needs the core-fraction distribution over one real campaign.
+# Unused unless --apply_alignment is given.
 ALIGNMENT_CORE_WARN_DEFAULT = 0.10
 
 # --- Helper Functions ---
@@ -243,125 +245,236 @@ def generate_cal_table(df: pd.DataFrame, output_name: str) -> pd.DataFrame:
     io_utils.write_csv(cal_table, f'{output_name}_cal_table.csv', index=False)
     return cal_table
 
-def check_spatial_alignment(df: pd.DataFrame, roles: Dict[str, int], max_diff_pixel: float) -> pd.Series:
+def check_spatial_alignment(df: pd.DataFrame, combo: Tuple[int, ...], roles: Dict[str, int], max_diff_pixel: float) -> pd.Series:
 
     """
-    Coincidence-consistency (radius) cut on one combo's track candidates.
-
-    For every non-anchor board present in the combo, the transformed
-    pixel-centre position must lie within a circle of radius
-    max_diff_pixel * PIXEL_PITCH around the anchor board's pixel centre:
-        r = sqrt((x_anchor - x_other)^2 + (y_anchor - y_other)^2) <= limit
-    This is deliberately a window, not a straight-line fit: it tolerates
-    inclined tracks and mechanical/projective offsets up to the window size,
-    and rejects the random coincidences (a real hit on two boards plus noise,
-    an after-pulse or a second particle on the third) whose pixel pattern is
-    geometrically impossible for a single particle.
-
-    Anchor choice: the trigger board when it is part of this combo (the
-    established behaviour); otherwise the first present board in the order
-    ref, dut, extra. Before this fallback existed, a combo WITHOUT the trigger
-    board (e.g. the 'extra0-ref1-dut2' leave-one-out combo of a 4-board
-    telescope) received no cut at all: `x_{trig_id}` was not among its
-    columns, no condition was ever built, and the function returned all-True
-    without any warning. That combo therefore carried every combinatorial
-    background pattern into the downstream steps -- observed on real data as
-    ~2.5x more candidates than the trigger-containing combos, 20-50% of them
-    geometrically inconsistent -- and since step 7's coverage-based selection
-    deliberately picks low-count candidates, that background was liable to be
-    selected as tracks. Relative offsets between two non-trigger boards are
-    already correct whenever each board's own yaml translation (defined
-    relative to the trigger board) is correct, so the fallback anchor needs
-    no additional alignment information.
+    Checks if every board in combo is spatially aligned with a single
+    reference board, via Euclidean distance: the trig board when it's in
+    this combo (unchanged from before), otherwise combo's own median board
+    id -- same fallback used for the global_relative alignment estimate --
+    so a combo that doesn't happen to include trig still gets a real
+    geometric-coincidence requirement instead of skipping the check
+    entirely (previously, looking for a trig board absent from this combo's
+    columns always found nothing to compare, silently returning "everything
+    passes").
+    Logic: r = sqrt((x1-x2)^2 + (y1-y2)^2) <= limit
     """
 
-    # Boards actually present in this combo = those with transformed coordinates
-    # (apply_geometric_transformation_matrix only adds x_/y_ for combo boards).
-    present = {role: bid for role, bid in roles.items() if f'x_{bid}' in df.columns}
-    if not present:
-        logging.warning("No transformed coordinates found for any board. Skipping spatial alignment check.")
-        return pd.Series(True, index=df.index)
+    trig_id = roles.get('trig')
+    if trig_id is not None and trig_id in combo:
+        ref_id = trig_id
+    else:
+        sorted_combo = sorted(combo)
+        ref_id = sorted_combo[len(sorted_combo) // 2]
+        logging.info(f"No trig board in this combo; using board {ref_id} as the spatial-alignment reference instead.")
 
-    anchor_role = next((r for r in ['trig', 'ref', 'dut', 'extra'] if r in present), None)
-    if anchor_role is None:
-        # Non-standard role names only: fall back to the first present board.
-        anchor_role = sorted(present)[0]
-    anchor_id = present[anchor_role]
-    if anchor_role != 'trig':
-        logging.info(f"Trigger board not in this combo: spatial alignment check anchored on "
-                     f"'{anchor_role}' (board {anchor_id}) instead.")
-
+    conditions = []
     # Limit calculation: pixels * pitch (mm/pixel)
     limit = max_diff_pixel * PIXEL_PITCH
 
-    conditions = []
-    for role_name, other_id in present.items():
-        if other_id == anchor_id:
+    for bid in combo:
+        if bid == ref_id:
             continue
-        dx = df[f'x_{anchor_id}'] - df[f'x_{other_id}']
-        dy = df[f'y_{anchor_id}'] - df[f'y_{other_id}']
-        # Cartesian (Euclidean) Distance Check
-        distance = np.sqrt(dx**2 + dy**2)
-        conditions.append(distance <= limit)
+
+        # Check if global coordinates exist for both
+        if f'x_{ref_id}' in df.columns and f'x_{bid}' in df.columns:
+
+            # Calculate deltas
+            dx = df[f'x_{ref_id}'] - df[f'x_{bid}']
+            dy = df[f'y_{ref_id}'] - df[f'y_{bid}']
+
+            # Cartesian (Euclidean) Distance Check
+            distance = np.sqrt(dx**2 + dy**2)
+            conditions.append(distance <= limit)
 
     if not conditions:
-        # Only one board present -- nothing to compare against. Cannot happen
-        # while MIN_BOARD_COMBO_SIZE >= 2; kept as a guard.
         return pd.Series(True, index=df.index)
 
     # Combine all conditions (must satisfy distance check for ALL pairs)
     return np.logical_and.reduce(conditions)
 
+def compute_peak_offset(track_candidates: pd.DataFrame, bid: int, ref_id: int) -> Tuple[float, float]:
+    """Histogram-peak estimate of (x_bid - x_ref, y_bid - y_ref), weighted by
+    each hit pattern's count -- the mode of the shift distribution, not the
+    mean, so a handful of outlier tracks can't pull the estimate off the bulk
+    of the distribution.
+    """
+    dx = track_candidates[f'x_{bid}'] - track_candidates[f'x_{ref_id}']
+    dy = track_candidates[f'y_{bid}'] - track_candidates[f'y_{ref_id}']
+
+    hist_counts, bin_edges = np.histogram(dx, weights=track_candidates['count'], bins=30)
+    max_index = np.argmax(hist_counts)
+    center_x = round(float(0.5 * (bin_edges[max_index] + bin_edges[max_index + 1])), 2)
+
+    hist_counts, bin_edges = np.histogram(dy, weights=track_candidates['count'], bins=30)
+    max_index = np.argmax(hist_counts)
+    center_y = round(float(0.5 * (bin_edges[max_index] + bin_edges[max_index + 1])), 2)
+
+    return center_x, center_y
+
+def corrected_translation(existing: Dict, dx: float, dy: float) -> Dict[str, float]:
+    """New translation.{x,y,z} for a board whose current geometry shows an
+    observed (dx, dy) offset from its reference -- keeps z untouched."""
+    return {
+        'x': round(existing.get('x', 0.0) - dx, 2),
+        'y': round(existing.get('y', 0.0) - dy, 2),
+        'z': round(existing.get('z', 0.0), 2),
+    }
+
+def compute_modal_offset(track_candidates: pd.DataFrame, bid: int, ref_id: int,
+                         counts_w: np.ndarray) -> Tuple[float, float, float]:
+    """Sub-pixel estimate of (x_bid - x_ref, y_bid - y_ref) used by
+    --apply_alignment, plus the modal-core weight share that
+    --alignment_core_warn tests.
+
+    The shifts are exact multiples of PIXEL_PITCH (both boards use the same
+    pixel-centre model), so this takes the count-weighted MODE of the integer
+    pixel shift and refines it with the count-weighted centroid over mode +/- 1
+    pixel (a sub-pixel estimate from the neighbour asymmetry). It is
+    idempotent: re-run on already-corrected geometry it returns ~0.
+
+    This is deliberately NOT compute_peak_offset(). That one histograms the
+    continuous shift into 30 bins over its full range; on a full-grid candidate
+    set the bin width is ~one pitch, so the modal-bin midpoint is quantized to
+    +/-0.65 mm (half a pixel) with a sign set by where the range extremes fall
+    -- observed as every estimate coming out exactly +/-0.65 mm, the same board
+    flipping sign between combos. That is tolerable for a number a human reads
+    out of a diagnostic yaml, and it is what the two diagnostic blocks have
+    always reported, so it is left untouched; it is NOT tolerable for a value
+    fed back into the geometry, which is why --apply_alignment uses this
+    estimator instead. The two therefore do not agree in general.
+
+    The returned core fraction is the min over the two axes of the share of
+    candidate weight inside mode +/- 1 pixel: ~1 for a clean beam-spot peak,
+    small when the mode is merely the crest of the flat combinatorial
+    background (this estimator's low-purity failure mode, in which it returns
+    ~0 = "no misalignment").
+    """
+    centers = []
+    core_frac = 1.0
+    for axis in ('x', 'y'):
+        shift = (track_candidates[f'{axis}_{bid}'] - track_candidates[f'{axis}_{ref_id}']).to_numpy(dtype=float)
+        k = np.rint(shift / PIXEL_PITCH).astype(int)               # integer pixel shift per candidate
+        ks, inv = np.unique(k, return_inverse=True)
+        mode_k = ks[np.argmax(np.bincount(inv, weights=counts_w))]  # count-weighted mode
+        core = np.abs(k - mode_k) <= 1                              # mode +/- 1 pixel
+        core_frac = min(core_frac, float(counts_w[core].sum() / counts_w.sum()))
+        centers.append(float(np.average(shift[core], weights=counts_w[core])))
+    return centers[0], centers[1], core_frac
+
+def applied_translation(existing: Dict, dx: float, dy: float) -> Dict[str, float]:
+    """corrected_translation()'s arithmetic at the precision --apply_alignment
+    feeds forward: new translation = existing minus the measured residual, so
+    re-running on already-aligned data leaves the translation unchanged. Kept
+    separate from corrected_translation() (2 dp, the diagnostic blocks' long-
+    standing rounding) because a value that is actually applied to the geometry
+    is quoted to 3 dp = 1 um, below the 10 um scale the estimates repeat to.
+    """
+    return {
+        'x': round(float(existing.get('x', 0.0)) - dx, 3),
+        'y': round(float(existing.get('y', 0.0)) - dy, 3),
+        'z': round(float(existing.get('z', 0.0)), 3),
+    }
+
+def solve_global_relative_alignment(edges: List[Tuple[int, int, float, float]], pin_id: int) -> Dict[int, Tuple[float, float]]:
+    """Combines per-combo relative offset measurements (bid, ref_id, dx, dy
+    meaning x_bid - x_ref ~= dx, same for y) from every combo into one
+    least-squares fit of every board's position, instead of anchoring to a
+    single combo's estimate. Solvable for any connected measurement graph
+    (unlike the resolution-unfolding sum-of-variances problem, a difference
+    system like this one doesn't need an odd cycle to be identifiable) -- but
+    only up to one arbitrary global additive constant, since relative offsets
+    alone can't fix an absolute origin. pin_id's fitted position is shifted
+    to exactly (0, 0) to remove that ambiguity; the choice of which board is
+    pinned doesn't affect any board's position *relative* to any other.
+    """
+    board_ids = sorted({b for e in edges for b in (e[0], e[1])} | {pin_id})
+    index = {b: i for i, b in enumerate(board_ids)}
+    n = len(board_ids)
+
+    A = np.zeros((len(edges), n))
+    bx = np.zeros(len(edges))
+    by = np.zeros(len(edges))
+    for row, (bid, ref_id, dx, dy) in enumerate(edges):
+        A[row, index[bid]] = 1
+        A[row, index[ref_id]] = -1
+        bx[row] = dx
+        by[row] = dy
+
+    x_sol, *_ = np.linalg.lstsq(A, bx, rcond=None)
+    y_sol, *_ = np.linalg.lstsq(A, by, rcond=None)
+
+    # Gauge-fix: shift the whole solution so pin_id reads exactly zero.
+    x_sol = x_sol - x_sol[index[pin_id]]
+    y_sol = y_sol - y_sol[index[pin_id]]
+
+    return {b: (float(x_sol[index[b]]), float(y_sol[index[b]])) for b in board_ids}
+
 # --- Main Execution ---
 
 def main():
     parser = argparse.ArgumentParser(description='Find track candidates and Calibrate.')
-    parser.add_argument('-p', '--path', required=True,
-                        help='Directory with the input feather files. A relative path is resolved under your EOS '
-                             'base (/eos/user/<u>/<user>/); an absolute path is used as-is (e.g. another user\'s EOS area).')
-    parser.add_argument('--cal-label', required=True, dest='cal_label',
-                        help='Output PREFIX for the CAL table: writes <CAL_LABEL>_cal_table.csv, '
-                             'relative to the current working directory (not to EOS).')
-    parser.add_argument('--track-label', required=True, dest='track_label',
-                        help='Output DIRECTORY for the per-combo track-candidate parquet files '
-                             '(<TRACK_LABEL>/tracks_<combo>.parquet), relative to the current working directory (not to EOS).')
+    parser.add_argument('-p', '--path', required=True, help='Path to directory with feather files')
+    parser.add_argument('--cal-label', required=True, help='Output name for CAL table', dest='cal_label')
+    parser.add_argument('--track-label', required=True, help='Output name for Tracks', dest='track_label')
     parser.add_argument('-s', '--sampling', type=float, default=3, help='Sampling fraction (percent)')
     parser.add_argument('--max_diff_pixel', type=int, default=1, help='Max pixel diff')
     parser.add_argument('-c', '--config', required=True, help='YAML config file')
     parser.add_argument('-r', '--runName', required=True, help='Run name in YAML')
     parser.add_argument('--mask_config', type=Path, dest='mask_config_file', help='Mask config YAML')
     parser.add_argument('--cal_table_only', action='store_true', help='Only generate CAL table')
-    parser.add_argument('--find_alignment', action='store_true', help='Find the board offset alignments refer to trigger board')
+    parser.add_argument('--find_alignment', action='store_true',
+                        help='Compute board alignment offsets two ways for comparison, written to a '
+                             'diagnostic YAML: "legacy" (each board vs. the trig board, per combo that '
+                             'includes trig) and "global_relative" (every combo\'s boards vs. that combo\'s '
+                             'own median board id, combined across all combos into one least-squares fit). '
+                             'Purely diagnostic -- never mutates the config or affects saved track output. '
+                             'Pass --apply_alignment as well to also feed the estimate forward into this '
+                             'run\'s in-memory geometry.')
+    parser.add_argument('--apply_alignment', action='store_true',
+                        help='OPT-IN, requires --find_alignment. Feed the alignment estimate forward: each '
+                             'non-trigger board\'s translation is estimated once (count-weighted modal pixel '
+                             'shift plus sub-pixel centroid, not the diagnostic histogram estimator) from the '
+                             'first trigger-containing combo that holds it, applied to the IN-MEMORY run '
+                             'config, and used for every later combo\'s coincidence window. Trigger-containing '
+                             'combos are processed first so no combo is cut on uncorrected geometry, a run with '
+                             'no board of role "trig" is an error instead of a silent no-op, and the alignment '
+                             'YAML gains an "applied" block recording what was used and which combo supplied '
+                             'it. Nothing is ever written back to --config. Use it when the board-config yaml '
+                             'has no (or wrong) translations; the durable fix is to measure the geometry once '
+                             'and put it in the config. Track output DOES change: this is not a diagnostic.')
     parser.add_argument('--alignment_core_warn', type=float, default=ALIGNMENT_CORE_WARN_DEFAULT,
-                        help='--find_alignment peak-significance floor in [0, 1]: warn when less than this share of a '
-                             'combo\'s candidate weight sits within +/-1 pixel of the modal shift, i.e. when the applied '
-                             'translation may be the combinatorial-background mode rather than the beam spot. Warn-only: '
-                             'the value is still applied. 0 disables the warning. Default %(default)s is a conservative '
-                             'floor, not a calibrated discriminator -- set it per campaign.')
+                        help='--apply_alignment peak-significance floor in [0, 1]: warn when less than this '
+                             'share of a combo\'s candidate weight sits within +/-1 pixel of the modal shift, '
+                             'i.e. the applied value may be the combinatorial-background mode rather than the '
+                             'beam spot. Warn-only, never changes what is applied; 0 disables. Ignored without '
+                             '--apply_alignment. Default %(default)s, a conservative floor rather than a '
+                             'calibrated discriminator -- set it per campaign.')
     parser.add_argument('--seed', type=int, default=None,
                         help='Seed for every random draw in this script (per-file event sampling, the memory-check '
-                             'file sample and the --max_files subset). Default: unseeded, i.e. NOT reproducible run-to-run.')
+                             'file sample and the --max_files subset). Default: unseeded, i.e. not reproducible run-to-run.')
     parser.add_argument('--max_files', type=int, default=100,
                         help='Cap on the number of input feather files read; above it a random subset is taken '
                              '(reported in the log). Default 100 keeps the previous hard-coded behaviour; '
                              'pass 0 to read every file.')
 
     args = parser.parse_args()
+
+    if args.apply_alignment and not args.find_alignment:
+        parser.error("--apply_alignment requires --find_alignment (it feeds that estimate forward).")
     if not 0.0 <= args.alignment_core_warn <= 1.0:
         parser.error(f"--alignment_core_warn must be in [0, 1], got {args.alignment_core_warn}")
 
     # Reproducibility: every random draw below (the per-file event sample in
-    # load_and_sample_data, the <=10-file memory-check sample, and the
-    # --max_files subset) goes through the global `random` / `np.random`
-    # state. Seeding both makes the CAL table, the candidate lists and any
-    # --find_alignment estimate bit-reproducible for a given input set, which
-    # is what turns a re-run after a code change into a controlled comparison.
-    # Left unseeded (the default) the outputs differ slightly on every
-    # invocation, exactly as before this option existed.
+    # load_and_sample_data, the memory-check file sample and the --max_files
+    # subset) goes through the global `random` / `np.random` state. Seeding
+    # both makes the CAL table, the candidate lists and the alignment
+    # reproducible run-to-run; left unseeded (the default) the outputs differ
+    # slightly on every invocation.
     if args.seed is not None:
         random.seed(args.seed)
         np.random.seed(args.seed)
-    logging.info(f"Random seed: {args.seed if args.seed is not None else 'none (unseeded -- not reproducible)'}")
+    logging.info(f"Random seed: {args.seed if args.seed is not None else 'none (unseeded, not reproducible)'}")
 
     # 1. Setup & Config with modern API
     yaml = YAML(typ='rt')  # 'rt' = Round Trip
@@ -386,17 +499,14 @@ def main():
     username = getpass.getuser()
     eos_base_dir = io_utils.eos_base_dir(username)
 
-    # Note: pathlib discards eos_base_dir when args.path is absolute, so an
-    # absolute -p reads any location (e.g. a colleague's EOS area) unchanged.
     # sorted(): glob order is filesystem-dependent, and a deterministic order
     # is what makes the --max_files subset reproducible under --seed.
     input_dir = eos_base_dir / args.path
     files = sorted(input_dir.glob('loop*feather'))
     n_found = len(files)
     # Previously a silent, hard-coded `if len(files) > 100: files = random.sample(files, 100)`:
-    # runs with >100 files had a random ~40% of their files dropped with no log
-    # line and no way to reproduce which ones. Same default cap, but now
-    # configurable, seedable and always reported.
+    # runs with more than 100 files had a random subset of their files dropped with no
+    # log line. Same default, but configurable, seedable and always reported.
     if args.max_files > 0 and n_found > args.max_files:
         files = random.sample(files, args.max_files)
         logging.warning(f"{n_found} input files found in {input_dir} but --max_files={args.max_files}: "
@@ -491,10 +601,13 @@ def main():
     trig_id = roles.get('trig')
     id_to_role = {v: k for k, v in roles.items()}
     n_written = 0
-    alignment_results = {} # combo_label -> {board_id: translation dict}, written once after the loop
-    # --find_alignment: board_id -> label of the combo whose estimate was applied
-    # to the in-memory run_config for that board. A board is aligned EXACTLY
-    # ONCE, from the first trigger-containing combo that contains it (see below).
+    alignment_results = {} # combo_label -> {board_id: translation dict} (legacy, trig-anchored), written once after the loop
+    relative_edges = []    # (bid, ref_id, dx, dy) per non-median board per combo (global_relative, median-anchored), combined into one fit after the loop
+
+    # --- --apply_alignment state (all of it inert without the flag) ---
+    # board_id -> label of the combo whose estimate was applied to the in-memory
+    # run_config for that board. A board is aligned EXACTLY ONCE, from the first
+    # trigger-containing combo that contains it.
     #
     # SCOPE: everything here is PER RUN. This script processes one --runName per
     # invocation, the estimate is derived from that run's own candidates, it is
@@ -508,41 +621,57 @@ def main():
     # change. Record the geometry validity range next to any merged-in value.
     alignment_source = {}
 
-    if args.find_alignment and trig_id is None:
+    # Snapshot of the --config geometry, taken before any feed-forward can touch
+    # it. The two diagnostic blocks below are always measured against THIS, so
+    # legacy_per_combo and global_relative report the same absolute translations
+    # whether or not --apply_alignment is on; without the flag it is simply the
+    # unmutated run_config and no copy is ever made.
+    baseline_config = {
+        bid: {'transformation': {
+            'rotation': dict(((conf or {}).get('transformation', {}) or {}).get('rotation', {}) or {}),
+            'translation': dict(((conf or {}).get('transformation', {}) or {}).get('translation', {}) or {}),
+        }}
+        for bid, conf in run_config.items()
+    } if args.apply_alignment else run_config
+
+    if args.apply_alignment and trig_id is None:
         # This tests the RUN CONFIG, not any individual combo: `trig_id` is
         # roles.get('trig') for the whole run. Combos that happen not to contain
         # the trigger board are normal and stay fully supported (they use the
-        # anchor fallback in check_spatial_alignment). What is caught here is a
-        # run in which NO board carries the 'trig' role at all.
-        # The estimate below is gated on `trig_id in combo`, which is False for
-        # every combo when no board has role 'trig' -- --find_alignment would
-        # silently become a no-op: no estimate, no alignment yaml, no warning,
-        # and every board left on its --config translation.
-        logging.error(f"--find_alignment requires a board with role 'trig'; run {args.runName} "
-                      f"defines roles {sorted(roles)}. Nothing would be estimated -- exiting.")
+        # median-board anchor in check_spatial_alignment). What is caught here is
+        # a run in which NO board carries the 'trig' role at all: the estimate is
+        # gated on `trig_id in combo`, which is then False for every combo, so
+        # --apply_alignment would silently become a no-op -- nothing applied, no
+        # warning, every board left on its --config translation. (Plain
+        # --find_alignment stays a no-op-plus-global_relative in that case, which
+        # is origin's long-standing behaviour and is left alone.)
+        logging.error(f"--apply_alignment requires a board with role 'trig'; run {args.runName} "
+                      f"defines roles {sorted(roles)}. Nothing would be applied -- exiting.")
         sys.exit(1)
 
-    # PROCESSING order -- deliberately not board_combos' own order. The alignment
-    # estimate exists only for combos that contain the trigger board, and it is
-    # what centres the radius cut, so a trigger-less combo processed first is cut
-    # on raw, uncorrected geometry. That is today's behaviour whenever the trigger
-    # is the highest-numbered board: with trig = 3 the lexicographically first
-    # combo is (0,1,2) and it runs before any estimate exists (CERN IRRAD Jul 2026
-    # h1_run14: boards 0 and 2 sit 6.34 mm = 4.9 px apart in x uncorrected, so
-    # their true coincidence falls OUTSIDE the 4-pixel window).
+    # PROCESSING order. Unchanged (board_combos' own order) unless
+    # --apply_alignment is on. With the flag, trigger-containing combos are
+    # processed first: the estimate exists only for combos that contain the
+    # trigger board and it is what centres the coincidence window, so a
+    # trigger-less combo processed first would be cut on raw, uncorrected
+    # geometry. That happens whenever the trigger is the highest-numbered board:
+    # with trig = 3 the lexicographically first combo is (0,1,2) and it runs
+    # before any estimate exists (CERN IRRAD Jul 2026 h1_run14: boards 0 and 2
+    # sit 6.34 mm = 4.9 px apart in x uncorrected, so their true coincidence
+    # falls OUTSIDE the 4-pixel window).
     # Running every trigger-containing combo first also makes each combo's own
     # boards aligned by the time it is cut -- a board is either aligned by an
-    # earlier combo or by this one -- and by the time the first trigger-less combo
-    # is reached every non-trigger board has a translation (a non-trigger board is
-    # absent from exactly one of the N-1 leave-one-out combos, so it appears in
-    # the others). No combo is ever processed before its geometry is final, so
-    # nothing has to be re-cut afterwards.
+    # earlier combo or by this one -- and by the time the first trigger-less
+    # combo is reached every non-trigger board has a translation (a non-trigger
+    # board is absent from exactly one of the N-1 leave-one-out combos, so it
+    # appears in the others). No combo is ever processed before its geometry is
+    # final, so nothing has to be re-cut afterwards.
     # sorted() is stable, so which combo aligns which board is still the
     # lexicographically first one containing it. board_combos itself is left
     # untouched: it is the --combos index order that
     # submit_extract_events_by_path.py (compute_expected_combos) re-derives, and
     # output files are named by combo label, so no index or filename changes.
-    combo_order = sorted(board_combos, key=lambda c: trig_id not in c)
+    combo_order = sorted(board_combos, key=lambda c: trig_id not in c) if args.apply_alignment else board_combos
 
     # Each combo gets its own file, so with 5+ combos per run they'd otherwise
     # pile up flat in one directory across every run. Nest them under a
@@ -587,10 +716,60 @@ def main():
         # 6. Geometric Transformation & Final Filtering
         apply_geometric_transformation_matrix(track_candidates, combo, run_config)
 
-        # --- Alignment estimate (--find_alignment) ---
-        # Estimates each non-trigger board's translation relative to the
-        # trigger board from this combo's candidates, so that the radius cut in
-        # check_spatial_alignment is centred on where tracks actually land.
+        # Alignment offsets are a property of the boards themselves, but the
+        # estimate itself still depends on which combo's tracks it's computed
+        # from -- so compute (and record) it for every eligible combo, keyed
+        # by combo, instead of overwriting one shared result. Both methods
+        # below are purely diagnostic: neither ever mutates run_config /
+        # full_config or affects this combo's saved track output, so track
+        # output is identical regardless of --find_alignment. (--apply_alignment
+        # is the separate, opt-in block further down that DOES change the
+        # geometry; the two diagnostic blocks here are unaffected by it because
+        # they read `diag_candidates`/`baseline_config`, i.e. the --config
+        # geometry, in both modes.)
+        if args.find_alignment:
+            if args.apply_alignment and alignment_source:
+                # A previous combo already fed its estimate into run_config, so
+                # track_candidates is in corrected geometry and would measure a
+                # residual. Re-transform a copy on the --config geometry so the
+                # diagnostic blocks keep reporting the same absolute numbers
+                # they report without the flag. (No copy on the first combo, or
+                # ever when the flag is off: nothing has been applied yet.)
+                diag_candidates = track_candidates.copy(deep=True)
+                apply_geometric_transformation_matrix(diag_candidates, combo, baseline_config)
+            else:
+                diag_candidates = track_candidates
+
+            # Legacy method: every board's offset relative to the trig board
+            # -- only computable for combos that include it.
+            if trig_id in combo:
+                combo_alignment = {}
+                for bid in combo:
+                    if bid == trig_id:
+                        continue
+                    center_x, center_y = compute_peak_offset(diag_candidates, bid, trig_id)
+                    existing = baseline_config.get(bid, {}).get('transformation', {}).get('translation', {'x': 0.0, 'y': 0.0, 'z': 0.0})
+                    combo_alignment[bid] = corrected_translation(existing, center_x, center_y)
+                alignment_results[combo_label] = combo_alignment
+
+            # global_relative method: every board's offset relative to *this
+            # combo's own* median board id -- doesn't need trig, so it runs
+            # for every combo. Collected here and solved once, globally,
+            # after the loop instead of being anchored to any single board or
+            # combo.
+            sorted_combo = sorted(combo)
+            median_id = sorted_combo[len(sorted_combo) // 2]
+            for bid in combo:
+                if bid == median_id:
+                    continue
+                dx, dy = compute_peak_offset(diag_candidates, bid, median_id)
+                relative_edges.append((bid, median_id, dx, dy))
+
+        # --- Alignment feed-forward (--apply_alignment, opt-in) ---
+        # Estimates each non-trigger board's translation relative to the trigger
+        # board from this combo's candidates and APPLIES it, so that the
+        # coincidence window in check_spatial_alignment is centred on where
+        # tracks actually land.
         # What the number IS: the count-weighted mean *projected* offset of
         # tracks between the two boards. It absorbs mechanical misalignment AND
         # the mean track angle times the lever arm between the planes (non-zero
@@ -598,96 +777,60 @@ def main():
         # the quantity that centres the window; it is not a purely mechanical
         # survey number.
         #
-        # Estimator (changed): the shifts x_bid - x_trig are exact multiples of
-        # PIXEL_PITCH (both boards use the same pixel-centre model), so we take
-        # the count-weighted MODE of the integer pixel shift and refine it with
-        # the count-weighted centroid over mode +/- 1 pixel (a sub-pixel
-        # estimate from the neighbour asymmetry). The previous implementation
-        # histogrammed the continuous shift with bins=30 over its full range;
-        # on a full-grid candidate set that bin width is ~one pitch, so the
-        # modal-bin midpoint was quantized to +/-0.65 mm (half a pixel) with a
-        # sign decided by where the range extremes fell -- observed as every
-        # estimate being exactly +/-0.65 mm, the same board flipping sign
-        # between combos.
-        #
-        # Feed-forward (per board): each board's estimate is applied to the
+        # Feed-forward is PER BOARD: each board's estimate is applied to the
         # in-memory run_config EXACTLY ONCE, from the first trigger-containing
         # combo that contains that board, and a board is never re-estimated on
-        # top of its own already-applied translation.
-        #   - The condition before f7d135a, `len(combo) == max_boards`, became
-        #     true for EVERY generated combo once the full board-set combo
-        #     stopped being generated (max_boards == N-1), so each combo
-        #     re-estimated on top of the previous combo's shift and overwrote it
-        #     (order-dependent, oscillating values). The per-board record keeps
-        #     that fixed: an already-aligned board is skipped below, never
-        #     re-applied.
-        #   - f7d135a's replacement, one global "applied" flag fired on the first
+        # top of its own already-applied translation. Two earlier designs failed
+        # here and both are ruled out by construction now:
+        #   - Applying on every combo (`len(combo) == max_boards`, true for
+        #     EVERY generated combo once the full board-set combo stopped being
+        #     generated) made each combo re-estimate on top of the previous
+        #     combo's shift and overwrite it: order-dependent, oscillating.
+        #   - A single run-level "applied" latch, firing on the first
         #     trigger-containing combo, went too far the other way: that combo
         #     holds only N-2 of the N-1 non-trigger boards, so on a 4-board
         #     telescope exactly one board kept its config translation for the
         #     whole run. With an all-zero config (DESY Aug 2026) that board's
-        #     radius window stayed centred on zero while the board itself sat
-        #     ~10 px away, so every combo containing it kept only combinatorial
-        #     background (run23 trig1-ref2-extra3: 1864 counts over 1840
-        #     surviving patterns, 1.01 events each, against 4.24 for the
-        #     aligned combo).
-        # Every combo's estimate is still recorded, keyed by combo, so they can be
-        # cross-checked in the alignment yaml; for a board an earlier combo
-        # already aligned the estimate is a RESIDUAL check, and a disagreement is
-        # now logged instead of passing silently. Nothing is written back to
-        # --config.
-        if args.find_alignment and trig_id in combo:
+        #     window stayed centred on zero while the board itself sat ~10 px
+        #     away, so every combo containing it kept only combinatorial
+        #     background (run 23 trig1-ref2-extra3: 1864 counts over 1840
+        #     surviving patterns, 1.01 events each, against 4.24 for the aligned
+        #     combo).
+        # For a board an earlier combo already aligned, this combo's estimate is
+        # a RESIDUAL cross-check and a disagreement is logged, not acted on.
+        # Nothing is ever written back to --config.
+        if args.apply_alignment and trig_id in combo:
             counts_w = track_candidates['count'].to_numpy(dtype=float)
-            combo_alignment = {}
+            applied_here = {}
             combo_core = {}  # board_id -> min over axes of the modal-core weight share
             for bid in combo:
                 if bid == trig_id:
                     continue
                 existing = run_config.get(bid, {}).get('transformation', {}).get('translation', {}) or {}
-                combo_alignment[bid] = {}
-                core_frac = 1.0
-                for axis in ('x', 'y'):
-                    shift = (track_candidates[f'{axis}_{bid}'] - track_candidates[f'{axis}_{trig_id}']).to_numpy(dtype=float)
-                    k = np.rint(shift / PIXEL_PITCH).astype(int)               # integer pixel shift per candidate
-                    ks, inv = np.unique(k, return_inverse=True)
-                    mode_k = ks[np.argmax(np.bincount(inv, weights=counts_w))]  # count-weighted mode
-                    core = np.abs(k - mode_k) <= 1                               # mode +/- 1 pixel
-                    # Weight share of the modal core: ~1 for a clean beam-spot
-                    # peak, small when the mode is merely the crest of the flat
-                    # combinatorial background (the estimator's low-purity
-                    # failure mode, which returns ~0 = "no misalignment").
-                    core_frac = min(core_frac, float(counts_w[core].sum() / counts_w.sum()))
-                    center = float(np.average(shift[core], weights=counts_w[core]))
-                    # New translation = existing translation minus the measured
-                    # residual, so re-running on already-aligned data yields a
-                    # residual of ~0 and leaves the translation unchanged.
-                    combo_alignment[bid][axis] = round(float(existing.get(axis, 0.0)) - center, 3)
-                combo_alignment[bid]['z'] = round(float(existing.get('z', 0.0)), 3)
+                center_x, center_y, core_frac = compute_modal_offset(track_candidates, bid, trig_id, counts_w)
+                applied_here[bid] = applied_translation(existing, center_x, center_y)
                 combo_core[bid] = core_frac
 
-            alignment_results[combo_label] = combo_alignment
-
-            for bid in sorted(set(combo_alignment) & set(alignment_source)):
+            for bid in sorted(set(applied_here) & set(alignment_source)):
                 # Already aligned by an earlier combo, so this combo's candidates
                 # were transformed with that translation and what was just
-                # measured is a RESIDUAL: combo_alignment[bid] should reproduce
-                # the applied value. A real disagreement means the two combos do
-                # not see the same board position -- typically one of the two
-                # modes latched onto combinatorial background instead of the beam
-                # spot. Reported, not acted on: the first estimate stands.
-                applied = full_config[args.runName][bid].get('transformation', {}).get('translation', {}) or {}
-                residual = max(abs(float(combo_alignment[bid][a]) - float(applied.get(a, 0.0))) for a in ('x', 'y'))
+                # measured is a RESIDUAL: applied_here[bid] should reproduce the
+                # applied value. A real disagreement means the two combos do not
+                # see the same board position -- typically one of the two modes
+                # latched onto combinatorial background instead of the beam spot.
+                # Reported, not acted on: the first estimate stands.
+                already = run_config[bid].get('transformation', {}).get('translation', {}) or {}
+                residual = max(abs(float(applied_here[bid][a]) - float(already.get(a, 0.0))) for a in ('x', 'y'))
                 emit = logging.warning if residual > PIXEL_PITCH else logging.info
                 emit(f"Combo ({combo_label}): board {bid} already aligned from ({alignment_source[bid]}) "
-                     f"as {dict(applied)}; this combo re-measures {combo_alignment[bid]} "
+                     f"as {dict(already)}; this combo re-measures {applied_here[bid]} "
                      f"(max residual {residual:.3f} mm). Not re-applied.")
 
-            newly_aligned = {bid: t for bid, t in combo_alignment.items() if bid not in alignment_source}
+            newly_aligned = {bid: t for bid, t in applied_here.items() if bid not in alignment_source}
             if newly_aligned:
                 for bid, new_translation in newly_aligned.items():
-                    full_config[args.runName][bid].setdefault('transformation', {})['translation'] = new_translation
+                    run_config[bid].setdefault('transformation', {})['translation'] = new_translation
                     alignment_source[bid] = combo_label
-                run_config = full_config[args.runName]
                 logging.info(f"Alignment from combo ({combo_label}) applied in-memory to run_config "
                              f"(not saved to {args.config}): {newly_aligned}")
                 for bid in sorted(newly_aligned):
@@ -699,13 +842,13 @@ def main():
                                         f"combinatorial-background mode, not the beam spot. Review the per-combo "
                                         f"cross-checks in the alignment yaml before trusting combos that contain "
                                         f"this board.")
-                # Re-transform this combo's own candidates so its radius cut below
-                # already uses the corrected geometry. Boards aligned by an earlier
-                # combo are recomputed from row/col with the translation they
-                # already had, so this is idempotent for them.
+                # Re-transform this combo's own candidates so its cut below
+                # already uses the corrected geometry. Boards aligned by an
+                # earlier combo are recomputed from row/col with the translation
+                # they already had, so this is idempotent for them.
                 apply_geometric_transformation_matrix(track_candidates, combo, run_config)
 
-        spatial_mask = check_spatial_alignment(track_candidates, roles, args.max_diff_pixel)
+        spatial_mask = check_spatial_alignment(track_candidates, combo, roles, args.max_diff_pixel)
         final_tracks = track_candidates[spatial_mask]
 
         # Remove duplicates if any remain based on pattern
@@ -719,46 +862,68 @@ def main():
         logging.info(f"Combo ({combo_label}): {len(final_tracks)} tracks saved to {output_file}")
         n_written += 1
 
-    if args.find_alignment and trig_id is not None:
+    if args.apply_alignment:
         unaligned = [b for b in ids_to_process
                      if b != trig_id and b in boards_with_hits and b not in alignment_source]
         if unaligned:
-            logging.warning(f"--find_alignment: board(s) {unaligned} never received a derived translation "
+            logging.warning(f"--apply_alignment: board(s) {unaligned} never received a derived translation "
                             f"(no trigger-containing combo produced candidates for them). They kept their "
                             f"--config translation, so every combo containing them was cut on that geometry.")
 
-    if alignment_results:
-        # Own directory, separate from the tracks/cal_table output, since the
-        # alignment yaml is a different kind of artifact (a diagnostic to
-        # review/merge by hand, not pipeline input). It sits NEXT TO the
-        # --track-label tree (<TRACK_LABEL parent>/alignment/) rather than in
-        # the bare current working directory, so it lands with the run's other
-        # outputs regardless of where the script is invoked from. For a plain
-        # --track-label with no directory part this is still ./alignment/.
-        alignment_dir = Path(args.track_label).parent / 'alignment'
+    if alignment_results or relative_edges:
+        # Own directory, separate from wherever --track-label's tracks/cal_table
+        # output goes, since alignment output is a different kind of artifact
+        # (a diagnostic to review/merge by hand, not pipeline input).
+        alignment_dir = Path('alignment')
         alignment_dir.mkdir(parents=True, exist_ok=True)
         alignment_file = alignment_dir / f'{Path(args.track_label).name}_alignment.yaml'
-        align_block = {
-            combo_label: {bid: {'transformation': {'translation': t}} for bid, t in combo_vals.items()}
-            for combo_label, combo_vals in alignment_results.items()
-        }
-        # What the tracks in this run were ACTUALLY cut with, and which combo
-        # supplied it. The per-combo blocks alone are ambiguous: a board that
-        # appears in several of them is recorded pre-correction in the combo that
-        # aligned it and as a residual re-measurement in the later ones, with
-        # nothing in the numbers to say which. dict() copies the value so ruamel
-        # emits it plainly instead of an alias to the run_config entry.
+
+        output = {}
+        if alignment_results:
+            output['legacy_per_combo'] = {
+                combo_label: {bid: {'transformation': {'translation': t}} for bid, t in combo_vals.items()}
+                for combo_label, combo_vals in alignment_results.items()
+            }
+        if relative_edges:
+            # Any board works as the gauge pin -- trig is used here only so
+            # the reported numbers line up with legacy_per_combo's convention
+            # (both report "what to add to the pinned/trig board's existing
+            # translation" for every other board), making the two sections
+            # directly comparable board-by-board.
+            pin_id = trig_id if trig_id is not None else min(ids_to_process)
+            fitted = solve_global_relative_alignment(relative_edges, pin_id)
+            global_alignment = {}
+            for bid, (fx, fy) in fitted.items():
+                if bid == pin_id:
+                    continue
+                existing = baseline_config.get(bid, {}).get('transformation', {}).get('translation', {'x': 0.0, 'y': 0.0, 'z': 0.0})
+                global_alignment[bid] = corrected_translation(existing, fx, fy)
+            output['global_relative'] = {
+                'pinned_board': pin_id,
+                'boards': {bid: {'transformation': {'translation': t}} for bid, t in global_alignment.items()},
+            }
+
+        # --apply_alignment only: what the tracks in this run were ACTUALLY cut
+        # with, and which combo supplied it. The two diagnostic blocks alone
+        # cannot say: they report every combo's own measurement against the
+        # --config geometry, with nothing in the numbers to mark which one was
+        # applied. dict() copies the values so ruamel emits them plainly instead
+        # of as aliases to the run_config entries.
         if alignment_source:
-            align_block['applied'] = {
+            output['applied'] = {
                 bid: {'from_combo': alignment_source[bid],
                       'transformation': {'translation': dict(
-                          full_config[args.runName][bid]['transformation']['translation'])}}
+                          run_config[bid]['transformation']['translation'])}}
                 for bid in sorted(alignment_source)
             }
+
         with open(alignment_file, 'w') as f:
-            yaml.dump({args.runName: align_block}, f)
-        logging.info(f"Alignment offsets for {len(alignment_results)} combo(s) written to {alignment_file} "
+            yaml.dump({args.runName: output}, f)
+        logging.info(f"Alignment comparison (legacy_per_combo vs. global_relative) written to {alignment_file} "
                      f"(not saved back to {args.config} -- merge in manually if desired).")
+        if alignment_source:
+            logging.info(f"--apply_alignment: 'applied' block in {alignment_file} records the translation each "
+                         f"board's tracks were actually cut with, and the combo it came from.")
 
     if n_written == 0:
         logging.warning("No track candidates found for any board combo.")
