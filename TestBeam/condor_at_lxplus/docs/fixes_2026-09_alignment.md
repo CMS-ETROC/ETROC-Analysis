@@ -128,3 +128,21 @@ value every other combo measures). The warning that DID fire, and the one to tru
 cross-combo disagreement message - `board N already aligned from (combo) as ...; this combo re-measures
 ... (max residual X mm)`. Treat a large residual there as the signal that a board's applied translation is
 not to be believed, and supply that run's geometry instead.
+
+## Validation of the reconciled code (2026-09-10)
+
+Branch merge-check-2026-09-10 at f5c0d86 (main plus this PR), step 6 re-run interactively with the same
+flags as the shipped runs (`--max_diff_pixel 4 -s 10 --seed 42`):
+
+- DESY Aug run 23, `--find_alignment --apply_alignment`, original DESY_TB_2026Aug.yaml: the `applied:` block
+  is byte-identical to the shipped analysis_v2 yaml (boards 0 and 2 from dut0-trig1-ref2, board 3 from
+  dut0-trig1-extra3 at x -0.680 y -13.167 mm), and all four track-candidate files match the shipped ones by
+  md5 (dut0-trig1-ref2 14805 rows, dut0-trig1-extra3 3750, trig1-ref2-extra3 7603, dut0-ref2-extra3 3336).
+  The trig-less combo matches too, so dropping the branch's radius cut in favour of main's combo-anchored
+  spatial check changed nothing on this data.
+- DESY Aug run 23, `--find_alignment` only: yaml and all four track files byte-identical to origin/main
+  (c463a76) run with the same command.
+- CERN IRRAD March H1 run 12, `--find_alignment --max_files 20`: yaml and all four track files
+  byte-identical to origin/main.
+
+Scratch outputs: /eos/user/m/musafdar/scratch_mergecheck_20260910/{A,B,C,D}_*.
