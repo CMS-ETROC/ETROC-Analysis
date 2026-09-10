@@ -1,0 +1,116 @@
+# DESY_TB_2026Aug_corrected.yaml - the August 2026 board config WITH the measured telescope geometry.
+#
+# Rides ALONGSIDE DESY_TB_2026Aug.yaml, which is left exactly as it is. Pass this one with -c when you
+# want the geometry supplied instead of derived, and keep path_finder's --find_alignment as a residual
+# check that should then read about zero.
+#
+# Two differences from DESY_TB_2026Aug.yaml, and nothing else:
+#
+# 1. TRANSLATIONS for the 60-degree runs (5-23), previously all zero. Board 1 is the trigger and stays at
+#    the origin; the others are measured RELATIVE to it, in mm:
+#        board 0  B1-P1-9   x +0.300   y  +5.451
+#        board 2  PT-IH5    x -0.174   y  -6.117
+#        board 3  B1-P1-6   x -0.617   y -13.303
+#    Source: the median of 38 independent per-combo estimates (two per board per run) over all 19 runs of
+#    the v2 reprocessing, /eos/user/m/musafdar/DESY_Aug2026/analysis_v2/tracks/alignment/. The spread over
+#    the whole campaign is 0.03-0.28 mm, i.e. ONE geometry for the campaign. Board 3 is 13.3 mm = 10.2
+#    pixels at the 1.3 mm pitch, which is what made every board-3 combo collapse inside a 4-pixel matching
+#    window while its translation was left at zero. See notes/desy-may-60deg-geometry.md and
+#    docs/fixes_2026-09_alignment.md.
+#
+# 2. defaults angle 30 -> 60. August ran at 60 degrees throughout (Jongho, 2026-09-01). Runs 5-23 already
+#    override it per run, so this only changes runs 2-4, which inherit the default.
+#    CAUTION: runs 2-4 still carry rotation y: +30 below. They are the wrong-orientation, undecoded runs
+#    and are not usable, so their rotation block is left untouched rather than guessed at. Do not process
+#    them from this file without settling their orientation first.
+#
+defaults:
+  B1-P1-6: &B1-P1-6  {name: B1-P1-6,              short: B1-P1-6,  angle: 60, offset: 20,  HV: 230,  role: extra}
+  PT-IH5: &PT-IH5    {name: ET2.02 PacTech IH-5,  short: PT-IH5,   angle: 60, offset: 20,  HV: 230,  role: ref}
+  PT-IH3: &PT-IH3    {name: ET2.02 PacTech IH-3,  short: PT-IH3,   angle: 60, offset: 20,  HV: 230,  role: trig}
+  B1-P1-9: &B1-P1-9  {name: B1-P1-9,              short: B1-P1-9,  angle: 60, offset: 20,  HV: 220,  role: dut}
+
+  # PT-IH27_60deg: &PT-IH27_60deg {<<: *PT-IH27, angle: 60, role: extra}
+  # PT-IH5_60deg:  &PT-IH5_60deg  {<<: *PT-IH5,  angle: 60, role: ref}
+  # PT-IH3_60deg:  &PT-IH3_60deg  {<<: *PT-IH3,  angle: 60, role: trig,   HV: 210}
+  # PT-IH2_60deg:  &PT-IH2_60deg  {<<: *PT-IH2,  angle: 60}
+
+run2: &run2
+  0: {<<: *B1-P1-9, temp: 15C, transformation: {rotation: {x: 0, y: 30, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  1: {<<: *PT-IH3,  temp: 25C, transformation: {rotation: {x: 0, y: 30, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  2: {<<: *PT-IH5,  temp: 25C, transformation: {rotation: {x: 0, y: 30, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  3: {<<: *B1-P1-6, temp: 25C, transformation: {rotation: {x: 0, y: 30, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+
+run3: &run3
+  0: {<<: *B1-P1-9, HV: 190, temp: -20C, transformation: {rotation: {x: 0, y: 30, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  1: {<<: *PT-IH3,  HV: 220, temp: 0C, transformation: {rotation: {x: 0, y: 30, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  2: {<<: *PT-IH5,  HV: 220, temp: 0C, transformation: {rotation: {x: 0, y: 30, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  3: {<<: *B1-P1-6, HV: 220, temp: 0C, transformation: {rotation: {x: 0, y: 30, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+run4: *run3
+
+## 4 GeV runs
+run5: &run5
+  0: {<<: *B1-P1-9, HV: 190, angle: 60, temp: -20C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0.3, y: 5.451, z: 0}}}
+  1: {<<: *PT-IH3,  HV: 220, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  2: {<<: *PT-IH5,  HV: 220, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: -0.174, y: -6.117, z: 0}}}
+  3: {<<: *B1-P1-6, HV: 220, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: -0.617, y: -13.303, z: 0}}}
+run6: *run5
+
+## 3 GeV runs, no BL scan
+run7: *run5
+run8: *run5
+run9: *run5
+
+## 3 GeV runs, BL scan
+run10: *run5
+run11: *run5
+
+run12: &run12
+  0: {<<: *B1-P1-9, HV: 150, angle: 60, temp: -20C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0.3, y: 5.451, z: 0}}}
+  1: {<<: *PT-IH3,  HV: 180, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  2: {<<: *PT-IH5,  HV: 180, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: -0.174, y: -6.117, z: 0}}}
+  3: {<<: *B1-P1-6, HV: 180, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: -0.617, y: -13.303, z: 0}}}
+run13: *run12
+
+run14: &run14
+  0: {<<: *B1-P1-9, HV: 130, angle: 60, temp: -20C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0.3, y: 5.451, z: 0}}}
+  1: {<<: *PT-IH3,  HV: 160, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  2: {<<: *PT-IH5,  HV: 160, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: -0.174, y: -6.117, z: 0}}}
+  3: {<<: *B1-P1-6, HV: 160, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: -0.617, y: -13.303, z: 0}}}
+run15: *run14
+run16: *run14
+
+run17: &run17
+  0: {<<: *B1-P1-9, HV: 110, angle: 60, temp: -20C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0.3, y: 5.451, z: 0}}}
+  1: {<<: *PT-IH3,  HV: 140, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  2: {<<: *PT-IH5,  HV: 140, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: -0.174, y: -6.117, z: 0}}}
+  3: {<<: *B1-P1-6, HV: 140, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: -0.617, y: -13.303, z: 0}}}
+run18: *run17
+
+run19:
+  0: {<<: *B1-P1-9, HV: 90,  angle: 60, temp: -20C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0.3, y: 5.451, z: 0}}}
+  1: {<<: *PT-IH3,  HV: 120, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  2: {<<: *PT-IH5,  HV: 120, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: -0.174, y: -6.117, z: 0}}}
+  3: {<<: *B1-P1-6, HV: 120, angle: 60, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: -0.617, y: -13.303, z: 0}}}
+
+run20:
+  0: {<<: *B1-P1-9, HV: 90,  RFSel: 3, angle: 60, offset: 6, temp: -20C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0.3, y: 5.451, z: 0}}}
+  1: {<<: *PT-IH3,  HV: 120, RFSel: 3, angle: 60, offset: 8, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  2: {<<: *PT-IH5,  HV: 120, RFSel: 3, angle: 60, offset: 6, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: -0.174, y: -6.117, z: 0}}}
+  3: {<<: *B1-P1-6, HV: 120, RFSel: 3, angle: 60, offset: 6, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: -0.617, y: -13.303, z: 0}}}
+
+# 3 GeV beam
+run21: &run21
+  0: {<<: *B1-P1-9, HV: 90,  RFSel: 3, angle: 60, offset: 8,  temp: -20C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0.3, y: 5.451, z: 0}}}
+  1: {<<: *PT-IH3,  HV: 120, RFSel: 3, angle: 60, offset: 10, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  2: {<<: *PT-IH5,  HV: 120, RFSel: 3, angle: 60, offset: 8,  temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: -0.174, y: -6.117, z: 0}}}
+  3: {<<: *B1-P1-6, HV: 120, RFSel: 3, angle: 60, offset: 8,  temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: -0.617, y: -13.303, z: 0}}}
+
+# 4 GeV beam
+run22: *run21
+
+run23:
+  0: {<<: *B1-P1-9, HV: 110, RFSel: 3, angle: 60, offset: 8,  temp: -20C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0.3, y: 5.451, z: 0}}}
+  1: {<<: *PT-IH3,  HV: 140, RFSel: 3, angle: 60, offset: 10, temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: 0, y: 0, z: 0}}}
+  2: {<<: *PT-IH5,  HV: 140, RFSel: 3, angle: 60, offset: 8,  temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: -0.174, y: -6.117, z: 0}}}
+  3: {<<: *B1-P1-6, HV: 140, RFSel: 3, angle: 60, offset: 8,  temp: 0C, transformation: {rotation: {x: 0, y: -60, z: 0}, translation: {x: -0.617, y: -13.303, z: 0}}}

@@ -88,3 +88,21 @@ Measure the telescope geometry once per holder configuration, write the translat
 config yaml (as the May 2026 yaml already does, scaling with tan(angle)), and keep `--find_alignment` as
 a residual check that should read ~0. The derived correction is then a safety net, not the source of
 the geometry.
+
+For August 2026 that is now done, in a SEPARATE file rather than by editing the campaign config:
+`board_configs_yaml/DESY_TB_2026Aug_corrected.yaml` rides alongside `DESY_TB_2026Aug.yaml`, which is left
+untouched so nobody's existing command changes behaviour. Pass the corrected file with `-c` to supply the
+geometry; the original stays the default. It differs in exactly two ways: the runs 5-23 translations
+(board 0 x +0.300 y +5.451, board 2 x -0.174 y -6.117, board 3 x -0.617 y -13.303 mm, board 1 being the
+trigger at the origin), and the defaults `angle` 30 -> 60, which August ran at throughout. The values are
+the median of 38 independent per-combo estimates over all 19 runs of the post-fix reprocessing, spread
+0.03-0.28 mm across the campaign, i.e. one geometry. Runs 2-4 keep their zero translations and their
+`rotation y: +30`: they are the wrong-orientation, undecoded runs, and guessing their orientation was
+deliberately avoided.
+
+A caveat on the guard this fix added: `--alignment_core_warn` at its 0.10 default did NOT fire on a
+genuine background latch (DESY May 2026 run 5, board 0, whose anchor-combo estimate is ~13 mm from the
+value every other combo measures). The warning that DID fire, and the one to trust, is the existing
+cross-combo disagreement message - `board N already aligned from (combo) as ...; this combo re-measures
+... (max residual X mm)`. Treat a large residual there as the signal that a board's applied translation is
+not to be believed, and supply that run's geometry instead.
