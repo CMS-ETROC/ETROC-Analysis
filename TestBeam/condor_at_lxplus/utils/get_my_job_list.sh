@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-echo "Please be patient, this script may take a while to go through the full history"
+# Usage: ./get_my_job_list.sh [max records, default 200]
+# -limit stops the schedd scan once that many records are found; never run condor_history unbounded.
 
-condor_history $USER | ./extract_jobs_from_list.py
+condor_history $USER -limit "${1:-200}" | ./extract_jobs_from_list.py
 
