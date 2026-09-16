@@ -1,6 +1,17 @@
+import os
+import sys
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+
+# The joint time-walk solve lives with the pipeline it feeds
+# (condor_at_lxplus/core/twc_solver.py) and is shared, not copied: this helper,
+# core/bootstrap.py and the two utils/ diagnostics all call the same function,
+# so a change to the correction cannot be applied to three of the four again.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                os.pardir, 'condor_at_lxplus', 'core'))
+import twc_solver  # noqa: E402
 
 from sklearn.mixture import GaussianMixture
 from scipy.stats import norm, kstest
@@ -58,23 +69,18 @@ def poly3D(max_order, x, y, z, *args):
 
 ## --------------------------------------
 def three_board_iterative_timewalk_correction(df: pd.DataFrame, roles: list[str]):
-    """Iteratively corrects Time Walk."""
+    """Corrects time walk by the joint least-squares solve (twc_solver).
+
+    The name is kept for the notebooks that call it, but it is no longer
+    iterative: the two-pass alternating loop it used to run is a fixed-point
+    iteration stopped at rho^1 of its own last step (rho = the inter-board TOT
+    correlation), which cost 7-16 ps of pair width on the correlated H1 3.5e15
+    data; the joint solve is the same problem solved exactly.  Same signature,
+    same return value ({role: corrected TOA array}).
+    """
     tots = {r: df[f'tot_{r}'].values for r in roles}
-    toas = {r: df[f'toa_{r}'].values.copy() for r in roles}
-
-    def get_deltas(current_toas):
-        d = {}
-        for r in roles:
-            others = [current_toas[o] for o in roles if o != r]
-            d[r] = (0.5 * sum(others)) - current_toas[r]
-        return d
-
-    for _ in range(2):
-        delta_toas = get_deltas(toas)
-        for r in roles:
-            coeff = np.polyfit(tots[r], delta_toas[r], 2)
-            toas[r] += np.poly1d(coeff)(tots[r])
-    return toas
+    toas = {r: df[f'toa_{r}'].values for r in roles}
+    return twc_solver.apply_timewalk_correction_arrays(tots, toas, roles)
 
 ## --------------------------------------
 def calculate_gmm_cdf(x: np.ndarray, weights: np.ndarray, means: np.ndarray, covariances: np.ndarray):

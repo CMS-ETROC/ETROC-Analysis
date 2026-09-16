@@ -10,6 +10,7 @@ from itertools import combinations
 from pathlib import Path
 
 import io_utils
+import twc_solver
 
 # --- Configuration & Logging ---
 warnings.filterwarnings("ignore")
@@ -35,6 +36,29 @@ ALL_ROLES = {'trig', 'dut', 'ref', 'extra'}
 # definition, quoted as a systematic rather than chased further.
 GMM_TOL = 1e-6
 GMM_MAX_ITER = 2000
+
+# Variance floor on every mixture component, in ps^2 (sklearn's reg_covar; its
+# own default is 1e-6 ps^2, i.e. a 1 fs component is allowed).  With tol=1e-6
+# and max_iter=2000 the EM now has time to run into the classic Gaussian-mixture
+# likelihood singularity: a component collapses onto a single (quantised) point,
+# sigma -> 0, weight ~0.003.  The toy study measured this on 1.86 % of converged
+# fits at N = 300 and 0.29 % at N = 1000 (0 % above), and it hit 2 of 9 real
+# low-N pairs; the spike then owns the PDF maximum, no half-maximum width can be
+# read off the 1000-point grid, and the resample is silently thrown away - so it
+# costs bootstrap efficiency (and biases the accepted set) rather than being
+# caught.
+# The floor is 4 ps^2 (sigma_floor = 2 ps), chosen from two bounds:
+#  - it must be well BELOW anything physically resolvable, so it can never bias
+#    a real component.  A pairwise TOA difference is quantised by the TDC at
+#    LSB = 3.125 ns / 128 = 24.4 ps, whose uniform sd is 7.05 ps, so the
+#    difference of two TOAs cannot have a true component narrower than
+#    sqrt(2)*7.05 ~ 10 ps.  2 ps is a fifth of that floor.
+#  - it must be large enough that a collapsed component no longer dominates the
+#    peak: at 2 ps a weight-0.003 spike has ~14x LESS peak density than the main
+#    ~45 ps component, so the FWHM is read off the real peak again.
+# Cost: a 45 ps mixture width becomes sqrt(45^2 + 4) = 45.04 ps, +0.1 % - an
+# order of magnitude below the 1 % definition systematic already quoted.
+GMM_REG_COVAR = 4.0
 KS_PMIN_DEFAULT = 1e-3     # see run_sample_analysis()
 KS_DMAX_DEFAULT = 0.03     # see run_sample_analysis()
 
@@ -71,23 +95,21 @@ def apply_neighbor_cut(df: pd.DataFrame, requested_cols: list, logic: str):
 # --- Core Physics Logic ---
 
 def apply_timewalk_correction(df: pd.DataFrame, roles: list[str]):
-    """Iteratively corrects Time Walk."""
+    """Corrects time walk by the JOINT least-squares solve (twc_solver).
+
+    Was a two-pass alternating fit (`for _ in range(2)`), which is a fixed-point
+    iteration stopped far short of its fixed point: the leftover own-TOT slope
+    after k passes is s1 * rho^(k-1) with rho the inter-board TOT correlation,
+    so at the H1 3.5e15 rho ~ 0.35 two passes left 26-30 ps/ns un-corrected and
+    the pair widths 7-16 ps too wide (notes/twc-convergence-verify.md).  The
+    joint solve is that same problem solved exactly in one lstsq - identical
+    pair widths to the converged loop (0.00 ps), no iteration count to tune.
+
+    Signature and return value are unchanged: {role: corrected TOA array}.
+    """
     tots = {r: df[f'tot_{r}'].values for r in roles}
-    toas = {r: df[f'toa_{r}'].values.copy() for r in roles}
-
-    def get_deltas(current_toas):
-        d = {}
-        for r in roles:
-            others = [current_toas[o] for o in roles if o != r]
-            d[r] = (0.5 * sum(others)) - current_toas[r]
-        return d
-
-    for _ in range(2):
-        delta_toas = get_deltas(toas)
-        for r in roles:
-            coeff = np.polyfit(tots[r], delta_toas[r], 2)
-            toas[r] += np.poly1d(coeff)(tots[r])
-    return toas
+    toas = {r: df[f'toa_{r}'].values for r in roles}
+    return twc_solver.apply_timewalk_correction_arrays(tots, toas, roles)
 
 def calculate_gmm_cdf(x: np.ndarray, weights: np.ndarray, means: np.ndarray, covariances: np.ndarray):
     """Standalone vectorized GMM CDF calculation to avoid re-definition in loops."""
@@ -116,7 +138,8 @@ def fit_gmm_and_get_fwhm(data: np.ndarray):
             # random_state intentionally left unseeded even under --reproducible: n_init=3
             # already does multi-restart to find a good fit, and pinning a seed here would
             # just lock in whichever local optimum that seed lands on rather than the best one.
-            gmm = GaussianMixture(n_components=n_comp, n_init=3, tol=GMM_TOL, max_iter=GMM_MAX_ITER).fit(data_reshaped)
+            gmm = GaussianMixture(n_components=n_comp, n_init=3, tol=GMM_TOL, max_iter=GMM_MAX_ITER,
+                                  reg_covar=GMM_REG_COVAR).fit(data_reshaped)
             ks_score, ks_p = kstest(data_sorted, lambda x: calculate_gmm_cdf(x, gmm.weights_, gmm.means_, gmm.covariances_))
 
             x_range = np.linspace(data.min(), data.max(), 1000).reshape(-1, 1)
@@ -217,12 +240,12 @@ def run_sample_analysis(sample_df: pd.DataFrame, roles: list[str], threshold: fl
 # --- Main Workflow ---
 
 def main():
-    global GMM_TOL, GMM_MAX_ITER
+    global GMM_TOL, GMM_MAX_ITER, GMM_REG_COVAR
     parser = argparse.ArgumentParser(description='Unified Analysis with Neighbor Logic')
     parser.add_argument('-f', '--file', required=True, help='Input file')
     parser.add_argument('-n', '--num_bootstrap_output', type=int, default=200)
     parser.add_argument('--iteration_limit', type=int, default=7500)
-    parser.add_argument('--minimum_nevt', type=int, default=100)
+    parser.add_argument('--minimum_nevt', type=int, default=300)
     parser.add_argument('--reproducible', action='store_true',
                         help='Seed resampling (not the GMM fit) so results are reproducible run-to-run.')
     parser.add_argument('--ks_pmin', type=float, default=KS_PMIN_DEFAULT,
@@ -242,6 +265,10 @@ def main():
                         help='EM convergence tolerance of the Gaussian-mixture fit (default 1e-6; sklearn\'s default 1e-3 '
                              'leaves the fit ~12%% too narrow, see the module constants).')
     parser.add_argument('--gmm_max_iter', type=int, default=GMM_MAX_ITER, help='EM iteration cap (default 2000).')
+    parser.add_argument('--gmm_reg_covar', type=float, default=GMM_REG_COVAR,
+                        help='Variance floor [ps^2] on every mixture component (default 4.0, i.e. a 2 ps '
+                             'sigma floor). Stops the EM singularity that collapses a component onto one '
+                             'quantised point at low N; see the module constant for why 4 ps^2.')
     parser.add_argument('--neighbor_cut', dest='neighbor_cut', default=['none'], nargs='+',
                         help='Specify one or more **space-separated** board columns to be used for neighbor cuts. '
                         'The argument collects all values into a list. '
@@ -253,7 +280,9 @@ def main():
     args = parser.parse_args()
     if args.ks_pmin_floor > args.ks_pmin:
         parser.error('--ks_pmin_floor must not exceed --ks_pmin')
-    GMM_TOL, GMM_MAX_ITER = args.gmm_tol, args.gmm_max_iter
+    if args.gmm_reg_covar <= 0:
+        parser.error('--gmm_reg_covar must be positive (it is a variance floor in ps^2)')
+    GMM_TOL, GMM_MAX_ITER, GMM_REG_COVAR = args.gmm_tol, args.gmm_max_iter, args.gmm_reg_covar
 
     # 1. Metadata & Data Loading
     input_path = Path(args.file)
@@ -286,6 +315,13 @@ def main():
     phase_seed_seqs = root_seed_seq.spawn(len(phases)) if root_seed_seq is not None else [None] * len(phases)
 
     ss_accept_threshold = args.ks_pmin   # the bootstrap phase starts where the single-shot was accepted
+    # Per-track (= per pixel triple) trial bookkeeping, written into the output as
+    # its own columns.  Until now only the number of ACCEPTED resamples survived
+    # (step 13 recovers it as n_boot from the row count); the number of ATTEMPTS
+    # did not, so the acceptance rate that run_sample_analysis warns about at
+    # < 0.7 ("the accepted resamples may be a biased subset") could not be
+    # checked, filtered on, or reported for any track after the fact.
+    trials = {}
     for phase_idx, (target, is_boot) in enumerate(phases):
         n_success, attempts = 0, 0
         current_threshold = min(args.ks_pmin, ss_accept_threshold) if is_boot else args.ks_pmin
@@ -334,6 +370,11 @@ def main():
 
         logger.info(f"[Summary] {'Bootstrap' if is_boot else 'Single-Shot'}: {n_success}/{attempts} attempts accepted, "
                     f"final p-value threshold {current_threshold:.1e}")
+        pfx = 'boot' if is_boot else 'ss'
+        trials[f'trials_{pfx}_attempts'] = int(attempts)
+        trials[f'trials_{pfx}_accepted'] = int(n_success)
+        trials[f'trials_{pfx}_target'] = int(target)
+        trials[f'trials_{pfx}_ks_pmin_final'] = float(current_threshold)
         if is_boot and attempts > 0 and n_success / attempts < 0.7:
             logger.warning(f"[Summary] Bootstrap acceptance rate {n_success / attempts:.2f} is low: the accepted resamples "
                            f"may be a biased subset (check the KS gate for this track).")
@@ -359,6 +400,16 @@ def main():
     # 4. Save Output
     if final_results:
         res_df = pd.DataFrame(final_results)
+        # NEW COLUMNS ONLY - nothing above is renamed.  These are constants of the
+        # track, so they are attached to the frame rather than to each result dict
+        # (which keeps the success and the -1-placeholder rows on one schema).
+        # Everything downstream that iterates over the resolution columns must skip
+        # the 'trials_' prefix; fit_bootstrap_results.TRIAL_PREFIX does that.
+        for k, v in trials.items():
+            res_df[k] = v
+        res_df['trials_boot_accept_rate'] = (
+            float(trials.get('trials_boot_accepted', 0)) / trials['trials_boot_attempts']
+            if trials.get('trials_boot_attempts') else float('nan'))
         output_name = f"{input_path.stem}_boot.parquet"
         io_utils.write_parquet(res_df, output_name, compression='lz4')
         logger.info(f"Results saved to {output_name}")

@@ -203,8 +203,8 @@ def wmode(x, w):
 
 def wpeak(x, w):
     """Sub-pixel refinement of the mode: count-weighted centroid over mode +/- 1 px.
-    (path_finder.py --find_alignment reports the peak bin of a 30-bin histogram of the
-    same shifts in mm, a coarser estimator of the same peak.)"""
+    (The same estimator path_finder.py --apply_alignment uses: count-weighted mode of the
+    integer pixel shift, then the centroid over mode +/- 1 px.)"""
     m = wmode(x, w)
     k = np.abs(x - m) <= 1
     if not k.any() or np.sum(w[k]) <= 0:
@@ -860,7 +860,14 @@ def section_alignment(R, align_path, run_name):
     Reads the layout path_finder writes ({run: {legacy_per_combo: {combo: {board:
     {transformation: {translation}}}}, global_relative: {pinned_board, boards: {...}}}});
     the global_relative block is stored under combo 'global_relative'. A flat
-    {run: {combo: {board: ...}}} layout is accepted too."""
+    {run: {combo: {board: ...}}} layout is accepted too.
+
+    An 'applied' block - written only by path_finder.py --find_alignment
+    --apply_alignment, and recording the translation each board's tracks were
+    actually cut with plus the combo it came from - is stored under the
+    pseudo-combo 'applied' in either layout. It is excluded BY NAME from the
+    flat-layout branch, where it would otherwise be walked as if it were a combo
+    and its per-board {from_combo, transformation} payloads read as boards."""
     from ruamel.yaml import YAML
     yaml = YAML(typ="safe")
     with open(align_path, "r") as fh:
@@ -875,6 +882,12 @@ def section_alignment(R, align_path, run_name):
                     R.add("alignment", axis, value=float(tr[axis]),
                           combo=str(combo), board=int(bid))
 
+    # Keys of an alignment yaml that are NOT combo labels. Both diagnostic
+    # blocks are handled explicitly below; 'applied' is handled here so it is
+    # picked up in both layouts and skipped by the flat-layout walk.
+    non_combo_keys = ("legacy_per_combo", "global_relative", "applied")
+    store("applied", block.get("applied"))
+
     if "legacy_per_combo" in block or "global_relative" in block:
         for combo, boards in (block.get("legacy_per_combo") or {}).items():
             store(combo, boards)
@@ -885,6 +898,8 @@ def section_alignment(R, align_path, run_name):
                   combo="global_relative")
     else:
         for combo, boards in block.items():
+            if combo in non_combo_keys:
+                continue
             store(combo, boards)
 
 

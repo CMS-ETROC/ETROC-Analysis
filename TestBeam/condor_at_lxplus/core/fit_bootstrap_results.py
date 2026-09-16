@@ -16,6 +16,11 @@ import io_utils
 warnings.filterwarnings("ignore")
 
 NICKNAME_DICT = {'t': 'trig', 'd': 'dut', 'r': 'ref', 'e': 'extra'}
+# Step-12 columns that are per-track BOOKKEEPING, not resolutions: attempts,
+# acceptances, the threshold the phase ended at.  They are constant down the
+# file and must never be fed to the Gaussian fit, counted as a role, or folded
+# into the all-negative test that detects a failed bootstrap.
+TRIAL_PREFIX = 'trials_'
 FILENAME_PATTERN = re.compile(r"(\w)-R(\d+)C(\d+)")
 
 # --- Core Fitting Logic ---
@@ -125,6 +130,13 @@ def process_single_boot_file(ifile: Path, args: argparse.Namespace) -> dict:
 
     for col in boot_df.columns:
         if col == 'is_bootstrap': continue
+        if col.startswith(TRIAL_PREFIX):
+            # NEW COLUMNS, carried through verbatim (constant per track): how many
+            # resample attempts step 12 made and how many its KS gate accepted, so
+            # the acceptance rate is available per pixel triple downstream instead
+            # of only as a log warning at submit time.
+            contribution[col] = boot_df[col].iloc[0]
+            continue
         if col.startswith('ksp'):
             # the per-sample KS p-value floor is a diagnostic, not a resolution: carry its
             # single-shot value and its median over the accepted resamples, no Gaussian fit
@@ -150,7 +162,7 @@ def process_single_boot_file(ifile: Path, args: argparse.Namespace) -> dict:
         contribution[f'fit_valid_{col}'] = stats['valid']
 
     for col in anchor_df.columns:
-        if col == 'is_bootstrap' or col.startswith('ksp'): continue
+        if col == 'is_bootstrap' or col.startswith('ksp') or col.startswith(TRIAL_PREFIX): continue
         contribution[f'single_shot_res_{col}'] = anchor_df[col].iloc[0]
         # A -1 single-shot means step 12 failed every full-sample attempt for this
         # track (KS or imaginary 3-board solve); its res_/err_ above still come from
@@ -158,7 +170,10 @@ def process_single_boot_file(ifile: Path, args: argparse.Namespace) -> dict:
         # (e.g. an imaginary solve barely turned real) -- flag it so downstream
         # tables/plots can exclude or mark such tracks instead of trusting them.
         contribution[f'single_shot_failed_{col}'] = int(anchor_df[col].iloc[0] < 0)
-    boot_failed = int(len(boot_df) == 1 and (boot_df.iloc[0].drop(labels=['is_bootstrap'], errors='ignore') < 0).all())
+    # The failure marker is "every RESOLUTION column is -1"; the trials_ columns are
+    # positive counts and would silently turn every boot_failed into 0 if included.
+    _drop = ['is_bootstrap'] + [c for c in boot_df.columns if c.startswith(TRIAL_PREFIX)]
+    boot_failed = int(len(boot_df) == 1 and (boot_df.iloc[0].drop(labels=_drop, errors='ignore') < 0).all())
     contribution['boot_failed'] = boot_failed
     contribution['n_boot'] = 0 if boot_failed else int(len(boot_df))   # accepted resamples (the -1 placeholder is not one)
 

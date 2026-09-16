@@ -65,6 +65,39 @@ def apply_correlation_cut(
     # reliably map filtered rows back to the pre-cut dataframe by index.
     return df.loc[mask]
 
+# Name of the provenance column that records, for every saved row, the row LABEL
+# it had in this step's input (the step-9 track table). See process_single_file().
+SRC_ROW_COL = 'src_row'
+
+
+def join_step9_rows(step10_df: pd.DataFrame, step9_df: pd.DataFrame) -> pd.DataFrame:
+    """Return the step-9 rows corresponding to `step10_df`, aligned to its rows.
+
+    THE EXACT CODE, and the only supported way to do this join. Do NOT use
+    `step9_df.loc[step10_df.index]`: the saved step-10 table carries a plain
+    RangeIndex (process_single_file() resets it so the parquet is tidy), so that
+    expression silently returns the WRONG rows - measured at 39-45 % agreement on
+    four real track files, and it cannot be caught by a "were all keys found"
+    check because a wrong step-9 row is still a valid row. That mistake is what
+    invalidated the ambiguous-key rate quoted by the isolation-category test
+    (notes/fourboard-lsq-test.md, section 1).
+
+    Rows written before SRC_ROW_COL existed cannot be joined at all - there is no
+    record of which rows survived the cuts - so this raises rather than guessing.
+    """
+    if SRC_ROW_COL not in step10_df.columns:
+        raise KeyError(
+            "step-10 table has no '%s' column: it was written by a pipeline version that did not "
+            "record the input row label, so its rows cannot be mapped back to step 9. Re-run step 10 "
+            "for this track, or use the raw-code inversion instead (see utils/fourboard_pairing.py)."
+            % SRC_ROW_COL)
+    missing = ~step10_df[SRC_ROW_COL].isin(step9_df.index)
+    if missing.any():
+        raise KeyError("%d of %d step-10 rows reference step-9 labels that are not in the given frame"
+                       % (int(missing.sum()), len(step10_df)))
+    return step9_df.loc[step10_df[SRC_ROW_COL].to_numpy()]
+
+
 def convert_to_time(df: pd.DataFrame, all_roles: dict[str, int]) -> pd.DataFrame:
     """Calculates physical time units, ensuring bin_size is calculated per-file.
 
@@ -272,6 +305,14 @@ def process_single_file(
             neighbor_columns = [col for col in final_df.columns if col.startswith('HasNeighbor')]
             final_df['trackNeighbor'] = final_df[neighbor_columns].any(axis=1)
 
+            # PRESERVE THE INPUT ROW LABEL. The saved index itself is reset (a tidy
+            # RangeIndex is what every downstream reader expects, and a parquet
+            # round-trip is no place to carry meaning), so the label is written as
+            # its own column first. Without it there is no record of WHICH input
+            # rows survived the cuts, and code that assumed the index survived the
+            # reset joined 39-45 % of its rows to the wrong events
+            # (notes/fourboard-lsq-test.md). Use join_step9_rows() to consume it.
+            final_df[SRC_ROW_COL] = final_df.index.to_numpy(dtype='int64')
             final_df = final_df.reset_index(drop=True)  # tidy index for the saved output
 
             out_name = f"{filepath.stem}.parquet"

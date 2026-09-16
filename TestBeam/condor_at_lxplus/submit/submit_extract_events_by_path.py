@@ -133,7 +133,10 @@ def compute_expected_combos(config_path: str, run_name: str) -> list[tuple[int, 
     """Reproduces path_finder.py's own board-combo generation (same board ids,
     same combo sizes, same order: combinations() over every subset down to
     MIN_BOARD_COMBO_SIZE, largest first) so a --combos index is derived purely
-    from the run's board config. That keeps index 0 always meaning the same
+    from the run's board config. This is the INDEX order; path_finder's
+    PROCESSING order differs (trigger-containing combos first, for the alignment
+    feed-forward) but its output files are named by combo label, so the index
+    is unaffected. That keeps index 0 always meaning the same
     board combo across every invocation of this run -- unlike an index into
     "whichever files happen to exist in the directory today", which would
     shift if a combo hasn't been reduced yet or was deleted."""

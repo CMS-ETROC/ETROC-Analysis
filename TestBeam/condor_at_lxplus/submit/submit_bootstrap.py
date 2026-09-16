@@ -82,6 +82,7 @@ def build_python_command(args: argparse.Namespace) -> str:
         f"--ks_dmax {args.ks_dmax}",
         f"--gmm_tol {args.gmm_tol}",
         f"--gmm_max_iter {args.gmm_max_iter}",
+        f"--gmm_reg_covar {args.gmm_reg_covar}",
         f"--minimum_nevt {args.minimum_nevt}",
         f"--iteration_limit {args.iteration_limit}",
         f"--neighbor_cut {neighbor_cut_str}",
@@ -174,7 +175,11 @@ def create_submission_files(
         'master_list_file_name': master_list_file_name,
         'out_dir': str(group_out_dir),
         'log_dir': str(group_log_dir),
-        'transfer_files': io_utils.build_transfer_files(WORKER_SCRIPT_NAME),
+        # core/twc_solver.py holds the joint time-walk solve that bootstrap.py
+        # imports; it is not an io_utils dependency, so it is named here rather
+        # than in COMMON_TRANSFER_FILES.  build_transfer_files() checks it exists
+        # at submit time, so a forgotten file fails loudly here, not in a job.
+        'transfer_files': io_utils.build_transfer_files(WORKER_SCRIPT_NAME, 'core/twc_solver.py'),
         'unique_tag': unique_tag,
         'logical_dir': logical_dir, # Pass the directory to Jinja
         'ext': ext,                 # Pass the extension to Jinja
@@ -262,7 +267,7 @@ if __name__ == "__main__":
 
     # Bootstrap Params
     parser.add_argument('-n', '--num_bootstrap_output', type=int, default=100)
-    parser.add_argument('--minimum_nevt', type=int, default=1000)
+    parser.add_argument('--minimum_nevt', type=int, default=300)
     parser.add_argument('--iteration_limit', type=int, default=7500)
 
     # Options
@@ -282,6 +287,8 @@ if __name__ == "__main__":
     parser.add_argument('--ks_dmax', type=float, default=0.03, help='bootstrap.py --ks_dmax (default 0.03).')
     parser.add_argument('--gmm_tol', type=float, default=1e-6, help='bootstrap.py --gmm_tol: EM convergence tolerance of the mixture fit (default 1e-6).')
     parser.add_argument('--gmm_max_iter', type=int, default=2000, help='bootstrap.py --gmm_max_iter (default 2000).')
+    parser.add_argument('--gmm_reg_covar', type=float, default=4.0,
+                        help='bootstrap.py --gmm_reg_covar: variance floor [ps^2] on every mixture component (default 4.0, i.e. a 2 ps sigma floor).')
     parser.add_argument('--neighbor_cut', dest='neighbor_cut', default=['none'], nargs='+',
                         help='Specify one or more **space-separated** board columns to be used for neighbor cuts. '
                         'The argument collects all values into a list. '
