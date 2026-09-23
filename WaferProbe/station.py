@@ -1,5 +1,5 @@
 """station.py -- helpers copied verbatim from the station repo
-ETROC-WaferProbe, branch psu-identify at commit c166312: the whole of
+ETROC-WaferProbe, branch psu-identify at commit cbf3c96: the whole of
 src/grading.py, plus nem_files (from src/qinj_check.py) and load_wafer_map
 (from prober_move.py). Brought in so plot_wafer.py, wafer_tables.py and
 wafer_plots.py can run here without the rest of the station repo.
@@ -49,6 +49,11 @@ The mapping is read off run_die's own code path, not guessed:
   reads the fuses and writes nothing (--verifyEfuse); either comes after
   the calibration and before QInj, and one that did not verify does not
   stop the run. Both are graded alike.
+- summary["qinj_check"] is src/qinj_check.run_verdict's record. With
+  --useEfuse after a burn or verify that verified it counts the events
+  whose trailer carries another chip ID than the word's (chip_id_bad); a
+  failed run with such events and none off the record pattern (bad)
+  failed on the chip ID alone.
 """
 
 Grade = namedtuple("Grade", ["name", "bin", "detail"])
@@ -65,7 +70,8 @@ NOT_TESTED = 6
 RAIL_OPEN = 7
 BL_NW_ZERO = 8
 EFUSE_FAIL = 9
-N_BINS = 10  # bins 0 .. N_BINS - 1, all read by wafer_run.start_checks
+EFUSE_TRAILER_FAIL = 10
+N_BINS = 11  # bins 0 .. N_BINS - 1, all read by wafer_run.start_checks
 
 # SetDieResult: "Result (optional) -- No spaces (maximum 256 characters)"
 # (Velox remote-interface manual, the SetDieResult entry).
@@ -149,6 +155,19 @@ def _before_qinj(summary):
     return None
 
 
+def _qinj_failure(summary, error):
+    """The Grade of a run that failed in the QInj stage with no finding
+    before it: EFUSE_TRAILER_FAIL when its check found trailers carrying
+    another chip ID than the word's (--useEfuse) in events that all hold
+    the record pattern, else NO_LINK_OR_DATA, which also takes a run with
+    events off the pattern: their trailers are no more trustworthy than
+    the rest."""
+    check = summary.get("qinj_check") or {}
+    if check.get("chip_id_bad") and not check.get("bad"):
+        return Grade("EFUSE_TRAILER_FAIL", EFUSE_TRAILER_FAIL, error or "trailer chip ID")
+    return Grade("NO_LINK_OR_DATA", NO_LINK_OR_DATA, error or "qinj stage failure")
+
+
 def grade(summary):
     """The Grade for one die's summary.json. A missing summary (dry-run,
     or the die never ran) or one with no "status" field grades
@@ -183,8 +202,7 @@ def grade(summary):
         phases = summary.get("phases", {})
         error = summary.get("error")
         if "qinj_start" in phases:
-            return _before_qinj(summary) or Grade("NO_LINK_OR_DATA", NO_LINK_OR_DATA,
-                                                  error or "qinj stage failure")
+            return _before_qinj(summary) or _qinj_failure(summary, error)
         if "i2c_start" in phases:
             # a check or calibration that failed before the error still
             # names the die; the error follows in the detail
@@ -203,7 +221,7 @@ def result_text(grade, attempt):
     """The SetDieResult text for the die: "<GRADE>", or "<GRADE>_retry" when
     the graded attempt is the retry (attempt > 1). The grade's detail is
     recorded in the pass's wafer_<YYYYmmdd_HHMMSS>.json and the log, never
-    on the map, so the station's Result column takes one of 2 x 10 values.
+    on the map, so the station's Result column takes one of 2 x 11 values.
     Sanitised to [A-Za-z0-9_.-] and the station's 256-character limit all
     the same."""
     parts = [grade.name]

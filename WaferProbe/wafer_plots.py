@@ -32,6 +32,7 @@ GRADE_COLOURS = {
     "PASSED": "#2ca02c", "POWER_SHORT": "#d62728", "I2C_NACK": "#ff7f0e",
     "I2C_PIXELS": "#e6b800", "NO_LINK_OR_DATA": "#9467bd", "OTHER_FAIL": "#8c564b",
     "NOT_TESTED": "#dcdcdc", "RAIL_OPEN": "#1f77b4", "BL_NW_ZERO": "#e377c2", "EFUSE_FAIL": "#17becf",
+    "EFUSE_TRAILER_FAIL": "#006d5b",
 }
 MAIN_RAILS = ("analog", "digital")
 ZERO_COLOUR = "#e41a1c"
