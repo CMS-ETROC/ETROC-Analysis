@@ -25,11 +25,12 @@
 # 2. The inputs are not in the repository. They are read from two EOS locations: the input
 #    tables (31 MB) from `/eos/user/m/musafdar/ETROC_plot_inputs/irrad_2026`, the raw March scans
 #    and slow-control logs from `/eos/user/m/musafdar/CERN_IRRAD_Mar2026/IVCurves`.
-#    `../iv/campaigns/irrad_2026_inputs.md` lists every table with where it came from, and ends
+#    `../campaigns/irrad_2026_inputs.md` lists every table with where it came from, and ends
 #    with a table of the environment variables that point the notebook at your own copies
 #    (`ETROC_IV_INPUTS` for the tables, `ETROC_IV_EOS_MARCH` for the raw tree). The first code
-#    cell checks every table against the published checksums and every raw file for existence
-#    and read access, and stops listing all the problems it found.
+#    cell checks that every table and raw file exists and can be read, and stops with a list of
+#    all that cannot; a table whose checksum differs from the published list is named, and the
+#    run goes on.
 # 3. Open `iv.ipynb` in Jupyter and run all cells, or run it headless with
 #    `jupyter nbconvert --to notebook --execute iv.ipynb --output-dir <somewhere>`.
 #
@@ -37,14 +38,21 @@
 # `PANELS = True` in the setup cell below also writes each panel of a figure as a file of its own
 # next to the compound figure, named `<stem>_01_h1.png`, `<stem>_02_f1.png` and so on. Figures 24
 # and 25 write their per-run panels instead; figures 5 and 34-39 have no single-panel export.
+# A panel gets the audits of its figure (a per-run panel the text-overlap audit only), printed in
+# the notebook's output; it has no values file of its own.
 #
 # The campaign's scan catalogue, run lists and input paths live in
-# `../iv/campaigns/irrad_2026.py`. This notebook holds the choices made per figure: which scan
+# `../campaigns/irrad_2026.py`. This notebook holds the choices made per figure: which scan
 # stands for each irradiation step, axis ranges, legend placement.
 #
 # `iv.ipynb` and `iv.py` are the same notebook, kept in step by jupytext. Edit either one, then
-# run `jupytext --sync iv.ipynb` and `nbstripout iv.ipynb` before committing. Neither tool is in
-# LCG_104d (`pip install --user jupytext nbstripout`); running the notebook needs neither.
+# run `python3 -m jupytext --sync iv.ipynb` and `python3 -m nbstripout iv.ipynb` in this folder
+# before committing. Neither tool is in LCG_104d (the install line is in `../README.md`); running
+# the notebook needs neither.
+#
+# After a run, `python3 -m etroc_plots.checks <folder>/iv`, run from `TestBeam/` with the folder
+# the figures went to (`etroc_plots/notebooks/figures/iv` by default), checks every saved figure
+# against the rules in `../CONVENTIONS.md`.
 
 # %%
 import os
@@ -65,12 +73,14 @@ from IPython.display import Image, display
 here = os.path.dirname(os.path.abspath(__file__)) if "__file__" in globals() else os.getcwd()
 sys.path.insert(0, os.path.normpath(os.path.join(here, "..", "..")))
 
-CAMPAIGN = "irrad_2026"                       # iv/campaigns/<CAMPAIGN>.py
-# An exported ETROC_IV_CAMPAIGN wins; it is read once, on the first etroc_plots.iv import.
-os.environ.setdefault("ETROC_IV_CAMPAIGN", CAMPAIGN)
+CAMPAIGN = "irrad_2026"                       # campaigns/<CAMPAIGN>.py
+# An exported ETROC_CAMPAIGN wins (an empty one counts as unset); it is read once, on the first
+# etroc_plots import.
+if not os.environ.get("ETROC_CAMPAIGN"):
+    os.environ["ETROC_CAMPAIGN"] = CAMPAIGN
 
-from etroc_plots import talk_style as ts                      # noqa: E402
-from etroc_plots.iv import campaigns                          # noqa: E402
+from etroc_plots import style                                 # noqa: E402
+from etroc_plots import campaigns                             # noqa: E402
 from etroc_plots.iv import iv_data as ivd                     # noqa: E402
 from etroc_plots.iv import iv_plot as ivp                     # noqa: E402
 from etroc_plots.iv import iv_timeseries as tsdata            # noqa: E402
@@ -78,16 +88,17 @@ from etroc_plots.iv import preirrad_current                   # noqa: E402
 from etroc_plots.iv.kfactor import k_factor, fine_step_span   # noqa: E402
 
 if campaigns.NAME != CAMPAIGN:
-    raise RuntimeError("the package is running campaign %r (ETROC_IV_CAMPAIGN) but CAMPAIGN = %r: "
+    raise RuntimeError("the package is running campaign %r (ETROC_CAMPAIGN) but CAMPAIGN = %r: "
                        "set one to match the other, then restart the kernel (the campaign is "
                        "read once, on the first import)" % (campaigns.NAME, CAMPAIGN))
+campaign = campaigns.active
 
 # stops, listing every missing or unreadable table or raw file; reports any table that differs
 # from the published copy
 ivd.check_inputs()
 
 NOTEBOOK = "TestBeam/etroc_plots/notebooks/iv.ipynb"   # recorded as "script" in every values file
-OUT = os.path.join(os.path.abspath(os.environ.get("ETROC_FIGURES", "figures")), "iv")
+OUT = os.path.join(os.path.abspath(os.environ.get("ETROC_FIGURES") or "figures"), "iv")
 os.makedirs(OUT, exist_ok=True)
 
 PANELS = False   # True: also write each figure's single panels, where it has them (see above)
@@ -99,7 +110,7 @@ def show(stem):
 
 
 def flatten_panels(stem, paths):
-    """Move ts.save_panel's nested panels/<stem>/NN_name.{png,pdf} next to the compound figure,
+    """Move style.save_panel's nested panels/<stem>/NN_name.{png,pdf} next to the compound figure,
     flat-named <stem>_NN_name.* (this notebook's single-panel naming), and remove the now-empty
     nested folder."""
     nested_dir = None
@@ -120,7 +131,7 @@ def export_panels(stem, draw, panel_subject, line1=None):
     draw(ax, tel) the compound figure used."""
     panels = {"h1": (lambda ax, ctx: draw(ax, "h1"), panel_subject),
               "f1": (lambda ax, ctx: draw(ax, "f1"), panel_subject)}
-    chosen = ts.resolve_panels(["all"], panels)
+    chosen = style.resolve_panels(["all"], panels)
     flatten_panels(stem, ivp.export_panels_1x2(stem, OUT, chosen, line1=line1))
 
 
@@ -192,14 +203,15 @@ def scan_paths(res_h, res_f):
 # %% [markdown]
 # ### Figures 1 and 2: full range, linear and log y
 #
-# The fine scans over their full measured range (200-540 V), H1 left and F1 right, with every
-# data-taking point drawn (0.1 V bins). Figure 1 has a linear y axis, 0-4000 µA. Figure 2 has a
+# The fine scans over their full measured range (each ends between 200 and 540 V), H1 left and F1
+# right, with every bin drawn (0.1 V bins from 10 to 60 V, coarser above). Figure 1 has a linear y axis, 0-4000 µA. Figure 2 has a
 # log y axis from each telescope's lowest pre-irradiation current up to 4000 µA. Both use the
 # x range shared by every full-range IV figure, 0-620 V.
 
 # %%
 FULL_FOOTER = ("full-range fine scans, ~+2 days after each step (pre-irradiation: right before "
-               "the first step); every data-taking point drawn (0.1 V bins); parked, no beam")
+               "the first step); every bin drawn (0.1 V from 10 to 60 V, coarser above); "
+               "parked, no beam")
 
 
 def full_values(curves):
@@ -223,7 +235,7 @@ def log_floor(curves):
 
 def full_footer(fell_back_h, fell_back_f):
     notes = ["%s %s: fine scan under %g V, quick scan used instead"
-             % (name, ", ".join(ts.fluence_label(f, unit=False) for f in steps), FALLBACK_MAXV_V)
+             % (name, ", ".join(style.fluence_label(f, unit=False) for f in steps), FALLBACK_MAXV_V)
              for name, steps in (("H1", fell_back_h), ("F1", fell_back_f)) if steps]
     return FULL_FOOTER + ("  ·  " + "; ".join(notes) if notes else "")
 
@@ -317,10 +329,14 @@ if PANELS:
 # %%
 IV04_SUBJECT = "in-run leakage current, March steps"
 IV04_PANEL_SUBJECT = "in-run current"
-IV04_FOOTER = ("HV monitor, 60 s medians, readback within 6 V of the run bias  ·  "
+IV04_FOOTER = ("HV monitor, 60 s medians, readback within %g V of the run bias  ·  "
                "three fluence steps, two bias points per step, "
-               "Disc threshold = baseline + 20")
+               "Disc threshold = baseline + %d" % (tsdata.BIAS_TOL_V, campaign.MARCH_OFFSET))
 IV04_RUN_INFO = tsdata.MARCH_H1_RUNS   # fluence + per-chip bias per run (shared H1/F1 numbering)
+# the footer states the threshold offset: every board of every drawn run must have run at it
+tsdata.check_offset(["%s_run%d" % (tel, run) for tel in campaign.TELESCOPE_CHIPS
+                     for runs in campaign.RUNS_AT_FLUENCE.values() for run in runs],
+                    campaign.MARCH_YAML, campaign.MARCH_OFFSET)
 
 
 def iv04_bias(tel, run, chip):
@@ -335,10 +351,10 @@ def iv04_panel_data(tel, df):
     fluences = []
     for run in sorted(d["run"].unique()):
         fl = IV04_RUN_INFO[run]["fluence"]
-        color = ts.fluence_color(fl)
+        color = style.fluence_color(fl)
         fluences.append(fl)
         x_ends, y_ends, biases = [], [], []
-        for chip in tsdata.CHIPS[tel]:
+        for chip in campaign.TELESCOPE_CHIPS[tel]:
             sub = d[(d["run"] == run) & (d["chip"] == chip)].sort_values("elapsed_min")
             if sub.empty:
                 continue
@@ -358,8 +374,8 @@ def iv04_panel_data(tel, df):
             groups.append(dict(x_end=max(x_ends), y_end=sum(y_ends) / len(y_ends), color=color,
                                text="/".join(str(v) for v in sorted({int(round(b))
                                                                      for b in biases})) + " V"))
-    swatches = [(ts.fluence_label(f), ts.fluence_color(f))
-                for f in sorted({ts.fluence_key(f) for f in fluences})]
+    swatches = [(style.fluence_label(f), style.fluence_color(f))
+                for f in sorted({style.fluence_key(f) for f in fluences})]
     return lines, groups, swatches, stats
 
 
@@ -379,7 +395,7 @@ def iv04_draw_wrap(ax, tel):
 
 ivp.compound_1x2(
     "iv04_currents_march", OUT, iv04_draw_wrap, tag=IV04_SUBJECT, footer_text=IV04_FOOTER,
-    line1=ts.HEADER_LINE_1, script=NOTEBOOK,
+    line1=campaign.HEADER_LINE_1, script=NOTEBOOK,
     inputs=[_iv04_march_csv, tsdata.F1_WINDOWS_CSV],
     values_fn=lambda res_h, res_f: dict(
         h1=res_h, f1=res_f, runs=sorted(int(r) for r in _iv04_df["run"].unique()),
@@ -389,7 +405,7 @@ ivp.compound_1x2(
 show("iv04_currents_march")
 if PANELS:
     export_panels("iv04_currents_march", iv04_draw_wrap, IV04_PANEL_SUBJECT,
-                  line1=ts.HEADER_LINE_1)
+                  line1=campaign.HEADER_LINE_1)
 
 # %% [markdown]
 # ### Figure 5: pre-irradiation current stability
@@ -437,7 +453,7 @@ IV06_FINE_MAX_STEP = 0.5
 IV06_VGL_AGREE_V = 0.1   # the drawn V_gl must match vgl_points.csv this closely
 
 IV06_XLIM = (0.0, 60.0)
-IV06_COLOR = ts.fluence_color(IV06_FLUENCE)
+IV06_COLOR = style.fluence_color(IV06_FLUENCE)
 IV06_FORMULA = r"$k = \dfrac{V}{I}\,\dfrac{dI}{dV}$"
 IV06_ANNOTATION = (r"gain layer fully depleted at $V_{gl}$: multiplication" "\n"
                    r"turns on, the current rises steeply")
@@ -492,26 +508,26 @@ def iv06_draw_leakage(ax, d, compound=False):
     ax.plot(d["v"][m], d["i"][m], marker="o", markersize=3.2, markerfacecolor="none",
            markeredgecolor=IV06_COLOR, markeredgewidth=1.0, color=IV06_COLOR, linewidth=1.0,
            linestyle="-", alpha=0.9)
-    ax.axvline(d["v_gl"], color=ts.INK, linestyle="--", linewidth=1.8, zorder=3)
+    ax.axvline(d["v_gl"], color=style.INK, linestyle="--", linewidth=1.8, zorder=3)
     ymax = 1.10 * float(np.max(d["i"][m]))
-    ax.text(d["v_gl"] + 1.2, 0.94 * ymax, r"$V_{gl}$ = %.1f V" % d["v_gl"], color=ts.INK,
-           fontsize=ts.sizes()["ann"], va="top", ha="left")
+    ax.text(d["v_gl"] + 1.2, 0.94 * ymax, r"$V_{gl}$ = %.1f V" % d["v_gl"], color=style.INK,
+           fontsize=style.sizes()["ann"], va="top", ha="left")
     i_at_vgl = float(np.interp(d["v_gl"], d["v"], d["i"]))
     if compound:
         ax.annotate(IV06_ANNOTATION_COMPOUND, xy=(d["v_gl"], i_at_vgl), xycoords="data",
                    xytext=(28.5, 44.0), textcoords="data",
-                   fontsize=ts.sizes()["ann"] * 0.72, color=ts.INK, va="top", ha="right",
-                   arrowprops=dict(arrowstyle="->", color=ts.INK, lw=1.2))
+                   fontsize=style.sizes()["ann"] * 0.72, color=style.INK, va="top", ha="right",
+                   arrowprops=dict(arrowstyle="->", color=style.INK, lw=1.2))
     else:
         ax.annotate(IV06_ANNOTATION, xy=(d["v_gl"], i_at_vgl), xycoords="data",
                    xytext=(5.0, 0.86 * ymax), textcoords="data",
-                   fontsize=ts.sizes()["ann"] * 0.9, color=ts.INK, va="top", ha="left",
-                   arrowprops=dict(arrowstyle="->", color=ts.INK, lw=1.2))
+                   fontsize=style.sizes()["ann"] * 0.9, color=style.INK, va="top", ha="left",
+                   arrowprops=dict(arrowstyle="->", color=style.INK, lw=1.2))
     ax.set_xlim(*IV06_XLIM)
     ax.set_ylim(0.0, ymax)
-    ax.set_xlabel(ts.XLABEL_BIAS)
+    ax.set_xlabel(style.XLABEL_BIAS)
     ax.set_ylabel(ivp.YLABEL_I)
-    ts.style_axes(ax)
+    style.style_axes(ax)
     return d
 
 
@@ -521,20 +537,20 @@ def iv06_draw_kfactor(ax, d):
     ax.plot(d["v"][m], d["k"][m], marker="o", markersize=2.6, markerfacecolor="none",
            markeredgecolor=IV06_COLOR, markeredgewidth=0.9, color=IV06_COLOR, linewidth=1.0,
            linestyle="-", alpha=0.9, markevery=ivd.markevery(int(m.sum())))
-    ax.axvline(d["v_gl"], color=ts.INK, linestyle="--", linewidth=1.8, zorder=3)
-    ax.plot([d["v_gl"]], [d["k_peak"]], marker="*", markersize=16, color=ts.INK,
-           markeredgecolor=ts.INK, linestyle="none", zorder=4)
+    ax.axvline(d["v_gl"], color=style.INK, linestyle="--", linewidth=1.8, zorder=3)
+    ax.plot([d["v_gl"]], [d["k_peak"]], marker="*", markersize=16, color=style.INK,
+           markeredgecolor=style.INK, linestyle="none", zorder=4)
     ax.annotate(r"$V_{gl}$ = peak of k", xy=(d["v_gl"], d["k_peak"]), xycoords="data",
                xytext=(38.0, 0.92 * d["k_peak"]), textcoords="data",
-               fontsize=ts.sizes()["ann"], color=ts.INK, va="center", ha="left",
-               arrowprops=dict(arrowstyle="->", color=ts.INK, lw=1.2))
-    ax.text(0.05, 0.94, IV06_FORMULA, transform=ax.transAxes, fontsize=ts.sizes()["label"] * 1.1,
-           color=ts.INK, va="top", ha="left")
+               fontsize=style.sizes()["ann"], color=style.INK, va="center", ha="left",
+               arrowprops=dict(arrowstyle="->", color=style.INK, lw=1.2))
+    ax.text(0.05, 0.94, IV06_FORMULA, transform=ax.transAxes, fontsize=style.sizes()["label"] * 1.1,
+           color=style.INK, va="top", ha="left")
     ax.set_xlim(*IV06_XLIM)
     ax.set_ylim(0.0, 1.30 * d["k_peak"])
-    ax.set_xlabel(ts.XLABEL_BIAS)
+    ax.set_xlabel(style.XLABEL_BIAS)
     ax.set_ylabel("k = (V/I)(dI/dV)")
-    ts.style_axes(ax)
+    style.style_axes(ax)
     return d
 
 
@@ -546,22 +562,22 @@ def iv06_footer_text(d):
 
 
 _iv06_d = iv06_load_and_compute()
-ts.apply_style(1.0)
+style.apply_style(1.0)
 _iv06_fig, (_iv06_ax_l, _iv06_ax_k) = plt.subplots(1, 2, figsize=(11.5, 6.2))
 _iv06_fig.subplots_adjust(left=0.08, right=0.97, top=0.89, bottom=0.20, wspace=0.28)
 
 iv06_draw_leakage(_iv06_ax_l, _iv06_d, compound=True)
 iv06_draw_kfactor(_iv06_ax_k, _iv06_d)
 
-ts.right_lines(_iv06_ax_l, [IV06_CAPTION_LEAKAGE], ts.sizes(0.72)["title"])
-ts.right_lines(_iv06_ax_k, [IV06_CAPTION_KFACTOR], ts.sizes()["title"])
-ts.compound_header([_iv06_ax_l, _iv06_ax_k], line1=ivd.LINE1_PARKED, data=IV06_HEADER_DATA_FULL)
-ts.footer(_iv06_fig, iv06_footer_text(_iv06_d), scale=0.85)
+style.right_lines(_iv06_ax_l, [IV06_CAPTION_LEAKAGE], style.sizes(0.72)["title"])
+style.right_lines(_iv06_ax_k, [IV06_CAPTION_KFACTOR], style.sizes()["title"])
+style.compound_header([_iv06_ax_l, _iv06_ax_k], line1=ivd.LINE1_PARKED, data=IV06_HEADER_DATA_FULL)
+style.footer(_iv06_fig, iv06_footer_text(_iv06_d), scale=0.85)
 
-ts.lower_footer(_iv06_fig)   # the footer's final band, so the audits see the saved layout
-_iv06_problems = ts.check_no_clipping(_iv06_fig, "iv06_vgl_method")
+style.lower_footer(_iv06_fig)   # the footer's final band, so the audits see the saved layout
+_iv06_problems = style.audit_figure(_iv06_fig, "iv06_vgl_method")
 _iv06_legend_problems = ivp.check_legend_overlap(_iv06_fig, tag="iv06_vgl_method")
-ts.save_figure(_iv06_fig, OUT, "iv06_vgl_method", audit=False)
+style.save_figure(_iv06_fig, OUT, "iv06_vgl_method", audit=False)
 
 _iv06_values = dict(tel=IV06_TEL, chip=IV06_CHIP, fluence_p_cm2=IV06_FLUENCE, timing="+2 d",
                     scan_path=_iv06_d["path"], scan_date=IV06_SCAN_DATE,
@@ -578,22 +594,22 @@ show("iv06_vgl_method")
 
 if PANELS:
     IV06_PANEL_CAPTION = {"leakage": IV06_CAPTION_LEAKAGE, "kfactor": IV06_CAPTION_KFACTOR}
-    ts.apply_style(1.0)
+    style.apply_style(1.0)
     for _iv06_index, _iv06_name, _iv06_drawfn in (
             (1, "leakage", lambda ax: iv06_draw_leakage(ax, _iv06_d)),
             (2, "kfactor", lambda ax: iv06_draw_kfactor(ax, _iv06_d))):
         _iv06_pfig = plt.figure(figsize=(9.2, 7.0))
         _iv06_pax = _iv06_pfig.add_axes([0.11, 0.13, 0.85, 0.775])
         _iv06_drawfn(_iv06_pax)
-        ts.talk_header(_iv06_pax, name=IV06_PANEL_CAPTION[_iv06_name], line1=ivd.LINE1_PARKED,
+        style.header(_iv06_pax, name=IV06_PANEL_CAPTION[_iv06_name], line1=ivd.LINE1_PARKED,
                        data=IV06_HEADER_DATA_SHORT)
-        ts.check_no_clipping(_iv06_pfig, "iv06_vgl_method panel %s" % _iv06_name)
+        style.audit_figure(_iv06_pfig, "iv06_vgl_method panel %s" % _iv06_name)
         ivp.check_legend_overlap(_iv06_pfig, tag="iv06_vgl_method panel %s" % _iv06_name)
         for _iv06_ext in ("png", "pdf"):
             _iv06_p = os.path.join(OUT, "iv06_vgl_method_%02d_%s.%s"
                                    % (_iv06_index, _iv06_name, _iv06_ext))
             _iv06_pfig.savefig(_iv06_p, dpi=200 if _iv06_ext == "png" else None,
-                               facecolor=ts.SURFACE)
+                               facecolor=style.SURFACE)
         plt.close(_iv06_pfig)
 
 # %% [markdown]
@@ -606,12 +622,12 @@ if PANELS:
 
 # %%
 IV07_YLABEL_VGL = r"$V_{gl}$ [V]"
-# every V_gl plot uses the same fixed y axis, 0-55 V, so H1 and F1 panels stay directly comparable
+# every linear V_gl plot uses the same fixed y axis, 0-55 V, so H1 and F1 panels stay comparable
 IV07_YLIM = {"h1": (0.0, 55.0), "f1": (0.0, 55.0)}
 
 VGL_FSCALE = 1.0e15
 # x label and fluence-legend title: bookkeeping fluence, or fluence on chip when a variant sets
-# chip_dose (every fluence then scaled by ivp.CHIP_DOSE_FACTOR)
+# chip_fluence (every fluence then scaled by ivp.CHIP_FLUENCE_FACTOR)
 VGL_XLABEL_FLUENCE_BOOKKEEPING = r"Bookkeeping fluence [$10^{15}$ p/cm$^2$]"
 VGL_XLABEL_FLUENCE_ONCHIP = r"Fluence on chip [$10^{15}$ p/cm$^2$]"
 VGL_LOC_STYLE = "upper right"
@@ -620,7 +636,7 @@ VGL_COMPOUND_LEGEND_SCALE = 0.6
 
 # Figures 7, 12 and 31-33 are all drawn by _vgl_draw(), set up per figure by an entry here: the
 # fluence range, whether the 4-month rest points are drawn, the header text and, optionally,
-# chip_dose=True for fluence on chip. Figures 31-33 add their entries in their own cell below.
+# chip_fluence=True for fluence on chip. Figures 31-33 add their entries in their own cell below.
 VGL_VARIANTS = {
     "iv07_vgl_march": dict(fluence_max=1.7e15, include_4mo=False, data="March 2026"),
     "iv12_vgl_rest": dict(fluence_max=1.7e15, include_4mo=True, data="March 2026 + 4 months"),
@@ -636,11 +652,11 @@ def _vgl_clean(kw):
 
 def _vgl_style_handles(rest_color, scale=1.0):
     h = [
-        Line2D([], [], color=ts.INK, marker="o", markersize=9.0 * scale, linestyle="none",
-              markerfacecolor=ts.SURFACE, markeredgecolor=ts.INK, markeredgewidth=1.8 * scale,
+        Line2D([], [], color=style.INK, marker="o", markersize=9.0 * scale, linestyle="none",
+              markerfacecolor=style.SURFACE, markeredgecolor=style.INK, markeredgewidth=1.8 * scale,
               label="right after (open)"),
-        Line2D([], [], color=ts.INK, marker="o", markersize=9.0 * scale, linestyle="none",
-              markerfacecolor=ts.INK, markeredgecolor=ts.INK,
+        Line2D([], [], color=style.INK, marker="o", markersize=9.0 * scale, linestyle="none",
+              markerfacecolor=style.INK, markeredgecolor=style.INK,
               label="after cooling down (+2 d / +4 d)"),
     ]
     if rest_color:
@@ -651,65 +667,65 @@ def _vgl_style_handles(rest_color, scale=1.0):
 
 
 def _vgl_chip_handles(chips, scale=1.0):
-    return [Line2D([], [], color=ts.INK, marker=ts.chip_marker(c), markersize=9.0 * scale,
-                   linestyle="none", label=ts.chip_short(c)) for c in chips]
+    return [Line2D([], [], color=style.INK, marker=style.chip_marker(c), markersize=9.0 * scale,
+                   linestyle="none", label=style.chip_short(c)) for c in chips]
 
 
 def _vgl_draw(ax, tel, spec, extra=None, legend_scale=VGL_COMPOUND_LEGEND_SCALE,
               skip_title=False):
-    chip_dose = bool(spec.get("chip_dose"))
-    dose_factor = ivp.CHIP_DOSE_FACTOR if chip_dose else 1.0
+    chip_fluence = bool(spec.get("chip_fluence"))
+    fluence_factor = ivp.CHIP_FLUENCE_FACTOR if chip_fluence else 1.0
     rest_color = ivp.timing_color(1, None) if spec["include_4mo"] else None
     df = ivd.load_vgl_points()
     sub = df[df["tel"] == tel]
-    chips = ts.TELESCOPE_CHIPS[tel]
+    chips = campaign.TELESCOPE_CHIPS[tel]
     fmax = spec["fluence_max"]
     used = []
     for chip in chips:
         csub = sub[(sub["chip"] == chip) & (sub["fluence_p_cm2"] <= fmax)]
         ra = csub[csub["timing"] == "right after"].sort_values("fluence_p_cm2")
         for _, row in ra.iterrows():
-            kw = ts.point_style(chip, row["fluence_p_cm2"], line=False, open_marker=True,
+            kw = style.point_style(chip, row["fluence_p_cm2"], line=False, open_marker=True,
                                 scale=legend_scale)
-            ax.plot([row["fluence_p_cm2"] * dose_factor / VGL_FSCALE], [row["vgl_V"]],
+            ax.plot([row["fluence_p_cm2"] * fluence_factor / VGL_FSCALE], [row["vgl_V"]],
                    **_vgl_clean(kw))
         ann = csub[csub["timing"].isin(["+2 d", "+4 d"])].sort_values("fluence_p_cm2")
         for _, row in ann.iterrows():
-            kw = ts.point_style(chip, row["fluence_p_cm2"], line=False, open_marker=False,
+            kw = style.point_style(chip, row["fluence_p_cm2"], line=False, open_marker=False,
                                 scale=legend_scale)
-            ax.plot([row["fluence_p_cm2"] * dose_factor / VGL_FSCALE], [row["vgl_V"]],
+            ax.plot([row["fluence_p_cm2"] * fluence_factor / VGL_FSCALE], [row["vgl_V"]],
                    **_vgl_clean(kw))
         mo = csub[csub["timing"] == "4 months"] if spec["include_4mo"] else csub.iloc[0:0]
         for _, row in mo.iterrows():
-            kw = ts.point_style(chip, row["fluence_p_cm2"], line=False, open_marker=False,
+            kw = style.point_style(chip, row["fluence_p_cm2"], line=False, open_marker=False,
                                 scale=legend_scale, color=rest_color)
-            ax.plot([row["fluence_p_cm2"] * dose_factor / VGL_FSCALE], [row["vgl_V"]],
+            ax.plot([row["fluence_p_cm2"] * fluence_factor / VGL_FSCALE], [row["vgl_V"]],
                    **_vgl_clean(kw))
         used.append(dict(chip=chip,
                          right_after=ra[["fluence_p_cm2", "vgl_V"]].to_dict("records"),
                          after_cooling_down=ann[["fluence_p_cm2", "vgl_V", "timing"]].to_dict("records"),
                          four_months=mo[["fluence_p_cm2", "vgl_V"]].to_dict("records")))
 
-    ax.set_xlim(-0.03 * fmax * dose_factor / VGL_FSCALE, fmax * dose_factor / VGL_FSCALE)
+    ax.set_xlim(-0.03 * fmax * fluence_factor / VGL_FSCALE, fmax * fluence_factor / VGL_FSCALE)
     ax.set_ylim(*IV07_YLIM[tel])
-    ax.set_xlabel(VGL_XLABEL_FLUENCE_ONCHIP if chip_dose else VGL_XLABEL_FLUENCE_BOOKKEEPING)
+    ax.set_xlabel(VGL_XLABEL_FLUENCE_ONCHIP if chip_fluence else VGL_XLABEL_FLUENCE_BOOKKEEPING)
     ax.set_ylabel(IV07_YLABEL_VGL)
-    ts.style_axes(ax)
+    style.style_axes(ax)
     if not skip_title:
-        ts.panel_title(ax, tel, extra=extra, scale=legend_scale)
+        style.panel_title(ax, tel, extra=extra, scale=legend_scale)
 
-    s = ts.sizes(legend_scale)
+    s = style.sizes(legend_scale)
     combined = (_vgl_chip_handles(chips, legend_scale)
                 + _vgl_style_handles(rest_color, legend_scale))
     l1 = ax.legend(handles=combined, loc=VGL_LOC_STYLE, fontsize=s["legend"] * 0.9, ncol=2,
                    columnspacing=0.8, handletextpad=0.5)
     ax.add_artist(l1)
-    present = [f for f in ts.FLUENCE_STEPS if f <= fmax]
-    fluence_handles_fn = ivp.chip_dose_fluence_handles if chip_dose else ts.fluence_handles
-    fluence_fontsize = s["legend"] * (0.68 if chip_dose else 0.9)
+    present = [f for f in campaign.FLUENCE_STEPS if f <= fmax]
+    fluence_handles_fn = ivp.chip_fluence_handles if chip_fluence else style.fluence_handles
+    fluence_fontsize = s["legend"] * (0.68 if chip_fluence else 0.9)
     ax.legend(handles=fluence_handles_fn(present, legend_scale), loc=VGL_LOC_FLUENCE,
              fontsize=fluence_fontsize, ncol=2,
-             title=("fluence on chip" if chip_dose else "bookkeeping fluence"),
+             title=("fluence on chip" if chip_fluence else "bookkeeping fluence"),
              title_fontsize=s["legend_title"], columnspacing=0.8, handletextpad=0.5)
 
     return used
@@ -717,49 +733,51 @@ def _vgl_draw(ax, tel, spec, extra=None, legend_scale=VGL_COMPOUND_LEGEND_SCALE,
 
 def vgl_figure(stem):
     spec = VGL_VARIANTS[stem]
-    ts.apply_style(1.0)
+    style.apply_style(1.0)
     fig, (ax_h1, ax_f1) = plt.subplots(1, 2, figsize=ivp.COMPOUND_FIGSIZE)
     fig.subplots_adjust(**dict(ivp.COMPOUND_ADJUST, bottom=0.16))
 
     u_h1 = _vgl_draw(ax_h1, "h1", spec)
     u_f1 = _vgl_draw(ax_f1, "f1", spec)
 
-    ts.compound_header([ax_h1, ax_f1], line1=ivd.LINE1_PARKED, data=spec["data"], pad=6)
+    style.compound_header([ax_h1, ax_f1], line1=ivd.LINE1_PARKED, data=spec["data"], pad=6)
     footer_text = ("gain-layer depletion voltage, from the k-factor peak of the fine low-V "
                   "scan; open = right after, filled = after cooling down")
-    if spec.get("chip_dose"):
-        footer_text += u"\n" + ivp.CHIP_DOSE_FOOTER
-    ts.footer(fig, footer_text)
+    if spec.get("chip_fluence"):
+        footer_text += u"\n" + ivp.CHIP_FLUENCE_FOOTER
+    style.footer(fig, footer_text)
 
-    ts.lower_footer(fig)   # the footer's final band, so the audits see the saved layout
-    problems = ts.check_no_clipping(fig, stem)
+    style.lower_footer(fig)   # the footer's final band, so the audits see the saved layout
+    problems = style.audit_figure(fig, stem)
     legend_problems = ivp.check_legend_overlap(fig, tag=stem)
     box_problems = ivp.check_legend_boxes(fig, tag=stem)
-    ts.save_figure(fig, OUT, stem, audit=False)
+    style.save_figure(fig, OUT, stem, audit=False)
 
     values = dict(h1=u_h1, f1=u_f1, overlap_problems=problems,
                  legend_overlap_problems=legend_problems, legend_box_problems=box_problems)
     ivp.write_values(OUT, stem, values, script=NOTEBOOK,
-                     inputs=[os.path.join(ivd.INPUTS_VGL, "vgl_points.csv")])
+                     inputs=[os.path.join(ivd.INPUTS_VGL, "vgl_points.csv")],
+                     conventions=(ivp.CHIP_FLUENCE_CONVENTIONS if spec.get("chip_fluence")
+                                  else ivp.IV_CONVENTIONS))
     plt.close(fig)
     return values
 
 
 def vgl_export_panels(stem):
     spec = VGL_VARIANTS[stem]
-    ts.apply_style(1.0)
+    style.apply_style(1.0)
     for index, name in ((1, "h1"), (2, "f1")):
         fig = plt.figure(figsize=ivp.PANEL_FIGSIZE)
         ax = fig.add_axes(ivp.PANEL_AXES)
         _vgl_draw(ax, name, spec, extra="", legend_scale=0.9, skip_title=True)
-        ts.talk_header(ax, name=ts.TELESCOPE_TITLE[name], line1=ivd.LINE1_PARKED,
+        style.header(ax, name=campaign.TELESCOPE_TITLE[name], line1=ivd.LINE1_PARKED,
                        data=spec["data"], pad=6)
-        ts.check_no_clipping(fig, "%s panel %s" % (stem, name))
+        style.audit_figure(fig, "%s panel %s" % (stem, name))
         ivp.check_legend_overlap(fig, tag="%s panel %s" % (stem, name))
         ivp.check_legend_boxes(fig, tag="%s panel %s" % (stem, name))
         for ext in ("png", "pdf"):
             p = os.path.join(OUT, "%s_%02d_%s.%s" % (stem, index, name, ext))
-            fig.savefig(p, dpi=200 if ext == "png" else None, facecolor=ts.SURFACE)
+            fig.savefig(p, dpi=200 if ext == "png" else None, facecolor=style.SURFACE)
         plt.close(fig)
 
 
@@ -809,7 +827,7 @@ IV0809_LOOKS = [IV08_BEFORE, IV08_AFTER]
 IV0809_FOOTER = ("same fluence on both curves, colour marks when the scan was taken; quick scans, "
                  "10 V bins; H1's after-the-rest scan avoids an IH13 diagnostic-switch noise interval")
 
-_iv0809_fl = ts.fluence_label(IV0809_FLUENCE)
+_iv0809_fl = style.fluence_label(IV0809_FLUENCE)
 
 
 def _iv0809_lin_ylim(curves):
@@ -866,7 +884,7 @@ def _iv10_footer(skipped):
 def _iv10_build(panel=None):
     return ivp.ratio_figure(
         "iv10_rest_1p5e15_ratio", OUT, IV08_BEFORE, IV08_AFTER, IV0809_XLIM,
-        tag="IV after / before the four-month rest, %s" % ts.fluence_label(IV08_BEFORE["fluence"]),
+        tag="IV after / before the four-month rest, %s" % style.fluence_label(IV08_BEFORE["fluence"]),
         footer=_iv10_footer, ylabel="I(after rest) / I(before rest)", script=NOTEBOOK, panel=panel)
 
 
@@ -963,7 +981,7 @@ def _iv11_build(panel=None):
     return ivp.look_figure(
         "iv11_lowv_rest", OUT, IV11_LOOKS,
         tag="IV at the low-V knee, before and after the four-month rest, %s"
-            % ts.fluence_label(IV11_FLUENCE),
+            % style.fluence_label(IV11_FLUENCE),
         footer=IV11_FOOTER, xlim=ivp.LOWV_XLIM, yscale="linear", ylim=IV11_YLIM,
         mask_V=ivp.LOWV_MASK_V, marker_step_V=ivp.LOWV_MARKER_STEP_V, point_scale=0.55,
         gap_skip_below_V=10.0, script=NOTEBOOK, panel_subject="low-V knee",
@@ -996,11 +1014,12 @@ if PANELS:
 # the March run at 1.5e15 (H1 400 V, F1 265 V), about +17 hours after the step; after the rest,
 # the July H1 run at 540 V / July F1 run at 460 V, about +4 months after the step. x = hours from
 # each run's own start, so the two looks are read on one clock. July curves drop the first 15
-# minutes after the HV step (the readback is in tolerance there, the current is not).
+# minutes after the HV step (`tsdata.SETTLE_MIN`: the readback is in tolerance there, the current
+# is not). The March run is checked against the March good-run list, and both looks against the
+# threshold offset the footer states.
 
 # %%
 IV13_FLUENCE = 1.5e15
-IV13_SETTLE_MIN = 15.0
 IV13_MARCH_RUN = {"h1": 17, "f1": 17}
 IV13_JULY_RUN = {"h1": "h1_run5", "f1": "f1_run9"}
 IV13_WHEN_BEFORE = "+17 hours"
@@ -1008,8 +1027,9 @@ IV13_WHEN_AFTER = "+4 months"
 IV13_XLABEL = "Time since run start [h]"
 IV13_SUBJECT = "in-run leakage current, before and after the rest"
 IV13_PANEL_SUBJECT = "before / after the rest"
-IV13_FOOTER = ("HV monitor, 60 s medians, readback within 6 V of the run bias, first 15 min after "
-              "the HV step dropped  ·  one good run per look, Disc threshold = baseline + 20")
+IV13_FOOTER = ("HV monitor, 60 s medians, readback within %g V of the run bias, first %g min after "
+              "the HV step dropped  ·  one good run per look, Disc threshold = baseline + %d"
+              % (tsdata.BIAS_TOL_V, tsdata.SETTLE_MIN, campaign.MARCH_OFFSET))
 
 
 def iv13_march_bias(tel, run, chip):
@@ -1026,18 +1046,30 @@ def iv13_context():
     march = tsdata.load_march()
     selection, info = tsdata.july_1p5e15_selection()
     timeline = tsdata.load_july_timeline()
+    # the footer's claims: one good run per look, one threshold offset for both looks
+    if campaign.JULY_1P5E15_OFFSET != campaign.MARCH_OFFSET:
+        raise RuntimeError("IV13_FOOTER states one threshold offset, but the March runs ran at %d "
+                           "and the July 1.5e15 runs at %d; state both"
+                           % (campaign.MARCH_OFFSET, campaign.JULY_1P5E15_OFFSET))
+    tsdata.check_offset(["%s_run%d" % (tel, run) for tel, run in IV13_MARCH_RUN.items()],
+                        campaign.MARCH_YAML, campaign.MARCH_OFFSET)
+    for tel, run in IV13_MARCH_RUN.items():
+        if run not in tsdata.good_runs(tel, good_runs_campaign=campaign.GOOD_RUNS_CAMPAIGN_MARCH)[0]:
+            raise RuntimeError("March run %d of %s is not on the good-run list; choose another in "
+                               "IV13_MARCH_RUN" % (run, tel.upper()))
     for tel, run in IV13_JULY_RUN.items():
         if run not in selection[tel]["chosen"]:
-            raise RuntimeError("%s is not a good RFSel 2 / offset 20 run at 1.5e15 "
+            raise RuntimeError("%s is not a good RFSel %s / offset %s run at %s "
                                "(tsdata.july_1p5e15_selection); choose another in IV13_JULY_RUN"
-                               % run)
+                               % (run, campaign.JULY_1P5E15_RFSEL, campaign.JULY_1P5E15_OFFSET,
+                                  campaign.FLUENCE_TEXT_PLAIN[IV13_FLUENCE]))
     return dict(march=march, info=info, timeline=timeline, selection=selection)
 
 
 def iv13_panel_data(tel, ctx):
-    chips = tsdata.CHIPS[tel]
-    colors = [ivp.timing_color(0, ts.fluence_color(IV13_FLUENCE)),
-             ivp.timing_color(1, ts.fluence_color(IV13_FLUENCE))]
+    chips = campaign.TELESCOPE_CHIPS[tel]
+    colors = [ivp.timing_color(0, style.fluence_color(IV13_FLUENCE)),
+             ivp.timing_color(1, style.fluence_color(IV13_FLUENCE))]
     lines, groups, stats, days = [], [], {}, {}
 
     # ------------------------------------------------------------ before the rest (March)
@@ -1084,7 +1116,7 @@ def iv13_panel_data(tel, ctx):
         sub_all = tl.loc[m].sort_values("tb")
         if sub_all.empty:
             continue
-        sub = sub_all.loc[sub_all["tb"] >= w["start"] + pd.Timedelta(minutes=IV13_SETTLE_MIN)]
+        sub = sub_all.loc[sub_all["tb"] >= w["start"] + pd.Timedelta(minutes=tsdata.SETTLE_MIN)]
         if sub.empty:
             continue
         hours = (sub["tb"] - origin).dt.total_seconds() / 3600.0
@@ -1136,7 +1168,7 @@ def iv13_draw_wrap(ax, tel):
 
 ivp.compound_1x2(
     "iv13_current_vs_time_rest", OUT, iv13_draw_wrap, tag=IV13_SUBJECT, footer_text=IV13_FOOTER,
-    line1=ts.HEADER_LINE_1, script=NOTEBOOK,
+    line1=campaign.HEADER_LINE_1, script=NOTEBOOK,
     inputs=[tsdata.JULY_TIMELINE, tsdata.JULY_REF_CSV, tsdata.GOOD_RUNS_CSV,
             os.path.join(tsdata.INPUTS, "march", "march_inrun_60s.csv"), tsdata.F1_WINDOWS_CSV,
             tsdata.JULY_YAML],
@@ -1147,7 +1179,7 @@ ivp.compound_1x2(
 show("iv13_current_vs_time_rest")
 if PANELS:
     export_panels("iv13_current_vs_time_rest", iv13_draw_wrap, IV13_PANEL_SUBJECT,
-                  line1=ts.HEADER_LINE_1)
+                  line1=campaign.HEADER_LINE_1)
 
 # %% [markdown]
 # ## July 2026: IV at 2e15
@@ -1181,7 +1213,7 @@ def _iv1415_lin_ylim(curves):
 def _iv14_build(panel=None):
     return ivp.look_figure(
         "iv14_2e15", OUT, IV1415_LOOKS,
-        tag="IV at %s: right after / +2 / +3 days (linear y)" % ts.fluence_label(IV1415_FLUENCE),
+        tag="IV at %s: right after / +2 / +3 days (linear y)" % style.fluence_label(IV1415_FLUENCE),
         footer=IV1415_FOOTER, xlim=IV1415_XLIM, yscale="linear", ylim=_iv1415_lin_ylim,
         script=NOTEBOOK, panel_subject="full range, linear y", panel=panel)
 
@@ -1195,7 +1227,7 @@ if PANELS:
 def _iv15_build(panel=None):
     return ivp.look_figure(
         "iv15_2e15_log", OUT, IV1415_LOOKS,
-        tag="IV at %s: right after / +2 / +3 days (log y)" % ts.fluence_label(IV1415_FLUENCE),
+        tag="IV at %s: right after / +2 / +3 days (log y)" % style.fluence_label(IV1415_FLUENCE),
         footer=IV1415_FOOTER, xlim=IV1415_XLIM, yscale="log", ylim=IV1415_LOG_YLIM,
         script=NOTEBOOK, panel_subject="full range, log y", panel=panel)
 
@@ -1228,7 +1260,7 @@ IV16_FOOTER = ("fine scans, 0.1 V bins, one marker every ~10 V; the +3 days look
 def _iv16_build(panel=None):
     return ivp.look_figure(
         "iv16_2e15_lowv", OUT, IV16_LOOKS,
-        tag="IV at %s, low-V knee" % ts.fluence_label(IV16_FLUENCE),
+        tag="IV at %s, low-V knee" % style.fluence_label(IV16_FLUENCE),
         footer=IV16_FOOTER, xlim=ivp.LOWV_XLIM, yscale="linear", mask_V=ivp.LOWV_MASK_V,
         marker_step_V=ivp.LOWV_MARKER_STEP_V, point_scale=0.55, gap_skip_below_V=10.0,
         script=NOTEBOOK, panel_subject="low-V knee", panel=panel)
@@ -1269,7 +1301,7 @@ def _iv1718_lin_ylim(curves):
     return (0.0, 1.1 * max(float(c["i"].max()) for c in curves))
 
 
-_iv1718_fl = ts.fluence_label(IV1718_FLUENCE)
+_iv1718_fl = style.fluence_label(IV1718_FLUENCE)
 
 
 def _iv17_build(panel=None):
@@ -1322,7 +1354,7 @@ IV19_FOOTER = ("fine scans, 0.1 V bins, one marker every ~10 V; the right-after 
 def _iv19_build(panel=None):
     return ivp.look_figure(
         "iv19_3p5e15_lowv", OUT, IV19_LOOKS,
-        tag="IV at %s, low-V knee" % ts.fluence_label(IV19_FLUENCE),
+        tag="IV at %s, low-V knee" % style.fluence_label(IV19_FLUENCE),
         footer=IV19_FOOTER, xlim=ivp.LOWV_XLIM, yscale="linear", mask_V=ivp.LOWV_MASK_V,
         marker_step_V=ivp.LOWV_MARKER_STEP_V, point_scale=0.55, gap_skip_below_V=10.0,
         script=NOTEBOOK, panel_subject="low-V knee", panel=panel)
@@ -1371,7 +1403,7 @@ def _iv20_rows(tel):
             continue
         hours = max((pd.Timestamp(sub.iloc[0]["start_utc"]) - rad_stop).total_seconds() / 3600.0,
                     0.0)
-        for chip in ts.TELESCOPE_CHIPS[tel]:
+        for chip in campaign.TELESCOPE_CHIPS[tel]:
             r = sub[sub["board"] == "PT_" + chip]
             if r.empty or pd.isna(r.iloc[0]["I_%dV_uA" % int(IV20_V_AT)]):
                 continue
@@ -1383,10 +1415,10 @@ def _iv20_rows(tel):
 def _iv20_draw(ax, tel):
     rows = _iv20_rows(tel)
     look_colors = dict(ivp.look_series([(x["fluence"], x.get("when")) for x in IV20_LOOKS]))
-    for chip in ts.TELESCOPE_CHIPS[tel]:
+    for chip in campaign.TELESCOPE_CHIPS[tel]:
         sub = sorted([r for r in rows if r["chip"] == chip], key=lambda r: r["hours"])
         for r in sub:
-            kw = ts.point_style(chip, IV1718_FLUENCE, color=look_colors[r["look"]],
+            kw = style.point_style(chip, IV1718_FLUENCE, color=look_colors[r["look"]],
                                 scale=IV20_POINT_SCALE, line=False)
             kw.pop("capsize", None)
             kw.pop("elinewidth", None)
@@ -1396,14 +1428,14 @@ def _iv20_draw(ax, tel):
     ax.get_xaxis().set_major_formatter(mticker.ScalarFormatter())
     ax.set_xlabel(IV20_XLABEL)
     ax.set_ylabel(r"$|I|$ at %d V [$\mu$A]" % int(IV20_V_AT))
-    ts.style_axes(ax)
-    ts.panel_title(ax, tel)
-    s = ts.sizes(IV20_LEGEND_SCALE)
+    style.style_axes(ax)
+    style.panel_title(ax, tel)
+    s = style.sizes(IV20_LEGEND_SCALE)
     lf = ax.legend(handles=ivp.look_handles(ivp.look_series(
         [(x["fluence"], x.get("when")) for x in IV20_LOOKS]), IV20_LEGEND_SCALE),
         loc="upper right", fontsize=s["legend"])
     ax.add_artist(lf)
-    ax.legend(handles=ts.chip_handles(ts.TELESCOPE_CHIPS[tel], IV20_LEGEND_SCALE),
+    ax.legend(handles=style.chip_handles(campaign.TELESCOPE_CHIPS[tel], IV20_LEGEND_SCALE),
               loc="lower left", fontsize=s["legend"])
     return rows
 
@@ -1411,13 +1443,13 @@ def _iv20_draw(ax, tel):
 def _iv20_build(panel=None):
     panels = {"h1": (lambda ax, ctx: _iv20_draw(ax, "h1"), "current at %d V" % int(IV20_V_AT)),
              "f1": (lambda ax, ctx: _iv20_draw(ax, "f1"), "current at %d V" % int(IV20_V_AT))}
-    chosen = ts.resolve_panels(panel, panels)
+    chosen = style.resolve_panels(panel, panels)
     if chosen:
         return ivp.export_panels_1x2("iv20_3p5e15_hours", OUT, chosen)
     return ivp.compound_1x2(
         "iv20_3p5e15_hours", OUT, lambda ax, tel: _iv20_draw(ax, tel),
         tag="Current at %d V vs time after the %s step"
-            % (int(IV20_V_AT), ts.fluence_label(IV1718_FLUENCE)),
+            % (int(IV20_V_AT), style.fluence_label(IV1718_FLUENCE)),
         footer_text=IV20_FOOTER, script=NOTEBOOK,
         values_fn=lambda rh, rf: dict(h1=rh, f1=rf, v_at_V=IV20_V_AT),
         inputs=[os.path.join(ivd.INPUTS_JULY, "july_iv_scans.csv")])
@@ -1437,13 +1469,15 @@ if PANELS:
 # left / F1 right. Each bias condition has its own colour (the fluence colour for the highest bias,
 # then the timing colours) and exactly one legend entry. The 1.5e15 step, the March sensors
 # measured again after the four-month rest, is drawn from every good RFSel 2 / Disc offset 20 run
-# at that step; 2e15 and 3.5e15 draw the good RFSel 2 / Disc offset 20 runs of the campaign's
-# display-run list (`july/display_runs_jul.csv` in the inputs folder), and of those only the boards
-# whose HV plateau in the per-run current table (`july/july_inrun_currents.csv`) lasts at least
-# 4 h. Every run or board left out is listed in the values file with the reason (`rejected`,
-# `not_good`, `dropped_boards`). A run whose drawn median disagrees with the reference current by
-# more than 5% is dropped and reported. Every curve drops the first 15 minutes after the HV step
-# (the readback is already in tolerance there, the current is not).
+# at that step (the campaign's `JULY_1P5E15_RFSEL` / `JULY_1P5E15_OFFSET`); 2e15 and 3.5e15 draw
+# the good RFSel 2 / Disc offset 20 runs (`JULY_STEPS_RFSEL` / `JULY_STEPS_OFFSET`) of the
+# campaign's display-run list (`july/display_runs_jul.csv` in the inputs folder), and of those only
+# the boards whose HV plateau in the per-run current table (`july/july_inrun_currents.csv`) lasts
+# at least 4 h (`JULY_MIN_PLATEAU_H`). Every run or board left out is listed in the values file
+# with the reason (`rejected`, `not_good`, `dropped_boards`). A run whose drawn median disagrees
+# with the reference current by more than 5 % (`IV2123_ASSERT_TOL_PCT`) is dropped and reported.
+# Every curve drops the first 15 minutes after the HV step (`tsdata.SETTLE_MIN`: the readback is
+# already in tolerance there, the current is not).
 
 # %%
 IV2123_ASSERT_TOL_PCT = 5.0
@@ -1458,9 +1492,9 @@ IV2123_IH7_EXCURSION_NOTE = "IH7 excursions left as logged"
 
 IV2123_SUBJECT = "in-run leakage current"
 IV2123_PANEL_SUBJECT = "in-run current"
-IV2123_FOOTER = ("HV monitor, 60 s medians, readback within %g V of the run bias, first 15 min "
-                 "after the HV step dropped  ·  good runs only, RFSel %s, "
-                 "Disc threshold = baseline + %s")   # tolerance, RFSel, offset
+IV2123_FOOTER = ("HV monitor, 60 s medians, readback within %%g V of the run bias, first %g min "
+                 "after the HV step dropped  ·  good runs only, RFSel %%s, "
+                 "Disc threshold = baseline + %%s" % tsdata.SETTLE_MIN)   # tolerance, RFSel, offset
 # second footer line at the irradiation steps (july_run_selection's plateau minimum)
 IV2123_PLATEAU_FOOTER = ("boards with an HV plateau shorter than %g h in the per-run current "
                          "table are not drawn" % tsdata.JULY_MIN_PLATEAU_H)
@@ -1474,10 +1508,10 @@ IV2123_VARIANTS = {
 
 def _iv2123_select(fluence):
     """(selection, info, timeline, checked, excluded) for one July fluence step."""
-    if ts.fluence_key(fluence) == ts.fluence_key(1.5e15):
+    if style.fluence_key(fluence) == style.fluence_key(1.5e15):
         selection, info = tsdata.july_1p5e15_selection()
     else:
-        step = [f for f in tsdata.JULY_STEPS if ts.fluence_key(f) == ts.fluence_key(fluence)]
+        step = [f for f in tsdata.JULY_STEPS if style.fluence_key(f) == style.fluence_key(fluence)]
         if not step:
             raise ValueError("%g p/cm2 is neither the 1.5e15 re-measurement nor a July "
                              "irradiation step %s" % (fluence, tsdata.JULY_STEPS))
@@ -1487,7 +1521,7 @@ def _iv2123_select(fluence):
     for tel_key, tel_name in tsdata.JULY_TEL.items():
         for run in list(selection[tel_key]["chosen"]):
             chip_res, run_fail = {}, False
-            for c, chip in enumerate(tsdata.CHIPS[tel_key]):
+            for c, chip in enumerate(campaign.TELESCOPE_CHIPS[tel_key]):
                 key = (tel_key, run, chip)
                 if key not in info:
                     continue
@@ -1514,13 +1548,13 @@ def _iv2123_select(fluence):
 
 
 def _iv2123_run_step_reference(fluence):
-    if ts.fluence_key(fluence) == ts.fluence_key(1.5e15):
+    if style.fluence_key(fluence) == style.fluence_key(1.5e15):
         return pd.Timestamp(IV2123_JULY_1P5E15_RESTART_UTC)
-    return pd.Timestamp(ivd.RAD_STOP_UTC[ts.fluence_key(fluence)])
+    return pd.Timestamp(ivd.RAD_STOP_UTC[style.fluence_key(fluence)])
 
 
 def _iv2123_hours_label(bias_txt, hours, fluence):
-    if ts.fluence_key(fluence) == ts.fluence_key(1.5e15) and hours > 48.0:
+    if style.fluence_key(fluence) == style.fluence_key(1.5e15) and hours > 48.0:
         return "%s, +%d d" % (bias_txt, int(round(hours / 24.0)))
     if hours < 10.0:
         return "%s, +%.1f h" % (bias_txt, hours)
@@ -1535,16 +1569,16 @@ def _iv2123_panel_data(tel, fluence, selection, info, timeline):
     tel_name = tsdata.JULY_TEL[tel]
     runs = []
     for run in selection[tel]["chosen"]:
-        keys = [(tel, run, c) for c in tsdata.CHIPS[tel] if (tel, run, c) in info]
+        keys = [(tel, run, c) for c in campaign.TELESCOPE_CHIPS[tel] if (tel, run, c) in info]
         keys = [k for k in keys
-                if ts.fluence_key(float(info[k]["fluence"])) == ts.fluence_key(fluence)]
+                if style.fluence_key(float(info[k]["fluence"])) == style.fluence_key(fluence)]
         if keys:
             runs.append((run, keys))
     keys_of = dict(runs)
     ref_utc = _iv2123_run_step_reference(fluence)
     run_bias = {run: max(info[k]["bias_V"] for k in keys) for run, keys in runs}
     order = sorted(run_bias, key=lambda r: -run_bias[r])
-    color_of = {run: ivp.timing_color(i, ts.fluence_color(fluence)) for i, run in enumerate(order)}
+    color_of = {run: ivp.timing_color(i, style.fluence_color(fluence)) for i, run in enumerate(order)}
     hours_of = {run: (min(info[k]["start"] for k in keys_of[run]) - ref_utc).total_seconds()
                      / 3600.0
                 for run in order}
@@ -1556,7 +1590,7 @@ def _iv2123_panel_data(tel, fluence, selection, info, timeline):
         x_ends, y_ends, dropped = [], [], []
         for k in keys:
             chip = k[2]
-            c = tsdata.CHIPS[tel].index(chip)
+            c = campaign.TELESCOPE_CHIPS[tel].index(chip)
             w = info[k]
             m = ((timeline["tel"] == tel_name) & (timeline["channel"] == c)
                  & (timeline["tb"] >= w["start"]) & (timeline["tb"] <= w["end"])
@@ -1628,10 +1662,10 @@ def _iv2123_build(stem, fluence, panel=None):
     if panel:
         panels = {"h1": (lambda ax, c: _iv2123_draw(ax, "h1", fluence, ctx), IV2123_PANEL_SUBJECT),
                  "f1": (lambda ax, c: _iv2123_draw(ax, "f1", fluence, ctx), IV2123_PANEL_SUBJECT)}
-        chosen = ts.resolve_panels(panel, panels)
-        return ivp.export_panels_1x2(stem, OUT, chosen, line1=ts.HEADER_LINE_1)
+        chosen = style.resolve_panels(panel, panels)
+        return ivp.export_panels_1x2(stem, OUT, chosen, line1=campaign.HEADER_LINE_1)
 
-    at_step = any(ts.fluence_key(fluence) == ts.fluence_key(f) for f in tsdata.JULY_STEPS)
+    at_step = any(style.fluence_key(fluence) == style.fluence_key(f) for f in tsdata.JULY_STEPS)
     rfsel, offset = ((tsdata.JULY_STEPS_RFSEL, tsdata.JULY_STEPS_OFFSET) if at_step
                      else (tsdata.JULY_1P5E15_RFSEL, tsdata.JULY_1P5E15_OFFSET))
     footer = (IV2123_FOOTER % (tsdata.BIAS_TOL_V, rfsel, offset)
@@ -1639,7 +1673,7 @@ def _iv2123_build(stem, fluence, panel=None):
     inputs = [tsdata.JULY_TIMELINE, tsdata.JULY_REF_CSV, tsdata.GOOD_RUNS_CSV]
     inputs += [tsdata.DISPLAY_RUNS_JUL_CSV] if at_step else [tsdata.JULY_YAML]
     return ivp.compound_1x2(stem, OUT, draw, tag=IV2123_SUBJECT, footer_text=footer,
-                            line1=ts.HEADER_LINE_1, values_fn=values_fn, script=NOTEBOOK,
+                            line1=campaign.HEADER_LINE_1, values_fn=values_fn, script=NOTEBOOK,
                             inputs=inputs)
 
 
@@ -1656,7 +1690,7 @@ for _iv2123_stem, _iv2123_spec in IV2123_VARIANTS.items():
 # Per-run bias current vs elapsed time in the run, one row of small panels per telescope: H1 in
 # figure 24, F1 in figure 25. The runs (those in the `top` rows of
 # `july/res_vs_run_combo_check_jul_values.json` in the inputs folder, a values file made outside
-# this repository, see `../iv/campaigns/irrad_2026_inputs.md`) are drawn in ascending run number,
+# this repository, see `../campaigns/irrad_2026_inputs.md`) are drawn in ascending run number,
 # each with its class, flag, fluence, threshold offset and RFSel from that file. The currents come
 # from the July HV-monitor log (`july/timeline_60s.csv.gz`), the HV and LV cycle marks from
 # `july/hv_cycles_jul.csv`. The figures are drawn by the
@@ -1668,7 +1702,7 @@ for _iv2123_stem, _iv2123_spec in IV2123_VARIANTS.items():
 # %%
 from etroc_plots.iv import current_vs_run as cvr              # noqa: E402
 
-ts.apply_style(1.0)
+style.apply_style(1.0)
 _iv2425_runs_by_tel, _iv2425_meta, _iv2425_combo_json = cvr.load_combo_meta()
 _iv2425_run_win, _iv2425_board_meta = cvr.load_currents_meta()
 _iv2425_timeline = cvr.load_timeline()
@@ -1718,7 +1752,7 @@ IV2627_LOOKS = [
 
 IV2627_FOOTER = ("one look per step: March steps at +2 days (fine scans, full range), the 1.5e15 "
                  "sensors again after the four-month rest, then the July steps (quick scans)")
-IV28_FOOTER = IV2627_FOOTER + u"\n" + ivp.CHIP_DOSE_FOOTER
+IV28_FOOTER = IV2627_FOOTER + u"\n" + ivp.CHIP_FLUENCE_FOOTER
 
 
 def _iv2627_lin_ylim(curves):
@@ -1758,23 +1792,23 @@ if PANELS:
 # ### Figure 28: IV across the campaign, fluence on chip
 #
 # The same figure as 26, with each legend entry giving the fluence actually seen on chip
-# (`ivp.CHIP_DOSE_FACTOR` times the IRRAD bookkeeping fluence) instead of the bookkeeping fluence.
+# (`ivp.CHIP_FLUENCE_FACTOR` times the IRRAD bookkeeping fluence) instead of the bookkeeping fluence.
 # The x axis stays bias voltage; looks, colours and timing labels are those of figure 26.
 
 # %%
 def _iv28_build(panel=None):
     return ivp.look_figure(
-        "iv28_campaign_chipdose", OUT, IV2627_LOOKS,
+        "iv28_campaign_chipfluence", OUT, IV2627_LOOKS,
         tag="IV across the campaign, one curve per step (linear y, fluence on chip)",
         footer=IV28_FOOTER, xlim=IV2627_XLIM, yscale="linear", ylim=_iv2627_lin_ylim,
         legend_scale=IV2627_LEGEND_SCALE, gap_skip_below_V=80.0, script=NOTEBOOK,
-        panel_subject="full range, linear y", chip_dose=True, panel=panel)
+        panel_subject="full range, linear y", chip_fluence=True, panel=panel)
 
 
 _iv28_build()
-show("iv28_campaign_chipdose")
+show("iv28_campaign_chipfluence")
 if PANELS:
-    flatten_panels("iv28_campaign_chipdose", _iv28_build(panel=["all"]))
+    flatten_panels("iv28_campaign_chipfluence", _iv28_build(panel=["all"]))
 
 # %% [markdown]
 # ### Figure 29: the low-V knee across the campaign
@@ -1799,8 +1833,7 @@ IV29_LOOKS = [
 ]
 
 IV29_FOOTER = ("fine scans only, 0.1 V bins, one marker every ~10 V; the after-the-rest look is "
-              "the 2026-07-16 legacy fine scan; pre-irradiation is not drawn (its fine scan is "
-              "in figure 3)")
+              "the 2026-07-16 legacy fine scan; pre-irradiation is not drawn")
 
 
 def _iv29_build(panel=None):
@@ -1836,7 +1869,7 @@ def _iv30_footer(skipped):
 def _iv30_build(panel=None):
     return ivp.ratio_figure(
         "iv30_campaign_ratio", OUT, IV08_BEFORE, IV08_AFTER, IV0809_XLIM,
-        tag="IV after / before the four-month rest, %s" % ts.fluence_label(IV08_BEFORE["fluence"]),
+        tag="IV after / before the four-month rest, %s" % style.fluence_label(IV08_BEFORE["fluence"]),
         footer=_iv30_footer, ylabel="I(after rest) / I(before rest)", script=NOTEBOOK, panel=panel)
 
 
@@ -1854,7 +1887,7 @@ if PANELS:
 # right-after and after-cooling-down scans, plus the 1.5e15 four-month-rest point, out to 3.5e15.
 # As in figure 7, the x axis is the bookkeeping fluence and the per-chip points are not joined by a
 # line. Figure 32 is the same data with every fluence value, axis label and legend switched to
-# fluence on chip (`ivp.CHIP_DOSE_FACTOR`) instead of bookkeeping fluence. Figure 33 stops the
+# fluence on chip (`ivp.CHIP_FLUENCE_FACTOR`) instead of bookkeeping fluence. Figure 33 stops the
 # ladder at 2e15, with no 3.5e15 point.
 #
 # All three use the `VGL_VARIANTS` and `_vgl_draw` code defined under figure 7.
@@ -1862,7 +1895,7 @@ if PANELS:
 # %%
 VGL_VARIANTS.update({
     "iv31_vgl_campaign": dict(fluence_max=3.7e15, include_4mo=True, data="full campaign"),
-    "iv32_vgl_campaign_chipdose": dict(fluence_max=3.7e15, include_4mo=True, chip_dose=True,
+    "iv32_vgl_campaign_chipfluence": dict(fluence_max=3.7e15, include_4mo=True, chip_fluence=True,
                                        data="full campaign"),
     "iv33_vgl_to_2e15": dict(fluence_max=2.2e15, include_4mo=True, data="March 2026 to 2e15"),
 })
@@ -1872,10 +1905,10 @@ show("iv31_vgl_campaign")
 if PANELS:
     vgl_export_panels("iv31_vgl_campaign")
 
-vgl_figure("iv32_vgl_campaign_chipdose")
-show("iv32_vgl_campaign_chipdose")
+vgl_figure("iv32_vgl_campaign_chipfluence")
+show("iv32_vgl_campaign_chipfluence")
 if PANELS:
-    vgl_export_panels("iv32_vgl_campaign_chipdose")
+    vgl_export_panels("iv32_vgl_campaign_chipfluence")
 
 vgl_figure("iv33_vgl_to_2e15")
 show("iv33_vgl_to_2e15")
@@ -1892,9 +1925,9 @@ if PANELS:
 # the four boards' separate fits are the point. An exponential is not the only shape these points
 # allow (the single-exponential fits' chi2/ndf, printed on figures 35, 36, 38 and 39, is far above
 # 1), so the log view is drawn beside the linear one rather than instead of it: the linear view
-# keeps the 0-55 V range of every V_gl plot and carries the fit table, the log view is the shape
-# check. Open markers are the scan right after a step, filled are after cooling down (2 to 4
-# days), half-filled is the 4-month-later look.
+# keeps the 0-55 V range of every linear V_gl plot and carries the fit table, the log view is
+# the shape check. Open markers are the scan right after a step, filled are after cooling down
+# (2 to 4 days), half-filled is the 4-month-later look.
 #
 # Figures 35 and 38 compare the fitted slope to published removal-constant measurements: the
 # average fit curve and every reference curve are forced through this campaign's own fitted V0, so
@@ -1907,10 +1940,9 @@ if PANELS:
 
 # %%
 from etroc_plots.iv import vgl_plot as vglp, vgl, vgl_style           # noqa: E402
-from etroc_plots.iv.campaigns import active as vglc                  # noqa: E402
 from matplotlib.gridspec import GridSpec                             # noqa: E402
 
-IV3439_TELS = [("h1", vglc.VGL_H1, (35.0, 0.4)), ("f1", vglc.VGL_F1, (45.0, 0.2))]
+IV3439_TELS = [("h1", campaign.VGL_H1, (35.0, 0.4)), ("f1", campaign.VGL_F1, (45.0, 0.2))]
 IV3439_DATA = "March + July 2026"
 
 IV3439_PANEL = {
@@ -1926,21 +1958,21 @@ IV3439_LINE_KEYS = {"h1": (("-", "PS protons, 23-24 GeV"), ("-.", "reactor neutr
 
 
 def _iv3439_fits(tel, table, p0):
-    return vglp.fit_boards(table, vglc.TEL_CHIPS[tel], p0)
+    return vglp.fit_boards(table, campaign.TELESCOPE_CHIPS[tel], p0)
 
 
 def _iv3439_refs(tel):
-    return vgl.reference_rows(vglc.VGL_VENDOR[tel], vglc.CHIP_HIT_FRACTION, vglc.CONV_FULL,
-                              vglc.NIEL_24GEV, vglc.CHIP_HIT_REL_ERR, vglc.VGL_REF_ALTERNATES[tel])
+    return vgl.reference_rows(campaign.VGL_VENDOR[tel], campaign.CHIP_FLUENCE_FACTOR, campaign.CONV_FULL,
+                              campaign.NIEL_24GEV, campaign.CHIP_FLUENCE_REL_ERR, campaign.VGL_REF_ALTERNATES[tel])
 
 
 def _iv3439_finish(fig, axes, stem, values, subjects=None):
-    ts.compound_header(axes, line1=vglc.LINE1_PARKED, data=IV3439_DATA, pad=6, subjects=subjects)
-    ts.lower_footer(fig)   # the footer's final band, so the audits see the saved layout
-    problems = ts.check_no_clipping(fig, stem)
+    style.compound_header(axes, line1=campaign.LINE1_PARKED, data=IV3439_DATA, pad=6, subjects=subjects)
+    style.lower_footer(fig)   # the footer's final band, so the audits see the saved layout
+    problems = style.audit_figure(fig, stem)
     legend_problems = ivp.check_legend_overlap(fig, tag=stem)
     box_problems = ivp.check_legend_boxes(fig, tag=stem)
-    ts.save_figure(fig, OUT, stem, audit=False)
+    style.save_figure(fig, OUT, stem, audit=False)
     values = dict(values, overlap_problems=problems, legend_overlap_problems=legend_problems,
                   legend_box_problems=box_problems)
     ivp.write_values(OUT, stem, values, script=NOTEBOOK,
@@ -1949,7 +1981,7 @@ def _iv3439_finish(fig, axes, stem, values, subjects=None):
 
 
 def _iv3439_build_fit(stem, yscale):
-    ts.apply_style(1.0)
+    style.apply_style(1.0)
     fig = plt.figure(figsize=ivp.COMPOUND_FIGSIZE)
     adj = dict(ivp.COMPOUND_ADJUST, bottom=0.16)
     gs = GridSpec(2, 2, height_ratios=[3.0, 1.15], hspace=0.08,
@@ -1957,7 +1989,7 @@ def _iv3439_build_fit(stem, yscale):
                  bottom=adj["bottom"], wspace=adj["wspace"])
     axes, values = [], {}
     for col, (tel, table, p0) in enumerate(IV3439_TELS):
-        boards = vglc.TEL_CHIPS[tel]
+        boards = campaign.TELESCOPE_CHIPS[tel]
         ax = fig.add_subplot(gs[0, col])
         axr = fig.add_subplot(gs[1, col], sharex=ax)
         values[tel] = vglp.draw_fit_panel(
@@ -1965,14 +1997,14 @@ def _iv3439_build_fit(stem, yscale):
             colors=vgl_style.by_board(boards),
             xoff=vgl_style.by_board(boards, vgl_style.XOFFSETS),
             fits=_iv3439_fits(tel, table, p0), yscale=yscale, **IV3439_PANEL[yscale][tel])
-        ts.panel_title(ax, tel)
+        style.panel_title(ax, tel)
         axes.append(ax)
-    ts.footer(fig, vglp.FOOTER)
+    style.footer(fig, vglp.FOOTER)
     _iv3439_finish(fig, axes, stem, values)
 
 
 def _iv3439_build_compare(stem, yscale):
-    ts.apply_style(1.0)
+    style.apply_style(1.0)
     fig = plt.figure(figsize=(ivp.COMPOUND_FIGSIZE[0], 12.0))
     gs = GridSpec(2, 2, height_ratios=[3.0, 2.3], hspace=0.45, left=0.075, right=0.985,
                  top=0.935, bottom=0.085, wspace=0.24)
@@ -1982,43 +2014,43 @@ def _iv3439_build_compare(stem, yscale):
         ax = fig.add_subplot(gs[0, col])
         values[tel] = vglp.draw_compare_panel(ax, table, fits, refs, yscale=yscale,
                                               line_keys=IV3439_LINE_KEYS[tel])
-        ts.panel_title(ax, tel)
+        style.panel_title(ax, tel)
         axc = fig.add_subplot(gs[1, col])
         pos = axc.get_position()
         axc.set_position([pos.x0 + 0.155, pos.y0, pos.width - 0.215, pos.height])
         vglp.draw_slope_strip(axc, fits, refs, tel.upper())
         chi2[tel] = values[tel]["chi2_ndf"]
         axes.append(ax)
-    ts.footer(fig, (
+    style.footer(fig, (
         "curves forced through each telescope's own fitted V0: only the slope c is compared; "
-        "published c x %.2f per p, x %.3f per n$_{eq}$; band = $\\pm$%d %% on-chip fluence or "
+        "published c x %.3f per p, x %.3f per n$_{eq}$; band = $\\pm$%d %% on-chip fluence or "
         "wafer spread\n"
         "c is an effective slope: single-exponential fits give $\\chi^2$/ndf = %.0f (H1), %.0f "
         "(F1) at %.1f V per point; open = right after, filled = after cooling down, half = "
         "4 months"
-        % (vglc.CHIP_HIT_FRACTION, vglc.CONV_FULL, round(100 * vglc.CHIP_HIT_REL_ERR),
+        % (campaign.CHIP_FLUENCE_FACTOR, campaign.CONV_FULL, round(100 * campaign.CHIP_FLUENCE_REL_ERR),
            chi2["h1"], chi2["f1"], vgl.SIGMA_V)))
     _iv3439_finish(fig, axes, stem, values)
 
 
 def _iv3439_build_h1_vs_f1(stem, yscale):
-    ts.apply_style(1.0)
+    style.apply_style(1.0)
     fig = plt.figure(figsize=ivp.COMPOUND_FIGSIZE)
     fig.subplots_adjust(**dict(ivp.COMPOUND_ADJUST, bottom=0.16))
     axn, axa = fig.subplots(1, 2)
     sets, chi2 = [], {}
     for tel, table, p0 in IV3439_TELS:
         fa = _iv3439_fits(tel, table, p0)["all"]["average"]
-        phi, v = vgl.avg_series(table, (vglc.PROMPT,))
-        label = "%s (%s)" % (tel.upper(), vglc.VGL_VENDOR[tel])
+        phi, v = vgl.avg_series(table, (campaign.PROMPT,))
+        label = "%s (%s)" % (tel.upper(), campaign.VGL_VENDOR[tel])
         sets.append(dict(tel=tel, label=label, phi=phi, v=v, V0=fa["V0"], c_1e16=fa["c_1e16"],
                          c_1e16_err=fa["c_1e16_err"]))
         chi2[tel] = fa["chi2_ndf_sigma0p2"]
     values = vglp.draw_h1_vs_f1(axn, axa, sets, yscale=yscale)
-    ts.footer(fig, (
+    style.footer(fig, (
         "board-average scans right after each step (open markers) and their single-exponential "
         "fits; colour and marker = telescope; H1 and F1 sat back to back in the same box\n"
-        "the chip-hit fraction and NIEL cancel in c(H1)/c(F1); c is an effective slope, "
+        "the on-chip fluence factor and NIEL cancel in c(H1)/c(F1); c is an effective slope, "
         "$\\chi^2$/ndf = %.0f (H1), %.0f (F1) at %.1f V per point"
         % (chi2["h1"], chi2["f1"], vgl.SIGMA_V)))
     _iv3439_finish(fig, [axn, axa], stem, values,
@@ -2072,10 +2104,10 @@ IV40_FOOTER = "HV monitor, 60 s medians, before the H1/F1 setup swap; ramp-down 
 
 
 def _iv40_load():
-    df = pd.read_csv(vglc.MARCH_SPARK_CSV)
+    df = pd.read_csv(campaign.MARCH_SPARK_CSV)
     df["Date"] = pd.to_datetime(df["Date"], format="%m/%d/%Y %H:%M:%S.%f", errors="coerce")
     df = df.dropna(subset=["Date"]).sort_values("Date")
-    df["tb"] = df["Date"] - pd.Timedelta(hours=vglc.PREIRRAD_LOG_UTC_OFFSET_H)   # local -> UTC
+    df["tb"] = df["Date"] - pd.Timedelta(hours=campaign.PREIRRAD_LOG_UTC_OFFSET_H)   # local -> UTC
     df = df[(df["tb"] >= IV40_DAY_LO) & (df["tb"] <= IV40_DAY_HI)]
     return df
 
@@ -2116,7 +2148,7 @@ def _iv40_data():
     if not held_chips:
         raise RuntimeError("figure 40: no channel of %s stays at or above %.0f uA for %.0f min "
                            "between %s and %s UTC; check the file and the IV40_* settings"
-                           % (vglc.MARCH_SPARK_CSV, IV40_HOLD_DETECT_UA, IV40_HOLD_MIN_MIN,
+                           % (campaign.MARCH_SPARK_CSV, IV40_HOLD_DETECT_UA, IV40_HOLD_MIN_MIN,
                               IV40_DAY_LO, IV40_DAY_HI))
     t0 = min(holds[c]["start"] for c in held_chips)
     hold_end = max(holds[c]["end"] for c in held_chips)
@@ -2145,27 +2177,27 @@ def _iv40_draw_v(ax, data):
     vmax = max(float(s["v"].max()) for s in data["series"].values())
     ax.set_ylim(0.0, vmax * 1.12)
     ax.set_ylabel(IV40_YLABEL_V)
-    ts.style_axes(ax)
+    style.style_axes(ax)
     handles = [Line2D([], [], **{k: v for k, v in _iv40_style(c, s).items() if k != "alpha"},
                       label="%s (%s)" % (c, "held" if s["held"] else "not held"))
               for c, s in data["series"].items()]
-    ax.legend(handles=handles, loc="lower left", fontsize=ts.sizes(1.0)["legend"], ncol=2,
+    ax.legend(handles=handles, loc="lower left", fontsize=style.sizes(1.0)["legend"], ncol=2,
              framealpha=0.9)
 
 
 def _iv40_draw_i(ax, data):
     for chip, s in data["series"].items():
         ax.plot(s["x"], s["i"], markevery=IV40_MARKEVERY, **_iv40_style(chip, s))
-    ax.axhline(IV40_CURRENT_LIMIT_UA, color=ts.INK, linestyle="--", linewidth=1.3, zorder=1)
+    ax.axhline(IV40_CURRENT_LIMIT_UA, color=style.INK, linestyle="--", linewidth=1.3, zorder=1)
     ax.set_ylim(0.0, IV40_CURRENT_LIMIT_UA * 1.10)
     xmax = max(float(s["x"].max()) for s in data["series"].values())
     ax.set_xlim(0.0, xmax * 1.02)
     ax.set_xlabel("Minutes since the start of the hold")
     ax.set_ylabel(ivp.YLABEL_I)
-    ts.style_axes(ax)
+    style.style_axes(ax)
     ax.annotate("4 mA limit", xy=(xmax * 1.02, IV40_CURRENT_LIMIT_UA), xytext=(-4, 5),
                textcoords="offset points", ha="right", va="bottom",
-               fontsize=ts.sizes(1.0)["ann"], color=ts.INK, annotation_clip=False)
+               fontsize=style.sizes(1.0)["ann"], color=style.INK, annotation_clip=False)
 
 
 def _iv40_footer_text(data):
@@ -2188,40 +2220,40 @@ def _iv40_values(data):
 def iv40_build():
     stem = "iv40_spark_march"
     data = _iv40_data()
-    ts.apply_style(1.0)
+    style.apply_style(1.0)
     fig, (ax_v, ax_i) = plt.subplots(2, 1, figsize=(9.5, 11.5))
     fig.subplots_adjust(left=0.115, right=0.97, top=0.945, bottom=0.09, hspace=0.26)
     _iv40_draw_v(ax_v, data)
-    ts.right_lines(ax_v, ["March week-1 HPK setup"], ts.sizes(1.0)["title"])
+    style.right_lines(ax_v, ["March week-1 HPK setup"], style.sizes(1.0)["title"])
     _iv40_draw_i(ax_i, data)
-    ts.compound_header([ax_v], line1=ivd.LINE1_PARKED, line2="", data="March 2026")
-    ts.footer(fig, _iv40_footer_text(data), scale=0.75)
+    style.compound_header([ax_v], line1=ivd.LINE1_PARKED, line2="", data="March 2026")
+    style.footer(fig, _iv40_footer_text(data), scale=0.75)
 
-    ts.lower_footer(fig)   # the footer's final band, so the audits see the saved layout
-    problems = ts.check_no_clipping(fig, stem)
+    style.lower_footer(fig)   # the footer's final band, so the audits see the saved layout
+    problems = style.audit_figure(fig, stem)
     legend_problems = ivp.check_legend_overlap(fig, tag=stem)
     box_problems = ivp.check_legend_boxes(fig, tag=stem)
-    ts.save_figure(fig, OUT, stem, audit=False)
+    style.save_figure(fig, OUT, stem, audit=False)
     values = dict(**_iv40_values(data), overlap_problems=problems,
                  legend_overlap_problems=legend_problems, legend_box_problems=box_problems)
-    ivp.write_values(OUT, stem, values, script=NOTEBOOK, inputs=[vglc.MARCH_SPARK_CSV])
+    ivp.write_values(OUT, stem, values, script=NOTEBOOK, inputs=[campaign.MARCH_SPARK_CSV])
     plt.close(fig)
 
 
 def iv40_export_panels():
     stem = "iv40_spark_march"
     data = _iv40_data()
-    ts.apply_style(1.0)
+    style.apply_style(1.0)
     fig, (ax_v, ax_i) = plt.subplots(2, 1, figsize=(8.4, 9.2))
     fig.subplots_adjust(left=0.14, right=0.97, top=0.93, bottom=0.09, hspace=0.32)
     _iv40_draw_v(ax_v, data)
-    ts.talk_header(ax_v, name="March week-1 HPK setup", line1=ivd.LINE1_PARKED, line2="",
+    style.header(ax_v, name="March week-1 HPK setup", line1=ivd.LINE1_PARKED, line2="",
                    tag="current-limit hold")
     _iv40_draw_i(ax_i, data)
-    ts.check_no_clipping(fig, "%s panel h2" % stem)
+    style.audit_figure(fig, "%s panel h2" % stem)
     ivp.check_legend_overlap(fig, tag="%s panel h2" % stem)
     ivp.check_legend_boxes(fig, tag="%s panel h2" % stem)
-    paths = ts.save_panel(fig, OUT, stem, 1, "h2")
+    paths = style.save_panel(fig, OUT, stem, 1, "h2")
     plt.close(fig)
     flatten_panels(stem, paths)
 
@@ -2274,7 +2306,7 @@ def _iv41_detect(sub):
 
 
 def _iv41_telescope_data(tel, timeline):
-    chips = tsdata.CHIPS[tel]
+    chips = campaign.TELESCOPE_CHIPS[tel]
     tsub = timeline[timeline["tel"] == tsdata.JULY_TEL[tel]]
     holds = {}
     for c, chip in enumerate(chips):
@@ -2306,39 +2338,39 @@ def _iv41_telescope_data(tel, timeline):
 
 
 def _iv41_handle(chip, color):
-    return Line2D([], [], color=color, marker=ts.chip_marker(chip),
-                  linestyle=ts.chip_linestyle(chip), linewidth=1.8, markersize=6.0, label=chip)
+    return Line2D([], [], color=color, marker=style.chip_marker(chip),
+                  linestyle=style.chip_linestyle(chip), linewidth=1.8, markersize=6.0, label=chip)
 
 
 def _iv41_draw_v(ax, data):
     for chip, s in data["series"].items():
-        kw = dict(color=s["color"], marker=ts.chip_marker(chip), linestyle=ts.chip_linestyle(chip),
+        kw = dict(color=s["color"], marker=style.chip_marker(chip), linestyle=style.chip_linestyle(chip),
                   linewidth=1.8, markersize=6.0)
         ax.plot(s["x"], s["v"], markevery=IV41_MARKEVERY, **kw)
     vmax = max(float(s["v"].max()) for s in data["series"].values())
     ax.set_ylim(0.0, vmax * 1.12)
     ax.set_ylabel(IV41_YLABEL_V)
-    ts.style_axes(ax)
+    style.style_axes(ax)
     handles = [_iv41_handle(c, data["series"][c]["color"]) for c in data["series"]]
-    ax.legend(handles=handles, loc="lower left", fontsize=ts.sizes(1.0)["legend"], ncol=2,
+    ax.legend(handles=handles, loc="lower left", fontsize=style.sizes(1.0)["legend"], ncol=2,
              framealpha=0.9)
 
 
 def _iv41_draw_i(ax, data):
     for chip, s in data["series"].items():
-        kw = dict(color=s["color"], marker=ts.chip_marker(chip), linestyle=ts.chip_linestyle(chip),
+        kw = dict(color=s["color"], marker=style.chip_marker(chip), linestyle=style.chip_linestyle(chip),
                   linewidth=1.8, markersize=6.0)
         ax.plot(s["x"], s["i"], markevery=IV41_MARKEVERY, **kw)
-    ax.axhline(IV41_CURRENT_LIMIT_UA, color=ts.INK, linestyle="--", linewidth=1.3, zorder=1)
+    ax.axhline(IV41_CURRENT_LIMIT_UA, color=style.INK, linestyle="--", linewidth=1.3, zorder=1)
     ax.set_ylim(0.0, IV41_CURRENT_LIMIT_UA * 1.10)
     xmax = max(float(s["x"].max()) for s in data["series"].values())
     ax.set_xlim(0.0, xmax * 1.02)
     ax.set_xlabel("Minutes since the start of the hold")
     ax.set_ylabel(ivp.YLABEL_I)
-    ts.style_axes(ax)
+    style.style_axes(ax)
     ax.annotate("4 mA limit", xy=(xmax * 1.02, IV41_CURRENT_LIMIT_UA), xytext=(-4, 5),
                textcoords="offset points", ha="right", va="bottom",
-               fontsize=ts.sizes(1.0)["ann"], color=ts.INK, annotation_clip=False)
+               fontsize=style.sizes(1.0)["ann"], color=style.INK, annotation_clip=False)
 
 
 def _iv41_footer_text(tel_data):
@@ -2380,26 +2412,26 @@ def iv41_build():
     tels = ("h1", "f1")
     tel_data = {tel: _iv41_telescope_data(tel, timeline) for tel in tels}
 
-    ts.apply_style(1.0)
+    style.apply_style(1.0)
     ncol = len(tels)
     fig, axes = plt.subplots(2, ncol, figsize=(7.6 * ncol, 10.2), squeeze=False)
     for j, tel in enumerate(tels):
         data = tel_data[tel]
         ax_v, ax_i = axes[0][j], axes[1][j]
         _iv41_draw_v(ax_v, data)
-        ts.panel_title(ax_v, tel)
+        style.panel_title(ax_v, tel)
         _iv41_draw_i(ax_i, data)
     fig.subplots_adjust(left=0.075, right=0.985, top=0.935, bottom=0.09, hspace=0.30,
                         wspace=0.24 if ncol > 1 else 0.0)
-    ts.compound_header([axes[0][j] for j in range(ncol)], line1=ivd.LINE1_PARKED,
+    style.compound_header([axes[0][j] for j in range(ncol)], line1=ivd.LINE1_PARKED,
                        data="July 2026, campaign end")
-    ts.footer(fig, _iv41_footer_text(tel_data), scale=0.78)
+    style.footer(fig, _iv41_footer_text(tel_data), scale=0.78)
 
-    ts.lower_footer(fig)   # the footer's final band, so the audits see the saved layout
-    problems = ts.check_no_clipping(fig, stem)
+    style.lower_footer(fig)   # the footer's final band, so the audits see the saved layout
+    problems = style.audit_figure(fig, stem)
     legend_problems = ivp.check_legend_overlap(fig, tag=stem)
     box_problems = ivp.check_legend_boxes(fig, tag=stem)
-    ts.save_figure(fig, OUT, stem, audit=False)
+    style.save_figure(fig, OUT, stem, audit=False)
     values = dict(tel=_iv41_values(tel_data), overlap_problems=problems,
                  legend_overlap_problems=legend_problems, legend_box_problems=box_problems)
     ivp.write_values(OUT, stem, values, script=NOTEBOOK, inputs=[tsdata.JULY_TIMELINE])
@@ -2412,17 +2444,17 @@ def iv41_export_panels():
     paths = []
     for index, tel in enumerate(("h1", "f1"), start=1):
         data = _iv41_telescope_data(tel, timeline)
-        ts.apply_style(1.0)
+        style.apply_style(1.0)
         fig, (ax_v, ax_i) = plt.subplots(2, 1, figsize=(8.4, 9.2))
         fig.subplots_adjust(left=0.14, right=0.97, top=0.93, bottom=0.09, hspace=0.32)
         _iv41_draw_v(ax_v, data)
-        ts.talk_header(ax_v, name=ts.TELESCOPE_TITLE[tel], line1=ivd.LINE1_PARKED,
+        style.header(ax_v, name=campaign.TELESCOPE_TITLE[tel], line1=ivd.LINE1_PARKED,
                        tag="current-limit hold")
         _iv41_draw_i(ax_i, data)
-        ts.check_no_clipping(fig, "%s panel %s" % (stem, tel))
+        style.audit_figure(fig, "%s panel %s" % (stem, tel))
         ivp.check_legend_overlap(fig, tag="%s panel %s" % (stem, tel))
         ivp.check_legend_boxes(fig, tag="%s panel %s" % (stem, tel))
-        paths += ts.save_panel(fig, OUT, stem, index, tel)
+        paths += style.save_panel(fig, OUT, stem, index, tel)
         plt.close(fig)
     flatten_panels(stem, paths)
 
@@ -2474,7 +2506,7 @@ def _iv42_beam_windows():
 
 
 def _iv42_telescope_data(tel, timeline):
-    chips = tsdata.CHIPS[tel]
+    chips = campaign.TELESCOPE_CHIPS[tel]
     tsub = timeline[timeline["tel"] == tsdata.JULY_TEL[tel]]
     sessions = _iv42_sessions(tsub["tb"].drop_duplicates())
     t_lo, t_hi = tsub["tb"].min(), tsub["tb"].max()
@@ -2492,7 +2524,7 @@ def _iv42_telescope_data(tel, timeline):
 
 
 def _iv42_handle(chip, color):
-    return Line2D([], [], color=color, linestyle=ts.chip_linestyle(chip), linewidth=1.6,
+    return Line2D([], [], color=color, linestyle=style.chip_linestyle(chip), linewidth=1.6,
                   label=chip)
 
 
@@ -2502,8 +2534,8 @@ def _iv42_beam_handles(windows):
         s0, s1 = windows[fl]
         if s0 is None or s1 is None:
             continue
-        out.append(mpatches.Patch(facecolor=ts.fluence_color(fl), edgecolor="none",
-                                  alpha=IV42_BEAM_ALPHA * 2.2, label="at %s" % ts.fluence_label(fl)))
+        out.append(mpatches.Patch(facecolor=style.fluence_color(fl), edgecolor="none",
+                                  alpha=IV42_BEAM_ALPHA * 2.2, label="at %s" % style.fluence_label(fl)))
     return out
 
 
@@ -2512,39 +2544,39 @@ def _iv42_shade_beam(ax, windows):
         s0, s1 = windows[fl]
         if s0 is None or s1 is None:
             continue
-        ax.axvspan(s0, s1, color=ts.fluence_color(fl), alpha=IV42_BEAM_ALPHA, zorder=0, linewidth=0)
+        ax.axvspan(s0, s1, color=style.fluence_color(fl), alpha=IV42_BEAM_ALPHA, zorder=0, linewidth=0)
 
 
 def _iv42_draw_v(ax, data, windows):
     _iv42_shade_beam(ax, windows)
     for chip, s in data["series"].items():
         for seg in s["segments"]:
-            ax.plot(seg["tb"], seg["v"], color=s["color"], linestyle=ts.chip_linestyle(chip),
+            ax.plot(seg["tb"], seg["v"], color=s["color"], linestyle=style.chip_linestyle(chip),
                     linewidth=1.1)
     vmax = max(float(seg["v"].max()) for s in data["series"].values() for seg in s["segments"])
     ax.set_ylim(0.0, vmax * 1.12)
     ax.set_ylabel(IV42_YLABEL_V)
-    ts.style_axes(ax)
+    style.style_axes(ax)
     handles = [_iv42_handle(c, data["series"][c]["color"]) for c in data["series"]]
     handles += _iv42_beam_handles(windows)
     ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.05), ncol=3,
-             fontsize=max(ts.sizes(1.0)["legend"], 12), framealpha=0.9, borderaxespad=0.0)
+             fontsize=max(style.sizes(1.0)["legend"], 12), framealpha=0.9, borderaxespad=0.0)
 
 
 def _iv42_draw_i(ax, data, windows, t_hi):
     _iv42_shade_beam(ax, windows)
     for chip, s in data["series"].items():
         for seg in s["segments"]:
-            ax.plot(seg["tb"], seg["i_uA"], color=s["color"], linestyle=ts.chip_linestyle(chip),
+            ax.plot(seg["tb"], seg["i_uA"], color=s["color"], linestyle=style.chip_linestyle(chip),
                     linewidth=1.1)
-    ax.axhline(IV42_CURRENT_LIMIT_UA, color=ts.INK, linestyle="--", linewidth=1.0, zorder=1)
+    ax.axhline(IV42_CURRENT_LIMIT_UA, color=style.INK, linestyle="--", linewidth=1.0, zorder=1)
     ax.set_ylim(0.0, IV42_CURRENT_LIMIT_UA * 1.10)
     ax.annotate("4 mA limit", xy=(t_hi, IV42_CURRENT_LIMIT_UA), xytext=(-4, 5),
                textcoords="offset points", ha="right", va="bottom",
-               fontsize=ts.sizes(1.0)["ann"], color=ts.INK, annotation_clip=False)
+               fontsize=style.sizes(1.0)["ann"], color=style.INK, annotation_clip=False)
     ax.set_xlabel("Calendar time (UTC)")
     ax.set_ylabel(ivp.YLABEL_I)
-    ts.style_axes(ax)
+    style.style_axes(ax)
 
 
 def _iv42_apply_date_axis(ax, t_lo, t_hi, labels=True):
@@ -2590,28 +2622,28 @@ def iv42_build():
     windows[3.5e15] = (windows[3.5e15][0], t_hi)
     n_sessions = {tel: len(d["sessions"]) for tel, d in tel_data.items()}
 
-    ts.apply_style(1.0)
+    style.apply_style(1.0)
     tels = ["h1", "f1"]
     fig, axes = plt.subplots(2, 2, figsize=(7.6 * 2, 10.2), squeeze=False)
     for j, tel in enumerate(tels):
         data = tel_data[tel]
         ax_v, ax_i = axes[0][j], axes[1][j]
         _iv42_draw_v(ax_v, data, windows)
-        ts.panel_title(ax_v, tel)
+        style.panel_title(ax_v, tel)
         _iv42_draw_i(ax_i, data, windows, t_hi)
         _iv42_apply_date_axis(ax_v, t_lo, t_hi, labels=False)
         _iv42_apply_date_axis(ax_i, t_lo, t_hi)
     fig.subplots_adjust(left=0.075, right=0.985, top=0.935, bottom=0.115, hspace=0.46,
                         wspace=0.24)
-    ts.compound_header([axes[0][j] for j in range(2)], line1=ts.HEADER_LINE_1,
+    style.compound_header([axes[0][j] for j in range(2)], line1=campaign.HEADER_LINE_1,
                        data="July 2026, full campaign")
-    ts.footer(fig, _iv42_footer_text(n_sessions, windows), scale=0.78)
+    style.footer(fig, _iv42_footer_text(n_sessions, windows), scale=0.78)
 
-    ts.lower_footer(fig)   # the footer's final band, so the audits see the saved layout
-    problems = ts.check_no_clipping(fig, stem)
+    style.lower_footer(fig)   # the footer's final band, so the audits see the saved layout
+    problems = style.audit_figure(fig, stem)
     legend_problems = ivp.check_legend_overlap(fig, tag=stem)
     box_problems = ivp.check_legend_boxes(fig, tag=stem)
-    ts.save_figure(fig, OUT, stem, audit=False)
+    style.save_figure(fig, OUT, stem, audit=False)
     values = dict(tel={tel: _iv42_session_values(tel_data[tel]) for tel in tels},
                  session_gap_threshold_s=IV42_SESSION_GAP_S,
                  beam_windows={("%g" % fl): dict(start_utc=str(windows[fl][0]),
@@ -2634,19 +2666,19 @@ def iv42_export_panels():
     paths = []
     for index, tel in enumerate(("h1", "f1"), start=1):
         data = tel_data[tel]
-        ts.apply_style(1.0)
+        style.apply_style(1.0)
         fig, (ax_v, ax_i) = plt.subplots(2, 1, figsize=(8.4, 9.2))
         fig.subplots_adjust(left=0.14, right=0.97, top=0.93, bottom=0.13, hspace=0.46)
         _iv42_draw_v(ax_v, data, windows)
-        ts.talk_header(ax_v, name=ts.TELESCOPE_TITLE[tel], line1=ts.HEADER_LINE_1,
+        style.header(ax_v, name=campaign.TELESCOPE_TITLE[tel], line1=campaign.HEADER_LINE_1,
                        tag="full July campaign")
         _iv42_draw_i(ax_i, data, windows, t_hi)
         _iv42_apply_date_axis(ax_v, t_lo, t_hi, labels=False)
         _iv42_apply_date_axis(ax_i, t_lo, t_hi)
-        ts.check_no_clipping(fig, "%s panel %s" % (stem, tel))
+        style.audit_figure(fig, "%s panel %s" % (stem, tel))
         ivp.check_legend_overlap(fig, tag="%s panel %s" % (stem, tel))
         ivp.check_legend_boxes(fig, tag="%s panel %s" % (stem, tel))
-        paths += ts.save_panel(fig, OUT, stem, index, tel)
+        paths += style.save_panel(fig, OUT, stem, index, tel)
         plt.close(fig)
     flatten_panels(stem, paths)
 

@@ -1,21 +1,20 @@
-"""iv_data.py -- loaders and scan catalogue for the IV / V_gl talk figures (builder A).
+"""iv_data.py: loaders and scan catalogue for the IV and V_gl figures.
 
 Two on-disk formats, one in-memory shape. March slow-control scans are pre-binned CSVs with
 columns V_ch0,I_ch0,...,V_ch3,I_ch3 (volts negative, amps negative, one row per voltage bin,
-channel columns not aligned row-for-row -- each channel is its own ascending-|V| series padded
+channel columns not aligned row-for-row; each channel is its own ascending-|V| series padded
 to a common row count, so a row is NOT a shared voltage point across channels). July scans are
 already binned, positive, in INPUTS/july/iv_curves.json. Both loaders return
-{chip_name: (v_abs_volts, i_abs_uA)}, ascending in V, so every figure script draws off one code
+{chip_name: (v_abs_volts, i_abs_uA)}, ascending in V, so every figure draws off one code
 path regardless of source.
 
-F1 has no binned CSV for the 1.5e15 step (see bin_f1_15e14.py, which writes
-INPUTS/march/<stem>_binned_iv_data.csv in this same 8-column format); once written those files
-load through the same march loader as everything else.
+F1 has no binned CSV for the 1.5e15 step on EOS. The inputs folder holds the three binned files,
+INPUTS/march/<stem>_binned_iv_data.csv, in this same 8-column format (provenance in
+campaigns/irrad_2026_inputs.md); they load through the same March loader as everything else.
 """
 import hashlib
 import json
 import os
-import sys
 
 import numpy as np
 import pandas as pd
@@ -23,17 +22,17 @@ import pandas as pd
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
-# ---- campaign catalogue (see iv/campaigns/) --------------------------------
-# These names live in the campaign module now; they are re-bound here so every
-# reference in this file and in the figure scripts keeps working unchanged.
-from .campaigns import active as _campaign
+# ---- campaign catalogue (see campaigns/) --------------------------------
+# These names are defined by the campaign module and re-bound here, so this module and the
+# notebook use them as ivd.<NAME>.
+from ..campaigns import active as _campaign
 INPUTS = _campaign.INPUTS            # the campaign's input folder (ETROC_IV_INPUTS overrides it)
 INPUTS_JULY = _campaign.INPUTS_JULY
 INPUTS_MARCH = _campaign.INPUTS_MARCH
 INPUTS_VGL = _campaign.INPUTS_VGL
 MARCH_EOS_WEEK2 = _campaign.MARCH_EOS_WEEK2
 MARCH_EOS_15E14 = _campaign.MARCH_EOS_15E14
-TEL_CHIPS = _campaign.TEL_CHIPS
+TELESCOPE_CHIPS = _campaign.TELESCOPE_CHIPS
 LINE1_PARKED = _campaign.LINE1_PARKED
 RAD_STOP_UTC = _campaign.RAD_STOP_UTC
 MARCH_SCANS = _campaign.MARCH_SCANS
@@ -56,7 +55,7 @@ PREIRRAD_LOG_UTC_OFFSET_H = _campaign.PREIRRAD_LOG_UTC_OFFSET_H
 
 
 
-FINE_LOWV_MAX_V = 80.0   # bin ceiling -- matches fig27 XLIM; the scans coarsen past ~75 V
+FINE_LOWV_MAX_V = 80.0   # bin ceiling (V); the scans coarsen past ~75 V
 MIN_N_JULY_FINE = 3     # minimum per-bin sample count (~3 s dwell); thinner bins are interpolated
 
 
@@ -127,7 +126,7 @@ def check_inputs(inputs=None, manifest=None, raw_inputs=None):
         raise RuntimeError(
             "input check failed for campaign %s (tables folder %s, %d tables and %d raw inputs "
             "checked):\n%s\nMissing: point the campaign's input variables at a full copy; "
-            "iv/campaigns/%s_inputs.md lists every variable and its default. "
+            "campaigns/%s_inputs.md lists every variable and its default. "
             "Unreadable: ask the owner of that area for read access."
             % (_campaign.__name__, inputs, len(listed), len(raw_inputs),
                "\n".join(["  missing: %s" % p for p in missing]
@@ -143,10 +142,10 @@ def load_march(path, tel):
     """8-column binned March CSV -> {chip: (v_abs_V, i_abs_uA)}, ascending in V.
 
     Each channel column pair is its own series (rows are NOT a shared voltage point across
-    channels -- see module docstring); NaNs (padding / empty bins) are dropped per channel.
+    channels; see module docstring); NaNs (padding / empty bins) are dropped per channel.
     """
     df = pd.read_csv(path)
-    chips = TEL_CHIPS[tel]
+    chips = TELESCOPE_CHIPS[tel]
     out = {}
     for ch, chip in enumerate(chips):
         vcol, icol = "V_ch%d" % ch, "I_ch%d" % ch
@@ -175,7 +174,7 @@ def july_curves():
 def load_july(tel_scan_key, tel):
     """iv_curves.json[tel_scan_key] -> ({chip: (v_V, i_uA)}, meta dict). Already positive, uA."""
     entry = july_curves()[tel_scan_key]
-    chips = TEL_CHIPS[tel]
+    chips = TELESCOPE_CHIPS[tel]
     out = {}
     for chip in chips:
         c = entry["curves"].get("PT_" + chip)
@@ -193,17 +192,17 @@ _JULY_FINE_CACHE = {}
 
 def load_july_fine(key, tel):
     """Bin a raw July legacy slow-control CSV (JULY_FINE_SCANS) onto 0.1 V bins over the
-    genuinely finely-stepped part of the scan (iv_analysis.kfactor.fine_step_span, the same
-    contiguous-<=0.5V-run detector fig23_vgl_method.py uses -- these logs run fine 0.1 V steps
+    genuinely finely-stepped part of the scan (kfactor.fine_step_span, the same
+    contiguous-<=0.5V-run detector the iv06_vgl_method figure uses: these logs run fine 0.1 V steps
     from a few V up to ~70-75 V, then open out to ~2-5 V steps on the way to breakdown), capped
     at FINE_LOWV_MAX_V. Time-windowed to the scan's own start first (load_iv_legacy -> bin_iv,
-    median aggregation), the same recipe bin_f1_15e14.py uses for the March legacy logs. Each
-    channel is then cut to its single up-sweep (legacy.up_sweep_window): the logs also hold the
-    ramp down before the sweep and the ramp down after it, which pass through the same low
-    voltages. meta["n_ramp_dropped"] counts, per chip, the samples cut there that fall inside
-    the binned range.
+    median aggregation), the same recipe that binned the F1 1.5e15 March logs
+    (campaigns/irrad_2026_inputs.md). Each channel is then cut to its single up-sweep
+    (legacy.up_sweep_window): the logs also hold the ramp down before the sweep and the ramp
+    down after it, which pass through the same low voltages. meta["n_ramp_dropped"] counts, per
+    chip, the samples cut there that fall inside the binned range.
     Returns {chip: (v_abs_V, i_abs_uA)}, meta dict shaped like load_july's own (type/scan), so
-    fig27 draws both sources through the same code path.
+    iv_plot.load_looks draws both sources through the same code path.
     """
     cache_key = (key, tel)
     if cache_key in _JULY_FINE_CACHE:
@@ -214,7 +213,7 @@ def load_july_fine(key, tel):
     spec = JULY_FINE_SCANS[key][tel]
     tidy = load_iv_legacy(spec["path"])
     tidy = tidy[tidy["timestamp"] >= pd.to_datetime(spec["start"])]
-    chips = TEL_CHIPS[tel]
+    chips = TELESCOPE_CHIPS[tel]
     out = {}
     fine_hi_by_chip = {}
     n_filled_by_chip = {}
@@ -239,10 +238,10 @@ def load_july_fine(key, tel):
         b = bin_iv(sub, bins, agg="median")
         if b is None or b.empty:
             continue
-        # Bins under MIN_N_JULY_FINE (~3 s of 1 Hz dwell) are a single (or two) raw sample(s) --
-        # noisy enough to read as spurious spikes on a slide. Drop them and, where they sit
+        # Bins under MIN_N_JULY_FINE (~3 s of 1 Hz dwell) are a single (or two) raw sample(s),
+        # noisy enough to read as spurious spikes on a figure. Drop them and, where they sit
         # strictly between two well-sampled bins, fill by linear interpolation between those
-        # neighbours only (never extrapolated past the good range) -- suppresses the artefact
+        # neighbours only (never extrapolated past the good range); this suppresses the artefact
         # without smoothing the knee, which sits in the densely-sampled part of the scan.
         good = b[b["n"] >= MIN_N_JULY_FINE]
         if good.empty:
@@ -293,7 +292,7 @@ VGL_TABLE_TOL_V = 0.05   # campaign V_gl tables vs vgl_points.csv
 def check_vgl_table(tel, table, points=None, tol_V=VGL_TABLE_TOL_V):
     """Check a campaign V_gl table (VGL_H1 / VGL_F1) against vgl_points.csv.
 
-    table rows are (fluence in 1e15 p/cm2, look label, [V_gl per board in TEL_CHIPS[tel] order]).
+    table rows are (fluence in 1e15 p/cm2, look label, [V_gl per board in TELESCOPE_CHIPS[tel] order]).
     Every entry needs exactly one row of `points` (default: load_vgl_points()) with the same
     chip, fluence and look (timing) whose vgl_V is within tol_V; every mismatch or missing
     counterpart is listed in one ValueError. Returns the number of entries checked.
@@ -302,7 +301,7 @@ def check_vgl_table(tel, table, points=None, tol_V=VGL_TABLE_TOL_V):
     problems = []
     n = 0
     for phi, label, values in table:
-        for chip, vgl in zip(TEL_CHIPS[tel], values):
+        for chip, vgl in zip(TELESCOPE_CHIPS[tel], values):
             n += 1
             rows = points[(points["chip"] == chip)
                           & np.isclose(points["fluence_p_cm2"].astype(float), phi * 1e15,
@@ -376,10 +375,10 @@ def markevery(n, target=12):
     return max(1, n // target)
 
 
-# ---------------------------------------------------------------------------- bin widths (A1/A2)
-# quick scans bin at 10 V, fine scans at 0.1 V (notes/talk-figures-2026.md section 3) -- every
-# IV-curve script tags each curve with its bin width so iv_plot.assert_no_gaps can tell a real
-# hole in the scan from a curve that is legitimately short (a scan that stopped early).
+# ---------------------------------------------------------------------------- bin widths
+# quick scans bin at 10 V, fine scans at 0.1 V; every IV curve carries its bin width so
+# iv_plot.assert_no_gaps can tell a real hole in the scan from a curve that is legitimately
+# short (a scan that stopped early).
 BIN_WIDTH_QUICK_V = 10.0
 BIN_WIDTH_FINE_V = 0.1
 
@@ -394,7 +393,7 @@ def bin_width_july(scan_type):
     return BIN_WIDTH_QUICK_V if scan_type == "quick" else BIN_WIDTH_FINE_V
 
 
-SHADE_K_MAX = 0.65   # A4: keep at least 35% of the base colour even at the lightest step
+SHADE_K_MAX = 0.65   # keep at least 35% of the base colour even at the lightest step
 
 
 def shade(color, k):
@@ -402,7 +401,7 @@ def shade(color, k):
 
     k=0 keeps the colour (the "right after" point/curve at a fluence step); increasing k marks a
     later look at the same fluence ("+2 days", "+4 months") without leaving the fluence's hue.
-    Capped at SHADE_K_MAX so the lightest step in a long ramp (fig31's seven-step sequence) never
+    Capped at SHADE_K_MAX so the lightest step in a long ramp (seven looks, say) never
     fades into near-white.
     """
     import matplotlib.colors as mcolors

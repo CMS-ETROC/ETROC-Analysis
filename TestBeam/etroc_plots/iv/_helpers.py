@@ -1,9 +1,9 @@
-import os
 """Internal helpers: limits, legends, panel tags, smoothing."""
+
+import os
 
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
 import matplotlib.ticker as ticker
 import mplhep as hep
@@ -60,7 +60,7 @@ def set_grid(mode):
     _GRID_MODE = "none" if mode in (None, False) else mode
 
 
-# expose as iv_analysis.set_grid without touching __init__: the package is
+# expose as etroc_plots.iv.set_grid without touching __init__: the package is
 # already registered in sys.modules while its submodules import
 import sys as _sys
 if _sys.modules.get(__package__) is not None:
@@ -110,8 +110,8 @@ def _two_tier_legend(ax, scans, seen_channels, channel_names,
 
     With no anchors given, the pair is auto-placed on the corner covering the
     fewest drawn points and stacked there as a unit. Passing anchor_channels
-    pins the pair; anchor_scans additionally splits the tiers apart (legacy
-    behaviour for callers that want two independent boxes).
+    pins the pair; anchor_scans additionally splits the tiers apart (for callers
+    that want two independent boxes).
     """
     fs = fontsize or FS_LEGEND
     ch_handles = [mlines.Line2D([], [], color="black",
@@ -154,7 +154,7 @@ def _two_tier_legend(ax, scans, seen_channels, channel_names,
     if len(sc_handles) > strip_threshold:
         # many conditions: their long labels fill any corner, so the
         # Conditions tier moves to a strip under the figure (like a caption)
-        # and the compact Devices tier stays inside the axes -- unless the
+        # and the compact Devices tier stays inside the axes, unless the
         # axes are so saturated (hours of ~1 Hz monitoring) that even the
         # best Devices spot would sit on dozens of points, in which case it
         # joins the strip too
@@ -187,7 +187,7 @@ def _mfactor(unit):
 def _panel_tag(ax, text, loc="upper left", size=FS_GRID_TAG):
     """
     Device name *inside* the panel. Keeps the axes-title strip free for the CMS
-    header and the run title, which is where they used to collide.
+    header and the run title, so the three never collide.
     """
     x, ha = (0.03, "left") if "left" in loc else (0.97, "right")
     y, va = (0.96, "top") if "upper" in loc else (0.04, "bottom")
@@ -211,7 +211,7 @@ def _smooth_volts(v, y, width_v):
     the fine scans are not uniformly stepped: 20260720_190823 runs 0.1 V from 10
     to 60 V and then 0.2 / 1 / 5 / 10 V out to 510 V. A single sample count
     derived from the median step would average over 1 V down low and 100 V up
-    high -- the same mistake, in volts, that the old notebook made in samples.
+    high.
 
     Averaging is restricted to a contiguous run of samples so an up-and-down
     sweep never mixes its two legs together.
@@ -274,7 +274,7 @@ def _as_scan_list(scans):
         file    (required)   path to the scan
         label                legend label
         format / fmt         "new" | "old" | "auto"   (default: by extension)
-        start / end          time window -- essential for legacy logs that hold
+        start / end          time window; essential for legacy logs that hold
                              many sweeps in one file
         i_max                legacy compliance-current cut [uA]
         bins                 legacy voltage binning (e.g. legacy.QUICK_BINS)
@@ -327,16 +327,16 @@ def _twin_axes(ax):
 def _artist_points_px(ax, renderer, include_twins=True):
     """
     Pixel coordinates of every drawn data point on ax and, by default, on its
-    twinned axes -- a legend hosted on ax_v also has to dodge the current
+    twinned axes: a legend hosted on ax_v also has to dodge the current
     trace living on ax_i.
 
     Points come from Line2D.get_xydata(), which is already unit-converted to
     float data coordinates. Converting get_xdata() with np.asarray(dtype=
     float) is NOT safe: datetime64 silently casts to nanoseconds since epoch
     rather than raising, every transformed point lands ~1e13 pixels off
-    screen, and the cover count reads zero for any absolute-time axis -- which
-    is exactly how a legend ended up sitting on the voltage trace of the
-    timeline plots while the audit passed.
+    screen, and the cover count reads zero for any absolute-time axis, so a
+    legend could sit on the voltage trace of a timeline plot while the audit
+    passed.
     """
     axes = [ax] + (_twin_axes(ax) if include_twins else [])
     pts = []
@@ -394,7 +394,7 @@ def _place_legend(ax, handles, title=None, anchor=None, fontsize=None,
     # footprint over a coarse grid of anchor positions and count covered
     # points at each. Corner candidates alone fail on long time-series where
     # every corner has a trace passing through but mid-height regions are
-    # empty -- a 9 x 7 grid finds those. Grid positions are scored with a
+    # empty; a 13 x 9 grid finds those. Grid positions are scored with a
     # slight preference for the conventional corners so sparse plots keep
     # their usual look; the probe corners are tried first and any zero-cover
     # corner wins outright.
@@ -445,7 +445,7 @@ def _stacked_legends(ax, tier1_handles, tier1_title, tier2_handles, tier2_title,
     final stack; the corner covering the fewest drawn points wins. The second
     tier is then anchored strictly below the first, and if that would leave
     the axes (tall stacks near the bottom edge), the whole pair flips to
-    growing upward instead -- the stack never pokes outside.
+    growing upward instead, so the stack never pokes outside.
     """
     fs = fontsize or FS_LEGEND
     fig = ax.get_figure()

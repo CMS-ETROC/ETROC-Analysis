@@ -14,9 +14,9 @@ and hold many sweeps. Two consequences the new SQLite format doesn't have:
 
 `load_iv_legacy` returns the same tidy frame as `load_iv`, with the columns the
 old format cannot supply (v_set, status bits) marked absent, so every downstream
-function works unchanged. Binning happens later, in `build_iv_curve`, exactly as
-the old notebook's `process_binned_iv` did -- pass `bins=` or a `"bins"` key in
-the scan config.
+function works unchanged. Binning happens later, in `build_iv_curve`, the same
+way as `process_binned_iv` of the March-2026 analysis: pass `bins=` or a
+`"bins"` key in the scan config.
 """
 
 import os
@@ -24,9 +24,9 @@ import os
 import numpy as np
 import pandas as pd
 
-# The March-2026 analysis binnings, kept verbatim so old and new results are
-# directly comparable. Negative and descending, matching the reverse-bias
-# convention of the raw data.
+# The March-2026 analysis binnings, kept unchanged so results of this package and
+# of that analysis are directly comparable. Negative and descending, matching the
+# reverse-bias convention of the raw data.
 FINE_BINS = -1 * np.array(
     np.arange(1, 10, 1).tolist()
     + np.arange(10, 60, 0.1).tolist()
@@ -46,13 +46,13 @@ def load_iv_legacy(path, n_channels=8):
         timestamp | channel | v_set | v_meas | i_meas | i_limit
                   | hv_on | ramping | in_compliance | low_range | fault
 
-    v_set and i_limit come back NaN and every status bit False -- the old format
+    v_set and i_limit come back NaN and every status bit False: the old format
     records none of them. Cleaning cuts that key on status bits are no-ops, and
-    the old hand-tuned `i_max` cut still works via build_iv_curve.
+    the hand-tuned `i_max` cut works via build_iv_curve.
     """
     raw = pd.read_csv(path)
     if "Date" not in raw.columns:
-        raise ValueError(f"{path}: no 'Date' column -- not a legacy IV log")
+        raise ValueError(f"{path}: no 'Date' column: not a legacy IV log")
     ts = _parse_legacy_dates(raw["Date"], path)
 
     frames = []
@@ -125,9 +125,9 @@ def bin_iv(df, bins, agg="median", min_count=1):
     """
     Collapse cleaned readings of ONE channel onto a voltage binning.
 
-    This is the old notebook's binning: pd.cut on the measured voltage, then the
-    per-bin median current (median so a beam spill during the dwell at one
-    voltage doesn't drag the point). Returns V_mean, I_filtered, n, i_spread --
+    This is the March-2026 analysis binning: pd.cut on the measured voltage, then
+    the per-bin median current (median so a beam spill during the dwell at one
+    voltage doesn't drag the point). Returns V_mean, I_filtered, n, i_spread,
     the same schema build_iv_curve produces for the new format.
     """
     d = df.dropna(subset=["v_meas", "i_meas"])
@@ -155,8 +155,8 @@ def _parse_legacy_dates(col, path=""):
     Time-only stamps are parsed onto a dummy date (pandas puts them on
     1900-01-01), with midnight wraps detected by backwards jumps and rolled
     into the next day so a log crossing 00:00 stays monotonic. start/end
-    windows then also need to be time-only for such files -- "07:55:00", not
-    "03/25/2026 07:55:00" -- and clean_channel handles that by re-parsing the
+    windows then also need to be time-only for such files ("07:55:00", not
+    "03/25/2026 07:55:00"), and clean_channel handles that by re-parsing the
     window with the same rule.
 
     A silent all-NaT parse is refused: it would turn every start/end window
@@ -187,8 +187,8 @@ def infer_bins(df, plateau_tol=0.05, min_dwell=3, pad_frac=0.5):
     a sweep shows up as plateaus in v_meas. This walks the readings in time
     order, calls a new plateau whenever the voltage moves more than plateau_tol
     from the running plateau mean, and places one bin edge halfway between
-    neighbouring plateaus. The result adapts to any step scheme -- 0.1 V here,
-    2 V there -- with exactly one bin per dwell, where a fixed FINE_BINS /
+    neighbouring plateaus. The result adapts to any step scheme (0.1 V here,
+    2 V there) with exactly one bin per dwell, where a fixed FINE_BINS /
     QUICK_BINS grid would merge dwells in its coarse regions and leave empty
     bins in its fine ones.
 
@@ -232,11 +232,11 @@ def interpolate_legacy_csv(in_path, out_path):
 
     The logger writes V rows and I rows asynchronously (~half the cells of any
     row are empty), and the usual pipeline fills them by linear interpolation
-    in TIME per column before analysis. Some raw files ship without that step
-    -- 202607160020_fineIV_interpolate.csv, despite its name, is byte-for-byte
+    in TIME per column before analysis. Some raw files ship without that step:
+    202607160020_fineIV_interpolate.csv, despite its name, is byte-for-byte
     the raw log plus a longer tail. This reimplements the fill, validated
     against the 202607152150 raw/interpolated pair: every raw token is
-    preserved verbatim, every filled cell matches the reference file to within
+    preserved as written, every filled cell matches the reference file to within
     one instrument readback quantum (V: 0.01 V, I: 5e-9 A; the residuals sit
     where the reference tool interpolated over the logger's occasionally
     out-of-order timestamps, which are sorted here first).
@@ -274,7 +274,7 @@ def interpolate_legacy_csv(in_path, out_path):
         for j in range(8):
             raw = r[j + 1].strip()
             if raw:
-                cells.append(r[j + 1])            # raw token verbatim
+                cells.append(r[j + 1])            # raw token as written
             elif np.isnan(filled[i, j]):
                 cells.append("")
             else:

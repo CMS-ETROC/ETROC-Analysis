@@ -5,9 +5,8 @@ removal constant. Everything here is campaign- and sensor-agnostic: the measurem
 beam constants and the literature comparison values belong to a campaign module or to the figure
 that draws them.
 
-Lifted on 2026-09-22 out of notes/viz/irrad_iv/vgl_fit{,_f1}/, which were identical in this part
-to the byte. The three generalisations made while lifting -- the fit starting guess, the chi2
-sigma and the fluence table -- are arguments now because H1 and F1 differed only in those.
+The fit starting guess (p0), the chi2 sigma (sigma_v) and the fluence table are arguments:
+they are what differs between H1 and F1.
 """
 import textwrap
 
@@ -142,10 +141,11 @@ def wrap(text, width=118):
 
 
 # ---- published gain-layer removal constants ---------------------------------------------------
-# All in 1e-16 cm2. unit "p" = per incident proton (converted with the chip-hit fraction only);
-# "neq" = per n_eq (converted with NIEL x chip-hit fraction). band "onchip" draws the +- on-chip
-# fluence uncertainty, None draws none, "spread" draws the min-max over the listed wafers. The
-# band choices are the ones the original comparison figures made.
+# All in 1e-16 cm2. unit "p" = per incident proton (converted with the on-chip fluence factor
+# only); "neq" = per n_eq (converted with NIEL x that factor). band "onchip" draws the +- on-chip
+# fluence uncertainty, None draws none, "spread" draws the min-max over the listed wafers.
+# Single proton constants carry the on-chip band, reactor-neutron constants none, multi-wafer
+# constants their spread.
 REFERENCES = {
     "HPK": [
         # Curras et al. 2023, arXiv:2306.11760: HPK type 2, 50 um LGAD, k-factor V_gl.
@@ -181,13 +181,14 @@ def _num(c):
     return "/".join("%g" % v for v in np.atleast_1d(c))
 
 
-def reference_rows(vendor, chip_hit, conv_neq, niel, rel_err, alternates=()):
+def reference_rows(vendor, fluence_factor, conv_neq, niel, rel_err, alternates=()):
     """The published constants as c per BOOKKEEPING proton, one dict per curve.
 
     Each row carries lo / c / hi (the band, or None), `values` (the converted value per wafer),
-    `arith` (the conversion as printed) and `alt`. `alternates` is ((name, chip-hit fraction),
-    ...): the same constant under a chip-hit fraction the measurement excludes, drawn dotted --
-    a per-n_eq constant then converts with NIEL x that fraction.
+    `arith` (the conversion as printed) and `alt`. `fluence_factor` is the on-chip fluence per
+    bookkeeping proton, `conv_neq` the n_eq on the chip per bookkeeping proton. `alternates` is
+    ((name, factor), ...): the same constant under an on-chip fluence factor the measurement
+    excludes, drawn dotted; a per-n_eq constant then converts with NIEL x that factor.
     """
     rows = []
     todo = [(ref, None) for ref in REFERENCES[vendor]]
@@ -196,7 +197,7 @@ def reference_rows(vendor, chip_hit, conv_neq, niel, rel_err, alternates=()):
     for ref, frac in todo:
         per_p = ref["unit"] == "p"
         if frac is None:
-            f = chip_hit if per_p else conv_neq
+            f = fluence_factor if per_p else conv_neq
         else:
             f = frac if per_p else niel * frac
         vals = sorted(float(v) * f for v in np.atleast_1d(ref["c"]))

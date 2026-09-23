@@ -2,8 +2,9 @@
 
 The panels run in the SAME order as the resolution-vs-run figure (res_vs_run_combo_check_jul),
 so the two figures can be read column by column. That order, and each run's class, flag,
-fluence, threshold offset and RFSel, are read from that figure's values sidecar
-(campaign.COMBO_CHECK_JSON): build the resolution figure first.
+fluence, threshold offset and RFSel, are read from that figure's values file
+(campaign.COMBO_CHECK_JSON, made outside this repository; the campaign's inputs file,
+campaigns/<campaign>_inputs.md, says where it comes from).
 
 Inputs, all named in the campaign file:
   JULY_REF_CSV       per-run log: start time (UTC), run length, per-board bias voltage and
@@ -11,21 +12,20 @@ Inputs, all named in the campaign file:
   JULY_TIMELINE      the HV slow-control log in 60 s bins (tb, channel, i_uA, tel)
   HV_CYCLES_JUL_CSV  HV / LV cycle, irradiation-step and DAQ-restart marks per run
   DISPLAY_RUNS_JUL_CSV  the display runs (ink triangle; preferred ones get "(p)")
-Channel 0-3 = the telescope's chips in board order (talk_style.TELESCOPE_CHIPS).
+Channel 0-3 = the telescope's chips in board order (the campaign's TELESCOPE_CHIPS).
 
     python -m etroc_plots.iv.current_vs_run --out DIR [--tel h1|f1|both] [--no-panels]
 
 writes DIR/current_vs_run_jul_<tel>.{png,pdf}, its _values.json, and one small panel per run
-under DIR/panels/. Converted from the talk's resolution/v2/build_current_vs_run.py on
-2026-09-22 with the drawing code unchanged; the comments below still carry that history.
+under DIR/panels/. The notebook draws the same figures (iv24_current_vs_run_h1,
+iv25_current_vs_run_f1) through build_one().
 """
 import argparse
 import csv
 import json
 import math
 import os
-import sys
-from collections import OrderedDict, defaultdict
+from collections import defaultdict
 from datetime import datetime
 
 import numpy as np
@@ -33,9 +33,9 @@ import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
-from .. import talk_style as ts
+from .. import style
 from . import iv_plot as ivp
-from .campaigns import active as campaign
+from ..campaigns import active as campaign
 
 OUT = "."                                  # main() sets both from --out
 PANEL_ROOT = os.path.join(OUT, "panels")
@@ -43,10 +43,8 @@ PANEL_ROOT = os.path.join(OUT, "panels")
 CURRENTS_CSV = campaign.JULY_REF_CSV
 TIMELINE_60S = campaign.JULY_TIMELINE
 HV_CYCLES_CSV = campaign.HV_CYCLES_JUL_CSV
-# Pass 8: display-run marks (section 3 / Addendum 1) + logged-radiation-stop ticks (Addendum 2),
-# mirroring build_combo_check.py's res_vs_run_combo_check_jul treatment on this script's own small-
-# multiple panels. Read directly (this script's own established convention, see module docstring:
-# "does not import res_v2_lib.py or build_combo_check.py") rather than importing either module.
+# Display-run marks and logged-radiation-stop ticks, drawn as on the resolution-vs-run figure;
+# the display-run list is read here directly.
 DISPLAY_RUNS_JUL_CSV = campaign.DISPLAY_RUNS_JUL_CSV
 
 TELS = ("h1", "f1")
@@ -54,46 +52,45 @@ SPIKE_RUNS = campaign.CURRENT_SPIKE_RUNS
 FLUENCE_TEXT_PLAIN = campaign.FLUENCE_TEXT_PLAIN
 
 SPIKE_COLOR = "#c0392b"
-NOLOG_COLOR = ts.INK_MUTED
-# fixed per-chip-slot colour (Addendum 1 item 1) -- board order 0..3, same order as
-# TELESCOPE_CHIPS / talk_style linestyle slots; NOT etroc_style.BOARD_COLOR.
+NOLOG_COLOR = style.INK_MUTED
+# fixed per-chip-slot colour: board order 0..3, same order as TELESCOPE_CHIPS and the style
+# module's line-style slots; NOT etroc_style.BOARD_COLOR.
 CHIP_COLOR = {0: "#1f77b4", 1: "#d62728", 2: "#2ca02c", 3: "#9467bd"}
 
-# Addendum 3: HV-cycle/LV-cycle/irradiation-step marks -- colours + legend text copied verbatim
-# from res_vs_run_combo_check_jul_values.json (hv_cycle_legend/lv_cycle_legend/irradiation_step_legend)
-# and from the rendered combo PNG's own tick-swatch colours (sampled 2026-09-17).
+# HV-cycle/LV-cycle/irradiation-step marks: colours and legend text are those of the
+# resolution-vs-run figure (legend text: its values file's hv_cycle_legend / lv_cycle_legend /
+# irradiation_step_legend; colours: its tick swatches).
 HVCYCLE_COLOR = "#ff7f0e"
 LVCYCLE_COLOR = "#17becf"
 IRRAD_COLOR = "#7b3fb5"
 HVCYCLE_LEGEND = "HV cycle before run"
 LVCYCLE_LEGEND = "LV cycle before run"
 IRRAD_LEGEND = "irradiation step before run"
-DAQ_RESTART_WORD = "DAQ restart"          # combo's daq_restart_mark; no tick colour, text only
+DAQ_RESTART_WORD = "DAQ restart"          # as on the resolution-vs-run figure; text only
 
-# Pass 8 section 3 (Addendum 1): a small filled ink triangle marks every one of the 30
-# display_runs_jul.csv rows; preferred runs additionally get "(p)" in the run-number label.
-# Legend text matches build_combo_check.py's DISPLAY_RUN_LEGEND_TEXT verbatim (Addendum 1).
+# A small filled ink triangle marks every run of display_runs_jul.csv; preferred runs
+# additionally get "(p)" in the run-number label. Legend text as on the resolution-vs-run figure.
 DISPLAY_RUN_LEGEND_TEXT = "display run; (p) = preferred when one run is shown"
-# Pass 8 Addendum 2: an extra ink-coloured tick (distinct from the purple irradiation-step tick)
+# An extra ink-coloured tick (distinct from the purple irradiation-step tick)
 # beside each irradiation-step mark, quoting the logged radiation-stop stamp + LV-on time.
-RAD_STOP_COLOR = ts.INK
+RAD_STOP_COLOR = style.INK
 RAD_STOP_LEGEND_TEXT = "logged radiation stop"
 RAD_STOP_SOURCE_TEXT = campaign.RAD_STOP_SOURCE_TEXT
-# coordinator fix 2026-09-18 (no file names on figures): plain-worded copy of the sentence
-# above for the drawn footer -- RAD_STOP_SOURCE_TEXT itself stays untouched since it is also
-# stored verbatim as the values JSON's rad_stop_source provenance field.
+# No file names on figures: the same sentence in plain words for the drawn footer;
+# RAD_STOP_SOURCE_TEXT keeps them because it is stored as the values file's rad_stop_source
+# provenance field.
 RAD_STOP_SOURCE_TEXT_FIGURE = campaign.RAD_STOP_SOURCE_TEXT_FIGURE
 
 
 def fl_text(fl):
-    return FLUENCE_TEXT_PLAIN.get(ts.fluence_key(fl), str(fl))
+    return FLUENCE_TEXT_PLAIN.get(style.fluence_key(fl), str(fl))
 
 
 def _find_combo_json():
     p = campaign.COMBO_CHECK_JSON
     if os.path.isfile(p):
         return p, os.path.dirname(p)
-    raise FileNotFoundError("%s not found (campaign COMBO_CHECK_JSON): iv/campaigns/%s_inputs.md "
+    raise FileNotFoundError("%s not found (campaign COMBO_CHECK_JSON): campaigns/%s_inputs.md "
                             "says where it comes from and which variable moves it"
                             % (p, campaign.__name__.split(".")[-1]))
 
@@ -132,7 +129,8 @@ def load_combo_meta():
 
 def load_currents_meta():
     """Per (tel, run) -> start_utc (datetime), max_min (float); per (tel, run, board_idx) ->
-    dict(hv_nominal_V, status, board short name). From notes/july_inrun_currents.csv (6f)."""
+    dict(hv_V (the hv_nominal_V column), status, board). From JULY_REF_CSV
+    (july/july_inrun_currents.csv in the inputs folder)."""
     run_win = {}
     board_meta = {}
     with open(CURRENTS_CSV) as fh:
@@ -154,12 +152,20 @@ def load_currents_meta():
     return run_win, board_meta
 
 
+def _restart_flag(value, where):
+    """The restart column as a bool: exactly "True" or "False"; anything else raises ValueError
+    naming `where`, so a mistyped cell cannot silently read as no restart."""
+    if value not in ("True", "False"):
+        raise ValueError("%s: restart = %r is not True or False; fix that cell" % (where, value))
+    return value == "True"
+
+
 def load_hv_cycles():
-    """Per (tel, run) -> dict(hv_cycled(bool: ANY status=='ok' board's b*_cycled=='True', per the
-    combo builder's own hv_cycle_rule), lv_event(str: none/lv_cycle/irradiation_step/n/a/'no data'),
-    restart(bool), plus the raw CSV fields (gap_h, b_status/b_gap_min_V/b_cycled per board 0-3,
-    lv_on_utc/lv_off_utc/lv_off_h, prev_run) for the values JSON. From this worktree's own
-    v2/hv_cycles_jul.csv, written by the combo-check builder -- read only, never recomputed."""
+    """Per (tel, run) -> dict(hv_cycled (bool: ANY board with status "ok" has b*_cycled "True"),
+    lv_event (str: none / lv_cycle / irradiation_step / n/a / 'no data'), restart (bool), plus the
+    raw CSV fields (gap_h, b_status / b_gap_min_V / b_cycled per board 0-3, lv_on_utc / lv_off_utc
+    / lv_off_h, prev_run) for the values file. Read from the campaign's HV_CYCLES_JUL_CSV, never
+    recomputed."""
     out = {}
     with open(HV_CYCLES_CSV) as fh:
         for row in csv.DictReader(fh):
@@ -167,7 +173,7 @@ def load_hv_cycles():
             run = int(row["run"])
             b_status, b_gap_min_V, b_cycled = [], [], []
             any_ok_cycled = False
-            for i in range(len(campaign.TEL_CHIPS[tel])):
+            for i in range(len(campaign.TELESCOPE_CHIPS[tel])):
                 st = row["b%d_status" % i]
                 gv = row["b%d_gap_min_V" % i]
                 cy = row["b%d_cycled" % i]
@@ -182,7 +188,7 @@ def load_hv_cycles():
                 gap_h=row["gap_h"],
                 b_status=b_status, b_gap_min_V=b_gap_min_V, b_cycled=b_cycled,
                 hv_cycled=any_ok_cycled,
-                restart=(row["restart"] == "True"),
+                restart=_restart_flag(row["restart"], "%s, %s run %d" % (HV_CYCLES_CSV, tel, run)),
                 lv_event=row["lv_event"],
                 lv_on_utc=row["lv_on_utc"], lv_off_utc=row["lv_off_utc"],
                 lv_off_h=(float(row["lv_off_h"]) if row["lv_off_h"] else None),
@@ -192,12 +198,12 @@ def load_hv_cycles():
 
 def hv_cycle_marks(tel, run, hv_cycles):
     """(mark_text_or_None, restart_text_or_None, tick_colors[list]) for one run, combining the HV
-    cycle / LV cycle / irradiation step flags exactly as the combo figure renders them: 'HV cycle'
-    alone, 'HV+LV cycle' (HV cycle + lv_event=='lv_cycle'), 'HV cycle · irradiation step' (HV
-    cycle + lv_event=='irradiation_step'), or 'LV cycle'/'irradiation step' alone if HV did not
-    cycle; 'DAQ restart' is always its own separate line, never merged (matches h1 run18's combo
-    label: 'HV cycle' then 'DAQ restart' as two lines). Ticks stack orange-then-teal/purple, no
-    tick for DAQ restart (the combo figure's own legend has none either)."""
+    cycle / LV cycle / irradiation step flags exactly as the resolution-vs-run figure renders
+    them: 'HV cycle' alone, 'HV+LV cycle' (HV cycle + lv_event=='lv_cycle'), 'HV cycle ·
+    irradiation step' (HV cycle + lv_event=='irradiation_step'), or 'LV cycle'/'irradiation step'
+    alone if HV did not cycle; 'DAQ restart' is always its own separate line, never merged (as
+    on H1 run 18: 'HV cycle' then 'DAQ restart' as two lines). Ticks stack orange-then-teal/purple,
+    no tick for DAQ restart (the resolution-vs-run figure's legend has none either)."""
     row = hv_cycles.get((tel, run))
     if row is None:
         return None, None, []
@@ -227,8 +233,7 @@ def hv_cycle_marks(tel, run, hv_cycles):
 
 
 def load_display_runs():
-    """(all_runs, preferred_runs): {tel: set(run)} from display_runs_jul.csv, read directly (this
-    script's own no-cross-import convention -- see module docstring). Columns confirmed 2026-09-17:
+    """(all_runs, preferred_runs): {tel: set(run)} from display_runs_jul.csv. Columns used:
     telescope (H1/F1), run (int), preferred ('0'/'1')."""
     all_runs = {"h1": set(), "f1": set()}
     pref_runs = {"h1": set(), "f1": set()}
@@ -245,9 +250,8 @@ def load_display_runs():
 
 
 def load_rad_stop_utc():
-    """{(tel, run_num): rad_stop_utc string} from notes/july_inrun_currents.csv, read directly
-    (same file this script already reads in load_currents_meta(), first-row-wins per (tel, run)
-    matching that function's own convention). Confirmed per-telescope stamps differ (2026-09-17):
+    """{(tel, run_num): rad_stop_utc string} from JULY_REF_CSV (the file load_currents_meta()
+    reads; the first row per (tel, run) wins, as there). The stamps differ per telescope:
     H1 run11 2026-07-20 18:37:57, H1 run14 2026-07-25 16:08:57, F1 run10 2026-07-20 18:39:00,
     F1 run13 2026-07-25 16:09:11."""
     out = {}
@@ -260,7 +264,7 @@ def load_rad_stop_utc():
 
 
 def _fmt_utc_stamp(s):
-    """'2026-07-20 18:37:57' -> '07-20 18:37' (matches build_combo_check.py's _fmt_utc_stamp)."""
+    """'2026-07-20 18:37:57' -> '07-20 18:37' (the resolution-vs-run figure's stamp format)."""
     if not s:
         return None
     try:
@@ -272,7 +276,7 @@ def _fmt_utc_stamp(s):
 
 def rad_stop_lv_on_map(hv_cycles):
     """{(tel, run): (rad_stop_fmt, lv_on_fmt)} for exactly the runs hv_cycles_jul.csv marks
-    lv_event=='irradiation_step' (H1 11/14, F1 10/13, confirmed 2026-09-17), requiring both a
+    lv_event=='irradiation_step' (H1 runs 11/14, F1 runs 10/13), requiring both a
     rad_stop_utc (july_inrun_currents.csv) and an lv_on_utc (hv_cycles_jul.csv, already loaded by
     load_hv_cycles()) to be present."""
     rad_stop = load_rad_stop_utc()
@@ -288,8 +292,8 @@ def rad_stop_lv_on_map(hv_cycles):
 
 
 def load_timeline():
-    """tb (naive UTC datetime, matches july_inrun_currents.csv's own start_utc clock per
-    Mac ETROC_viz_mirror/IRRAD_IV_JUL/SUMMARY_JUL.md), channel (0-3), i_uA, tel (H1/F1 upper)."""
+    """tb (naive UTC datetime, the same clock as july_inrun_currents.csv's start_utc), channel
+    (0-3), i_uA, tel (H1/F1 upper)."""
     import pandas as pd
     df = pd.read_csv(TIMELINE_60S, parse_dates=["tb"])
     return df
@@ -297,7 +301,7 @@ def load_timeline():
 
 def build_panel_data(tel, runs, run_win, board_meta, timeline):
     """{run: dict(t0, length_h, nolog(bool), chips: {chip: dict(status, elapsed_h[], i_uA[])})}"""
-    chips = ts.TELESCOPE_CHIPS[tel]
+    chips = campaign.TELESCOPE_CHIPS[tel]
     tel_up = tel.upper()
     sub = timeline[timeline["tel"] == tel_up]
     out = {}
@@ -362,17 +366,17 @@ def compute_xlim(panel_data):
 
 def label_lines(tel, run, meta_row, board_meta, chips, hv_cycles, is_preferred=False,
                rad_stop_line=None):
-    """5-line stacked label (same convention as res_vs_run_combo_check_jul's run_tick_label):
-    run N / fluence / HV tuple / RFSel . OS / flag-or-spike word -- plus (Addendum 3) up to two
-    more lines appended after it: the HV/LV/irradiation-step mark, then 'DAQ restart'. Returns
-    (lines, last_color, is_spike, hv_txt, flag_idx, tick_colors); flag_idx is the index of the
-    ORIGINAL last line (flag-or-spike word) -- only that line gets last_color, the appended mark
-    lines are plain ink like every other non-highlighted line (matches the combo figure: 'HV
-    cycle' / 'DAQ restart' render in plain ink there too, only the tick marks are coloured).
+    """5-line stacked label (the run-label convention of the resolution-vs-run figure):
+    run N / fluence / HV tuple / RFSel . OS / flag-or-spike word, plus up to three more lines
+    appended after it: the HV/LV/irradiation-step mark, the radiation-stop line, then 'DAQ
+    restart'. Returns (lines, last_color, is_spike, hv_txt, flag_idx, tick_colors); flag_idx is
+    the index of the flag-or-spike line, the only line drawn in last_color; every other line,
+    the appended ones included, is drawn in muted ink (style.INK_MUTED). The resolution-vs-run
+    figure likewise colours only the tick marks, not the mark text.
 
-    Pass 8: is_preferred appends '(p)' to the run-number line (section 3 / Addendum 1);
-    rad_stop_line, when given, is inserted right after the HV/LV/irradiation-step mark line and
-    before 'DAQ restart' (Addendum 2 -- tied to the irradiation-step mark it sits beside)."""
+    is_preferred appends '(p)' to the run-number line; rad_stop_line, when given, is inserted
+    right after the HV/LV/irradiation-step mark line and before 'DAQ restart' (it belongs to the
+    irradiation-step mark it sits beside)."""
     hv_vals = []
     for idx in range(len(chips)):
         bm = board_meta.get((tel, run, idx))
@@ -390,10 +394,10 @@ def label_lines(tel, run, meta_row, board_meta, chips, hv_cycles, is_preferred=F
     rf_txt = "/".join("%g" % r for r in meta_row["rfsels"]) if meta_row["rfsels"] else "-"
     is_spike = run in SPIKE_RUNS[tel]
     last = meta_row["flag"] if meta_row["flag"] else ("spike" if is_spike else "")
-    # red whenever the run is on 6f's spike list, whether the word shown is the not-good flag
-    # word (which may itself already read "spike", built_combo_check.py's own FLAG_KEYWORDS
-    # maps a "current"-reason not-good run to that word) or the bare spike label
-    last_color = SPIKE_COLOR if is_spike else ts.INK
+    # red whenever the run is on the campaign's spike list (CURRENT_SPIKE_RUNS), whether the
+    # word shown is the not-good flag word (which may itself read "spike": the resolution-vs-run
+    # values file flags a "current"-reason not-good run with that word) or the bare spike label
+    last_color = SPIKE_COLOR if is_spike else style.INK
     run_txt = "run %d%s" % (run, " (p)" if is_preferred else "")
     lines = [run_txt, fl_txt, hv_txt, u"RFSel %s · OS %s" % (rf_txt, off_txt), last]
     flag_idx = len(lines) - 1
@@ -408,13 +412,13 @@ def label_lines(tel, run, meta_row, board_meta, chips, hv_cycles, is_preferred=F
 
 
 def _chip_style(tel, chip):
-    idx = ts.TELESCOPE_CHIPS[tel].index(chip)
-    return dict(color=CHIP_COLOR[idx], linestyle=ts.chip_linestyle(chip), linewidth=1.1)
+    idx = campaign.TELESCOPE_CHIPS[tel].index(chip)
+    return dict(color=CHIP_COLOR[idx], linestyle=style.chip_linestyle(chip), linewidth=1.1)
 
 
 def _draw_one_panel(ax, tel, run, pd_, meta_row, board_meta, y_max, x_max, fs, hv_cycles,
                     is_display=False, is_preferred=False, rad_stop_line=None, title_pad=3.0):
-    chips = ts.TELESCOPE_CHIPS[tel]
+    chips = campaign.TELESCOPE_CHIPS[tel]
     ax.set_xlim(0.0, x_max)
     ax.set_ylim(0.0, y_max)
     lines, last_color, is_spike, hv_txt, flag_idx, tick_colors = label_lines(
@@ -433,53 +437,59 @@ def _draw_one_panel(ax, tel, run, pd_, meta_row, board_meta, y_max, x_max, fs, h
             ys = np.asarray(cs["i_uA"], dtype=float)
             clipped = bool((ys > y_max).any())
             ys_draw = np.clip(ys, None, y_max)
-            style = _chip_style(tel, chip)
-            ax.plot(xs, ys_draw, **style, zorder=3)
+            chip_kw = _chip_style(tel, chip)
+            ax.plot(xs, ys_draw, **chip_kw, zorder=3)
             if clipped:
                 xtop = xs[np.argmax(ys)]
-                ax.annotate("clipped", xy=(xtop, y_max), xytext=(0, -2),
-                           textcoords="offset points", ha="center", va="top",
-                           fontsize=fs["clip"], color=style["color"], weight="bold",
-                           arrowprops=dict(arrowstyle="-", color=style["color"], lw=0.6))
+                # centred on the clipped peak, but hung inward within 10 % of a side of the
+                # panel, which keeps it off the frame at these panel widths (the compound
+                # figure's spines rule reports a label that still touches it)
+                where = xtop / x_max
+                ha, dx = (("left", 2) if where < 0.1 else ("right", -2) if where > 0.9
+                          else ("center", 0))
+                ax.annotate("clipped", xy=(xtop, y_max), xytext=(dx, -2),
+                           textcoords="offset points", ha=ha, va="top",
+                           fontsize=fs["clip"], color=chip_kw["color"], weight="bold",
+                           arrowprops=dict(arrowstyle="-", color=chip_kw["color"], lw=0.6))
 
     # title above panel: "run N" + HV tuple
-    # coordinator fix 2026-09-18: this run-title (matplotlib center title) shares the
-    # same base title row as compound_header's CMS text (axes[0]) and right_lines' facility/
-    # subject line (last axes and, via subjects[], others) -- all default to the axes-top
-    # title row. A big pad lifts the run-title clear above that header block so their
-    # bounding boxes no longer share a y-range (header stays immediately above the axes).
+    # This run-title (matplotlib centre title) shares the same base title row as
+    # compound_header's CMS text (axes[0]) and right_lines' facility/subject line (last axes
+    # and, via subjects[], others); all default to the axes-top title row. A big pad lifts the
+    # run-title clear above that header block so their bounding boxes do not share a y-range
+    # (the header stays immediately above the axes).
     # explicit y (not pad=): matplotlib shares ONE title-offset transform across the
     # loc='left'/'center'/'right' titles of an axes, so a later right_lines() call on this
     # same axes (loc='right', pad=None) would silently reset this pad back to the rcParams
-    # default and re-collide the two -- an explicit y (axes fraction) is independent of that
+    # default and re-collide the two; an explicit y (axes fraction) is independent of that
     # shared transform, so this run-title stays clear of any header content right_lines adds
     # later on axes[0]/axes[-1].
     ax_h_in = ax.get_position().height * ax.figure.get_size_inches()[1]
     y_title = 1.0 + (title_pad / 72.0) / ax_h_in
-    ax.set_title(u"run %d\n%s" % (run, hv_txt), fontsize=fs["title"], color=ts.INK,
+    ax.set_title(u"run %d\n%s" % (run, hv_txt), fontsize=fs["title"], color=style.INK,
                y=y_title, verticalalignment="bottom")
 
-    # pass 8 section 3 / Addendum 1: small filled ink triangle above the panel for every
+    # small filled ink triangle above the panel for every
     # display_runs_jul.csv run (preferred runs already carry their own "(p)" in the label stack).
     if is_display:
-        ax.plot([0.5], [1.055], transform=ax.transAxes, marker="^", color=ts.INK,
+        ax.plot([0.5], [1.055], transform=ax.transAxes, marker="^", color=style.INK,
                markersize=4.0, clip_on=False, linestyle="none", zorder=5)
 
-    # stacked label block below panel (same 5 lines as res_vs_run_combo_check_jul); pitch tuned
+    # stacked label block below panel (the resolution-vs-run figure's 5 lines); pitch tuned
     # to the panel's own axes height in inches so it does not depend on the compound-vs-single
     # aspect ratio (fs["stack_pitch"]/fs["stack_gap"] are set by the caller from the axes bbox).
     pitch = fs.get("stack_pitch", 0.030)
     gap = fs.get("stack_gap", 0.022)
     for i, txt in enumerate(lines):
-        color = last_color if i == flag_idx else ts.INK_MUTED
+        color = last_color if i == flag_idx else style.INK_MUTED
         ax.text(0.5, -gap - pitch * i, txt, transform=ax.transAxes, ha="center", va="top",
                fontsize=fs["stack"], color=color, clip_on=False)
 
-    # red spike tick: short, thin (~1pt), centred on the panel's own bottom axis -- not a bar
-    # across the whole axis (Addendum 1 item 4). HV-cycle/LV-cycle/irradiation-step ticks
-    # (Addendum 3) reuse the same short-centred-tick geometry, stacked below it in their own
-    # combo-matched colours (orange then teal/purple); no tick for 'DAQ restart' (text only,
-    # matching the combo figure's own legend which has no restart tick either).
+    # red spike tick: short, thin (~1pt), centred on the panel's own bottom axis, not a bar
+    # across the whole axis. HV-cycle/LV-cycle/irradiation-step ticks reuse the same
+    # short-centred-tick geometry, stacked below it in the resolution-vs-run figure's colours
+    # (orange then teal/purple); no tick for 'DAQ restart' (text only; that figure's legend
+    # has no restart tick either).
     tick_y = -0.012
     if is_spike:
         ax.plot([0.44, 0.56], [tick_y, tick_y], transform=ax.transAxes, color=SPIKE_COLOR,
@@ -489,8 +499,8 @@ def _draw_one_panel(ax, tel, run, pd_, meta_row, board_meta, y_max, x_max, fs, h
         ax.plot([0.44, 0.56], [tick_y, tick_y], transform=ax.transAxes, color=color,
                linewidth=1.0, clip_on=False, solid_capstyle="butt")
         tick_y -= 0.010
-    # pass 8 Addendum 2: extra ink-coloured tick (distinct from the purple irradiation-step tick
-    # above) for the logged radiation-stop stamp, on exactly the 4 target runs.
+    # extra ink-coloured tick (distinct from the purple irradiation-step tick above) for the
+    # logged radiation-stop stamp, on the irradiation-step runs that have one.
     if rad_stop_line:
         ax.plot([0.44, 0.56], [tick_y, tick_y], transform=ax.transAxes, color=RAD_STOP_COLOR,
                linewidth=1.0, clip_on=False, solid_capstyle="butt")
@@ -517,7 +527,7 @@ def draw_compound(tel, runs, panel_data, meta, board_meta, y_max, y_mode, x_max,
     rad_stop_map = rad_stop_lv_on_map(hv_cycles)
 
     left, right = 0.018, 0.997
-    bottom, top = 0.335, 0.84  # top 2026-09-19: closes the top blank band (was 0.80)
+    bottom, top = 0.335, 0.84  # top: no blank band above the header
     w = (right - left) / n
     axes = []
     for i, run in enumerate(runs):
@@ -536,27 +546,27 @@ def draw_compound(tel, runs, panel_data, meta, board_meta, y_max, y_mode, x_max,
         else:
             ax.set_yticklabels([])
 
-    # header (user rule 2026-09-18): CMS text on the first run panel, immediately above its axes;
-    # facility line (telescope + campaign) on the last panel's top right; the y/x-range convention
-    # that used to sit in the header's own name/third line now rides as that panel's subject.
-    ts.compound_header(
-        axes, tag=ts.TELESCOPE_TITLE[tel], data="July 2026",
+    # header: CMS text on the first run panel, immediately above its axes; facility line
+    # (telescope + campaign) on the last panel's top right; the y/x-range convention rides as
+    # that panel's subject.
+    style.compound_header(
+        axes, tag=campaign.TELESCOPE_TITLE[tel], data="July 2026",
         subjects=[None] * (len(axes) - 1) + [
             u"y: 0–%d µA (%s), x: 0–%.1f h" % (int(y_max), y_mode, x_max)],
         scale=fs["header"] / 18.0)
 
     # chip legend (colour = fixed chip-slot colour, marker/linestyle = chip); chip ids only, plus
-    # the Addendum-3 HV/LV/irradiation-step tick legend (labels/colours copied from the combo figure)
-    chips = ts.TELESCOPE_CHIPS[tel]
-    handles = [Line2D([], [], color=CHIP_COLOR[i], linestyle=ts.chip_linestyle(c),
-                     marker=ts.chip_marker(c), markersize=3.5, linewidth=1.4, label=c)
+    # the HV/LV/irradiation-step tick legend (labels and colours of the resolution-vs-run figure)
+    chips = campaign.TELESCOPE_CHIPS[tel]
+    handles = [Line2D([], [], color=CHIP_COLOR[i], linestyle=style.chip_linestyle(c),
+                     marker=style.chip_marker(c), markersize=3.5, linewidth=1.4, label=c)
              for i, c in enumerate(chips)]
     handles.append(Line2D([], [], color=SPIKE_COLOR, linewidth=2.2, label="in-run current spike"))
     handles.append(Line2D([], [], color=HVCYCLE_COLOR, linewidth=2.2, label=HVCYCLE_LEGEND))
     handles.append(Line2D([], [], color=LVCYCLE_COLOR, linewidth=2.2, label=LVCYCLE_LEGEND))
     handles.append(Line2D([], [], color=IRRAD_COLOR, linewidth=2.2, label=IRRAD_LEGEND))
-    handles.append(Line2D([], [], color="none", marker="^", markerfacecolor=ts.INK,
-                         markeredgecolor=ts.INK, markersize=5.5, linestyle="none",
+    handles.append(Line2D([], [], color="none", marker="^", markerfacecolor=style.INK,
+                         markeredgecolor=style.INK, markersize=5.5, linestyle="none",
                          label=DISPLAY_RUN_LEGEND_TEXT))
     handles.append(Line2D([], [], color=RAD_STOP_COLOR, linewidth=2.2, label=RAD_STOP_LEGEND_TEXT))
     fig.legend(handles=handles, loc="upper center", ncol=len(handles), frameon=False,
@@ -572,14 +582,13 @@ def draw_compound(tel, runs, panel_data, meta, board_meta, y_max, y_mode, x_max,
     wrapped = []
     for line in _footer_text(tel, y_max, y_mode, x_max, n_clip).split("\n"):
         wrapped.extend(textwrap.wrap(line, width=260) or [""])
-    # coordinator fix 2026-09-18 (lower_footer): draw through ts.footer() (not a raw
-    # fig.text()) so it carries the _talk_footer marker -- save_figure()'s lower_footer()
-    # needs that marker to find and shift this text into its own cropped band. scale is
-    # picked so sizes(scale)["ann"] reproduces this figure's existing 7.5 pt footer size.
-    ts.footer(fig, "\n".join(wrapped), fs["footer"] / 14.0, x=0.012)
+    # drawn through style.footer() (not a raw fig.text()) so it carries the _etroc_footer
+    # marker: save_figure()'s lower_footer() needs that marker to find and shift this text into
+    # its own band. scale is picked so sizes(scale)["ann"] gives this figure's 7.5 pt footer.
+    style.footer(fig, "\n".join(wrapped), fs["footer"] / 14.0, x=0.012)
 
     os.makedirs(OUT, exist_ok=True)
-    paths, problems = ts.save_figure(fig, OUT, stem, dpi=DPI)
+    paths, problems = style.save_figure(fig, OUT, stem, dpi=DPI)
     png, pdf = paths
     plt.close(fig)
 
@@ -587,7 +596,7 @@ def draw_compound(tel, runs, panel_data, meta, board_meta, y_max, y_mode, x_max,
     if write_panels:
         n_panel_problems = draw_singles(tel, runs, panel_data, meta, board_meta, y_max, x_max, fs,
                                        stem, hv_cycles)
-    return png, pdf, len(problems), n_panel_problems
+    return png, pdf, problems, n_panel_problems
 
 
 def draw_singles(tel, runs, panel_data, meta, board_meta, y_max, x_max, fs, stem, hv_cycles):
@@ -610,11 +619,12 @@ def draw_singles(tel, runs, panel_data, meta, board_meta, y_max, x_max, fs, stem
                        fs1, hv_cycles, is_display=(run in display_runs.get(tel, ())),
                        is_preferred=(run in pref_runs.get(tel, ())), rad_stop_line=rs_line)
         ax.set_ylabel(u"bias current [µA]", fontsize=fs1["title"])
-        problems = ts.check_no_clipping(fig, "%s run%02d" % (stem, run))
+        # a per-run tile carries no CMS header, so only the overlap audit applies
+        problems = style.check_no_clipping(fig, "%s run%02d" % (stem, run))
         total_problems += len(problems)
         base = os.path.join(d, "run%02d" % run)
-        fig.savefig(base + ".png", dpi=200, facecolor=ts.SURFACE)
-        fig.savefig(base + ".pdf", facecolor=ts.SURFACE)
+        fig.savefig(base + ".png", dpi=200, facecolor=style.SURFACE)
+        fig.savefig(base + ".pdf", facecolor=style.SURFACE)
         plt.close(fig)
     return total_problems
 
@@ -622,10 +632,9 @@ def draw_singles(tel, runs, panel_data, meta, board_meta, y_max, x_max, fs, stem
 _NUM_WORD = {0: "zero", 1: "one", 2: "two", 3: "three", 4: "four", 5: "five",
             6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten"}
 
-# Addendum 3: the two mechanism sentences, copied verbatim from res_vs_run_combo_check_jul_values
-# .json's own hv_cycle_rule / lv_cycle_rule fields (read 2026-09-17), plus the DAQ-restart source
-# sentence (daq_restart_source) for the same provenance completeness the original brief asked of
-# the rest of this footer.
+# The two mechanism sentences are the resolution-vs-run values file's hv_cycle_rule /
+# lv_cycle_rule fields, word for word; the DAQ-restart source sentence (daq_restart_source)
+# completes the provenance of the footer.
 _HV_CYCLE_SENTENCE = (
     "HV cycle before a run: any powered board's timeline bias v drops below 20% of that sample's "
     "own vset for >=1 60 s sample in the gap between the previous run's end and this run's start "
@@ -637,21 +646,20 @@ _LV_CYCLE_SENTENCE = (
     "same fluence = LV cycle, at a higher fluence = irradiation step."
 )
 _DAQ_RESTART_SENTENCE = campaign.DAQ_RESTART_SENTENCE
-# coordinator fix 2026-09-18 (no file names on figures): plain-worded copy for the drawn
-# footer -- _DAQ_RESTART_SENTENCE itself stays untouched since it is also stored verbatim as
-# the values JSON's daq_restart_source provenance field.
+# No file names on figures: a plain-worded copy for the drawn footer; _DAQ_RESTART_SENTENCE
+# keeps them because it is stored as the values file's daq_restart_source provenance field.
 _DAQ_RESTART_SENTENCE_FIGURE = campaign.DAQ_RESTART_SENTENCE_FIGURE
-# _DISPLAY_RUN_SENTENCE is only ever drawn (not echoed into the values JSON), so it is edited
-# in place (coordinator fix 2026-09-18: no file names on figures).
+# _DISPLAY_RUN_SENTENCE is only ever drawn (not echoed into the values file), so it carries no
+# file name.
 _DISPLAY_RUN_SENTENCE = (
     "%s. Source: the July display-run list." % DISPLAY_RUN_LEGEND_TEXT
 )
 
 
 def _footer_text(tel, y_max, y_mode, x_max, n_clip):
-    """Plain data statement only (Addendum 1 item 2): no mention of the builder brief, the Mac
-    mirror path, the JSON 'hv' field, or the sha check -- those stay in the JSON provenance."""
-    chips_txt = "/".join(ts.TELESCOPE_CHIPS[tel])
+    """The footer: a plain data statement; file names and provenance details stay in the
+    values file."""
+    chips_txt = "/".join(campaign.TELESCOPE_CHIPS[tel])
     if y_mode == "p99":
         n_word = _NUM_WORD.get(n_clip, str(n_clip))
         y_desc = ("99th percentile of all samples, %s excursion%s clipped and marked"
@@ -671,8 +679,9 @@ def _footer_text(tel, y_max, y_mode, x_max, n_clip):
 
 
 def build_values_json(tel, runs, panel_data, meta, board_meta, y_max, y_mode, x_max, raw_max, p99,
-                     combo_json_path, no_log_runs, clipped_runs, hv_cycles, stem=None):
-    chips = ts.TELESCOPE_CHIPS[tel]
+                     combo_json_path, no_log_runs, clipped_runs, hv_cycles, stem=None, *,
+                     problems):
+    chips = campaign.TELESCOPE_CHIPS[tel]
     display_runs, pref_runs = load_display_runs()
     rad_stop_map = rad_stop_lv_on_map(hv_cycles)
     rad_stop_raw = load_rad_stop_utc()
@@ -739,6 +748,7 @@ def build_values_json(tel, runs, panel_data, meta, board_meta, y_max, y_mode, x_
                                          "lv_on_utc": hv_cycles.get((t, r), {}).get("lv_on_utc")}
                       for (t, r) in rad_stop_map},
         per_run=per_run,
+        overlap_problems=list(problems),
     )
     return ivp.write_values(OUT, stem or ("current_vs_run_jul_%s" % tel), payload,
                             script="TestBeam/etroc_plots/iv/current_vs_run.py",
@@ -748,10 +758,10 @@ def build_values_json(tel, runs, panel_data, meta, board_meta, y_max, y_mode, x_
 
 def build_one(tel, runs_by_tel, run_win, board_meta, timeline, hv_cycles, meta, combo_json_path,
              write_panels=True, stem=None):
-    """One telescope's compound figure + values JSON -- main()'s per-tel body, factored out so
-    it can be called directly (bypassing argparse) with only the output stem overridden, the way
-    iv/preirrad_current.plot() already takes a stem= argument. main() below calls this with
-    stem=None, which keeps its CLI output exactly as it was before this function existed."""
+    """One telescope's compound figure + values JSON: main()'s per-tel body, callable directly
+    (bypassing argparse) with only the output stem overridden, the way iv/preirrad_current.plot()
+    takes a stem= argument. main() below calls this with stem=None (the default name,
+    current_vs_run_jul_<tel>)."""
     runs = runs_by_tel[tel]
     panel_data = build_panel_data(tel, runs, run_win, board_meta, timeline)
     y_max, y_mode, raw_max, p99 = compute_ylim(tel, panel_data)
@@ -764,15 +774,15 @@ def build_one(tel, runs_by_tel, run_win, board_meta, timeline, hv_cycles, meta, 
             if cs["status"] == "ok" and any(v > y_max for v in cs["i_uA"]):
                 clipped_runs.add((r, chip))
 
-    png, pdf, n_prob, n_panel_prob = draw_compound(tel, runs, panel_data, meta, board_meta, y_max,
-                                                   y_mode, x_max, write_panels, hv_cycles,
-                                                   stem=stem)
+    png, pdf, problems, n_panel_prob = draw_compound(tel, runs, panel_data, meta, board_meta,
+                                                     y_max, y_mode, x_max, write_panels,
+                                                     hv_cycles, stem=stem)
     jpath = build_values_json(tel, runs, panel_data, meta, board_meta, y_max, y_mode, x_max,
                              raw_max, p99, combo_json_path, no_log_runs, clipped_runs, hv_cycles,
-                             stem=stem)
+                             stem=stem, problems=problems)
     return dict(tel=tel, n_runs=len(runs), y_max=y_max, y_mode=y_mode, raw_max=raw_max, p99=p99,
                x_max=x_max, x_max_raw=x_max_raw, no_log_runs=sorted(no_log_runs),
-               clipped=sorted(clipped_runs), png=png, pdf=pdf, json=jpath, problems=n_prob,
+               clipped=sorted(clipped_runs), png=png, pdf=pdf, json=jpath, problems=len(problems),
                panel_problems=n_panel_prob)
 
 
@@ -787,7 +797,7 @@ def main(argv=None):
     OUT, PANEL_ROOT = a.out, os.path.join(a.out, "panels")
     tels = TELS if a.tel == "both" else (a.tel,)
 
-    ts.apply_style(1.0)
+    style.apply_style(1.0)
     runs_by_tel, meta, combo_json_path = load_combo_meta()
     run_win, board_meta = load_currents_meta()
     timeline = load_timeline()
@@ -802,7 +812,7 @@ def main(argv=None):
         report.append(rec)
 
     print(json.dumps(report, indent=1, default=str))
-    print("TOTAL check_no_clipping problems: %d" % total_problems)
+    print("TOTAL audit problems: %d" % total_problems)
 
 
 if __name__ == "__main__":

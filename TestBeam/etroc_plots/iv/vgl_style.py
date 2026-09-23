@@ -1,17 +1,13 @@
 """Saved style for the V_gl-vs-fluence figures.
 
-These figures are paper-scale, not talk-scale: 9.5 pt text, inward ticks on all four sides, and
+These figures are drawn at paper scale: 9.5 pt text, inward ticks on all four sides, and
 the Okabe-Ito colourblind-safe palette. That is a different visual system from `_ivstyle`, which
-styles the talk's IV-curve figures (14x12 in, ~20 pt), so the two are kept apart on purpose --
+styles the IV-curve figures (14x12 in, ~20 pt), so the two are kept apart on purpose:
 importing the wrong one is then a visible mistake rather than a silent one.
-
-Lifted on 2026-09-22 from notes/viz/irrad_iv/vgl_fit{,_f1}/, where both scripts carried this
-block verbatim. Values are unchanged; the acceptance test requires the figures to stay
-pixel-identical.
 """
 import matplotlib.pyplot as plt
 
-# Okabe-Ito, by board POSITION rather than board name: H1 and F1 used these same four colours in
+# Okabe-Ito, by board POSITION rather than board name: H1 and F1 use these same four colours in
 # this same order, each keyed by its own board names.
 PALETTE = ('#0072B2', '#D55E00', '#009E73', '#CC79A7')
 

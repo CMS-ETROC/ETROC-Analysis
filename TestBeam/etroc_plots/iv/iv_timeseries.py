@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""Currents-vs-time inputs for talk_2026/iv: March raw-log reduction + July timeline reader.
+"""Currents-vs-time inputs for the IV figures: March raw-log reduction + July timeline reader.
 
 March: reduces the six ~1 Hz IV-monitor raw logs (one per telescope x fluence step, each covering
 two runs) to 60 s median bins, restricted to each run's plateau window and to bins whose readback
@@ -10,11 +10,10 @@ INPUTS/march/march_inrun_60s.csv (tel, run, chip, t_utc, elapsed_min, v_V, i_uA)
 measured from that run's own start (H1: the run start; F1: the same start_utc used for its window).
 
 July: INPUTS/july/timeline_60s.csv.gz is already 60 s bins in UTC; this module only selects runs
-(2e15 and 3.5e15: the display_runs_jul.csv-listed RFSel 2 / Disc offset 20 runs at that fluence --
-fixed 2026-09-19, replacing 3.5e15's earlier "top 4 by plateau_h" heuristic, which was blind to
-RFSel/offset and picked a mix of other settings classes instead of the RFSel2/OS20 runs the
-current-vs-time figure is meant to show) using the main-tree reference CSV and filters to each
-run's plateau window + 6 V bias tolerance.
+(2e15 and 3.5e15: the display_runs_jul.csv-listed RFSel 2 / Disc offset 20 runs at that fluence;
+a selection by plateau length alone is blind to RFSel/offset and would mix other settings classes
+into a figure meant to show one) using the per-run current table (JULY_REF_CSV) and filters to
+each run's plateau window + 6 V bias tolerance.
 
 Assertions (both campaigns) compare the median current per chip over the reference sub-window
 against the campaign's own numbers, with a 5% tolerance, and are never tuned away. The March
@@ -22,17 +21,15 @@ reduction prints every comparison, marks a bigger disagreement "<-- FAIL", still
 returns ok=False; the IV notebook's July figures drop a run that disagrees and list it as rejected.
 
 CLI:
-  iv_timeseries.py --reduce-one h1_3e14        (single raw file, for the first sanity pass)
+  iv_timeseries.py --reduce-one h1_3e14        (single raw file, a quick sanity check)
   iv_timeseries.py --reduce-all                (all six files -> INPUTS/march/march_inrun_60s.csv)
   iv_timeseries.py --assert-march [csv]        (re-check an already-reduced march CSV)
   iv_timeseries.py --assert-july                (build + check the July run selection)
 """
 import argparse
 import csv
-import gzip
 import json
 import os
-import sys
 from datetime import timedelta
 
 import numpy as np
@@ -40,14 +37,14 @@ import pandas as pd
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-# ---- campaign catalogue (see iv/campaigns/) --------------------------------
-# These names live in the campaign module now; they are re-bound here so every
-# reference in this file and in the figure scripts keeps working unchanged.
-from .campaigns import active as _campaign
+# ---- campaign catalogue (see campaigns/) --------------------------------
+# These names are defined by the campaign module and re-bound here, so this module and the
+# notebook use them as tsdata.<NAME>.
+from ..campaigns import active as _campaign
 INPUTS = _campaign.INPUTS            # the campaign's input folder (ETROC_IV_INPUTS overrides it)
 EOS_ROOT = _campaign.EOS_ROOT
 DISPLAY_RUNS_JUL_CSV = _campaign.DISPLAY_RUNS_JUL_CSV
-CHIPS = _campaign.CHIPS
+TELESCOPE_CHIPS = _campaign.TELESCOPE_CHIPS
 MARCH_H1_RUNS = _campaign.MARCH_H1_RUNS
 MARCH_F1_RUN_NUMS = _campaign.MARCH_F1_RUN_NUMS
 F1_WINDOWS_CSV = _campaign.F1_WINDOWS_CSV
@@ -74,14 +71,16 @@ PREIRRAD_LOG_UTC_OFFSET_H = _campaign.PREIRRAD_LOG_UTC_OFFSET_H
 
 
 
-BIAS_TOL_V = 6.0
+BIAS_TOL_V = 6.0    # V: a bin counts only while the HV readback is this close to the run bias
+SETTLE_MIN = 15.0   # minutes after the HV step dropped from every in-run window: the readback
+                    # is in tolerance there, the current is not
 BIN = "60S"
 
 
 def _f1_windows():
-    """run -> dict(start_utc, end_utc, bias, ref_uA{chip}) from the main-tree reference CSV.
+    """run -> dict(start_utc, end_utc, bias, ref_uA{chip}) from F1_WINDOWS_CSV.
 
-    win_start_utc/win_end_utc there are start_utc+15min / +plateau_h - i.e. exactly the assertion
+    win_start_utc/win_end_utc there are start_utc+15min / +plateau_h, i.e. exactly the assertion
     sub-window; start_utc/window_h give the run's own full plotted window.
     """
     df = pd.read_csv(F1_WINDOWS_CSV)
@@ -94,8 +93,8 @@ def _f1_windows():
             end_utc=pd.Timestamp(row["start_utc"]) + timedelta(hours=float(row["window_h"])),
             win_start_utc=pd.Timestamp(row["win_start_utc"]),
             win_end_utc=pd.Timestamp(row["win_end_utc"]),
-            bias={c: float(row["Vread_%s_V" % c]) for c in CHIPS["f1"]},
-            ref_uA={c: float(row["I_%s_uA" % c]) for c in CHIPS["f1"]},
+            bias={c: float(row["Vread_%s_V" % c]) for c in TELESCOPE_CHIPS["f1"]},
+            ref_uA={c: float(row["I_%s_uA" % c]) for c in TELESCOPE_CHIPS["f1"]},
         )
     return out
 
@@ -106,7 +105,7 @@ def _reduce_one_file(tel, fluence, verbose=True):
     Returns a DataFrame (tel, run, chip, t_utc, elapsed_min, v_V, i_uA).
     """
     path = MARCH_RAW_FILES[(tel, fluence)]
-    chips = CHIPS[tel]
+    chips = TELESCOPE_CHIPS[tel]
     usecols = ["Date"] + ["Re(%smeas[%d]) [%s]" % (kind, c, unit)
                           for c in range(len(chips)) for kind, unit in (("V", "V"), ("I", "A"))]
     if verbose:
@@ -164,7 +163,7 @@ def _assert_table(reduced, label_windows, ref_lookup):
     print("  %-4s %-6s %10s %10s %8s" % ("run", "chip", "drawn_uA", "ref_uA", "%diff"))
     for run in sorted(reduced["run"].unique()):
         w = label_windows[run]
-        for chip in CHIPS[reduced.loc[reduced["run"] == run, "tel"].iloc[0]]:
+        for chip in TELESCOPE_CHIPS[reduced.loc[reduced["run"] == run, "tel"].iloc[0]]:
             sub = reduced[(reduced["run"] == run) & (reduced["chip"] == chip)]
             t = pd.to_datetime(sub["t_utc"])
             m = (t >= w["assert_start"]) & (t <= w["assert_end"])
@@ -187,7 +186,7 @@ def reduce_all(out_csv):
     is printed with "<-- FAIL"; the CSV is written either way.
     Returns (reduced frame, comparison rows, True when every comparison passed)."""
     all_parts = []
-    for tel in CHIPS:
+    for tel in TELESCOPE_CHIPS:
         for fluence in RUNS_AT_FLUENCE:
             part = _reduce_one_file(tel, fluence)
             all_parts.append(part)
@@ -197,8 +196,8 @@ def reduce_all(out_csv):
     full.to_csv(out_csv, index=False)
     print("wrote %s (%d rows)" % (out_csv, len(full)))
 
-    # assertion: H1 against the brief, F1 against the main-tree reference CSV
-    h1_windows = {r: dict(assert_start=pd.Timestamp(MARCH_H1_RUNS[r]["start_utc"]) + timedelta(minutes=15),
+    # assertion: H1 against MARCH_H1_RUNS ref_uA, F1 against F1_WINDOWS_CSV
+    h1_windows = {r: dict(assert_start=pd.Timestamp(MARCH_H1_RUNS[r]["start_utc"]) + timedelta(minutes=SETTLE_MIN),
                           assert_end=pd.Timestamp(MARCH_H1_RUNS[r]["start_utc"])
                                      + timedelta(hours=MARCH_H1_RUNS[r]["plateau_h"]))
                  for r in MARCH_H1_RUNS}
@@ -242,14 +241,16 @@ def _parse_good_flag(value, where):
     raise ValueError("%s: good = %r is not true/false or 1/0; fix that cell" % (where, value))
 
 
-def _good_runs(tel_key, path=None):
-    """(good, reasons) for one telescope in the July IRRAD campaign: `good` is the set of plain
-    run numbers (int) marked good==True, `reasons` maps every not-good run number to its CSV
-    reason.  Merged-run rows ("46+47") are skipped -- the per-run July selection never sees them.
+def good_runs(tel_key, path=None, good_runs_campaign=None):
+    """(good, reasons) for one telescope from the good-run list: `good` is the set of plain run
+    numbers (int) marked good==True, `reasons` maps every not-good run number to its CSV reason.
+    `good_runs_campaign` picks the list's campaign column (default GOOD_RUNS_CAMPAIGN, the July
+    runs). Merged-run rows ("46+47") are skipped: the per-run selections never see them.
     """
     path = path or GOOD_RUNS_CSV
     df = pd.read_csv(path)
-    df = df[(df["campaign"] == GOOD_RUNS_CAMPAIGN) & (df["telescope"] == GOOD_RUNS_TEL[tel_key])]
+    df = df[(df["campaign"] == (good_runs_campaign or GOOD_RUNS_CAMPAIGN))
+            & (df["telescope"] == GOOD_RUNS_TEL[tel_key])]
     good, reasons = set(), {}
     for _, row in df.iterrows():
         run_field = str(row["run"])
@@ -270,11 +271,10 @@ def _run_num(run_field):
 
 
 def _load_display_runs_jul_rows():
-    """DISPLAY_RUNS_JUL_CSV rows as dicts, via the stdlib csv module rather than pandas (fix
-    2026-09-20): the 2026-09-20 update added a `note` free-text field with unquoted commas (H1
-    3.5e15 RFSel2/offset "8/10" run 56 row), which pandas' C parser rejects outright as a field-
-    count mismatch for the whole file. csv.DictReader tolerates that ragged trailing field the
-    same way build_timeline.load_display_runs_jul() already does; every column _display_runs_jul
+    """DISPLAY_RUNS_JUL_CSV rows as dicts, via the stdlib csv module rather than pandas: the
+    file's `note` free-text field has unquoted commas (e.g. the H1 3.5e15 RFSel2/offset "8/10"
+    run 56 row), which pandas' C parser rejects outright as a field-count mismatch for the whole
+    file. csv.DictReader tolerates that ragged trailing field; every column _display_runs_jul
     reads (telescope/fluence/rfsel/os/run) sits before the ragged tail so it is unaffected.
     """
     with open(DISPLAY_RUNS_JUL_CSV, newline="") as fh:
@@ -340,7 +340,7 @@ def july_run_selection(good_runs_csv=None, steps=None):
     info = {}
     selection = {}
     for tel_key, tel_name in JULY_TEL.items():
-        good, reasons = _good_runs(tel_key, good_runs_csv)
+        good, reasons = good_runs(tel_key, good_runs_csv)
         sub = df[df["tel"] == tel_name]
         ref_tel = ref[ref["tel"] == tel_name]
         chosen_runs = []
@@ -391,30 +391,52 @@ def july_run_selection(good_runs_csv=None, steps=None):
                 start = pd.Timestamp(row["plateau_start_utc"])
                 end = pd.Timestamp(row["plateau_end_used_utc"])
                 info[(tel_key, run, chip)] = dict(
-                    start=start, end=end, assert_start=start + timedelta(minutes=15),
+                    start=start, end=end, assert_start=start + timedelta(minutes=SETTLE_MIN),
                     assert_end=end, bias_V=float(row["v_plateau_V"]),
                     ref_uA=float(row["i_inrun_uA"]), plateau_h=float(row["plateau_h"]),
                     fluence=row["fluence_p_cm2"])
     return selection, info
 
 
-_JULY_YAML_CACHE = {}
+_YAML_CACHE = {}
 
 
-def _july_yaml():
-    if "doc" not in _JULY_YAML_CACHE:
+def _board_yaml(path):
+    if path not in _YAML_CACHE:
         import yaml
-        with open(JULY_YAML) as fh:
-            _JULY_YAML_CACHE["doc"] = yaml.safe_load(fh)
-    return _JULY_YAML_CACHE["doc"]
+        with open(path) as fh:
+            _YAML_CACHE[path] = yaml.safe_load(fh)
+    return _YAML_CACHE[path]
 
 
-def july_run_settings(run_key):
-    """{(RFSel, offset), ...} over the four boards of one July run, from the campaign yaml."""
-    cfg = _july_yaml().get(run_key, {})
+def run_settings(run_key, yaml_path=None):
+    """{(RFSel, offset), ...} over the four boards of one run ("h1_run17"), from a board-config
+    yaml (default: the campaign's July one). RFSel is None where the yaml does not record it; a
+    run missing from the yaml gives an empty set."""
+    cfg = _board_yaml(yaml_path or JULY_YAML).get(run_key, {})
     if not isinstance(cfg, dict):
         return set()
     return {(d.get("RFSel"), d.get("offset")) for d in cfg.values() if isinstance(d, dict)}
+
+
+def july_run_settings(run_key):
+    """run_settings() of one July run."""
+    return run_settings(run_key, JULY_YAML)
+
+
+def check_offset(run_keys, yaml_path, offset):
+    """Raise RuntimeError unless every board of every run in `run_keys` ("h1_run17") ran at
+    threshold offset `offset` in the board-config yaml `yaml_path`. A footer that states the
+    offset calls this for the runs it draws."""
+    bad = {}
+    for key in run_keys:
+        got = sorted({off for _rfsel, off in run_settings(key, yaml_path)}, key=str)
+        if got != [offset]:
+            bad[key] = got
+    if bad:
+        raise RuntimeError("threshold offset is not %s on every board in %s: %s (an empty list "
+                           "means the run is not in the yaml)"
+                           % (offset, os.path.basename(yaml_path), bad))
 
 
 def july_1p5e15_selection(good_runs_csv=None):
@@ -428,7 +450,7 @@ def july_1p5e15_selection(good_runs_csv=None):
     ref = ref_all[ref_all["status"] == "ok"]
     selection, info = {}, {}
     for tel_key, tel_name in JULY_TEL.items():
-        good, reasons = _good_runs(tel_key, good_runs_csv)
+        good, reasons = good_runs(tel_key, good_runs_csv)
         sub = ref[ref["tel"] == tel_name]
         sub_all = ref_all[ref_all["tel"] == tel_name]
         chosen, rejected, not_good, candidates, dropped_boards = [], [], [], [], []
@@ -461,7 +483,7 @@ def july_1p5e15_selection(good_runs_csv=None):
                 start = pd.Timestamp(row["plateau_start_utc"])
                 end = pd.Timestamp(row["plateau_end_used_utc"])
                 info[(tel_key, run, chip)] = dict(
-                    start=start, end=end, assert_start=start + timedelta(minutes=15),
+                    start=start, end=end, assert_start=start + timedelta(minutes=SETTLE_MIN),
                     assert_end=end, bias_V=float(row["v_plateau_V"]),
                     ref_uA=float(row["i_inrun_uA"]), plateau_h=float(row["plateau_h"]),
                     fluence=1.5e15)
@@ -483,7 +505,7 @@ def check_holds_last_to(holds, chips, t_end, what):
                            % (what, t_end, ", ".join(early)))
 
 
-SPIKE_SETTLE_MIN = 15.0     # same settle cut as fig32's own assert_start convention
+SPIKE_SETTLE_MIN = SETTLE_MIN     # the spike scan skips the same settle time
 SPIKE_FACTOR = 1.25         # |I| > this x the run's chip median counts as "above"
 SPIKE_MAX_MIN = 30.0        # a contiguous above-threshold group this long or longer is an
                             # "excursion" (real physics/HV behaviour); shorter is a "spike"
@@ -499,8 +521,8 @@ def _per_run_windows(per_run=None):
     """july_timeline.json 'per_run' (status=='ok' rows only, each already carrying both plateau
     bounds) -> {(tel_key, run, chip): dict(tel, channel, settle_start, end, bias_V)}.
 
-    settle_start = plateau_start_utc + 15 min, matching iv_timeseries's own assert_start
-    convention used everywhere else in this module (july_run_selection, fig32._draw_panel);
+    settle_start = plateau_start_utc + 15 min, matching the assert_start convention
+    of july_run_selection and of the in-run current figures (iv21-iv23);
     bias_V is v_plateau_V, falling back to hv_nominal_V on the rare row missing it.
     """
     if per_run is None:
@@ -530,15 +552,15 @@ def _per_run_windows(per_run=None):
 
 
 def detect_july_spikes(timeline=None, per_run=None):
-    """In-run current spike/excursion scan over every July run's 60 s median series (see module
-    docstring section above). A spike is a contiguous group of post-settle bins where |I| exceeds
+    """In-run current spike/excursion scan over every July run's 60 s median series (thresholds:
+    the SPIKE_* constants). A spike is a contiguous group of post-settle bins where |I| exceeds
     SPIKE_FACTOR x the run's own chip median (over the same post-settle window); a group shorter
     than SPIKE_MAX_MIN minutes is a "spike", one that long or longer is an "excursion" (kept
-    distinct -- an excursion is more likely a real, sustained HV/physics effect than a brief glitch,
+    distinct: an excursion is more likely a real, sustained HV/physics effect than a brief glitch,
     but neither is filtered here; that judgement is the caller's).
 
     Returns a list of dicts (tel, run, chip, kind, start_utc, end_utc, duration_min, peak_uA,
-    median_uA) -- one row per contiguous above-threshold group, sorted by (tel, run, chip,
+    median_uA), one row per contiguous above-threshold group, sorted by (tel, run, chip,
     start_utc). Never tunes a window to make a run "look clean"; a run with no group above
     threshold contributes no rows.
     """
@@ -587,7 +609,7 @@ def assert_july():
         print("\n%s: chosen %s, rejected %s" % (
             tel_key.upper(), selection[tel_key]["chosen"], selection[tel_key]["rejected"]))
         for run in selection[tel_key]["chosen"]:
-            for c, chip in enumerate(CHIPS[tel_key]):
+            for c, chip in enumerate(TELESCOPE_CHIPS[tel_key]):
                 key = (tel_key, run, chip)
                 if key not in info:
                     continue
@@ -619,7 +641,7 @@ if __name__ == "__main__":
     ap.add_argument("--assert-march", nargs="?", const="__default__")
     ap.add_argument("--assert-july", action="store_true")
     ap.add_argument("--detect-spikes", action="store_true",
-                    help="v2: scan every July run for in-run current spikes/excursions "
+                    help="scan every July run for in-run current spikes/excursions "
                          "(see detect_july_spikes); prints a summary, writes --out if given")
     ap.add_argument("--out", default=os.path.join(INPUTS, "march", "march_inrun_60s.csv"))
     a = ap.parse_args()
@@ -642,7 +664,7 @@ if __name__ == "__main__":
         part = _reduce_one_file(tel, fluence)
         print(part.groupby(["run", "chip"]).size())
         if tel == "h1":
-            windows = {r: dict(assert_start=pd.Timestamp(MARCH_H1_RUNS[r]["start_utc"]) + timedelta(minutes=15),
+            windows = {r: dict(assert_start=pd.Timestamp(MARCH_H1_RUNS[r]["start_utc"]) + timedelta(minutes=SETTLE_MIN),
                                assert_end=pd.Timestamp(MARCH_H1_RUNS[r]["start_utc"])
                                           + timedelta(hours=MARCH_H1_RUNS[r]["plateau_h"]))
                       for r in RUNS_AT_FLUENCE[fluence]}
@@ -660,7 +682,7 @@ if __name__ == "__main__":
     if a.assert_march:
         path = None if a.assert_march == "__default__" else a.assert_march
         full = load_march(path)
-        h1_windows = {r: dict(assert_start=pd.Timestamp(MARCH_H1_RUNS[r]["start_utc"]) + timedelta(minutes=15),
+        h1_windows = {r: dict(assert_start=pd.Timestamp(MARCH_H1_RUNS[r]["start_utc"]) + timedelta(minutes=SETTLE_MIN),
                               assert_end=pd.Timestamp(MARCH_H1_RUNS[r]["start_utc"])
                                          + timedelta(hours=MARCH_H1_RUNS[r]["plateau_h"]))
                      for r in MARCH_H1_RUNS}

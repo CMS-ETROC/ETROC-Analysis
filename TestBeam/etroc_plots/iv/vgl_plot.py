@@ -1,40 +1,38 @@
 # -*- coding: utf-8 -*-
 """House-style drawing of the V_gl-vs-fluence fit figures.
 
-The talk's own V_gl figure (fig24/28/40) fixes the house treatment: marker and line style per
-chip, the "CMS  ETL ETROC IRRAD" header written directly above the frame, a one-line footer in
-its own band, and the no-clipping / legend-overlap audits before saving. This module draws the
-*fit* view in that treatment, and is shared by H1 and F1 -- the two hand-written versions of this
-panel were 83 percent identical.
+The notebook's own V_gl figures (iv07, iv12, iv31-iv33) fix the house treatment: marker and line
+style per chip, the "CMS  ETL ETROC IRRAD" header written directly above the frame, a one-line
+footer in its own band, and the no-clipping / legend-overlap audits before saving. This module
+draws the *fit* view in that treatment, and is shared by H1 and F1.
 
 Two house conventions are deliberately not carried over, because this figure's subject is
-different from the talk figure's, and both deviations are stated on the figure itself:
+different from those figures', and both deviations are stated on the figure itself:
 
 * colour is the BOARD, not the fluence. Fluence is already the x axis here, so the fluence
   colour ladder would be redundant, while the four boards' separate fits are the whole point.
-  ts.point_style takes `color=` for exactly this reason (the talk's own fig 30 uses it).
+  style.point_style takes `color=` for exactly this reason.
 * a logarithmic view is drawn BESIDE the house 0-55 V linear one, not instead of it. Over this
-  fluence range the data do not choose between an exponential and a straight line -- measured
-  2026-09-22, H1 favours the exponential by only ~0.15 V rms while F1 favours a straight line by
-  ~0.35 V rms, and chi2/ndf is 25-69 either way -- so showing only the log view would assert a
-  model the data do not support. The linear view keeps the house range and carries the fit
-  numbers; the log view is the shape check, and its range is per telescope because F1's V_gl
+  fluence range the data do not choose between an exponential and a straight line: H1 favours
+  the exponential by only ~0.15 V rms while F1 favours a straight line by ~0.35 V rms, and
+  chi2/ndf is 25-69 either way, so showing only the log view would assert a model the data do
+  not support. The linear view keeps the house range and carries the fit numbers; the log view
+  is the shape check, with one range (YLIM_LOG, 7-55 V) for both telescopes, although F1's V_gl
   roughly halves over the campaign where H1's falls fourfold.
 
 The open/filled sense DOES follow the house: open = scan right after the step, filled = after
-cooling down. The hand-written figures had it the other way round. The third look, 4 months
-later, is half-filled: the house gives it a colour of its own, but here colour already means the
-board, and a marker of its own would collide with one board's marker.
+cooling down. The third look, 4 months later, is half-filled: the house gives it a colour of its
+own, but here colour already means the board, and a marker of its own would collide with one
+board's marker.
 """
 import numpy as np
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 from matplotlib.ticker import MultipleLocator
 
-from .. import talk_style as ts
-from . import iv_plot as ivp
+from .. import style
 from . import vgl
-from .campaigns import active as campaign
+from ..campaigns import active as campaign
 
 YLABEL = r"$V_{gl}$ [V]"
 # A short label: the full wording (facility bookkeeping 24 GeV/c proton fluence) overflows a
@@ -42,10 +40,9 @@ YLABEL = r"$V_{gl}$ [V]"
 XLABEL = r"Bookkeeping fluence [$10^{15}$ p/cm$^2$]"
 RESID_YLABEL = "data - fit  [V]"
 LOG_TICKS = (8, 10, 12, 15, 20, 25, 30, 40, 50)
-AVG_COLOR = ts.INK
+AVG_COLOR = style.INK
 
-# ts.point_style returns ERRORBAR keywords; Line2D rejects the error-bar-only ones. The talk's
-# own fig_vgl.py carries the same helper for the same reason.
+# style.point_style returns ERRORBAR keywords; Line2D rejects the error-bar-only ones.
 _ERRORBAR_ONLY = ("capsize", "elinewidth", "ecolor", "barsabove", "errorevery")
 
 
@@ -74,18 +71,17 @@ def _curve(f):
     return f["V0"], f["c_1e16"] / 10.0
 
 
-# Fixed linear range for every V_gl panel (user rule, see fig_vgl.py): H1 and F1 stay directly
-# comparable. The log view has its own range -- 0 has no place on a log axis -- but it too is ONE
-# range for both telescopes (user, 2026-09-22: same limits between H1 and F1, for direct visual
-# comparison). The comparison figure's range is wider: it must also hold the published curves,
-# which reach 3.6 V at the end of the grid (Kraus W36 with its band).
+# Fixed linear range for every V_gl panel: H1 and F1 stay directly comparable. The log view has
+# its own range (0 has no place on a log axis), but it too is ONE range for both telescopes, for
+# direct visual comparison. The comparison figure's range is wider: it must also hold the
+# published curves, which reach 3.6 V at the end of the grid (Kraus W36 with its band).
 YLIM_LINEAR = (0.0, 55.0)
 YLIM_LOG = (7.0, 55.0)
 YLIM_LOG_COMPARE = (3.3, 80.0)
 LOG_TICKS_COMPARE = (4, 5, 7, 10, 15, 20, 30, 40, 50, 70)
-# One residual range for both telescopes, so their scatter compares directly. It is the F1
-# original's: F1's cooling-down and 4-month points at 1.5e15 sit +3.9 to +4.4 V above the
-# right-after fit, and the H1 original's (-2.3, 2.75) would hide them.
+# One residual range for both telescopes, so their scatter compares directly. It is wide enough
+# for F1's cooling-down and 4-month points at 1.5e15, which sit +3.9 to +4.4 V above the
+# right-after fit; a range sized for H1 alone, (-2.3, 2.75), would hide them.
 RESID_YLIM = (-2.6, 5.4)
 
 
@@ -109,15 +105,15 @@ def draw_fit_panel(ax, axr, table, boards, colors, xoff, fits, scale=0.9, yscale
     """One telescope's V_gl fit panel (ax) over its residual panel (axr).
 
     yscale picks the view: "linear" is the house 0-55 V axis, "log" is the straight-line-if-
-    exponential view. Both are drawn for the same data (user decision 2026-09-22) because over
-    this fluence range the data do not discriminate between an exponential and a straight line --
-    for F1 a straight line fits better -- so neither view alone is honest.
+    exponential view. Both are drawn for the same data because over
+    this fluence range the data do not discriminate between an exponential and a straight line
+    (for F1 a straight line fits better), so neither view alone is honest.
 
     `fits` is what fit_boards() returned. Returns the values dict for the sidecar.
     """
     if ylim is None:
         ylim = YLIM_LOG if yscale == "log" else YLIM_LINEAR
-    s = ts.sizes(scale)
+    s = style.sizes(scale)
     xgrid = np.linspace(0.0, campaign.VGL_XGRID_MAX, campaign.VGL_XGRID_N)
     used = []
 
@@ -126,7 +122,7 @@ def draw_fit_panel(ax, axr, table, boards, colors, xoff, fits, scale=0.9, yscale
         f = fits["all"][b]
         v0, c = _curve(f)
         ax.plot(xgrid, vgl.model(xgrid, v0, c), color=col, lw=1.2 * scale, alpha=0.75,
-                ls=ts.chip_linestyle(b), zorder=2)
+                ls=style.chip_linestyle(b), zorder=2)
         points = {"right_after": [], "after_cooling_down": [], "four_months": []}
         for phi, lab, vals in table:
             value = vals[i]
@@ -134,12 +130,12 @@ def draw_fit_panel(ax, axr, table, boards, colors, xoff, fits, scale=0.9, yscale
             # house sense: open = right after the step, filled = after cooling down
             look = look_of(lab)
             if look == "right_after":
-                kw = ts.point_style(b, phi, scale=scale, line=False, open_marker=True, color=col)
+                kw = style.point_style(b, phi, scale=scale, line=False, open_marker=True, color=col)
             elif look == "after_cooling_down":
-                kw = ts.point_style(b, phi, scale=scale, line=False, color=col)
+                kw = style.point_style(b, phi, scale=scale, line=False, color=col)
             else:
-                kw = ts.point_style(b, phi, scale=scale, line=False, color=col)
-                kw.update(fillstyle="left", markerfacecoloralt=ts.SURFACE)   # half-filled
+                kw = style.point_style(b, phi, scale=scale, line=False, color=col)
+                kw.update(fillstyle="left", markerfacecoloralt=style.SURFACE)   # half-filled
             points[look].append((phi, value))
             ax.plot([phi + dx], [value], **_line_kw(kw))
             axr.plot([phi + dx], [resid], **_line_kw(kw))
@@ -158,7 +154,7 @@ def draw_fit_panel(ax, axr, table, boards, colors, xoff, fits, scale=0.9, yscale
         vgl.set_log_ticks(ax, list(log_ticks))
     ax.set_ylabel(YLABEL)
     ax.tick_params(labelbottom=False)
-    ts.style_axes(ax)
+    style.style_axes(ax)
 
     axr.axhline(0.0, color="0.4", lw=0.9)
     axr.set_ylim(*resid_ylim)
@@ -166,23 +162,23 @@ def draw_fit_panel(ax, axr, table, boards, colors, xoff, fits, scale=0.9, yscale
     axr.set_ylabel(RESID_YLABEL)
     axr.set_xlabel(XLABEL)
     axr.set_xlim(*ax.get_xlim())
-    ts.style_axes(axr)
+    style.style_axes(axr)
     axr.yaxis.label.set_fontsize(s["legend"] * 0.8)   # after style_axes, which resets it
 
-    board_handles = [Line2D([], [], color=colors[b], marker=ts.chip_marker(b),
-                            ls=ts.chip_linestyle(b), ms=8.0 * scale, lw=1.4 * scale, label=b)
+    board_handles = [Line2D([], [], color=colors[b], marker=style.chip_marker(b),
+                            ls=style.chip_linestyle(b), ms=8.0 * scale, lw=1.4 * scale, label=b)
                      for b in boards]
     leg1 = ax.legend(handles=board_handles, loc="lower left", fontsize=s["legend"] * 0.85,
                      title="board", title_fontsize=s["legend"] * 0.85, ncol=2)
     ax.add_artist(leg1)
 
     look_handles = [
-        Line2D([], [], color="0.25", marker="o", ms=8.0 * scale, mfc=ts.SURFACE, mew=1.8 * scale,
+        Line2D([], [], color="0.25", marker="o", ms=8.0 * scale, mfc=style.SURFACE, mew=1.8 * scale,
                ls="none", label="right after (fitted)"),
         Line2D([], [], color="0.25", marker="o", ms=8.0 * scale, ls="none",
                label="after cooling down"),
         Line2D([], [], color="0.25", marker="o", ms=8.0 * scale, ls="none", fillstyle="left",
-               markerfacecoloralt=ts.SURFACE, mew=1.8 * scale, label="4 months later"),
+               markerfacecoloralt=style.SURFACE, mew=1.8 * scale, label="4 months later"),
         Line2D([], [], color=AVG_COLOR, lw=2.4 * scale, label="average fit"),
         Line2D([], [], color=AVG_COLOR, lw=2.0 * scale, ls="--", dashes=(5, 3),
                label="average, last step dropped"),
@@ -199,7 +195,7 @@ def draw_fit_panel(ax, axr, table, boards, colors, xoff, fits, scale=0.9, yscale
                     % ("no last", fa0["V0"], fa0["V0_err"], fa0["c_1e16"], fa0["c_1e16_err"]))
         ax.text(0.985, stats_top, "\n".join(rows), transform=ax.transAxes, ha="right", va="top",
                 ma="left", fontsize=s["legend"] * 0.66, family="monospace", linespacing=1.4,
-                bbox=dict(boxstyle="round,pad=0.5", fc=ts.SURFACE, ec="0.7", lw=0.8))
+                bbox=dict(boxstyle="round,pad=0.5", fc=style.SURFACE, ec="0.7", lw=0.8))
 
     return dict(boards=used,
                 average=dict(V0=fa["V0"], V0_err=fa["V0_err"], c_1e16=fa["c_1e16"],
@@ -221,7 +217,7 @@ FOOTER = ("gain-layer depletion voltage, from the k-factor peak of the fine low-
 # matched to the curves, so it doubles as their legend and carries the conversion arithmetic.
 REF_XMAX = 6.6          # one strip range for both telescopes: holds every reference and its band
 AVG_OFFSETS = {"right_after": 0.0, "after_cooling_down": 0.05, "four_months": -0.05}
-H1F1_COLORS = {"h1": "#B2182B", "f1": "#2166AC"}     # the original H1-vs-F1 figure's colours
+H1F1_COLORS = {"h1": "#B2182B", "f1": "#2166AC"}     # H1 red, F1 blue (iv36, iv39)
 H1F1_MARKERS = {"h1": "o", "f1": "s"}
 
 
@@ -235,11 +231,11 @@ def avg_points(table):
 def _look_kw(look, color, scale):
     kw = dict(marker="o", ms=8.0 * scale, mec=color, mew=1.8 * scale, ls="none")
     if look == "right_after":
-        kw.update(mfc=ts.SURFACE)
+        kw.update(mfc=style.SURFACE)
     elif look == "after_cooling_down":
         kw.update(mfc=color)
     else:
-        kw.update(mfc=color, fillstyle="left", markerfacecoloralt=ts.SURFACE)
+        kw.update(mfc=color, fillstyle="left", markerfacecoloralt=style.SURFACE)
     return kw
 
 
@@ -252,7 +248,7 @@ def draw_compare_panel(ax, table, fits, refs, scale=0.9, yscale="linear", ylim=N
     the reference in the slope strip, the line style says which beam. Returns the values dict for
     the sidecar.
     """
-    s = ts.sizes(scale)
+    s = style.sizes(scale)
     fa = fits["all"]["average"]
     v0, c_lin, c_log = fa["V0"], fa["c_1e16"], fits["log"]["average"]["c_1e16"]
     xg = np.linspace(0.0, campaign.VGL_XGRID_MAX, campaign.VGL_XGRID_N)
@@ -282,7 +278,7 @@ def draw_compare_panel(ax, table, fits, refs, scale=0.9, yscale="linear", ylim=N
         vgl.set_log_ticks(ax, list(log_ticks))
     ax.set_ylabel(YLABEL)
     ax.set_xlabel(XLABEL)
-    ts.style_axes(ax)
+    style.style_axes(ax)
 
     handles = [Line2D([], [], label=lab, **_look_kw(look, "0.25", scale)) for look, lab in
                (("right_after", "right after (fitted)"),
@@ -305,8 +301,8 @@ def draw_compare_panel(ax, table, fits, refs, scale=0.9, yscale="linear", ylim=N
 
 def draw_slope_strip(axc, fits, refs, who, scale=0.9, xmax=REF_XMAX):
     """The comparison as slopes: our c with its fit error, each published value with its band."""
-    s = ts.sizes(scale)
-    ts.style_axes(axc)
+    s = style.sizes(scale)
+    style.style_axes(axc)
     fa = fits["all"]["average"]
     c, ce = fa["c_1e16"], fa["c_1e16_err"]
     axc.axvspan(c - ce, c + ce, color="0.55", alpha=0.30, lw=0, zorder=1)
@@ -323,7 +319,7 @@ def draw_slope_strip(axc, fits, refs, who, scale=0.9, xmax=REF_XMAX):
         if lo is not None:
             axc.plot([lo, hi], [yy, yy], color=col, lw=5.0 * scale, alpha=0.32,
                      solid_capstyle="butt", zorder=3)
-        axc.plot([cen], [yy], marker="o", ms=7.0 * scale, mfc=ts.SURFACE if alt else col,
+        axc.plot([cen], [yy], marker="o", ms=7.0 * scale, mfc=style.SURFACE if alt else col,
                  mec=col, mew=1.5 * scale, ls="none", zorder=5)
         axc.text(1.02, yy, val, transform=axc.get_yaxis_transform(), ha="left", va="center",
                  fontsize=s["legend"] * 0.7)
@@ -338,7 +334,7 @@ def draw_slope_strip(axc, fits, refs, who, scale=0.9, xmax=REF_XMAX):
     axc.grid(False, axis="y")
     axc.set_xlabel(r"$c$  [$10^{-16}$ cm$^2$ per bookkeeping proton]",
                    fontsize=s["legend"] * 0.85)
-    f = campaign.CHIP_HIT_FRACTION
+    f = campaign.CHIP_FLUENCE_FACTOR
     top = axc.secondary_xaxis("top", functions=(lambda v: v / f, lambda v: v * f))
     top.set_xlabel(r"$c$ per proton that crossed the chip  [$10^{-16}$ cm$^2$]",
                    fontsize=s["legend"] * 0.85)
@@ -350,12 +346,12 @@ def draw_h1_vs_f1(axn, axa, sets, scale=0.9, yscale="linear"):
 
     `sets` is [dict(tel, label, phi, v, V0, c_1e16, c_1e16_err), ...], H1 first.
     """
-    s = ts.sizes(scale)
+    s = style.sizes(scale)
     xg = np.linspace(0.0, campaign.VGL_XGRID_MAX, campaign.VGL_XGRID_N)
     handles = []
     for st in sets:
         col, mk = H1F1_COLORS[st["tel"]], H1F1_MARKERS[st["tel"]]
-        pk = dict(marker=mk, ms=8.5 * scale, mfc=ts.SURFACE, mec=col, mew=1.9 * scale,
+        pk = dict(marker=mk, ms=8.5 * scale, mfc=style.SURFACE, mec=col, mew=1.9 * scale,
                   ls="none", zorder=5)
         axn.plot(xg, np.exp(-(st["c_1e16"] / 10.0) * xg), color=col, lw=2.2 * scale, zorder=3)
         axn.plot(st["phi"], st["v"] / st["V0"], **pk)
@@ -363,7 +359,7 @@ def draw_h1_vs_f1(axn, axa, sets, scale=0.9, yscale="linear"):
                  zorder=3)
         axa.plot(st["phi"], st["v"], **pk)
         handles.append(Line2D([], [], color=col, lw=2.2 * scale, marker=mk, ms=pk["ms"],
-                              mfc=ts.SURFACE, mec=col, mew=pk["mew"],
+                              mfc=style.SURFACE, mec=col, mew=pk["mew"],
                               label="%s:  V0 = %.1f V,  c = %.2f +- %.2f"
                               % (st["label"], st["V0"], st["c_1e16"], st["c_1e16_err"])))
     if yscale == "log":
@@ -380,7 +376,7 @@ def draw_h1_vs_f1(axn, axa, sets, scale=0.9, yscale="linear"):
     for ax in (axn, axa):
         ax.set_xlim(-0.13, campaign.VGL_XGRID_MAX)
         ax.set_xlabel(XLABEL)
-        ts.style_axes(ax)
+        style.style_axes(ax)
     axn.set_ylabel(r"$V_{gl}\,/\,V_0$  (own fitted $V_0$)")
     axa.set_ylabel(YLABEL)
     axn.legend(handles=handles, loc="lower left", fontsize=s["legend"] * 0.8,
@@ -391,7 +387,7 @@ def draw_h1_vs_f1(axn, axa, sets, scale=0.9, yscale="linear"):
     ratio_err = ratio * np.hypot(h["c_1e16_err"] / h["c_1e16"], f["c_1e16_err"] / f["c_1e16"])
     axn.text(0.975, 0.965, "c(H1) / c(F1) = %.2f +- %.2f" % (ratio, ratio_err),
              transform=axn.transAxes, ha="right", va="top", fontsize=s["legend"] * 0.85,
-             bbox=dict(boxstyle="round,pad=0.5", fc=ts.SURFACE, ec="0.7", lw=0.8))
+             bbox=dict(boxstyle="round,pad=0.5", fc=style.SURFACE, ec="0.7", lw=0.8))
     return dict(c_ratio_h1_over_f1=ratio, c_ratio_h1_over_f1_err=float(ratio_err),
                 fraction_of_V_gl_left_at_3p5e15={st["tel"]: float(st["v"][-1] / st["v"][0])
                                                  for st in sets},

@@ -1,6 +1,7 @@
 546bffe3e73b28d5d09f29f6201d6ac5  july/display_runs_jul.csv
 1126560b2c7a86443fa0d872d8dbd7ac  july/fine_legacy_20260716/F1_202607160017_fineIV_interpolate.csv
-7172d9fe9252c5853439ed67973b6488  july/fine_legacy_20260716/H1_202607160020_fineIV_interpolated_claudefixed.csv
+7172d9fe9252c5853439ed67973b6488  july/fine_legacy_20260716/H1_202607160020_fineIV_interpolated_corrected.csv
+ae6df55349acca701be52e07a73e0519  july/good_runs.csv
 3b38f59b4f8be27cc55fb9e7f3b7248f  july/hv_cycles_jul.csv
 150ec6ca0c0a64dda62ca338d02eb3c9  july/iv_curves.json
 ebd0c94b63b1d3bf0b0c4002ea3c7bba  july/iv_scan_inventory.csv
@@ -9,7 +10,6 @@ ad3426abcc9a836818faaab4cad7cf42  july/july_iv_scans.csv
 45a7618697886bb17f351fcd9fb95691  july/july_timeline.json
 7db338fbaa737caa3622de20a497b714  july/logging_gaps.csv
 581192dcf42117f4a7fdc0a3c9f877bc  july/res_vs_run_combo_check_jul_values.json
-ae6df55349acca701be52e07a73e0519  july/talk_good_runs.csv
 68fe8f53a72a85f6d6be6f9ad3b83500  july/timeline_60s.csv.gz
 c33826a5208622897d3be4c539dc6874  march/conditions_March2026_H1_HPK.csv
 ebe018746dba1817a1b872aca23f0871  march/fine_iv_F1_m25C_17cm_15e14_03232026_0037_binned_iv_data.csv

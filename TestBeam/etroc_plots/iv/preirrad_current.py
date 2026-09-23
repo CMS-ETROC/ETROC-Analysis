@@ -54,7 +54,8 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
 from .. import etroc_style as es
-from .campaigns import active as campaign
+from .. import style
+from ..campaigns import active as campaign
 
 LOG_TIME_FORMAT = "%m/%d/%Y %H:%M:%S.%f"
 TOL_V = 6.0          # plateau tolerance on the HV readback
@@ -73,8 +74,8 @@ CONVENTIONS = {
     "current": "HV supply channel current readback, uA, the slow-control log as 10 s medians; "
                "channel 0-3 = the telescope's chips in board order",
     "time": "UTC (the log's local time shifted by the campaign's PREIRRAD_LOG_UTC_OFFSET_H)",
-    "run_window": "[run start + 15 min, the earlier of the HV plateau end (every channel within "
-                  "6 V of the nominal bias) and the DAQ run end]",
+    "run_window": "[run start + %d min, the earlier of the HV plateau end (every channel within "
+                  "%g V of the nominal bias) and the DAQ run end]" % (SETTLE_MIN, TOL_V),
     "hv_spread": "max - min of the channels' HV readbacks per 10 s sample, pooled over every "
                  "in-run sample",
 }
@@ -116,7 +117,7 @@ def build_cache(cache=None, log_csv=None, conditions_csv=None, channels=None, ma
         d[f"I{ch}"] = d[f"Re(Imeas[{ch}]) [A]"].abs() * 1e6    # A -> uA
     d = d[["t"] + [f"{q}{c}" for c in chans for q in ("V", "I")]].dropna()
     n_raw = len(d)
-    # 10 s median downsample - kills the readback transients
+    # 10 s median downsample: kills the readback transients
     d = d.set_index("t").resample("10s").median().dropna().reset_index()
 
     cond = pd.read_csv(conditions_csv)
@@ -238,7 +239,7 @@ def plot(out, cache=None, text=None, ramp_note=None, spike_label_y=None, stem=FI
     in `out`.
 
     cache          the cache directory
-    text           figure strings (exp_text, campaign, subject, hybrid, footer)
+    text           figure strings (campaign, subject, hybrid, footer)
     ramp_note      the one annotation naming the between-run IV ramps; {} draws none
     spike_label_y  per spike run, in time order: (label y, arrow-tip y) in uA
     Each defaults to the active campaign's PREIRRAD_* value.
@@ -259,15 +260,22 @@ def plot(out, cache=None, text=None, ramp_note=None, spike_label_y=None, stem=FI
     wins = pd.read_csv(os.path.join(cache, WINDOWS_CSV),
                        parse_dates=["window_start", "window_end", "start_utc"])
     chips = stats.drop_duplicates("channel").set_index("channel").chip.to_dict()
-    COND = ("iseg slow-control log, 10 s medians · shaded: the %d pre-irradiation beam runs"
+    COND = ("iseg slow-control log, 10 s medians; shaded: the %d pre-irradiation beam runs"
             % len(wins))
     spread_med, spread_max = hv_spread(log, wins)
 
     t0 = log.t.min() - pd.Timedelta(hours=2)
     t1 = log.t.max() + pd.Timedelta(hours=2)
 
-    fig, (axv, axi) = plt.subplots(2, 1, figsize=(21.5, 12.8), sharex=True,
-                                   gridspec_kw=dict(height_ratios=[1, 1.6], hspace=0.09))
+    # margins in inches: 0.736 above the axes for the two header lines and no more (top band
+    # <= 60 px, see checks.py), 0.908 below them for the tick labels and the axis label;
+    # style.save_figure then adds the footer's own band below that, 12 in high in the end
+    height = 12.0 - style.FOOTER_GAP_IN
+    fig, (axv, axi) = plt.subplots(2, 1, figsize=(21.5, height), sharex=True,
+                                   gridspec_kw=dict(height_ratios=[1, 1.6], hspace=0.09,
+                                                    left=0.125, right=0.9,
+                                                    top=1 - 0.736 / height,
+                                                    bottom=(1.408 - style.FOOTER_GAP_IN) / height))
 
     # ------------------------------------------------------------ run bands (both panels)
     for ax in (axv, axi):
@@ -283,8 +291,8 @@ def plot(out, cache=None, text=None, ramp_note=None, spike_label_y=None, stem=FI
     es.style_axes(axv, SCALE)
     axv.legend(loc="lower left", ncol=4, fontsize=S["legend"], columnspacing=1.2, handlelength=1.6,
                title=text["hybrid"], title_fontsize=S["legend_title"], framealpha=0.97)
-    es.cms_header(axv, FIG_NAME, subject=text["subject"], tag=COND, scale=SCALE, pad=12,
-                  campaign=text["campaign"], exp_text=text["exp_text"])
+    style.header(axv, name=FIG_NAME, tag=text["subject"], line1=text["campaign"], line2=COND,
+                 scale=SCALE, pad=12)
 
     # the one quantitative statement about the HV traces, stated where they are drawn
     axv.text(0.014, 0.968,
@@ -355,18 +363,18 @@ def plot(out, cache=None, text=None, ramp_note=None, spike_label_y=None, stem=FI
     axi.xaxis.set_major_formatter(mdates.DateFormatter("%m-%d\n%H:%M"))
     plt.setp(axi.get_xticklabels(), fontsize=S["tick"])
 
-    fig.text(0.5, 0.012, text["footer"], ha="center", fontsize=8.8 * A, color=NOTE)
-    fig.tight_layout(rect=[0, 0.032, 1, 1.0])
-    fig.savefig(os.path.join(out, stem + ".png"), dpi=200)
-    fig.savefig(os.path.join(out, stem + ".pdf"))
+    # the footer's point size is 8.8 * A; style.footer takes it as a scale of the reference size
+    style.footer(fig, text["footer"], scale=8.8 * A / style.sizes(1.0)["ann"], x=0.125)
+    _, problems = style.save_figure(fig, out, stem, dpi=200)   # footer band, audits, PNG + PDF
     plt.close(fig)
     print("wrote %s.{png,pdf}" % stem)
     print(wins[["run", "bias_V", "window_start", "window_end", "window_h", "end_set_by",
                 "verdict"]].to_string(index=False))
-    return write_values(out, cache, stats, wins, spread_med, spread_max, stem=stem)
+    return write_values(out, cache, stats, wins, spread_med, spread_max, stem=stem,
+                        problems=problems)
 
 
-def write_values(out, cache, stats, wins, spread_med, spread_max, stem=FIG_STEM):
+def write_values(out, cache, stats, wins, spread_med, spread_max, *, problems, stem=FIG_STEM):
     """The numbers the figure draws, with provenance, as <FIG_STEM>_values.json."""
     # imported here, after the figure is saved: iv_plot sets the IV family's rcParams on import
     from . import iv_plot as ivp
@@ -382,7 +390,8 @@ def write_values(out, cache, stats, wins, spread_med, spread_max, stem=FIG_STEM)
                                float(g.I_drift_pct_of_median.max())],
             n_spikes_worst_board=int(g.n_excursions.max()),
             max_spike_pct_of_median=float(g.max_excursion_pct_of_median.max())))
-    payload = {"hv_spread_V": {"median": spread_med, "max": spread_max}, "runs": runs}
+    payload = {"hv_spread_V": {"median": spread_med, "max": spread_max}, "runs": runs,
+               "overlap_problems": list(problems)}
     inputs = [os.path.join(cache, f) for f in (LOG_10S, STATS_CSV, WINDOWS_CSV)]
     return ivp.write_values(out, stem, payload,
                             script="TestBeam/etroc_plots/iv/preirrad_current.py", inputs=inputs,

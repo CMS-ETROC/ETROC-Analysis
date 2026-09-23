@@ -1,17 +1,6 @@
 """Shared plot style: every figure is built from these constants."""
 
-import os
-import glob
-import sqlite3
-
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
-import matplotlib.lines as mlines
-import matplotlib.ticker as ticker
 import mplhep as hep
-from scipy.signal import find_peaks   # no smoothing anywhere -- see the k-factor section
 
 hep.style.use(hep.style.CMS)
 

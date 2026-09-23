@@ -1,41 +1,28 @@
-"""Shared style for the DESY May 2026 analysis-walkthrough figures.
+"""House style for ETROC test-beam figures, independent of any campaign.
 
-House style: the ETROC-Analysis repo convention (TestBeam/BeamTestHelpers/plotting_basic.py) —
-`mplhep` CMS style, the experiment label written at the header left with
-`hep.cms.text(loc=0, text="ETL ETROC Test Beam")`, the figure name written at the header right with
-`ax.set_title(..., loc="right")`, axis labels at 25 pt / tick labels at 17 pt / header 18 pt /
-right title 16 pt on a single (11, 10) panel, short ticks on all four sides.  Multi-panel figures
-keep the same proportions through `scale`, so text stays legible at 200 dpi.
+House style (the ETROC-Analysis repo convention, TestBeam/BeamTestHelpers/plotting_basic.py):
+`mplhep` CMS style, axis labels at 25 pt / tick labels at 17 pt / header 18 pt / right title
+16 pt on a single (11, 10) panel, short ticks on all four sides.  Multi-panel figures keep the
+same proportions through `scale`, so text stays legible at 200 dpi.  The header itself (the
+campaign's experiment label on the left, at most two lines on the right) is written by
+style.header, which knows the campaign.
 
-Palette: dataviz skill categorical slots 1/2/3(dark step)/7, validated all-pairs with the ported
-validator (validate_palette.py) on the CMS white ground: CVD dE 8.4, normal-vision dE 16.3,
-contrast PASS.  Colour follows the BOARD INDEX (physical slot in the telescope), never its rank.
-Marker shape repeats the same identity so nothing is carried by colour alone.
+The module also holds the text-overlap audit run before a figure is saved (check_no_clipping)
+and the single-panel export of compound figures (--panel).
+
+Colour follows the BOARD INDEX (physical slot in the telescope), never its rank.  Marker shape
+repeats the same identity so nothing is carried by colour alone.
 """
 import os
 import matplotlib as mpl
 import mplhep as hep
+from matplotlib.legend import Legend
+from matplotlib.text import Annotation, Text
 
-# ------------------------------------------------------------------ identity of the campaign
-EXP_TEXT = "ETL ETROC Test Beam"      # the repo's own experiment label for test-beam figures
-CAMPAIGN = "DESY, May 2026"
-
+# ------------------------------------------------------------------ board identity
 # board index 0..3 -> colour / marker.  Identity is (colour, shape), used in every figure.
 BOARD_COLOR = {0: "#2a78d6", 1: "#eb6834", 2: "#199e70", 3: "#4a3aa7"}
 BOARD_MARKER = {0: "o", 1: "s", 2: "^", 3: "D"}
-
-# board index -> (role, chip) for the DESY May 2026 telescope, from the campaign run
-# configuration.  The board index IS the order along the beam.
-# The role word is PIPELINE BOOK-KEEPING ONLY (it is how the analysis names the four slots of a
-# board combination); all four boards are devices under test and no figure labels one "DUT".
-# It is kept here because the alignment files key their board combinations on it, and it is
-# carried into value JSONs as a plain field for traceability — never into a figure.
-DESY_BOARDS = {0: ("extra", "IH27"), 1: ("ref", "IH5"), 2: ("trig", "IH3"), 3: ("dut", "IH2")}
-ROLE_TO_IDX = {v[0]: k for k, v in DESY_BOARDS.items()}
-
-# the hybrid family, used where a panel has to name its own telescope
-HYBRID = "ETROC2.02 + HPK LGAD hybrids"
-SUBJECT = "DESY May 2026 telescope"
 
 INK = "#000000"
 INK_MUTED = "#5f5f5c"
@@ -83,55 +70,61 @@ def apply_style(scale=1.0):
     return s
 
 
-def data_line(*parts):
-    """The header's third line: WHAT DATA the figure shows, joined with the house separator.
+def named_axes(fig):
+    """(name, axes) for every axes of `fig`: axes[i] for fig.axes, and axes[i].child[j] for the
+    child axes of each (a secondary axis, an inset), which fig.axes leaves out, at any depth."""
+    out = []
 
-    Every figure drawn from data states its run, its board combination and, where the figure is
-    about one of them, its track or pixel - so a reader can tell from the header alone which
-    subset of the campaign is on the page.  Cartoons and method diagrams take no data and so get
-    no third line.
-    """
-    return u"  ·  ".join(str(p) for p in parts if p)
+    def walk(name, ax):
+        out.append((name, ax))
+        for j, c in enumerate(ax.child_axes):
+            walk("%s.child[%d]" % (name, j), c)
+    for i, ax in enumerate(fig.axes):
+        walk("axes[%d]" % i, ax)
+    return out
 
 
-def cms_header(ax, name, subject=None, tag=None, data=None, scale=1.0, pad=None,
-               campaign=CAMPAIGN, exp_text=None):
-    """The repo header: experiment label left, figure name (+ campaign / conditions) right.
+def axes_legends(ax):
+    """Every legend drawn on `ax`, each once, in the order they were added. ax.get_legend() is
+    only the last one made; an earlier one stays on the axes through ax.add_artist(), and one
+    kept that way while it is still the current legend is listed twice by get_children()."""
+    return list(dict.fromkeys(c for c in ax.get_children() if isinstance(c, Legend)))
 
-    name     the figure's name, e.g. "Beam Profile"
-    subject  optional panel subject appended to the name, e.g. "H1 (HPK)"
-    tag      optional conditions string, written after the campaign on the second title line
-    data     optional third line naming the data drawn - build it with data_line()
-    exp_text optional override for the left-hand experiment label; defaults to EXP_TEXT
-    """
-    s = sizes(scale)
-    hep.cms.text(loc=0, ax=ax, text=EXP_TEXT if exp_text is None else exp_text,
-                 fontsize=s["header"])
-    line1 = name if subject is None else f"{name} · {subject}"
-    line2 = campaign if tag is None else f"{campaign} · {tag}"
-    lines = [line1, line2] if data is None else [line1, line2, data]
-    kw = {} if pad is None else {"pad": pad}
-    ax.set_title("\n".join(lines), loc="right", size=s["title"], color=INK, **kw)
-    return s
+
+def text_extent(t, renderer):
+    """The window box of the text of `t`. matplotlib's own box of an annotation also covers its
+    arrow, which is drawn to reach its target (a frame, a data point) and is not text, so an
+    annotation is measured by its text alone; one matplotlib does not draw keeps its unit box."""
+    bb = t.get_window_extent(renderer=renderer)
+    if isinstance(t, Annotation) and t.arrow_patch is not None and bb.bounds != (0, 0, 1, 1):
+        bb = Text.get_window_extent(t, renderer)
+    return bb
 
 
 def check_no_clipping(fig, name, min_overlap=0.16, pad_px=1.0):
-    """Every text artist must sit inside the canvas and clear every other text artist.
+    """Every text artist must sit inside the canvas and clear every other text artist, and no
+    annotation arrow may cross another text.
 
     Reported, never silently fixed: these figures are laid out in inches by hand, so a report here
     means a placement has to change.  A tick label whose tick lies outside the drawn view is
-    skipped - nothing of it is on the page - and the texts of one legend are not compared with each
+    skipped (nothing of it is on the page), and the texts of one legend are not compared with each
     other, since the legend lays them out itself.  Returns the list of problems, and prints it.
 
     All THREE title artists of a panel are checked.  matplotlib keeps the loc="left" and
     loc="right" titles in `_left_title` / `_right_title`, apart from the centred `ax.title`, so a
-    check that collected only `ax.title` saw neither a panel subtitle written with
-    `set_title(..., loc="left")` nor a `cms_header` line - and a row title sitting on top of one of
-    them passed silently.
+    check that collects only `ax.title` sees neither a panel subtitle written with
+    `set_title(..., loc="left")` nor a header line, and a row title sitting on top of one of
+    them would pass silently.  Likewise every legend is checked, not only `ax.get_legend()` (the
+    last one made): an earlier legend stays on the axes through `ax.add_artist()`, and a figure
+    legend (`fig.legend`) belongs to no axes, and child axes (a secondary axis, an inset) are
+    checked although `fig.axes` leaves them out.  An annotation is measured by its text, not its
+    arrow (text_extent): the arrow may reach a frame, and it is tested on its own against the
+    other texts.
     """
     fig.canvas.draw()
     r = fig.canvas.get_renderer()
     items = []
+    arrows = []
 
     def collect(artist, owner, kind):
         try:
@@ -139,20 +132,32 @@ def check_no_clipping(fig, name, min_overlap=0.16, pad_px=1.0):
                 return
             if not str(artist.get_text()).strip():
                 return
-            bb = artist.get_window_extent(renderer=r)
+            bb = text_extent(artist, r)
         except Exception:
             return
         if bb.width <= 0 or bb.height <= 0:
             return
-        items.append(dict(bb=bb, owner=owner, kind=kind,
+        items.append(dict(bb=bb, owner=owner, kind=kind, artist=artist,
                           text=" ".join(str(artist.get_text()).split())[:46]))
+
+    def collect_arrow(t, owner):
+        """The arrow of an annotation matplotlib drew, whatever its text, as a path in pixels."""
+        patch = getattr(t, "arrow_patch", None)
+        if patch is None or not (t.get_visible() and patch.get_visible()):
+            return
+        if t.get_window_extent(renderer=r).bounds == (0, 0, 1, 1):      # not drawn
+            return
+        arrows.append(dict(owner=owner, artist=t,
+                           text=" ".join(str(t.get_text()).split())[:46],
+                           path=patch.get_transform().transform_path(patch.get_path())))
 
     for t in fig.texts:
         collect(t, "figure", "text")
-    for i, ax in enumerate(fig.axes):
-        who = "axes[%d]" % i
+        collect_arrow(t, "figure")
+    for who, ax in named_axes(fig):
         for t in ax.texts:
             collect(t, who, "text")
+            collect_arrow(t, who)
         for attr in ("title", "_left_title", "_right_title"):
             collect(getattr(ax, attr, None), who, "title")
         collect(ax.xaxis.label, who, "xlabel")
@@ -166,10 +171,13 @@ def check_no_clipping(fig, name, min_overlap=0.16, pad_px=1.0):
             bb = t.get_window_extent(renderer=r)
             if bb.y0 >= ab.y0 - 2 and bb.y1 <= ab.y1 + 2:
                 collect(t, who, "tick")
-        leg = ax.get_legend()
-        if leg is not None:
+        legs = axes_legends(ax)
+        for k, leg in enumerate(legs):
             for t in leg.get_texts() + ([leg.get_title()] if leg.get_title() else []):
-                collect(t, who + ":legend", "legend")
+                collect(t, who + ":legend" + ("%d" % (k + 1) if k else ""), "legend")
+    for k, leg in enumerate(fig.legends):
+        for t in leg.get_texts() + ([leg.get_title()] if leg.get_title() else []):
+            collect(t, "figure:legend%d" % (k + 1), "legend")
 
     fb = fig.bbox
     problems = []
@@ -195,6 +203,12 @@ def check_no_clipping(fig, name, min_overlap=0.16, pad_px=1.0):
                                 % (100 * area / small, a["owner"], a["kind"], a["text"],
                                    b["owner"], b["kind"], b["text"]))
 
+    for a in arrows:
+        for b in items:
+            if b["artist"] is not a["artist"] and a["path"].intersects_bbox(b["bb"], filled=False):
+                problems.append("arrow through text: %s arrow %r  vs  %s %s %r"
+                                % (a["owner"], a["text"], b["owner"], b["kind"], b["text"]))
+
     print("  overlap check on %s: %d text items, %s"
           % (name, len(items), "nothing clips" if not problems
              else "%d PROBLEM(S)" % len(problems)))
@@ -218,30 +232,15 @@ def style_axes(ax, scale=1.0, grid=True, minor=True, grid_alpha=0.45):
     return s
 
 
-def board_label(idx):
-    """Figure label: the chip name, nothing else."""
-    return DESY_BOARDS[idx][1]
-
-
-def board_chip(idx):
-    return DESY_BOARDS[idx][1]
-
-
-def board_role(idx):
-    """Pipeline bookkeeping label. For JSON provenance only, never for a figure."""
-    return DESY_BOARDS[idx][0]
-
-
 # ============================================================= single-panel export (--panel)
 #
-# Every compound-figure script keeps a module-level `PANELS = {name: (draw, title)}` registry.
-# `draw` is always called as `draw(ax_or_fig, ctx)` - one matplotlib Axes for a panel that owns a
+# The panels of a compound figure are listed in an ordered `{name: (draw, title)}` registry.
+# `draw` is always called as `draw(ax_or_fig, ctx)`: one matplotlib Axes for a panel that owns a
 # single set of axes, or the Figure itself for a panel that needs several (a map with its
 # colourbar, a grid of maps, a row of histograms), which then adds its own axes onto it exactly as
 # the compound figure's assembly function does.  `ctx` is whatever small bundle of already-loaded
-# data that script's panels need; building it is the script's own `_panel_context()`.  These three
-# helpers are the CLI/registry plumbing shared by every script; the per-panel drawing and sizing
-# stays with the script that owns the data.
+# data the panels need.  The helpers below are the CLI/registry plumbing; the per-panel drawing
+# and sizing stays with the code that owns the data.
 
 
 def add_panel_arg(ap):
@@ -293,9 +292,9 @@ def panel_subject(index, title, base_subject=None):
 def save_panel(fig, out, stem, index, name, dpi=200):
     """Save one single-panel figure to figures/panels/<stem>/<NN>_<name>.{png,pdf}.
 
-    `stem` is the compound figure's own stem (e.g. "fig21_coverage_run26"), so the panel files
-    of a script that draws more than one compound figure (a --run switch, or fig01's --only)
-    land in one directory per compound figure, never mixed together.  Returns the two paths.
+    `stem` is the compound figure's own stem (e.g. "iv26_campaign"), so the panel files of code
+    that draws more than one compound figure land in one directory per compound figure, never
+    mixed together.  Returns the two paths.
     """
     d = os.path.join(out, "panels", stem)
     os.makedirs(d, exist_ok=True)
@@ -308,17 +307,3 @@ def save_panel(fig, out, stem, index, name, dpi=200):
     return paths
 
 
-def header_axis(fig, ml_frac, y_frac, width_frac):
-    """An invisible full-width axis to carry cms_header, sitting above the real panel axes.
-
-    Every compound-figure assembly function in this folder builds exactly this - a slim,
-    tickless, spineless axis spanning the header band, so `cms_header`'s two-or-three-line
-    title and the `hep.cms.text` label at its left never compete with a panel's own
-    `ax.set_title`.  `ml_frac`/`width_frac` are the axis's x0/width in figure fraction (e.g.
-    `ML / W`, `(W - ML - MR) / W`); `y_frac` is its y0 in figure fraction.
-    """
-    hax = fig.add_axes([ml_frac, y_frac, width_frac, 1e-6])
-    hax.set_xticks([]); hax.set_yticks([])
-    for sp in hax.spines.values():
-        sp.set_visible(False)
-    return hax

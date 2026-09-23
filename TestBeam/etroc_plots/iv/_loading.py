@@ -6,7 +6,7 @@ import sqlite3
 import numpy as np
 import pandas as pd
 
-from ._helpers import _ch_label, _as_scan_list, _mfactor, _scan_load_kw, _scan_clean_kw
+from ._helpers import _ch_label, _as_scan_list, _mfactor
 
 # any of these bits means the reading should not be trusted
 _FAULT_BITS = ["emergency_off", "trip_exceeded", "input_error", "ext_inhibit",
@@ -92,9 +92,9 @@ def clean_channel(tidy, channel, start=None, end=None, drop_compliance=True,
     drop_hv_off     : the zero-bias readings bracketing every scan
     drop_ramping    : reading taken mid-ramp; off by default, since the readback
                       is usually already settled
-    v_tol           : backstop for the compliance case -- drop points whose
+    v_tol           : backstop for the compliance case: drop points whose
                       readback sits further than this from the demand (None = off)
-    i_max           : legacy compliance proxy -- drop points with |I| above this
+    i_max           : legacy compliance proxy: drop points with |I| above this
                       (in i_max_unit, default uA). The old format has no status
                       bits, so the hand-tuned current cut is the only way to
                       remove compliance points there; on the new format prefer
@@ -155,7 +155,7 @@ def build_iv_curve(tidy, channel, group_by="auto", bins=None, agg="median",
     group_by : "auto"  -> v_set when recorded (new format); else `bins` when
                           given (legacy format); else the raw readings
                "v_set" -> force grouping on the demand voltage
-               "bins"  -> force pd.cut(v_meas, bins) -- the legacy behaviour
+               "bins"  -> force pd.cut(v_meas, bins), as for legacy-format logs
                None    -> no grouping (hysteresis loops)
     bins     : voltage bin edges for the legacy path, e.g. legacy.QUICK_BINS.
                A continuous slow-control log has no set points, so without bins
@@ -206,7 +206,7 @@ def scan_summary(scans, channel_names=None, unit="uA", v_ref=None, verbose=False
                                              if k in ("start", "end")})
             ch_rows = tidy[tidy["channel"] == ch]
             comp = ch_rows.loc[ch_rows["in_compliance"], "v_set"].abs()
-            # per channel -- channels can be configured with different limits
+            # per channel: channels can be configured with different limits
             lim = ch_rows["i_limit"].abs()
             lim = lim.max() * mfactor if lim.notna().any() else np.nan
             row = {
@@ -231,7 +231,7 @@ def _parse_window(value, ts):
     Parse a start/end window compatibly with the data's own timestamp style.
 
     Time-only legacy logs land on pandas' dummy date (1900-01-01ff), so a
-    window given as "07:55:00" must land there too -- a bare
+    window given as "07:55:00" must land there too; a bare
     pd.to_datetime("07:55:00") would resolve onto *today* and silently select
     nothing. Detection: if the window parses with no date and the data lives
     on the dummy date, re-anchor the window onto the data's own day(s),

@@ -40,9 +40,9 @@ def k_factor(v, i, v_grid=None, smooth_v=0.0, low_range=None):
     low_range : the ammeter's `low_current_range` flag. The one interval that
                 straddles a range change compares readings taken on two different
                 ranges, with different quantisation, so its derivative is not
-                trustworthy -- those points are dropped and bridged by
-                interpolation. On the quick scan that single interval was
-                manufacturing a fake k peak at 20 V.
+                trustworthy: those points are dropped and bridged by
+                interpolation. Left in, that single interval makes a fake k
+                peak at 20 V on a quick scan.
     """
     v = np.abs(np.asarray(v, dtype=float))
     i = np.abs(np.asarray(i, dtype=float))
@@ -71,17 +71,17 @@ def fine_step_span(v_set, max_step=0.5, min_run=10):
     |V| range over which a scan is finely stepped: the LONGEST contiguous run
     of voltages spaced <= max_step, at least min_run steps long.
 
-    The campaign scans are not uniformly stepped -- 20260720_190823 runs 0.1 V
+    The campaign scans are not uniformly stepped: 20260720_190823 runs 0.1 V
     from 10 to 60 V then opens out to 10 V steps, while 20260717_0307 is fine
     only between 10.1 and 12.8 V. A gain-layer peak found in the coarse region
     is not resolvable, so the search is confined to the fine part.
 
     Contiguity matters: near breakdown the voltage readback sags under load,
     so auto-binned legacy scans sprout clusters of bins < 0.5 V apart at
-    480-500 V. Taking the global (min, max) of every sub-max_step gap -- the
-    old behaviour -- stretched the V_gl search window across the whole sweep,
-    and the breakdown ramp's curvature then beat the real gain-layer peak
-    (202607160017 ch0/2/3 reported V_gl ~ 490 V). The longest fine run is the
+    480-500 V. Taking the global (min, max) of every sub-max_step gap instead
+    would stretch the V_gl search window across the whole sweep, and the
+    breakdown ramp's curvature would then beat the real gain-layer peak
+    (202607160017 ch0/2/3 give V_gl ~ 490 V that way). The longest fine run is the
     deliberately fine-stepped region; incidental clusters lose to it. min_run
     also rejects scans with no genuine fine region (quick scans return NaN).
     """
@@ -119,18 +119,18 @@ def _first_crossing(v, k, level, i=None, min_points=2):
     """
     Interpolated voltage where k first rises through `level` AND stays there.
 
-    A genuine breakdown crossing is sustained -- k holds above the threshold
+    A genuine breakdown crossing is sustained: k holds above the threshold
     for consecutive samples while |I| rises. The low-|V| artifact usually is
     not: below depletion the current sits at the ammeter floor, V/I is
     enormous, and dI/dV is noise, so k spikes through thresholds erratically.
     Requiring `min_points` consecutive samples at or above `level` with |I|
-    net-rising across them rejects isolated spikes -- but it is a raised bar,
+    net-rising across them rejects isolated spikes, but it is a raised bar,
     not a fence: a FLICKERING sub-depletion region can pass a short run with
     a chance net-rise in floor-quantized current. The deterministic guard is
     the per-scan "min_v" in the scan dict, which removes those voltages
     before k is computed at all; this test is defense-in-depth behind it.
-    min_points=1 (or i=None, which skips the rising test) restores the
-    single-point behaviour.
+    min_points=1 (or i=None, which skips the rising test) gives a
+    single-point test.
     """
     ok = np.isfinite(k) & np.isfinite(v)
     if i is not None:
@@ -172,7 +172,7 @@ def plot_kfactor(scans, channel_names=None, title="", unit="auto",
     unit           : "auto" picks per channel from the data, or force "nA"/"uA"/"mA"
     k_breakdown    : level whose first crossing is reported as the breakdown voltage
     vgl_search     : (lo, hi) window in |V| to hunt for the gain-layer peak in k,
-                     or "auto" to use each scan's own finely-stepped region --
+                     or "auto" to use each scan's own finely-stepped region:
                      the campaign files step 0.1 V over quite different spans
                      (10-13 V, 10-70 V, 1-35 V), so one fixed window cannot serve
                      them all
@@ -182,8 +182,8 @@ def plot_kfactor(scans, channel_names=None, title="", unit="auto",
                      carry its own "min_v" to override per condition (a
                      pre-irradiation scan wants ~15 V, an irradiated one
                      whose fine region starts at 10 V wants less). Near zero bias the
-                     current sits on the noise floor and V/I blows up -- on the fine
-                     scan that produced a spurious k of 207 at 0.17 V, which buried
+                     current sits on the noise floor and V/I blows up; on the fine
+                     scan that gives a spurious k of 207 at 0.17 V, which buries
                      the real feature at 25 V.
     smooth_v       : boxcar width in volts (not samples). 1 V is a no-op on a 10 V
                      step scan and a 10-sample average on a 0.1 V one.
@@ -213,8 +213,8 @@ def plot_kfactor(scans, channel_names=None, title="", unit="auto",
 
         # --- pass 1: clean every scan in this column and find the largest current.
         # The unit has to be chosen before anything is drawn: picking it inside the
-        # loop scaled the first scan by its own maximum and later ones by the
-        # running maximum, so two traces on one axis ended up in different units.
+        # loop would scale the first scan by its own maximum and later ones by the
+        # running maximum, so two traces on one axis would end up in different units.
         traces = []
         for s_idx, (s, tidy) in enumerate(loaded):
             if ch not in set(tidy["channel"]):
@@ -246,7 +246,7 @@ def plot_kfactor(scans, channel_names=None, title="", unit="auto",
                 vset = np.full_like(v, np.nan)
                 gk = None                      # no per-reading flags after binning
             else:
-                # acquisition order preserved -- do NOT sort by voltage
+                # acquisition order preserved; do NOT sort by voltage
                 good = good.sort_values("timestamp")
                 v = good["v_meas"].abs().to_numpy(dtype=float)
                 vset = good["v_set"].abs().to_numpy(dtype=float)
@@ -300,7 +300,7 @@ def plot_kfactor(scans, channel_names=None, title="", unit="auto",
             # scans the gain-layer peak itself can exceed k_breakdown (the
             # March 3e14 scan's V_gl peak tops 8), so the crossing hunt starts
             # where the fine region ends. Scans with no fine region (quick
-            # scans) search everywhere, as before.
+            # scans) search the whole scan.
             span_src = vset if np.isfinite(vset).any() else v
             f_lo, f_hi = fine_step_span(span_src, max_step=0.5)
             bd_sel = v > f_hi if np.isfinite(f_hi) else np.ones(len(v), bool)
@@ -327,7 +327,7 @@ def plot_kfactor(scans, channel_names=None, title="", unit="auto",
             if vgl_search is not None and np.isfinite(lo) and np.isfinite(hi):
                 sel = (v >= lo) & (v <= hi) & np.isfinite(k)
                 if sel.sum() >= 3:
-                    # a real peak or nothing -- no argmax fallback, which would
+                    # a real peak or nothing; no argmax fallback, which would
                     # always hand back a number even for a flat, featureless k
                     pk, _ = find_peaks(k[sel], prominence=vgl_prominence)
                     if len(pk):
@@ -398,16 +398,13 @@ def plot_kfactor(scans, channel_names=None, title="", unit="auto",
     plt.show()
 
     # returned, not printed: the cell renders it once as a table. This is the
-    # only genuinely new information the function produces -- the curves
+    # only genuinely new information the function produces; the curves
     # themselves are already on screen.
     out = pd.DataFrame(results).drop_duplicates(subset=["scan", "channel"])
     if out.empty:
         return out
     if out["V_gl [V]"].isna().all():
         out = out.drop(columns=["V_gl [V]"])
-    # Evolution view: rows follow the order the scans were listed (put them in
-    # campaign order and each column reads as one board's history top-to-
-    # bottom); one column per device.
     # Evolution view: one row per scan in listed order (list them oldest-first
     # and each device block reads top-to-bottom as that board's history), one
     # column block per device. Built with set_index/unstack rather than
