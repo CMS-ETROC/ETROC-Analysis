@@ -1,5 +1,5 @@
 """station.py -- helpers copied verbatim from the station repo
-ETROC-WaferProbe, branch psu-identify at commit fd03ee1: the whole of
+ETROC-WaferProbe, branch psu-identify at commit c166312: the whole of
 src/grading.py, plus nem_files (from src/qinj_check.py) and load_wafer_map
 (from prober_move.py). Brought in so plot_wafer.py, wafer_tables.py and
 wafer_plots.py can run here without the rest of the station repo.
@@ -45,8 +45,10 @@ The mapping is read off run_die's own code path, not guessed:
   run that reached QInj also carries its verdict (summary["qinj_check"]).
 - summary["efuse"][chip_hex] = {"word", "before", "after", "writes",
   "verified", "reason"} is filled in by src/efuse_check.burn_efuse during
-  the eFuse burn (--doEfuse), which comes after the calibration and before
-  QInj; a burn that did not verify does not stop the run.
+  the eFuse burn (--doEfuse), or by src/efuse_check.verify_efuse, which
+  reads the fuses and writes nothing (--verifyEfuse); either comes after
+  the calibration and before QInj, and one that did not verify does not
+  stop the run. Both are graded alike.
 """
 
 Grade = namedtuple("Grade", ["name", "bin", "detail"])
@@ -106,16 +108,11 @@ def zero_pixels(summary):
 
 
 def efuse_failures(summary):
-    """[(chip_hex, reason), ...] for every chip whose eFuse burn did not
-    verify; empty when there are none or no burn ran."""
+    """[(chip_hex, reason), ...] for every chip whose eFuse burn, or
+    read-only verify (verify_efuse), did not verify; empty when there are
+    none or neither ran."""
     return [(chip, info.get("reason") or "not verified")
             for chip, info in (summary.get("efuse") or {}).items() if not info.get("verified")]
-
-
-def efuse_verified(summary):
-    """True when a chip's eFuse word verified in this run: burned now, or
-    found burned already."""
-    return any(info.get("verified") for info in (summary.get("efuse") or {}).values())
 
 
 def _qinj_note(summary):

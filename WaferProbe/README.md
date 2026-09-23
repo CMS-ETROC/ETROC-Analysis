@@ -25,6 +25,14 @@ rsync -av <station host>:<path>/BatchID_0_Name_N62M23/WaferID_3_Name_08A5/ \
     ./BatchID_0_Name_N62M23/WaferID_3_Name_08A5/
 ```
 
+Results written before the station took these labels (ETROC-WaferProbe
+before commit fcae979, 2026-09-23) sat in `<path>/<batch>/<wafer>/`. The
+station's two wafers of that time were renamed once, by hand
+(`FFF2p00/N60R91` to `BatchID_X_Name_FFF2p00/WaferID_X_Name_N60R91`,
+`N62M23/08A5` to `BatchID_0_Name_N62M23/WaferID_3_Name_08A5`); a copy
+taken before then needs the same rename, because `plot_wafer.py` finds a
+wafer folder by its labels only.
+
 ## Environment
 
 Python >= 3.9 with `numpy`, `pandas`, `pyarrow` and `matplotlib`. On lxplus,
