@@ -11,3 +11,6 @@ testbeam_*
 *.bin
 *.pkl
 plot_scripts_for_approval/etroc_TB_figs
+
+# figures a notebook writes by default (next to the notebook)
+etroc_plots/notebooks/figures/
