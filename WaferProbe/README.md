@@ -78,8 +78,9 @@ The tables, as csv:
   as `_on`); the rail-check thresholds the run used; the I2C verdicts and
   failure lists; baseline and noise-width mean and std over the pixels that
   did not read zero, with the zero readings listed apart; the QInj verdict
-  of the station's check over the last file (`qinj_check_*`), the events of
-  all the files read (`qinj_events`), the trailers with a nonzero chip
+  of the station's check (`qinj_check_*`; over the files after the first,
+  or the last file alone in runs without `qinj_seconds`), the events of all
+  the files read (`qinj_events`), the trailers with a nonzero chip
   status (`qinj_flagged_trailers`), the EA-flagged hit words and the lowest
   efficiency over the injected pixels; the chuck position at contact minus
   the station's map position (`dx_um`, `dy_um`). Power-on logs only two
