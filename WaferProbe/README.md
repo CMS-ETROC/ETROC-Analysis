@@ -12,11 +12,15 @@ its own; when the station's grading changes, `station.py` follows it.
 
 ## Getting the results
 
-The station laptop writes results under `<path>/<batchName>/<waferName>/`.
-Copy that folder here, e.g. with `rsync`:
+The station laptop writes results under
+`<path>/BatchID_<id>_Name_<batch>/WaferID_<id>_Name_<wafer>/`, with the batch
+and wafer IDs of the station's `configs/wafers.csv` (`X` for a wafer it does
+not list, such as a test wafer). Copy that folder here, keeping both levels,
+e.g. with `rsync`:
 
 ```
-rsync -av <station host>:<path>/<batchName>/<waferName>/ ./<batchName>/<waferName>/
+rsync -av <station host>:<path>/BatchID_0_Name_N62M23/WaferID_3_Name_08A5/ \
+    ./BatchID_0_Name_N62M23/WaferID_3_Name_08A5/
 ```
 
 ## Environment
@@ -31,8 +35,9 @@ Python >= 3.9 with `numpy`, `pandas`, `pyarrow` and `matplotlib`. On lxplus,
 python plot_wafer.py --path <results dir> --batchName FFF2p00 --waferName N60R91
 ```
 
-It prints the grade counts and writes into `<path>/<batch>/<wafer>/plots/`
-(`--out` for another folder). A die is represented by its newest run folder
+It finds the wafer folder by the two names, whatever its IDs (it refuses to
+guess when there is not exactly one), prints the grade counts and writes into
+the folder's `plots/` (`--out` for another folder). A die is represented by its newest run folder
 that holds a `summary.json`, passing over runs aborted with Ctrl+C: the run
 whose grade the station map shows. Two exceptions: a run made by hand with
 `master_run_script.py` counts here but never reaches the map, and a pass

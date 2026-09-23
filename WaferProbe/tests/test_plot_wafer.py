@@ -24,7 +24,7 @@ class PlotWaferTest(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.root = Path(tmp.name)
-        self.wafer = self.root / "B" / "W"
+        self.wafer = self.root / "BatchID_X_Name_B" / "WaferID_X_Name_W"
         self.out = self.root / "plots"
         write_map(self.root / "map.csv", WAFER_MAP)
 
@@ -119,7 +119,23 @@ class PlotWaferTest(unittest.TestCase):
     def test_a_missing_results_folder_is_refused(self):
         rc, printed, written = self.plot("--waferName", "nowhere")
         self.assertEqual((rc, written), (2, set()))
-        self.assertIn("no results folder", printed)
+        self.assertIn("0 results folders for B / nowhere", printed)
+
+    def test_the_folder_is_found_by_the_names_whatever_the_ids(self):
+        self.wafer = self.root / "BatchID_0_Name_B" / "WaferID_3_Name_W"
+        (self.root / "BatchID_0_Name_BB" / "WaferID_4_Name_W").mkdir(parents=True)
+        self.quick_die(1)
+        rc, printed, written = self.plot("--tables-only")
+        self.assertEqual(rc, 0)
+        self.assertIn(f"reading {self.wafer}", printed)
+
+    def test_two_folders_for_one_wafer_are_refused(self):
+        self.quick_die(1)
+        self.wafer = self.root / "BatchID_0_Name_B" / "WaferID_3_Name_W"
+        self.quick_die(1)
+        rc, printed, written = self.plot("--tables-only")
+        self.assertEqual((rc, written), (2, set()))
+        self.assertIn("2 results folders for B / W", printed)
 
 
 if __name__ == "__main__":

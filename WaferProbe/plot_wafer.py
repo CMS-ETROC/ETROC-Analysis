@@ -3,14 +3,17 @@
     python plot_wafer.py --path <path> --batchName <batch> --waferName <wafer>
 
 with the --path, --batchName and --waferName of the wafer run. It reads the
-die folders under <path>/<batch>/<wafer>/ and writes into
-<path>/<batch>/<wafer>/plots/ the tables dies.csv, pixels.csv and qinj.csv
-(wafer_tables.py) and the figures (wafer_plots.py). It only reads
+die folders of the wafer folder the station wrote,
+<path>/BatchID_<id>_Name_<batch>/WaferID_<id>_Name_<wafer>/ (X for an ID the
+wafer does not have), and writes into its plots/ the tables dies.csv,
+pixels.csv and qinj.csv (wafer_tables.py) and the figures (wafer_plots.py).
+It only reads
 results and never talks to the station, the supplies or the chip, so it can
 run while a wafer is being tested, or on any computer with a copy of the
 results folder.
 """
 import argparse
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -25,10 +28,8 @@ def build_arg_parser():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--path', required=True,
                         help='The --path of the wafer run: the mother directory of all results')
-    parser.add_argument('--batchName', help='Batch name, e.g. N62C72 (else BatchID_<batchID>)')
-    parser.add_argument('--waferName', help='Wafer name, e.g. 02G4 (else WaferID_<waferID>)')
-    parser.add_argument('--batchID', type=int, default=-1, help='Batch ID, for a run given no --batchName')
-    parser.add_argument('--waferID', type=int, default=-1, help='Wafer ID, for a run given no --waferName')
+    parser.add_argument('--batchName', required=True, help='Batch (lot) name of the wafer run, e.g. N62M23')
+    parser.add_argument('--waferName', required=True, help='Wafer name of the wafer run, e.g. 08A5')
     parser.add_argument('--waferMap', default=str(REPO / 'wafer_map.csv'), dest='wafer_map',
                         help='CSV mapping the die number (location_id) to its row and col on the wafer map')
     parser.add_argument('--before', default=None,
@@ -42,17 +43,31 @@ def build_arg_parser():
     return parser
 
 
+def find_wafer_dirs(path, batch, wafer):
+    """The wafer folders under `path` named for this batch and wafer,
+    BatchID_<id>_Name_<batch>/WaferID_<id>_Name_<wafer>, whatever the IDs
+    (a number, or X for a wafer without)."""
+    def named(parent, kind, name):
+        pattern = re.compile(rf"{kind}ID_(\d+|X)_Name_{re.escape(name)}")
+        return sorted(p for p in parent.iterdir() if p.is_dir() and pattern.fullmatch(p.name))
+    root = Path(path)
+    if not root.is_dir():
+        return []
+    return [w for b in named(root, "Batch", batch) for w in named(b, "Wafer", wafer)]
+
+
 def main(argv=None):
     args = build_arg_parser().parse_args(argv)
-    batch = args.batchName or (f"BatchID_{args.batchID}" if args.batchID >= 0 else None)
-    wafer = args.waferName or (f"WaferID_{args.waferID}" if args.waferID >= 0 else None)
-    if not batch or not wafer:
-        print("give --batchName (or --batchID) and --waferName (or --waferID), as for the wafer run")
+    batch, wafer = args.batchName, args.waferName
+    found = find_wafer_dirs(args.path, batch, wafer)
+    if len(found) != 1:
+        print(f"{len(found)} results folders for {batch} / {wafer} under {args.path}, "
+              f"expected 1 (BatchID_<id>_Name_{batch}/WaferID_<id>_Name_{wafer})")
+        for folder in found:
+            print(f"  {folder}")
         return 2
-    wafer_dir = Path(args.path) / batch / wafer
-    if not wafer_dir.is_dir():
-        print(f"no results folder {wafer_dir}")
-        return 2
+    wafer_dir = found[0]
+    print(f"reading {wafer_dir}")
     try:
         before = datetime.fromisoformat(args.before) if args.before else None
     except ValueError:
