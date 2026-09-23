@@ -3,9 +3,9 @@ wafer figures (wafer_plots.py; plot_wafer.py runs both) and for anyone
 who wants the numbers.
 
 Reads only what master_run_script.run_die writes, under
-<path>/<batch>/<wafer>/die<nnn>/run_<k>_<suffix>/: summary.json,
-power.parquet, baseline.parquet and, after --doQinj, the .nem files of the
-QInj run (qinj_files).
+<path>/BatchID_<id>_Name_<batch>/WaferID_<id>_Name_<wafer>/die<nnn>/run_<k>_<suffix>/:
+summary.json, power.parquet, baseline.parquet and, after --doQinj, the .nem
+files of the QInj run (qinj_files).
 
 The run that stands for a die is the newest run folder holding a
 summary.json, passing over runs aborted with Ctrl+C: the run whose grade

@@ -205,9 +205,10 @@ def grade(summary):
 def result_text(grade, attempt):
     """The SetDieResult text for the die: "<GRADE>", or "<GRADE>_retry" when
     the graded attempt is the retry (attempt > 1). The grade's detail is
-    recorded in wafer.json and the log, never on the map, so the station's
-    Result column takes one of 2 x 10 values. Sanitised to [A-Za-z0-9_.-]
-    and the station's 256-character limit all the same."""
+    recorded in the pass's wafer_<YYYYmmdd_HHMMSS>.json and the log, never
+    on the map, so the station's Result column takes one of 2 x 10 values.
+    Sanitised to [A-Za-z0-9_.-] and the station's 256-character limit all
+    the same."""
     parts = [grade.name]
     if attempt > 1:
         parts.append("retry")

@@ -15,8 +15,10 @@ its own; when the station's grading changes, `station.py` follows it.
 The station laptop writes results under
 `<path>/BatchID_<id>_Name_<batch>/WaferID_<id>_Name_<wafer>/`, with the batch
 and wafer IDs of the station's `configs/wafers.csv` (`X` for a wafer it does
-not list, such as a test wafer). Copy that folder here, keeping both levels,
-e.g. with `rsync`:
+not list, such as a test wafer). The two folder names are the wafer's
+labels, which the station also stamps on the prober (Velox lot id and wafer
+id) and on its saved wafer map; the plots name the wafer by them too. Copy
+that folder here, keeping both levels, e.g. with `rsync`:
 
 ```
 rsync -av <station host>:<path>/BatchID_0_Name_N62M23/WaferID_3_Name_08A5/ \
@@ -33,10 +35,15 @@ Python >= 3.9 with `numpy`, `pandas`, `pyarrow` and `matplotlib`. On lxplus,
 
 ```
 python plot_wafer.py --path <results dir> --batchName FFF2p00 --waferName N60R91
+python plot_wafer.py --path <results dir> --batchID 0 --waferID 3
 ```
 
-It finds the wafer folder by the two names, whatever its IDs (it refuses to
-guess when there is not exactly one), prints the grade counts and writes into
+It finds the wafer folder by the name, the ID or both of each level
+(`--batchName`, `--batchID`; `--waferName`, `--waferID`): given both, both
+must match, and an ID never finds a folder with `X`, so a wafer without IDs
+is found by its names. It refuses to guess when there is not exactly one
+match, and lists the folders that match (or, when none does, every wafer
+folder under `--path`). It then prints the grade counts and writes into
 the folder's `plots/` (`--out` for another folder). A die is represented by its newest run folder
 that holds a `summary.json`, passing over runs aborted with Ctrl+C: the run
 whose grade the station map shows. Two exceptions: a run made by hand with
@@ -110,9 +117,13 @@ Wafer maps draw each die at its `wafer_map.csv` place, row 0 at the top as on
 the station display, and print the value in the cell; a die without a value
 is hatched. Colour ranges span the 2nd to 98th percentile of the PASSED dies
 (of all dies in the alignment maps and the full-scan galleries; fixed for
-efficiencies and counts), so one broken die does not flatten the rest. Under
-every figure a note names the wafer, which run of each die was used (the
-newest, or the newest before `--before`) and when it was plotted.
+efficiencies and counts), so one broken die does not flatten the rest. Every
+figure title starts with the wafer's labels
+(`BatchID_0_Name_N62M23 / WaferID_3_Name_08A5`), on a line of their own when
+the figure is too narrow for the whole first line (`pixel_issues` without
+full-scan dies, say). Under every figure a note names the wafer by its
+labels, which run of each die was used (the newest, or the newest before
+`--before`) and when it was plotted.
 
 ## Tests
 

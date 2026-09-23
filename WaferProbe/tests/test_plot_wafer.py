@@ -6,6 +6,7 @@ import io
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 HAVE_PLOTS = all(importlib.util.find_spec(m) for m in ("numpy", "pandas", "pyarrow", "matplotlib"))
 if HAVE_PLOTS:
@@ -43,9 +44,9 @@ class PlotWaferTest(unittest.TestCase):
                   nem={"qinj": [event(QUICK_PIXELS, status=8, junk=3) * 2, event(QUICK_PIXELS) * 5,
                                 event(QUICK_PIXELS, status=8, junk=1)]})
 
-    def plot(self, *extra):
+    def plot(self, *extra, select=("--batchName", "B", "--waferName", "W")):
         with contextlib.redirect_stdout(io.StringIO()) as printed:
-            rc = main(["--path", str(self.root), "--batchName", "B", "--waferName", "W",
+            rc = main(["--path", str(self.root), *select,
                        "--waferMap", str(self.root / "map.csv"), "--out", str(self.out), *extra])
         return rc, printed.getvalue(), {p.name for p in self.out.iterdir()} if self.out.is_dir() else set()
 
@@ -56,7 +57,7 @@ class PlotWaferTest(unittest.TestCase):
         write_run(self.wafer, 5, 1, summary(5, 1, 2, status="over_current"))
         rc, printed, written = self.plot()
         self.assertEqual(rc, 0)
-        self.assertIn("B / W: 5 of 6 dies tested, PASSED 4 (80.0 %)", printed)
+        self.assertIn("BatchID_X_Name_B / WaferID_X_Name_W: 5 of 6 dies tested, PASSED 4 (80.0 %)", printed)
         self.assertEqual(written, TABLES | {f"{name}.png" for name in FIGURES})
 
     def test_figures_without_data_are_left_out_and_older_copies_removed(self):
@@ -119,7 +120,7 @@ class PlotWaferTest(unittest.TestCase):
     def test_a_missing_results_folder_is_refused(self):
         rc, printed, written = self.plot("--waferName", "nowhere")
         self.assertEqual((rc, written), (2, set()))
-        self.assertIn("0 results folders for B / nowhere", printed)
+        self.assertIn("0 results folders match BatchID_*_Name_B/WaferID_*_Name_nowhere", printed)
 
     def test_the_folder_is_found_by_the_names_whatever_the_ids(self):
         self.wafer = self.root / "BatchID_0_Name_B" / "WaferID_3_Name_W"
@@ -135,7 +136,85 @@ class PlotWaferTest(unittest.TestCase):
         self.quick_die(1)
         rc, printed, written = self.plot("--tables-only")
         self.assertEqual((rc, written), (2, set()))
-        self.assertIn("2 results folders for B / W", printed)
+        self.assertIn("2 results folders match BatchID_*_Name_B/WaferID_*_Name_W", printed)
+
+    def use_ids(self):
+        """The wafer under test in BatchID_0_Name_B/WaferID_3_Name_W, beside two
+        wafers of the same batch (IDs 4 and 43) and one of another batch with
+        wafer ID 3."""
+        self.wafer = self.root / "BatchID_0_Name_B" / "WaferID_3_Name_W"
+        self.quick_die(1)
+        (self.root / "BatchID_0_Name_B" / "WaferID_4_Name_W2").mkdir(parents=True)
+        (self.root / "BatchID_0_Name_B" / "WaferID_43_Name_W3").mkdir(parents=True)
+        (self.root / "BatchID_1_Name_B1" / "WaferID_3_Name_W").mkdir(parents=True)
+
+    def test_the_folder_is_found_by_the_ids(self):
+        self.use_ids()
+        rc, printed, _ = self.plot("--tables-only", select=("--batchID", "0", "--waferID", "3"))
+        self.assertEqual(rc, 0)
+        self.assertIn(f"reading {self.wafer}", printed)
+
+    def test_names_and_ids_can_be_mixed(self):
+        self.use_ids()
+        for select in (("--batchName", "B", "--waferID", "3"), ("--batchID", "0", "--waferName", "W"),
+                       ("--batchName", "B", "--batchID", "0", "--waferName", "W", "--waferID", "3")):
+            with self.subTest(select=select):
+                rc, printed, _ = self.plot("--tables-only", select=select)
+                self.assertEqual(rc, 0)
+                self.assertIn(f"reading {self.wafer}", printed)
+
+    def test_a_name_and_an_id_that_disagree_are_refused(self):
+        self.use_ids()
+        rc, printed, written = self.plot("--tables-only", select=("--batchName", "B", "--batchID", "1",
+                                                                  "--waferName", "W"))
+        self.assertEqual((rc, written), (2, set()))
+        self.assertIn("0 results folders match BatchID_1_Name_B/WaferID_*_Name_W", printed)
+        self.assertIn(f"the wafer folders there:\n  {self.wafer}\n", printed)
+
+    def test_an_x_folder_is_not_found_by_an_id(self):
+        self.quick_die(1)
+        rc, printed, written = self.plot("--tables-only", select=("--batchName", "B", "--waferID", "0"))
+        self.assertEqual((rc, written), (2, set()))
+        self.assertIn(f"the wafer folders there:\n  {self.wafer}\n", printed)
+
+    def test_the_ids_pick_one_of_two_folders_with_the_same_names(self):
+        self.use_ids()
+        (self.root / "BatchID_2_Name_B" / "WaferID_5_Name_W").mkdir(parents=True)
+        rc, printed, _ = self.plot("--tables-only")
+        self.assertEqual(rc, 2)
+        self.assertIn("2 results folders match BatchID_*_Name_B/WaferID_*_Name_W", printed)
+        self.assertIn(f"  {self.root / 'BatchID_2_Name_B' / 'WaferID_5_Name_W'}\n", printed)
+        rc, printed, _ = self.plot("--tables-only", "--waferID", "3")
+        self.assertEqual(rc, 0)
+        self.assertIn(f"reading {self.wafer}", printed)
+
+    def test_each_level_needs_a_name_or_an_id(self):
+        self.use_ids()
+        for select in (("--batchName", "B"), ("--waferID", "3")):
+            with self.subTest(select=select), contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit):
+                    self.plot("--tables-only", select=select)
+
+    def test_the_header_title_and_note_name_the_wafer_by_its_labels(self):
+        self.use_ids()
+        with patch("wafer_plots.plot_all", return_value=[]) as plot_all:
+            rc, printed, _ = self.plot(select=("--batchID", "0", "--waferID", "3"))
+        self.assertEqual(rc, 0)
+        self.assertIn("BatchID_0_Name_B / WaferID_3_Name_W: 1 of 6 dies tested", printed)
+        self.assertEqual(plot_all.call_args.kwargs["title"], "BatchID_0_Name_B / WaferID_3_Name_W")
+        self.assertTrue(plot_all.call_args.kwargs["note"].startswith(
+            "BatchID_0_Name_B / WaferID_3_Name_W: newest run of each die; plot_wafer.py "))
+
+    def test_a_title_too_wide_for_its_figure_puts_the_labels_on_a_line_of_their_own(self):
+        import matplotlib.pyplot as plt
+        from wafer_plots import _suptitle
+        label = "BatchID_0_Name_N62M23 / WaferID_3_Name_08A5"
+        for inches, expected in ((20, f"{label}: the other rails at high power"),
+                                 (5, f"{label}\nthe other rails at high power")):
+            fig = plt.figure(figsize=(inches, 3))
+            self.addCleanup(plt.close, fig)
+            heading = _suptitle(fig, label, "the other rails at high power", fontsize=12)
+            self.assertEqual(heading.get_text(), expected)
 
 
 if __name__ == "__main__":

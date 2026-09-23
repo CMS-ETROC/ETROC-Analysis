@@ -137,6 +137,20 @@ def _colourbar(fig, ax, norm, cmap, label, values=None, cax=None, integer=False)
     return cb
 
 
+def _suptitle(fig, title, text, fontsize):
+    """The figure title "<title>: <text>", title being the wafer's labels. On
+    a narrow figure (two panels, one rail) the labels can push that first
+    line past the figure's edges: when it takes more than 95 % of the figure
+    width, the labels get a line of their own."""
+    heading = fig.suptitle(f"{title}: {text}", fontsize=fontsize)
+    first = heading.get_text().split("\n")[0]
+    width, _, _ = fig.canvas.get_renderer().get_text_width_height_descent(
+        first, heading.get_fontproperties(), ismath=False)
+    if width > 0.95 * fig.bbox.width:
+        heading.set_text(f"{title}\n{text}")
+    return heading
+
+
 def wafer_map(ax, dies, values, *, title, label="", fmt="{:.0f}", cmap="viridis",
               ref=None, centre=None, vrange=None, frame=None, fontsize=6.5, integer=False):
     """Colour each die of the dies table by `values` (one per row), print
@@ -210,8 +224,8 @@ def fig_currents(dies, title):
         wafer_map(axes[i, 1], dies, high, title=f"{rail}: high-power current", label="mA", ref=ok)
         wafer_map(axes[i, 2], dies, high - on, title=f"{rail}: high power minus power-on",
                   label="mA", ref=ok)
-    fig.suptitle(f"{title}: rail currents, median over each run phase "
-                 "(first sweep of every phase dropped)", fontsize=12)
+    _suptitle(fig, title, "rail currents, median over each run phase "
+                          "(first sweep of every phase dropped)", fontsize=12)
     return fig
 
 
@@ -226,7 +240,7 @@ def fig_small_rails(dies, title):
     for ax, rail in zip(axes[0], rails):
         wafer_map(ax, dies, _num(dies, f"{rail}_I_high") * 1e3, title=f"{rail}: high-power current",
                   label="mA", fmt="{:.1f}", ref=ok)
-    fig.suptitle(f"{title}: the other rails at high power", fontsize=12)
+    _suptitle(fig, title, "the other rails at high power", fontsize=12)
     return fig
 
 
@@ -252,8 +266,8 @@ def fig_current_hists(dies, title):
         ax.set_ylabel("dies", fontsize=9)
         ax.legend(fontsize=7, frameon=False)
         ax.set_title(rail, fontsize=10)
-    fig.suptitle(f"{title}: rail currents per die, median over each run phase "
-                 "(lines: the check thresholds the runs used)", fontsize=11)
+    _suptitle(fig, title, "rail currents per die, median over each run phase "
+                          "(lines: the check thresholds the runs used)", fontsize=11)
     return fig
 
 
@@ -270,8 +284,8 @@ def fig_baseline_maps(dies, title):
         wafer_map(ax, dies, _num(dies, column), title=what, label="DAC code", fmt=fmt, ref=ok, frame=zero)
     sizes = pd.Series(_num(dies, "n_pixels")).dropna().astype(int).value_counts().sort_index()
     mix = ", ".join(f"{k} pixels: {n} dies" for k, n in sizes.items())
-    fig.suptitle(f"{title}: baseline and noise width per die, over its calibrated pixels that did not "
-                 f"read zero\n({mix}; red frame: some pixels read zero, see pixel_issues.png)", fontsize=11)
+    _suptitle(fig, title, "baseline and noise width per die, over its calibrated pixels that did not "
+                          f"read zero\n({mix}; red frame: some pixels read zero, see pixel_issues.png)", fontsize=11)
     return fig
 
 
@@ -299,8 +313,8 @@ def fig_baseline_hists(pixels, title):
             spread = f", std {v.std(ddof=1):.2f}" if len(v) > 1 else ""
             ax.set_title(f"{name}, {what}: {len(v)} pixels of {g['die'].nunique()} dies, "
                          f"mean {v.mean():.2f}{spread}", fontsize=10)
-    fig.suptitle(f"{title}: calibrated pixels pooled over dies, one bin per DAC code "
-                 f"({int(zero.sum())} zero readings left out)", fontsize=11)
+    _suptitle(fig, title, "calibrated pixels pooled over dies, one bin per DAC code "
+                          f"({int(zero.sum())} zero readings left out)", fontsize=11)
     return fig
 
 
@@ -326,8 +340,8 @@ def fig_alignment(dies, title):
             a, b, c, s, n = t
             trends.append(f"d{axis} = {a:.1f} {_signed(b)} × column {_signed(c)} × row, residual std {s:.1f}")
     fit = f"\nplane fitted over the wafer (µm): {'; '.join(trends)}" if trends else ""
-    fig.suptitle(f"{title}: chuck position read at contact minus the station's map position of the die{fit}",
-                 fontsize=11)
+    _suptitle(fig, title, f"chuck position read at contact minus the station's map position of the die{fit}",
+                          fontsize=11)
     return fig
 
 
@@ -373,9 +387,9 @@ def fig_fullscan(dies, pixels, title, column, what):
                     fontsize=6, color="#bbbbbb")
     _colourbar(fig, None, norm, cmap, f"{what} (DAC code)", sel.loc[~zero, column],
                cax=fig.add_axes([0.915, 0.3, 0.015, 0.4]))
-    fig.suptitle(f"{title}: {what} of every pixel, {len(full)} full-scan dies at their wafer positions\n"
-                 "each die: row 0 at the top, column 0 at the left; red = read zero; grey frame = no full scan",
-                 fontsize=11)
+    _suptitle(fig, title, f"{what} of every pixel, {len(full)} full-scan dies at their wafer positions\n"
+                          "each die: row 0 at the top, column 0 at the left; red = read zero; grey frame = no full scan",
+                          fontsize=11)
     return fig
 
 
@@ -422,8 +436,8 @@ def fig_pixel_issues(dies, pixels, title):
         _pixel_axes(ax)
         _colourbar(fig, ax, norm, cmap, label, img, integer=counts)
         ax.set_title(what, fontsize=10)
-    fig.suptitle(f"{title}: per pixel, over dies (a pixel counts for zero readings only in dies that "
-                 f"calibrated it: {int(calibrated.max())} dies at most)", fontsize=11)
+    _suptitle(fig, title, "per pixel, over dies (a pixel counts for zero readings only in dies that "
+                          f"calibrated it: {int(calibrated.max())} dies at most)", fontsize=11)
     return fig
 
 
@@ -444,9 +458,9 @@ def fig_qinj_overview(dies, qinj, title):
               label="trailers", cmap="Reds", vrange=(0, max(1.0, float(np.nanmax(flagged)))), integer=True)
     wafer_map(axes[1, 1], dies, ea, title="hit words with a nonzero EA flag", label="words",
               cmap="Reds", vrange=(0, max(1.0, float(np.nanmax(ea)))), integer=True)
-    fig.suptitle(f"{title}: charge injection, the files after the first of each qinj/ run (older runs: all of qinj_run2/)\n"
-                 "efficiency = hits with EA = 0 per event; injected pixels as the run recorded them, "
-                 f"else the wafer's {n} if the run expected {n} hits per event", fontsize=11)
+    _suptitle(fig, title, "charge injection, the files after the first of each qinj/ run (older runs: all of qinj_run2/)\n"
+                          "efficiency = hits with EA = 0 per event; injected pixels as the run recorded them, "
+                          f"else the wafer's {n} if the run expected {n} hits per event", fontsize=11)
     return fig
 
 
@@ -463,8 +477,8 @@ def fig_qinj_maps(dies, qinj, title, quantity):
                   title=f"pixel {pixel}", label=f"{quantity.upper()} code", fontsize=5.5, ref=_passed(dies))
     for ax in axes.flat[len(injected):]:
         ax.axis("off")
-    fig.suptitle(f"{title}: mean {quantity.upper()} code per die and injected pixel, the files after the first of each qinj/ run (older runs: all of qinj_run2/),\n"
-                 "hits with EA = 0 and |CAL - its most common value| < 3", fontsize=11)
+    _suptitle(fig, title, f"mean {quantity.upper()} code per die and injected pixel, the files after the first of each qinj/ run (older runs: all of qinj_run2/),\n"
+                          "hits with EA = 0 and |CAL - its most common value| < 3", fontsize=11)
     return fig
 
 
@@ -488,8 +502,8 @@ def fig_qinj_pixels(qinj, title):
             ax.tick_params(labelsize=7)
     handles = [Patch(color="#1f77b4", label="pixel columns 0-7"), Patch(color="#ff7f0e", label="pixel columns 8-15")]
     axes[0, 0].legend(handles=handles, fontsize=7, frameon=False)
-    fig.suptitle(f"{title}: CAL, TOA and TOT per injected pixel, one dot per die "
-                 f"({qinj['die'].nunique()} dies; same selection as the maps)", fontsize=11)
+    _suptitle(fig, title, "CAL, TOA and TOT per injected pixel, one dot per die "
+                          f"({qinj['die'].nunique()} dies; same selection as the maps)", fontsize=11)
     return fig
 
 
