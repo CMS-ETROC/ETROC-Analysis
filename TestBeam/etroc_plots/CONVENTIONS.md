@@ -55,7 +55,11 @@ rest are for whoever writes the next figure.
 
 - Currents are drawn as abs(I). A binned scan is the mean voltage and the median current per
   voltage bin (the median rejects beam-spill spikes): 10 V bins for quick scans, down to 0.1 V at
-  low voltage for fine scans (`FINE_BINS` and `QUICK_BINS` in `iv/legacy.py`).
+  low voltage for fine scans (`FINE_BINS` and `QUICK_BINS` in `iv/legacy.py`). The figure inputs
+  this package bins from raw logs (`legacy.binned_table`, `iv_data.load_july_fine`) keep only each
+  channel's up-sweep, since the ramps down before and after it pass the same voltages again; the
+  general helpers `build_iv_curve` and `kfactor.plot_kfactor` bin every reading in the window they
+  are given.
 - Full-range IV figures share the x range 0-620 V (`iv_plot.XLIM_FULL`); every linear V_gl axis
   spans 0-55 V (`YLIM_LINEAR` in `iv/vgl_plot.py`), and a log view sets its own range.
 - Scan times are UTC; the March raw logs were recorded in local time (CET, UTC+1).

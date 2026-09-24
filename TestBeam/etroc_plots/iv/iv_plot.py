@@ -179,19 +179,20 @@ def assert_no_gaps(curves, tag="", skip_below_V=0.0):
     Every curve dict must carry `bin_width_V` (ivd.bin_width_march / ivd.bin_width_july; 10 V
     for a quick scan, 0.1 V for a fine scan); a curve without one is skipped, and load_looks and
     the notebook's March loader set it on every curve. `skip_below_V` drops points below that
-    bias before checking (the campaign's fine scans ramp through the first ~10 V on a coarser,
-    ~1 V native step regardless of chip or fluence: real DAQ behaviour at negligible current, not
-    a hole; the low-V knee panels pass 10.0 here since that is exactly the range they zoom into).
+    bias before checking (below 10 V the March fine bins are 1 V wide and several July fine
+    scans step 1 V, where the current is negligible: not a hole; the low-V knee panels pass 10.0
+    here since that is exactly the range they zoom into).
 
     A gap only counts once it clears BOTH (a) 2.5x the scan's nominal bin width and (b) 4x the
     median of its own neighbouring gaps. (b) matters because even above skip_below_V a "fine"
-    scan is not uniformly 0.1 V end to end: July's binning coarsens past ~250 V where raw
-    samples thin out, which (a) alone would flag on every such curve. A genuine hole (a ~200 V
-    missing range, which is also what a legend box drawn over a climbing curve looks like)
-    stands out from ITS OWN neighbours however coarse the local sampling is, so (b) still
-    catches it. Raises AssertionError immediately: a real gap must never be "fixed" by loosening
-    this check instead of the data, and a legend sitting on top of good data must never be
-    "fixed" by loosening it instead of moving the legend (see check_legend_overlap).
+    scan is not uniformly 0.1 V end to end: its 0.1 V steps cover a stretch that differs by scan
+    and ends at 60 V at most, and its other steps are coarser, up to 10 V, which (a) alone would
+    flag on every such curve. A genuine hole (a ~200 V missing range, which is also what a legend
+    box drawn over a climbing curve looks like) stands out from ITS OWN neighbours however coarse
+    the local sampling is, so (b) still catches it. Raises AssertionError immediately: a real gap
+    must never be "fixed" by loosening this check instead of the data, and a legend sitting on
+    top of good data must never be "fixed" by loosening it instead of moving the legend (see
+    check_legend_overlap).
     """
     bad = []
     for c in curves:

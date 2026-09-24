@@ -235,6 +235,33 @@ def _smooth_volts(v, y, width_v):
     return out
 
 
+def _parse_window(value, ts):
+    """
+    Parse a start/end window compatibly with the data's own timestamp style.
+
+    Time-only legacy logs land on pandas' dummy date (1900-01-01ff), so a
+    window given as "07:55:00" must land there too; a bare
+    pd.to_datetime("07:55:00") would resolve onto *today* and silently select
+    nothing. Detection: if the window parses with no date and the data lives
+    on the dummy date, re-anchor the window onto the data's own day(s),
+    choosing the day that actually contains that time of day when the log
+    crosses midnight.
+    """
+    t = pd.to_datetime(value)
+    if not len(ts):
+        return t
+    data_day0 = ts.dropna().dt.normalize().min()
+    if data_day0 is pd.NaT or data_day0.year != 1900:
+        return t                     # full-date data: use the window as given
+    # data is time-only; interpret the window as time-of-day
+    tod = t - t.normalize()
+    for day in pd.unique(ts.dropna().dt.normalize()):
+        cand = day + tod
+        if ts.min() <= cand <= ts.max():
+            return cand
+    return data_day0 + tod
+
+
 def _elapsed_origin(tidy, scan, t0_mode="window"):
     """
     Zero point for an elapsed-time axis.
@@ -246,9 +273,9 @@ def _elapsed_origin(tidy, scan, t0_mode="window"):
     t = tidy["timestamp"]
     if t0_mode == "window":
         if scan.get("start") is not None:
-            t = t[t >= pd.to_datetime(scan["start"])]
+            t = t[t >= _parse_window(scan["start"], tidy["timestamp"])]
         if scan.get("end") is not None:
-            t = t[t <= pd.to_datetime(scan["end"])]
+            t = t[t <= _parse_window(scan["end"], tidy["timestamp"])]
     return t.min() if len(t) else tidy["timestamp"].min()
 
 

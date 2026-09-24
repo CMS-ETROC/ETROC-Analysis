@@ -2,15 +2,16 @@
 
 Two on-disk formats, one in-memory shape. March slow-control scans are pre-binned CSVs with
 columns V_ch0,I_ch0,...,V_ch3,I_ch3 (volts negative, amps negative, one row per voltage bin,
-channel columns not aligned row-for-row; each channel is its own ascending-|V| series padded
-to a common row count, so a row is NOT a shared voltage point across channels). July scans are
-already binned, positive, in INPUTS/july/iv_curves.json. Both loaders return
-{chip_name: (v_abs_volts, i_abs_uA)}, ascending in V, so every figure draws off one code
+channel columns not aligned row-for-row; each channel is its own series in ascending V, largest
+|V| first, padded to a common row count, so a row is NOT a shared voltage point across
+channels). July scans are already binned, positive, in INPUTS/july/iv_curves.json. Both loaders
+return {chip_name: (v_abs_volts, i_abs_uA)}, ascending in V, so every figure draws off one code
 path regardless of source.
 
-F1 has no binned CSV for the 1.5e15 step on EOS. The inputs folder holds the three binned files,
-INPUTS/march/<stem>_binned_iv_data.csv, in this same 8-column format (provenance in
-campaigns/irrad_2026_inputs.md); they load through the same March loader as everything else.
+The March tree holds no binned CSV of the F1 1.5e15 scans. The inputs folder holds the three that
+legacy.binned_table makes from the raw logs of that step (`python -m etroc_plots.iv.legacy`),
+INPUTS/march/<stem>_binned_iv_data.csv, in this same 8-column format; they load through the
+same March loader as everything else.
 """
 import hashlib
 import json
@@ -55,7 +56,7 @@ PREIRRAD_LOG_UTC_OFFSET_H = _campaign.PREIRRAD_LOG_UTC_OFFSET_H
 
 
 
-FINE_LOWV_MAX_V = 80.0   # bin ceiling (V); the scans coarsen past ~75 V
+FINE_LOWV_MAX_V = 80.0   # bin ceiling (V); the scans coarsen past ~70 V
 MIN_N_JULY_FINE = 3     # minimum per-bin sample count (~3 s dwell); thinner bins are interpolated
 
 
@@ -194,13 +195,13 @@ def load_july_fine(key, tel):
     """Bin a raw July legacy slow-control CSV (JULY_FINE_SCANS) onto 0.1 V bins over the
     genuinely finely-stepped part of the scan (kfactor.fine_step_span, the same
     contiguous-<=0.5V-run detector the iv06_vgl_method figure uses: these logs run fine 0.1 V steps
-    from a few V up to ~70-75 V, then open out to ~2-5 V steps on the way to breakdown), capped
-    at FINE_LOWV_MAX_V. Time-windowed to the scan's own start first (load_iv_legacy -> bin_iv,
-    median aggregation), the same recipe that binned the F1 1.5e15 March logs
-    (campaigns/irrad_2026_inputs.md). Each channel is then cut to its single up-sweep
-    (legacy.up_sweep_window): the logs also hold the ramp down before the sweep and the ramp
-    down after it, which pass through the same low voltages. meta["n_ramp_dropped"] counts, per
-    chip, the samples cut there that fall inside the binned range.
+    from a few V up to ~70 V, then open out to ~2-5 V steps on the way to breakdown), capped
+    at FINE_LOWV_MAX_V. Time-windowed to the scan's own start first, each channel then cut to its
+    single up-sweep (legacy.up_sweep_window) and binned with bin_iv, median aggregation: the
+    recipe of legacy.binned_table, which bins the F1 1.5e15 March logs. The logs also hold the
+    ramp down before the sweep and the ramp down after it, which pass through the same low
+    voltages. meta["n_ramp_dropped"] counts, per chip, the samples cut there that fall inside the
+    binned range.
     Returns {chip: (v_abs_V, i_abs_uA)}, meta dict shaped like load_july's own (type/scan), so
     iv_plot.load_looks draws both sources through the same code path.
     """
@@ -209,10 +210,11 @@ def load_july_fine(key, tel):
         return _JULY_FINE_CACHE[cache_key]
     from .legacy import load_iv_legacy, bin_iv, up_sweep_window          # noqa: E402
     from .kfactor import fine_step_span        # noqa: E402
+    from ._helpers import _parse_window        # noqa: E402
 
     spec = JULY_FINE_SCANS[key][tel]
     tidy = load_iv_legacy(spec["path"])
-    tidy = tidy[tidy["timestamp"] >= pd.to_datetime(spec["start"])]
+    tidy = tidy[tidy["timestamp"] >= _parse_window(spec["start"], tidy["timestamp"])]
     chips = TELESCOPE_CHIPS[tel]
     out = {}
     fine_hi_by_chip = {}
@@ -225,7 +227,10 @@ def load_july_fine(key, tel):
             raise ValueError("%s: channel %d (%s) has no voltage readings after %s"
                              % (spec["path"], ch, chip, spec["start"]))
         v_abs = sub["v_meas"].abs().to_numpy(dtype=float)
-        t0, t1 = up_sweep_window(sub["timestamp"].to_numpy(), v_abs)
+        try:
+            t0, t1 = up_sweep_window(sub["timestamp"].to_numpy(), v_abs)
+        except ValueError as err:
+            raise ValueError("%s: channel %d (%s): %s" % (spec["path"], ch, chip, err)) from None
         in_sweep = ((sub["timestamp"] >= t0) & (sub["timestamp"] <= t1)).to_numpy()
         ramp_v = v_abs[~in_sweep]
         sub = sub[in_sweep]

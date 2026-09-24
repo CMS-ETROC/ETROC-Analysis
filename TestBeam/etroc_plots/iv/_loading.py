@@ -6,7 +6,7 @@ import sqlite3
 import numpy as np
 import pandas as pd
 
-from ._helpers import _ch_label, _as_scan_list, _mfactor
+from ._helpers import _ch_label, _as_scan_list, _mfactor, _parse_window
 
 # any of these bits means the reading should not be trusted
 _FAULT_BITS = ["emergency_off", "trip_exceeded", "input_error", "ext_inhibit",
@@ -225,29 +225,3 @@ def scan_summary(scans, channel_names=None, unit="uA", v_ref=None, verbose=False
             rows.append(row)
     return pd.DataFrame(rows).set_index(["scan", "channel"])
 
-
-def _parse_window(value, ts):
-    """
-    Parse a start/end window compatibly with the data's own timestamp style.
-
-    Time-only legacy logs land on pandas' dummy date (1900-01-01ff), so a
-    window given as "07:55:00" must land there too; a bare
-    pd.to_datetime("07:55:00") would resolve onto *today* and silently select
-    nothing. Detection: if the window parses with no date and the data lives
-    on the dummy date, re-anchor the window onto the data's own day(s),
-    choosing the day that actually contains that time of day when the log
-    crosses midnight.
-    """
-    t = pd.to_datetime(value)
-    if not len(ts):
-        return t
-    data_day0 = ts.dropna().dt.normalize().min()
-    if data_day0 is pd.NaT or data_day0.year != 1900:
-        return t                     # full-date data: use the window as given
-    # data is time-only; interpret the window as time-of-day
-    tod = t - t.normalize()
-    for day in pd.unique(ts.dropna().dt.normalize()):
-        cand = day + tod
-        if ts.min() <= cand <= ts.max():
-            return cand
-    return data_day0 + tod

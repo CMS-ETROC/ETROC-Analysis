@@ -17,12 +17,20 @@ old format cannot supply (v_set, status bits) marked absent, so every downstream
 function works unchanged. Binning happens later, in `build_iv_curve`, the same
 way as `process_binned_iv` of the March-2026 analysis: pass `bins=` or a
 `"bins"` key in the scan config.
+
+`binned_table` makes one scan into the 8-column binned table the March loader
+reads, each channel cut to its up-sweep first; `python -m etroc_plots.iv.legacy
+--out DIR` makes the campaign's (`BINNED_FROM_RAW` in the campaign module).
 """
 
+import argparse
+import hashlib
 import os
 
 import numpy as np
 import pandas as pd
+
+from ._helpers import _parse_window
 
 # The March-2026 analysis binnings, kept unchanged so results of this package and
 # of that analysis are directly comparable. Negative and descending, matching the
@@ -98,6 +106,12 @@ def up_sweep_window(t, v_abs, tol_V=0.5):
     more than tol_V below the running maximum of the current piece, so every ramp down breaks
     into short pieces of small |V| span; the piece with the largest |V| span (max - min) is the
     sweep, and on a tie the one with more samples wins.
+
+    Raises ValueError when the readings hold no single clean up-sweep: the largest piece spans
+    less than 10 V (a flat channel, or a ramp down alone), another piece spans more than a
+    quarter of it (two sweeps, or one split by a dip), or |V| rises more than 1 V above the
+    sweep's top after it or lies more than 2 V below the sweep's start before it (a sweep split
+    by a glitch). Narrow the time window to the one scan, or look at the log.
     """
     t = np.asarray(t)
     v = np.asarray(v_abs, dtype=float)
@@ -106,19 +120,35 @@ def up_sweep_window(t, v_abs, tol_V=0.5):
                          "(got %d and %d)" % (len(t), len(v)))
     if not np.isfinite(v).all():
         raise ValueError("up_sweep_window: |V| holds NaN or inf; drop those samples first")
-    best = None                       # (span, n_samples, first index, last index)
+    pieces = []                       # (span, n_samples, first index, last index)
     first, run_max, run_min = 0, v[0], v[0]
     for k in range(1, len(v) + 1):
         if k == len(v) or v[k] < run_max - tol_V:
-            piece = (run_max - run_min, k - first, first, k - 1)
-            if best is None or piece[:2] > best[:2]:
-                best = piece
+            pieces.append((run_max - run_min, k - first, first, k - 1))
             if k < len(v):
                 first, run_max, run_min = k, v[k], v[k]
         else:
             run_max = max(run_max, v[k])
             run_min = min(run_min, v[k])
-    return t[best[2]], t[best[3]]
+    j = max(range(len(pieces)), key=lambda n: pieces[n][:2])      # the first of equals
+    span, _, i0, i1 = pieces[j]
+    low, top = v[i0:i1 + 1].min(), v[i0:i1 + 1].max()
+    rest = pieces[:j] + pieces[j + 1:]
+    second = max(rest, key=lambda p: p[0]) if rest else None
+    problems = []
+    if span < 10.0:
+        problems.append("its largest rising piece spans only %.1f V" % span)
+    if second is not None and second[0] > 0.25 * span:
+        problems.append("a second rising piece spans %.1f V (%s to %s)"
+                        % (second[0], t[second[2]], t[second[3]]))
+    if i1 + 1 < len(v) and v[i1 + 1:].max() > top + 1.0:
+        problems.append("|V| rises above the sweep's top (%.1f V) after it" % top)
+    if i0 > 0 and v[:i0].min() < low - 2.0:
+        problems.append("|V| lies below the sweep's start (%.1f V) before it" % low)
+    if problems:
+        raise ValueError("up_sweep_window: no single up-sweep between %s and %s: %s"
+                         % (t[0], t[-1], "; ".join(problems)))
+    return t[i0], t[i1]
 
 
 def bin_iv(df, bins, agg="median", min_count=1):
@@ -145,6 +175,62 @@ def bin_iv(df, bins, agg="median", min_count=1):
     return out.sort_values("V_mean").reset_index(drop=True)
 
 
+BINS = {"fine": FINE_BINS, "quick": QUICK_BINS}
+
+
+def binned_table(path, bins, start=None, end=None, n_channels=4):
+    """
+    One scan of a legacy log as the 8-column table the March loader reads
+    (iv_data.load_march): V_ch0, I_ch0, ..., V_ch3, I_ch3, volts and amps as recorded.
+
+    The log is cut to [start, end] in its own time stamps first (a log can hold more
+    than one scan; None leaves that side open; on a log whose stamps carry no date, a
+    window is a time of day), then each channel to its single up-sweep (up_sweep_window:
+    the ramps down before and after the sweep pass the same voltages again), and what is
+    left is binned with bin_iv, mean voltage and median current per bin. Each
+    channel is its own series in ascending V (largest |V| first), padded with NaN to the
+    longest one, so a row is not a common voltage point.
+
+    Returns (table, info): info holds, per channel, the sweep's first and last time stamp,
+    the number of bins and the number of samples in the window that fell outside the sweep.
+    Raises ValueError, naming the log and the channel, when a channel's window holds no
+    reading or no single up-sweep (up_sweep_window says why).
+    """
+    tidy = load_iv_legacy(path)
+    ts = tidy["timestamp"]
+    if start is not None:
+        tidy = tidy[tidy["timestamp"] >= _parse_window(start, ts)]
+    if end is not None:
+        tidy = tidy[tidy["timestamp"] <= _parse_window(end, ts)]
+    series, info = [], []
+    for ch in range(n_channels):
+        sub = tidy[tidy["channel"] == ch]          # in time order (load_iv_legacy sorts)
+        sub = sub[np.isfinite(sub["v_meas"].to_numpy(dtype=float))]
+        if sub.empty:
+            raise ValueError("%s: channel %d has no voltage reading between %s and %s"
+                             % (path, ch, start, end))
+        try:
+            t0, t1 = up_sweep_window(sub["timestamp"].to_numpy(),
+                                     sub["v_meas"].abs().to_numpy(dtype=float))
+        except ValueError as err:
+            raise ValueError("%s: channel %d: %s" % (path, ch, err)) from None
+        in_sweep = ((sub["timestamp"] >= t0) & (sub["timestamp"] <= t1)).to_numpy()
+        b = bin_iv(sub[in_sweep], bins, agg="median")
+        if b is None or b.empty:
+            raise ValueError("%s: channel %d: no reading of its up-sweep falls in the bins"
+                             % (path, ch))
+        series.append((b["V_mean"].to_numpy(dtype=float), b["I_filtered"].to_numpy(dtype=float)))
+        info.append(dict(channel=ch, sweep_start=pd.Timestamp(t0), sweep_end=pd.Timestamp(t1),
+                         n_bins=len(b), n_cut=int((~in_sweep).sum())))
+    n_rows = max(len(v) for v, _ in series)
+    columns = {}
+    for ch, (v, i) in enumerate(series):
+        pad = np.full(n_rows - len(v), np.nan)
+        columns["V_ch%d" % ch] = np.concatenate([v, pad])
+        columns["I_ch%d" % ch] = np.concatenate([i, pad])
+    return pd.DataFrame(columns), info
+
+
 def _parse_legacy_dates(col, path=""):
     """
     The old logger wrote two timestamp styles:
@@ -154,10 +240,10 @@ def _parse_legacy_dates(col, path=""):
 
     Time-only stamps are parsed onto a dummy date (pandas puts them on
     1900-01-01), with midnight wraps detected by backwards jumps and rolled
-    into the next day so a log crossing 00:00 stays monotonic. start/end
-    windows then also need to be time-only for such files ("07:55:00", not
-    "03/25/2026 07:55:00"), and clean_channel handles that by re-parsing the
-    window with the same rule.
+    into the next day so a log crossing 00:00 stays monotonic. A start/end
+    window on such a file is a time of day ("07:55:00"): _parse_window (in
+    _helpers.py) puts it on the log's own day, for clean_channel and
+    binned_table alike.
 
     A silent all-NaT parse is refused: it would turn every start/end window
     into a no-op and quietly bin unrelated historical data into the curve.
@@ -283,3 +369,28 @@ def interpolate_legacy_csv(in_path, out_path):
         out.append(",".join(cells))
     open(out_path, "w").write("\n".join(out) + "\n")
     print(f"Interpolated {len(rows)} rows -> {out_path}")
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(
+        description="Bin the campaign's raw legacy scan logs (BINNED_FROM_RAW in its campaign "
+                    "module) into <stem>_binned_iv_data.csv tables.")
+    ap.add_argument("--out", required=True,
+                    help="directory to write into (the published tables are in the campaign's "
+                         "INPUTS/march)")
+    a = ap.parse_args(argv)
+    from ..campaigns import active as campaign
+    os.makedirs(a.out, exist_ok=True)
+    for stem, spec in campaign.BINNED_FROM_RAW.items():
+        table, info = binned_table(spec["path"], BINS[spec["bins"]], spec["start"], spec["end"])
+        out = os.path.join(a.out, stem + "_binned_iv_data.csv")
+        table.to_csv(out, index=False)
+        with open(out, "rb") as fh:
+            print("%s  %s" % (hashlib.md5(fh.read()).hexdigest(), out))
+        for c in info:
+            print("    ch%d: up-sweep %s to %s, %d bins; %d samples of the window cut"
+                  % (c["channel"], c["sweep_start"], c["sweep_end"], c["n_bins"], c["n_cut"]))
+
+
+if __name__ == "__main__":
+    main()

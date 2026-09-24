@@ -51,8 +51,17 @@ PREAMP_POWER = "high"     # preamp power mode of every run (run metadata power_m
 
 # what the numbers in the values files are, where this campaign decides it
 VALUES_CONVENTIONS = {
-    "binning": "median current per voltage bin; quick scans 10 V bins; fine scans 0.1 V bins at "
-               "low voltage (10-60 V), coarser above, where the scan steps are coarser",
+    "binning": "March scans: mean voltage and median current per voltage bin (QUICK_BINS and "
+               "FINE_BINS in iv/legacy.py): 10 V bins in quick scans; in fine ones 1 V bins "
+               "below 10 V, 0.1 V bins from 10 to 60 V and coarser above; the three F1 1.5e15 "
+               "tables binned by this package (legacy.binned_table) from each channel's up-sweep "
+               "only. July scans: one point per recorded voltage step (july/iv_curves.json): 10 V "
+               "steps in quick scans; in fine ones 0.1 V steps over a stretch that differs by "
+               "scan and ends at 60 V at most, coarser steps elsewhere if any. The 2026-07-16 "
+               "fine logs (iv_data.load_july_fine): each channel's up-sweep, mean voltage and "
+               "median current per 0.1 V bin up to the end of their fine steps (about 70 V); a "
+               "bin of fewer than 3 samples is dropped, or replaced by linear interpolation "
+               "between its well-sampled neighbours when it lies between two of them",
     "scan_time": "UTC; March raw logs are recorded local CET = UTC+1",
     "fluence": "facility bookkeeping, p/cm2, 24 GeV protons; no n_eq",
 }
@@ -90,8 +99,8 @@ RAD_STOP_UTC = {
 # ============================================================================== March: IV scans
 # Explicit paths, not a naming rule: week2 stems carry "_interpolated_binned_iv_data.csv", the
 # 1.5e15 H1 quick "last before next step" scan exists only as the "_overlay" csv, and the F1
-# 1.5e15 scans have no binned CSV on EOS: the binned copies in INPUTS/march were made from the
-# raw logs of that step (irrad_2026_inputs.md).
+# 1.5e15 scans have no binned CSV in the March tree: their tables in INPUTS/march are this
+# package's binning of the raw logs of that step (BINNED_FROM_RAW below).
 def _week2(stem):
     return os.path.join(MARCH_EOS_WEEK2, stem + "_interpolated_binned_iv_data.csv")
 
@@ -129,6 +138,29 @@ MARCH_SCANS = {
                  "fine_2d": _f1_local("fine_iv_F1_m25C_17cm_15e14_03252026_0752"),
                  "quick_last": _f1_local("quick_iv_F1_m25C_17cm_15e14_03252026_0605")},
     },
+}
+
+# The raw logs behind the F1 1.5e15 tables above, and how this package bins them
+# (legacy.binned_table; `python -m etroc_plots.iv.legacy --out DIR` writes all three): each log
+# is cut to its scan's window in the log's own time stamps (None leaves a side open), then each
+# channel to its up-sweep. The 0037 log holds the first 3.5 hours of the 0605 one (2026-03-22
+# 23:02 to 03-23 02:31) and ends with this scan's ramp down, so its window is open at the end;
+# the 0605 log runs on to 03-25 06:16. The 0752 log holds this scan alone, and its time stamps
+# carry no date (a window on such a log is a time of day).
+_F1_15E14_RAW = os.path.join(MARCH_EOS_15E14, "F1")
+BINNED_FROM_RAW = {
+    "fine_iv_F1_m25C_17cm_15e14_03232026_0037": dict(
+        path=os.path.join(_F1_15E14_RAW,
+                          "fine_iv_F1_m25C_17cm_15e14_03232026_0037_interpolated.csv.gz"),
+        bins="fine", start="2026-03-23 00:37:00", end=None),
+    "fine_iv_F1_m25C_17cm_15e14_03252026_0752": dict(
+        path=os.path.join(_F1_15E14_RAW,
+                          "fine_iv_F1_m25C_17cm_15e14_03252026_0752_interpolated.csv.gz"),
+        bins="fine", start=None, end=None),
+    "quick_iv_F1_m25C_17cm_15e14_03252026_0605": dict(
+        path=os.path.join(_F1_15E14_RAW,
+                          "quick_iv_F1_m25C_17cm_15e14_03252026_0605_interpolated.csv.gz"),
+        bins="quick", start="2026-03-25 06:05:00", end="2026-03-25 06:16:45"),
 }
 
 # ============================================================================= March: in-run
@@ -477,11 +509,13 @@ def _outside_inputs(paths):
 # Every file this campaign reads outside the tables folder: the March scans and slow-control
 # logs on EOS, the board-config yamls in the repository, and any table moved by its own
 # environment variable. PREIRRAD_LOG and PREIRRAD_CONDITIONS_CSV are read only by
-# `python -m etroc_plots.iv.preirrad_current --rebuild` and are listed so the check covers them.
+# `python -m etroc_plots.iv.preirrad_current --rebuild`, the BINNED_FROM_RAW logs only by
+# `python -m etroc_plots.iv.legacy`; they are listed so the check covers them.
 RAW_INPUTS = _outside_inputs(
     [p for tel in MARCH_SCANS.values() for look in tel.values() for p in look.values()]
     + list(MARCH_RAW_FILES.values())
     + [spec["path"] for scan in JULY_FINE_SCANS.values() for spec in scan.values()]
+    + [spec["path"] for spec in BINNED_FROM_RAW.values()]
     + [MARCH_SPARK_CSV, PREIRRAD_LOG, PREIRRAD_CONDITIONS_CSV, MARCH_YAML, JULY_YAML,
        GOOD_RUNS_CSV,
        COMBO_CHECK_JSON, HV_CYCLES_JUL_CSV])

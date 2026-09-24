@@ -1187,9 +1187,10 @@ if PANELS:
 # ### Figures 14 and 15: full range, linear and log y
 #
 # The three July scans of the 2e15 step over their whole measured range, H1 left / F1 right: right
-# after the step, then again at +2 days and +3 days. The "+2 days" look is the step's fine (0.1 V)
-# scan, chosen over the 10 V quick scan of the same age because it carries more points; the other
-# two looks are 10 V quick scans (stated in the footer). Figure 14 is linear y, figure 15 is log y.
+# after the step, then again at +2 days and +3 days. The "+2 days" look is the step's fine scan
+# (0.1 V steps from 10 to 40 V, coarser elsewhere), chosen over the 10 V quick scan of the same
+# age because it carries more points; the other two looks are 10 V quick scans (stated in the
+# footer). Figure 14 is linear y, figure 15 is log y.
 
 # %%
 IV1415_FLUENCE = 2e15
@@ -1203,7 +1204,7 @@ IV1415_LOOKS = [
 ]
 
 IV1415_FOOTER = ("full-range scans, one colour per look; 10 V quick scans except the +2 days "
-                 "look, which is a 0.1 V fine scan; July 2026, parked, no beam")
+                 "look, a fine scan (0.1 V steps from 10 to 40 V); July 2026, parked, no beam")
 
 
 def _iv1415_lin_ylim(curves):

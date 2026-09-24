@@ -72,9 +72,10 @@ def fine_step_span(v_set, max_step=0.5, min_run=10):
     of voltages spaced <= max_step, at least min_run steps long.
 
     The campaign scans are not uniformly stepped: 20260720_190823 runs 0.1 V
-    from 10 to 60 V then opens out to 10 V steps, while 20260717_0307 is fine
-    only between 10.1 and 12.8 V. A gain-layer peak found in the coarse region
-    is not resolvable, so the search is confined to the fine part.
+    from 10 to 60 V, then 0.2, 1 and 5 V steps, and 10 V above 130 V, while
+    20260717_0307 is fine only between 10.1 and 12.8 V. A gain-layer peak
+    found in the coarse region is not resolvable, so the search is confined
+    to the fine part.
 
     Contiguity matters: near breakdown the voltage readback sags under load,
     so auto-binned legacy scans sprout clusters of bins < 0.5 V apart at
