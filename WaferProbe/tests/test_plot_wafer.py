@@ -216,6 +216,25 @@ class PlotWaferTest(unittest.TestCase):
             heading = _suptitle(fig, label, "the other rails at high power", fontsize=12)
             self.assertEqual(heading.get_text(), expected)
 
+    def test_a_die_with_a_bl_nw_note_gets_a_letter_and_a_footnote(self):
+        import matplotlib.pyplot as plt
+        import pandas as pd
+        from wafer_plots import fig_grades
+        note = "die median baseline 550, pixel (8,8) at 257"
+        dies = pd.DataFrame({"die": [1, 2, 3], "die_row": [0, 0, 1], "die_col": [0, 1, 0],
+                             "grade": ["PASSED", "PASSED", "POWER_SHORT"], "bin": [0, 0, 1],
+                             "map_text": ["PASSED_retry", "PASSED_retry", "POWER_SHORT"],
+                             "bl_nw_note": ["", note, ""]})
+        fig = fig_grades(dies, "B / W")
+        self.addCleanup(plt.close, fig)
+        self.assertEqual([t.get_text() for t in fig.axes[0].texts], ["1*", r"2*$^{\rm a}$", "3"])
+        self.assertIn(f"a: die 2 (row 0, col 1): {note}", "\n".join(t.get_text() for t in fig.texts))
+        dies["bl_nw_note"] = ""
+        plain = fig_grades(dies, "B / W")
+        self.addCleanup(plt.close, plain)
+        self.assertEqual([t.get_text() for t in plain.axes[0].texts], ["1*", "2*", "3"])
+        self.assertNotIn("letters:", "\n".join(t.get_text() for t in plain.texts))
+
 
 if __name__ == "__main__":
     unittest.main()

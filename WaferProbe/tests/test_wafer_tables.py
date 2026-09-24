@@ -13,8 +13,9 @@ if HAVE_TABLES:
     import numpy as np
     import pandas as pd
 
-    from wafer_tables import (collect, die_record, lowest_efficiency, offset_trend, phase_values,
-                              pick_run, qinj_files, qinj_pixel_stats, read_nem_hits)
+    from wafer_tables import (NOTE_MIN_DIES, NOTE_PIXEL_BL, NOTE_PIXEL_NW, bl_nw_notes, collect,
+                              die_record, lowest_efficiency, offset_trend, phase_values, pick_run,
+                              qinj_files, qinj_pixel_stats, read_nem_hits, unchecked_die_means)
     from tests.wafer_results import QUICK_PIXELS, baseline, event, power, run_power, summary, write_run
 
 needs_tables = unittest.skipUnless(HAVE_TABLES, "needs numpy, pandas and pyarrow (the wafer-daq venv)")
@@ -208,6 +209,74 @@ class CollectTest(TempWafer):
             self.assertTrue(math.isnan(dies.loc[0, column]), column)
         self.assertEqual((dies.loc[1, "qinj_events"], dies.loc[1, "qinj_min_eff"]), (2, 1.0))
         self.assertEqual(set(qinj["die"]), {2})
+
+
+@needs_tables
+class BlNwNoteTest(unittest.TestCase):
+    """A note on a die whose baseline or noise width stands out: pixels
+    far from their die's median, die means far from the PASSED dies'."""
+
+    def wafer(self, n=None, first=1, n_pixels=256, nw_offset=0.0):
+        """n PASSED dies (NOTE_MIN_DIES by default) from die `first`,
+        calibrated over n_pixels, whose means spread a little."""
+        dies = range(first, first + (n or NOTE_MIN_DIES))
+        return pd.DataFrame({"die": list(dies), "grade": "PASSED", "n_pixels": n_pixels,
+                             "bl_mean": [520.0 + d % 7 for d in dies],
+                             "nw_mean": [7.0 + nw_offset + 0.05 * (d % 5) for d in dies]})
+
+    def pixels(self, die, odd=None):
+        """Nine pixels of one die at baseline 550 and noise width 7; `odd`
+        maps a pixel to its own (baseline, noise width)."""
+        cells = [(r, c) for r in range(3) for c in range(3)]
+        values = [(odd or {}).get(cell, (550, 7)) for cell in cells]
+        return pd.DataFrame({"die": die, "pix_row": [r for r, _ in cells], "pix_col": [c for _, c in cells],
+                             "baseline": [b for b, _ in values], "noise_width": [w for _, w in values]})
+
+    def notes(self, dies, pixels):
+        return dict(zip(dies["die"], bl_nw_notes(dies, pixels)))
+
+    def test_pixels_far_from_their_die_median_are_noted(self):
+        notes = self.notes(self.wafer(), self.pixels(3, {(2, 2): (257, 7), (0, 1): (550, 16)}))
+        self.assertEqual(notes[3], "die median baseline 550, pixel (2,2) at 257; "
+                                   "die median noise width 7, pixel (0,1) at 16")
+        self.assertEqual({die for die, note in notes.items() if note}, {3})
+
+    def test_a_pixel_at_the_limits_is_not_noted(self):
+        odd = {(2, 2): (550 - NOTE_PIXEL_BL, 7), (0, 1): (550, 7 + NOTE_PIXEL_NW)}
+        self.assertEqual(self.notes(self.wafer(), self.pixels(3, odd))[3], "")
+
+    def test_zero_readings_are_left_to_the_grade(self):
+        self.assertEqual(self.notes(self.wafer(), self.pixels(3, {(2, 2): (0, 0), (1, 1): (0, 7)}))[3], "")
+
+    def test_the_furthest_pixels_are_listed_and_the_rest_counted(self):
+        odd = {(0, 0): (700, 7), (0, 1): (900, 7), (0, 2): (800, 7), (1, 0): (1000, 7)}
+        self.assertEqual(self.notes(self.wafer(), self.pixels(3, odd))[3],
+                         "die median baseline 550, pixels (1,0) at 1000, (0,1) at 900, (0,2) at 800 and 1 more")
+
+    def test_a_die_mean_far_from_the_passed_dies_is_noted(self):
+        dies = self.wafer()
+        dies.loc[dies["die"] == 5, "nw_mean"] = 9.4
+        notes = self.notes(dies, self.pixels(5))
+        self.assertRegex(notes[5], r"^noise-width mean 9\.40, \+\d+\.\d sigma from the median 7\.10 "
+                                   r"of the PASSED 256-pixel dies$")
+        self.assertEqual({die for die, note in notes.items() if note}, {5})
+
+    def test_the_spread_comes_from_the_passed_dies_only(self):
+        failed = pd.DataFrame({"die": range(101, 131), "grade": "POWER_SHORT", "n_pixels": 256,
+                               "bl_mean": 900.0, "nw_mean": 7.1})
+        notes = self.notes(pd.concat([self.wafer(), failed], ignore_index=True), self.pixels(1))
+        self.assertEqual({die for die, note in notes.items() if note}, set(range(101, 131)))
+        self.assertTrue(notes[101].startswith("baseline mean 900, +"))
+
+    def test_quick_test_and_full_scan_dies_are_checked_apart(self):
+        dies = pd.concat([self.wafer(30), self.wafer(first=31, n_pixels=9, nw_offset=3.0)], ignore_index=True)
+        self.assertEqual({die for die, note in self.notes(dies, self.pixels(1)).items() if note}, set())
+
+    def test_the_die_check_needs_enough_passed_dies(self):
+        dies = self.wafer(NOTE_MIN_DIES - 1)
+        dies.loc[dies["die"] == 5, "nw_mean"] = 9.4
+        self.assertEqual(self.notes(dies, self.pixels(5))[5], "")
+        self.assertEqual(unchecked_die_means(dies), [(256, ["bl_mean", "nw_mean"])])
 
 
 if __name__ == "__main__":

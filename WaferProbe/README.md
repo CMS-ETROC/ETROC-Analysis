@@ -89,7 +89,9 @@ The tables, as csv:
   the files read (`qinj_events`), the trailers with a nonzero chip
   status (`qinj_flagged_trailers`), the EA-flagged hit words and the lowest
   efficiency over the injected pixels; the chuck position at contact minus
-  the station's map position (`dx_um`, `dy_um`). Power-on logs only two
+  the station's map position (`dx_um`, `dy_um`); a note on a baseline or
+  noise width that stands out (`bl_nw_note`, see "Baseline and noise-width
+  notes"). Power-on logs only two
   sweeps, so `vref_V_on` is a single reading and can still be settling
   (1.01-1.11 V on 25 dies of N60R91, against 1.00 V at high power).
 - `pixels.csv`, one row per calibrated pixel: baseline and noise width.
@@ -115,11 +117,11 @@ mixes two plots:
 
 | figure | shows |
 |--------|-------|
-| `grades` | grade per die, the counts and the yield; `*` = graded on the retry |
+| `grades` | grade per die, the counts and the yield; `*` = graded on the retry; a superscript letter = a baseline or noise-width note, listed under the map |
 | `currents` | analog and digital current per die at power-on and at high power, and the difference |
 | `currents_small_rails` | the other rails at high power |
 | `current_hists` | the analog and digital currents as histograms, with the check thresholds the runs used |
-| `baseline_maps` | baseline and noise-width mean and std per die; red frame = some pixels read zero |
+| `baseline_maps` | baseline and noise-width mean and std per die; red frame = some pixels read zero; letters and notes as in `grades` |
 | `baseline_hists` | baseline and noise width of all calibrated pixels, quick-test and full-scan dies apart |
 | `alignment` | chuck position at contact minus the station's map position, per die, with a plane fitted over the wafer |
 | `fullscan_baseline`, `fullscan_noise_width` | the 16 x 16 map of every full-scan die at its place on the wafer |
@@ -139,6 +141,38 @@ the figure is too narrow for the whole first line (`pixel_issues` without
 full-scan dies, say). Under every figure a note names the wafer by its
 labels, which run of each die was used (the newest, or the newest before
 `--before`) and when it was plotted.
+
+### Baseline and noise-width notes
+
+A die can pass every check of the station and still have a baseline or
+noise width unlike the rest: a pixel whose baseline sits hundreds of codes
+from its neighbours, or a whole die noisier than the wafer. The station
+fails a pixel only when it reads exactly zero, so such a die keeps its
+grade; the plots mark it instead. A die, whatever its grade, gets a note
+(`bl_nw_note` in `dies.csv`) when
+
+- a pixel's baseline is more than 100 DAC codes from the median of its
+  die, or its noise width more than 8; the note names the three furthest
+  such pixels and counts the rest;
+- the die's baseline or noise-width mean is more than 5 robust sigma
+  (1.4826 x the median absolute deviation) from the median of the wafer's
+  PASSED dies calibrated over as many pixels (a mean over the 9 pixels of
+  a quick test scatters more than one over the 256 of a full scan, so each
+  kind is compared with its own). This needs at least 20 such PASSED dies
+  whose means spread; a line under the maps names the kind of die it could
+  not check, notes or not.
+
+Zero readings stay out, since the grade already takes them. `grades` and
+`baseline_maps` put a superscript letter (a, b, ..., in die order) on each
+such die and print the notes under the map, the first 8 of them;
+`dies.csv` has them all. A note never changes a grade, a bin or the
+station's map. The limits (`NOTE_*` in `wafer_tables.py`) were set on the
+calibrated dies of the two N62M23 wafers of September 2026 (114 of 08A5,
+115 of 07B2, all full scans): the only die they flag is 07B2 die 15, by
+both checks (pixel (8,8) at baseline 257 against the die's 554; noise-width
+mean 9.36, +7.7 sigma from the wafer's 7.18). On every other die no pixel
+is more than 80 codes from its die's median baseline, or more than 7 from
+its median noise width.
 
 ## Tests
 

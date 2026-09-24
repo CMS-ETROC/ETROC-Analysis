@@ -9,9 +9,12 @@ the cell; a die without a value is hatched grey. Colour scales span the
 2nd to 98th percentile of the PASSED dies, so one bad die does not flatten
 the rest; values beyond take the end colours. Pixel maps draw row 0 at
 the top and column 0 at the left. The note (which runs, when plotted) sits
-in a band under the figure, clear of the axis labels.
+in a band under the figure, clear of the axis labels. The grade and
+baseline maps put a letter on a die with a BL/NW note
+(wafer_tables.bl_nw_notes) and list the notes under the maps.
 """
 import json
+import textwrap
 from pathlib import Path
 
 import matplotlib
@@ -25,7 +28,9 @@ from matplotlib.patches import Patch, Rectangle  # noqa: E402
 from matplotlib.ticker import MaxNLocator  # noqa: E402
 from matplotlib.transforms import ScaledTranslation  # noqa: E402
 
-from wafer_tables import grade_counts, injected_pixels, offset_trend  # noqa: E402
+from wafer_tables import (DIE_MEANS, NOTE_DIE_SIGMA, NOTE_MIN_DIES, NOTE_PIXEL_BL,  # noqa: E402
+                          NOTE_PIXEL_NW, grade_counts, injected_pixels, offset_trend,
+                          unchecked_die_means)
 
 # grade -> colour; the legend lists them in the bin order of the grading in station.py
 GRADE_COLOURS = {
@@ -37,6 +42,7 @@ GRADE_COLOURS = {
 MAIN_RAILS = ("analog", "digital")
 ZERO_COLOUR = "#e41a1c"
 FULL_SCAN_PIXELS = 256
+NOTES_LISTED = 8  # BL/NW notes printed under a figure; dies.csv has them all
 
 FIGURES = ("grades", "currents", "currents_small_rails", "current_hists", "baseline_maps",
            "baseline_hists", "alignment", "fullscan_baseline", "fullscan_noise_width",
@@ -153,26 +159,29 @@ def _suptitle(fig, title, text, fontsize):
 
 
 def wafer_map(ax, dies, values, *, title, label="", fmt="{:.0f}", cmap="viridis",
-              ref=None, centre=None, vrange=None, frame=None, fontsize=6.5, integer=False):
+              ref=None, centre=None, vrange=None, frame=None, marks=None, fontsize=6.5, integer=False):
     """Colour each die of the dies table by `values` (one per row), print
     the value in the cell, hatch the dies without one. `ref` (a boolean
     mask) picks the dies that set the colour range, `vrange` fixes it,
-    `frame` (a mask) outlines dies in red; `integer` puts whole numbers on
-    the colour bar (counts)."""
+    `frame` (a mask) outlines dies in red, `marks` (one string per row)
+    follows the value in its cell; `integer` puts whole numbers on the
+    colour bar (counts)."""
     values = np.asarray(values, dtype=float)
     rows = dies["die_row"].to_numpy(dtype=int)
     cols = dies["die_col"].to_numpy(dtype=int)
+    marks = [""] * len(values) if marks is None else marks
     if vrange is None:
         use = values[ref] if ref is not None and np.isfinite(values[ref]).any() else values
         vrange = value_range(use, centre)
     norm = Normalize(*vrange)
     cmap = plt.get_cmap(cmap)
     _wafer_axes(ax, _shape(dies))
-    for r, c, v in zip(rows, cols, values):
+    for r, c, v, mark in zip(rows, cols, values, marks):
         if np.isfinite(v):
             colour = cmap(norm(v))
             ax.add_patch(Rectangle((c - .5, r - .5), 1, 1, facecolor=colour, edgecolor="white", lw=0.6))
-            ax.text(c, r, fmt.format(v), ha="center", va="center", fontsize=fontsize, color=_ink(colour))
+            ax.text(c, r, fmt.format(v) + mark, ha="center", va="center", fontsize=fontsize,
+                    color=_ink(colour))
         else:
             ax.add_patch(Rectangle((c - .5, r - .5), 1, 1, facecolor="#f4f4f4", edgecolor="#c8c8c8",
                                    hatch="////", lw=0.5))
@@ -190,24 +199,78 @@ def _pixel_values(dies, qinj, pixel, column):
     return dies["die"].map(per_die).to_numpy(dtype=float)
 
 
+def _note_letters(dies):
+    """die -> footnote letter (a, b, ..., z, aa, ab, ...), in die order,
+    for the dies with a BL/NW note (wafer_tables.bl_nw_notes); none for a
+    dies table without the column (a dies.csv from before the notes)."""
+    if "bl_nw_note" not in dies:
+        return {}
+    noted = dies.loc[dies["bl_nw_note"].fillna("") != "", "die"]
+    letters = {}
+    for k, die in enumerate(noted, start=1):
+        name = ""
+        while k:
+            k, r = divmod(k - 1, 26)
+            name = chr(ord("a") + r) + name
+        letters[die] = name
+    return letters
+
+
+def _mark(letters, die):
+    """A die's footnote letter as a superscript for its cell, "" for none."""
+    return rf"$^{{\rm {letters[die]}}}$" if die in letters else ""
+
+
+def _bl_nw_footnotes(fig, dies, letters):
+    """The BL/NW notes under the figure: what the letters mean, one note
+    per lettered die (the first NOTES_LISTED; dies.csv has them all), and,
+    letters or not, the groups of dies whose means could not be checked
+    (wafer_tables.unchecked_die_means)."""
+    unchecked = unchecked_die_means(dies) if np.isfinite(_num(dies, "bl_mean")).any() else []
+    if not letters and not unchecked:
+        return
+    lines = []
+    if letters:
+        lines.append(textwrap.fill(
+            "letters: baseline or noise width standing out, a mark only (the grade stays): a pixel further than "
+            f"{NOTE_PIXEL_BL} DAC codes (baseline) or {NOTE_PIXEL_NW} (noise width) from its die's median, or a "
+            f"die mean further than {NOTE_DIE_SIGMA} robust sigma (1.4826 x the median absolute deviation) from "
+            "the median of the PASSED dies calibrated over as many pixels; zero readings left out", 140))
+        rows = dies.set_index("die")
+        for die, letter in list(letters.items())[:NOTES_LISTED]:
+            d = rows.loc[die]
+            lines.append(textwrap.fill(f"{letter}: die {die} (row {d['die_row']}, col {d['die_col']}): "
+                                       f"{d['bl_nw_note']}", 140, subsequent_indent="      "))
+        if len(letters) > NOTES_LISTED:
+            lines.append(f"and {len(letters) - NOTES_LISTED} more: dies.csv, column bl_nw_note")
+    for n, columns in unchecked:
+        means = " and ".join(what for column, what, _ in DIE_MEANS if column in columns)
+        lines.append(f"{means} of the {n}-pixel dies not checked: fewer than {NOTE_MIN_DIES} PASSED ones "
+                     "with a value, or no spread among them")
+    fig.supxlabel("\n".join(lines), x=0.01, ha="left", multialignment="left", fontsize=7.5)
+
+
 # ---------------------------------------------------------------- figures
 
 def fig_grades(dies, title):
     fig, ax = plt.subplots(figsize=(9.8, 6.8), layout="constrained")
     _wafer_axes(ax, _shape(dies))
+    letters = _note_letters(dies)
     for d in dies.itertuples(index=False):
         colour = GRADE_COLOURS.get(d.grade, "white")
         ax.add_patch(Rectangle((d.die_col - .5, d.die_row - .5), 1, 1, facecolor=colour,
                                edgecolor="white", lw=0.8))
         retry = str(getattr(d, "map_text", "")).endswith("_retry")
-        ax.text(d.die_col, d.die_row, f"{d.die}{'*' if retry else ''}", ha="center", va="center",
-                fontsize=7, color=_ink(colour))
+        ax.text(d.die_col, d.die_row, f"{d.die}{'*' if retry else ''}{_mark(letters, d.die)}",
+                ha="center", va="center", fontsize=7, color=_ink(colour))
     counts, passed, tested = grade_counts(dies)
     handles = [Patch(facecolor=GRADE_COLOURS.get(g, "white"), label=f"{g}: {n}") for g, n in counts]
     ax.legend(handles=handles, loc="upper left", bbox_to_anchor=(1.01, 1.0), frameon=False, fontsize=8)
     share = f" ({100 * passed / tested:.1f} %)" if tested else ""
     ax.set_title(f"{title}: grade per die, PASSED {passed} of {tested} tested{share}\n"
-                 "die number in each cell; * = graded on the retry", fontsize=10)
+                 "die number in each cell; * = graded on the retry"
+                 + ("; letter = a note below" if letters else ""), fontsize=10)
+    _bl_nw_footnotes(fig, dies, letters)
     return fig
 
 
@@ -277,16 +340,21 @@ def fig_baseline_maps(dies, title):
         return None
     ok = _passed(dies)
     zero = _num(dies, "n_zero_pixels") > 0
+    letters = _note_letters(dies)
+    marks = [_mark(letters, die) for die in dies["die"]]
     fig, axes = plt.subplots(2, 2, figsize=(11.6, 10.2), layout="constrained")
     for ax, column, what, fmt in ((axes[0, 0], "bl_mean", "baseline mean", "{:.0f}"),
                                   (axes[0, 1], "bl_std", "baseline std", "{:.1f}"),
                                   (axes[1, 0], "nw_mean", "noise-width mean", "{:.1f}"),
                                   (axes[1, 1], "nw_std", "noise-width std", "{:.1f}")):
-        wafer_map(ax, dies, _num(dies, column), title=what, label="DAC code", fmt=fmt, ref=ok, frame=zero)
+        wafer_map(ax, dies, _num(dies, column), title=what, label="DAC code", fmt=fmt, ref=ok, frame=zero,
+                  marks=marks)
     sizes = pd.Series(_num(dies, "n_pixels")).dropna().astype(int).value_counts().sort_index()
     mix = ", ".join(f"{k} pixels: {n} dies" for k, n in sizes.items())
     _suptitle(fig, title, "baseline and noise width per die, over its calibrated pixels that did not "
-                          f"read zero\n({mix}; red frame: some pixels read zero, see pixel_issues.png)", fontsize=11)
+                          f"read zero\n({mix}; red frame: some pixels read zero, see pixel_issues.png"
+                          + ("; letter: a note below" if letters else "") + ")", fontsize=11)
+    _bl_nw_footnotes(fig, dies, letters)
     return fig
 
 

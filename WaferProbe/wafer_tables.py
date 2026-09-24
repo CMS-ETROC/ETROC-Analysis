@@ -22,7 +22,8 @@ in wafer_run.py.
           error, the median current and voltage of every rail in each run
           phase, the I2C verdicts, the baseline and noise-width statistics,
           the QInj verdict, event counts and lowest pixel efficiency,
-          and the chuck-minus-map offset at contact
+          the chuck-minus-map offset at contact, and a note on a baseline
+          or noise width that stands out (bl_nw_notes)
   pixels  one row per calibrated pixel: baseline and noise width
   qinj    one row per pixel with hits in the QInj data (qinj_files): hits,
           efficiency, and CAL, TOA and TOT mean and std over the hits
@@ -45,6 +46,17 @@ PHASES = {"power_on": "on", "high_power": "high", "qinj_start": "qinj"}
 # QInj hit selection, as in the 2025 engineering-wafer report:
 # |CAL - the pixel's most common CAL code| < CAL_WINDOW
 CAL_WINDOW = 3
+
+# BL/NW notes (bl_nw_notes): a die whose baseline or noise width stands out
+# gets a note, which the figures mark; a note never changes a grade.
+NOTE_PIXEL_BL = 100   # a pixel's baseline further than this (DAC codes) from its die's median
+NOTE_PIXEL_NW = 8     # a pixel's noise width further than this from its die's median
+NOTE_DIE_SIGMA = 5    # a die's baseline or noise-width mean further than this many robust
+                      # sigmas (1.4826 x the median absolute deviation) from the median of the
+                      # PASSED dies calibrated over as many pixels (quick test or full scan)
+NOTE_MIN_DIES = 20    # such PASSED dies with a mean that the die check needs
+NOTE_PIXELS_LISTED = 3  # pixels a note names, the furthest from the median first
+DIE_MEANS = (("bl_mean", "baseline mean", "{:.0f}"), ("nw_mean", "noise-width mean", "{:.2f}"))
 
 PIXEL_COLUMNS = ["die", "pix_row", "pix_col", "baseline", "noise_width"]
 QINJ_COLUMNS = ["die", "pix_row", "pix_col", "hits", "eff", "cal_mode", "n_sel",
@@ -372,6 +384,81 @@ def offset_trend(dies, column):
     return float(coef[0]), float(coef[1]), float(coef[2]), float(residual.std(ddof=3)), len(d)
 
 
+def wafer_spread(dies, column):
+    """(median, robust sigma) of a dies column over the PASSED dies, the
+    robust sigma being 1.4826 x the median absolute deviation; None when
+    fewer than NOTE_MIN_DIES of them have a value or the values do not
+    spread."""
+    if column not in dies:
+        return None
+    values = pd.to_numeric(dies.loc[dies["grade"] == "PASSED", column], errors="coerce").dropna()
+    if len(values) < NOTE_MIN_DIES:
+        return None
+    median = float(values.median())
+    sigma = 1.4826 * float((values - median).abs().median())
+    return (median, sigma) if sigma > 0 else None
+
+
+def _pixel_groups(dies):
+    """{n_pixels: dies calibrated over that many pixels}: the die check
+    compares a die with its own group only, since a mean over the 9 pixels
+    of a quick test scatters more than one over the 256 of a full scan."""
+    if "n_pixels" not in dies:
+        return {}
+    return {int(n): group for n, group in dies.groupby("n_pixels")}
+
+
+def unchecked_die_means(dies):
+    """[(n_pixels, [dies column, ...])] for the groups of dies (_pixel_groups)
+    whose means bl_nw_notes could not check (wafer_spread gave None)."""
+    out = []
+    for n, group in _pixel_groups(dies).items():
+        columns = [column for column, _, _ in DIE_MEANS if wafer_spread(group, column) is None]
+        if columns:
+            out.append((n, columns))
+    return out
+
+
+def bl_nw_notes(dies, pixels):
+    """A note per die of the dies table ("" for none), whatever its grade,
+    on what stands out in its baseline or noise width, for the figures to
+    mark: pixels whose baseline is further than NOTE_PIXEL_BL DAC codes,
+    or whose noise width is further than NOTE_PIXEL_NW, from the die's
+    median, and a baseline or noise-width mean further than
+    NOTE_DIE_SIGMA robust sigmas from the median of the PASSED dies
+    calibrated over as many pixels (_pixel_groups, wafer_spread). Zero
+    readings stay out: they are a failed calibration, which the grade
+    already takes. A note marks a die, it never grades it."""
+    found = {}
+    good = pixels[(pixels["baseline"] > 0) & (pixels["noise_width"] > 0)]
+    for die, p in good.groupby("die"):
+        for column, what, limit in (("baseline", "baseline", NOTE_PIXEL_BL),
+                                    ("noise_width", "noise width", NOTE_PIXEL_NW)):
+            median = float(p[column].median())
+            off = p.assign(dev=(p[column] - median).abs())
+            off = off[off["dev"] > limit].sort_values("dev", ascending=False, kind="stable")
+            if off.empty:
+                continue
+            listed = [f"({r},{c}) at {v}" for r, c, v in
+                      zip(off["pix_row"], off["pix_col"], off[column])][:NOTE_PIXELS_LISTED]
+            more = f" and {len(off) - len(listed)} more" if len(off) > len(listed) else ""
+            found.setdefault(die, []).append(
+                f"die median {what} {median:g}, pixel{'s' if len(off) > 1 else ''} {', '.join(listed)}{more}")
+    for n, group in _pixel_groups(dies).items():
+        for column, what, fmt in DIE_MEANS:
+            spread = wafer_spread(group, column)
+            if spread is None:
+                continue
+            median, sigma = spread
+            for die, v in zip(group["die"], pd.to_numeric(group[column], errors="coerce")):
+                z = (v - median) / sigma
+                if abs(z) > NOTE_DIE_SIGMA:  # NaN compares False
+                    found.setdefault(die, []).append(
+                        f"{what} {fmt.format(v)}, {z:+.1f} sigma from the median {fmt.format(median)} "
+                        f"of the PASSED {n}-pixel dies")
+    return dies["die"].map(lambda die: "; ".join(found.get(die, [])))
+
+
 def collect(wafer_dir, wafer_map, before=None, with_qinj=True):
     """(dies, pixels, qinj, warnings) for one wafer folder. wafer_map maps
     the die number to its (row, col) on the station map, as
@@ -414,6 +501,7 @@ def collect(wafer_dir, wafer_map, before=None, with_qinj=True):
     qinj = pd.DataFrame(qinj, columns=QINJ_COLUMNS)
     if "qinj_events" in dies:
         dies["qinj_min_eff"] = lowest_efficiency(dies, qinj)
+    dies["bl_nw_note"] = bl_nw_notes(dies, pixels)
     return dies, pixels, qinj, warnings
 
 
