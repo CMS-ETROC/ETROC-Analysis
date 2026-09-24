@@ -57,7 +57,13 @@ that holds a `summary.json`, passing over runs aborted with Ctrl+C: the run
 whose grade the station map shows. Two exceptions: a run made by hand with
 `master_run_script.py` counts here but never reaches the map, and a pass
 stopped with Ctrl+C during a die's retry leaves the first attempt standing
-here but no grade on the map.
+here but no grade on the map. That run stands for the die whatever it
+tested: a newest run without the full scan or charge injection leaves the
+die out of the full-scan maps and blank on the QInj maps, even when an
+older run has them. The station therefore keeps a wafer's full-protocol
+runs under one `--path` and lighter runs (a 9-pixel test, an eFuse verify,
+a data-phase scan) under another; give that other `--path` here to plot
+them apart.
 `--before "2026-09-22 15:30"` (DAQ computer clock) takes the newest run that
 started before that time instead, to see the wafer as it stood then. A die of
 the wafer map without a run grades `NOT_TESTED`. `--tables-only` skips the
