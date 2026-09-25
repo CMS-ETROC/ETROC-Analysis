@@ -20,6 +20,7 @@ if HAVE_PLOTS:
 
 TABLES = {"dies.csv", "pixels.csv", "qinj.csv"}
 WAFER_MAP = {1: (0, 1), 2: (0, 2), 3: (1, 0), 4: (1, 1), 5: (1, 2), 6: (2, 1)}
+STAGE = "pre_ubm"
 
 
 @unittest.skipUnless(HAVE_PLOTS, "needs numpy, pandas, pyarrow and matplotlib (the wafer-daq venv)")
@@ -36,20 +37,20 @@ class PlotWaferTest(unittest.TestCase):
         row, col = WAFER_MAP[die]
         prober = {"velox": {"x_um": 1000.0 * col, "y_um": 1000.0 * row},
                   "chuck": {"x_um": 1000.0 * col + 2.0 * col, "y_um": 1000.0 * row - 1.0, "z_contact_um": 50.0}}
-        write_run(self.wafer, die, 1, summary(die, row, col, prober=prober, **extra),
+        write_run(self.wafer / STAGE, die, 1, summary(die, row, col, prober=prober, **extra),
                   power=run_power(), baseline=baseline(QUICK_PIXELS))
 
     def full_qinj_die(self, die):
         row, col = WAFER_MAP[die]
-        write_run(self.wafer, die, 1, summary(die, row, col, fullscan=True, qinj=True,
+        write_run(self.wafer / STAGE, die, 1, summary(die, row, col, fullscan=True, qinj=True,
                                               qinj_pixels=[list(p) for p in QUICK_PIXELS]),
                   power=run_power(), baseline=baseline(FULL_PIXELS, zero=[(4, 10)]),
                   nem={"qinj": [event(QUICK_PIXELS, status=8, junk=3) * 2, event(QUICK_PIXELS) * 5,
                                 event(QUICK_PIXELS, status=8, junk=1)]})
 
-    def plot(self, *extra, select=("--batchName", "B", "--waferName", "W")):
+    def plot(self, *extra, select=("--batchName", "B", "--waferName", "W"), stage=STAGE):
         with contextlib.redirect_stdout(io.StringIO()) as printed:
-            rc = main(["--path", str(self.root), *select,
+            rc = main(["--path", str(self.root), "--waferStage", stage, *select,
                        "--waferMap", str(self.root / "map.csv"), "--out", str(self.out), *extra])
         return rc, printed.getvalue(), {p.name for p in self.out.iterdir()} if self.out.is_dir() else set()
 
@@ -57,16 +58,16 @@ class PlotWaferTest(unittest.TestCase):
         for die in (1, 3, 4):
             self.quick_die(die)
         self.full_qinj_die(2)
-        write_run(self.wafer, 5, 1, summary(5, 1, 2, status="over_current"))
+        write_run(self.wafer / STAGE, 5, 1, summary(5, 1, 2, status="over_current"))
         rc, printed, written = self.plot()
         self.assertEqual(rc, 0)
-        self.assertIn("BatchID_X_Name_B / WaferID_X_Name_W: 5 of 6 dies tested, PASSED 4 (80.0 %)", printed)
+        self.assertIn("BatchID_X_Name_B / WaferID_X_Name_W / pre_ubm: 5 of 6 dies tested, PASSED 4 (80.0 %)", printed)
         self.assertEqual(written, TABLES | {f"{name}.png" for name in FIGURES})
 
     def test_pixel_maps_are_drawn_notch_up(self):
         # seen with the notch up the chip is upside down: pixel (0, 0) top left, (15, 15) bottom right
         self.full_qinj_die(2)
-        dies, pixels, _, _ = collect(self.wafer, load_wafer_map(self.root / "map.csv"))
+        dies, pixels, _, _ = collect(self.wafer / STAGE, load_wafer_map(self.root / "map.csv"))
         for fig in (fig_fullscan(dies, pixels, "t", "baseline", "baseline"), fig_pixel_issues(dies, pixels, "t")):
             maps = [ax for ax in fig.axes if ax.images]
             self.assertTrue(maps)
@@ -81,7 +82,7 @@ class PlotWaferTest(unittest.TestCase):
         self.out.mkdir()
         for name in ("qinj_cal.png", "fullscan_baseline.png", "alignment.png"):
             (self.out / name).write_bytes(b"from an earlier plot")
-        write_run(self.wafer, 1, 1, summary(1, 0, 1), power=run_power(), baseline=baseline(QUICK_PIXELS))
+        write_run(self.wafer / STAGE, 1, 1, summary(1, 0, 1), power=run_power(), baseline=baseline(QUICK_PIXELS))
         rc, _, written = self.plot()
         self.assertEqual(rc, 0)
         left_out = {"alignment", "fullscan_baseline", "fullscan_noise_width", "qinj_overview", "qinj_cal",
@@ -133,6 +134,45 @@ class PlotWaferTest(unittest.TestCase):
         fig = fig_qinj_overview(dies, qinj, "t")
         self.addCleanup(plt.close, fig)
         self.assertEqual([t.get_text() for t in fig.axes[1].texts], ["99"])
+
+    def test_only_the_stage_asked_for_is_read_and_it_names_the_wafer(self):
+        import pandas as pd
+        self.quick_die(1)
+        write_run(self.wafer / "post_ubm", 3, 1, summary(3, *WAFER_MAP[3], wafer_stage="post_ubm"),
+                  power=run_power(), baseline=baseline(QUICK_PIXELS))
+        rc, printed, _ = self.plot("--tables-only", stage="post_ubm")
+        self.assertEqual(rc, 0)
+        self.assertIn(f"reading {self.wafer / 'post_ubm'}\n", printed)
+        self.assertIn("BatchID_X_Name_B / WaferID_X_Name_W / post_ubm: 1 of 6 dies tested", printed)
+        ran = pd.read_csv(self.out / "dies.csv").dropna(subset=["run"])
+        self.assertEqual((ran["die"].tolist(), ran["wafer_stage"].tolist()), ([3], ["post_ubm"]))
+
+    def test_a_run_of_another_stage_in_a_stage_folder_is_refused(self):
+        self.quick_die(1)
+        write_run(self.wafer / STAGE, 3, 1, summary(3, *WAFER_MAP[3], wafer_stage="post_ubm"),
+                  power=run_power(), baseline=baseline(QUICK_PIXELS))
+        rc, printed, written = self.plot("--tables-only")
+        self.assertEqual((rc, written), (2, set()))
+        self.assertIn("ran as another stage, nothing written: die 3 (post_ubm)", printed)
+
+    def test_a_wafer_without_the_stage_folder_is_refused_and_loose_die_folders_are_named(self):
+        write_run(self.wafer, 1, 1, summary(1, 0, 1), power=run_power(), baseline=baseline(QUICK_PIXELS))
+        rc, printed, written = self.plot("--tables-only")
+        self.assertEqual((rc, written), (2, set()))
+        self.assertIn(f"warning: 1 die folders directly in {self.wafer}, outside a stage folder", printed)
+        self.assertIn(f"no pre_ubm folder in {self.wafer}; the stages there: none", printed)
+
+    def test_a_run_without_a_recorded_stage_is_read_with_a_warning(self):
+        self.quick_die(1, wafer_stage=None)
+        rc, printed, _ = self.plot("--tables-only")
+        self.assertEqual(rc, 0)
+        self.assertIn("warning: 1 dies ran without a recorded stage", printed)
+
+    def test_the_stage_is_required(self):
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err), self.assertRaises(SystemExit):
+            main(["--path", str(self.root), "--batchName", "B", "--waferName", "W"])
+        self.assertIn("--waferStage", err.getvalue())
 
     def test_a_missing_results_folder_is_refused(self):
         rc, printed, written = self.plot("--waferName", "nowhere")
@@ -217,10 +257,10 @@ class PlotWaferTest(unittest.TestCase):
         with patch("wafer_plots.plot_all", return_value=[]) as plot_all:
             rc, printed, _ = self.plot(select=("--batchID", "0", "--waferID", "3"))
         self.assertEqual(rc, 0)
-        self.assertIn("BatchID_0_Name_B / WaferID_3_Name_W: 1 of 6 dies tested", printed)
-        self.assertEqual(plot_all.call_args.kwargs["title"], "BatchID_0_Name_B / WaferID_3_Name_W")
+        self.assertIn("BatchID_0_Name_B / WaferID_3_Name_W / pre_ubm: 1 of 6 dies tested", printed)
+        self.assertEqual(plot_all.call_args.kwargs["title"], "BatchID_0_Name_B / WaferID_3_Name_W / pre_ubm")
         self.assertTrue(plot_all.call_args.kwargs["note"].startswith(
-            "BatchID_0_Name_B / WaferID_3_Name_W: newest run of each die; plot_wafer.py "))
+            "BatchID_0_Name_B / WaferID_3_Name_W / pre_ubm: newest run of each die; plot_wafer.py "))
 
     def test_a_title_too_wide_for_its_figure_puts_the_labels_on_a_line_of_their_own(self):
         import matplotlib.pyplot as plt

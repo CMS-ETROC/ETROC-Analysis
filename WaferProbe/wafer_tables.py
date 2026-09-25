@@ -251,6 +251,7 @@ def die_record(die, position, run_dir=None, summary=None, baseline=None, power=N
         "map_text": result_text(g, attempt),
         "run": run_dir.name if run_dir is not None else None,
         "start": t.isoformat(sep=" ", timespec="seconds") if t else None,
+        "wafer_stage": summary.get("wafer_stage"),
         "status": summary.get("status"), "error": summary.get("error"),
         "attempt": attempt, "retry_reason": summary.get("retry_reason"),
         "fullscan": bool(summary.get("fullscan")), "qinj": bool(summary.get("qinj")),

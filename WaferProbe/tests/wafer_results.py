@@ -28,7 +28,7 @@ def event(pixels, status=0, junk=0):
 def summary(die, row, col, *, status="completed", attempt=1, power_on="2026-09-22 15:00:00.000", **extra):
     """A summary.json record; `extra` adds or replaces top-level keys."""
     record = {
-        "batch": "B", "wafer": "W", "die": die, "row": row, "col": col, "status": status, "error": None,
+        "batch": "B", "wafer": "W", "wafer_stage": "pre_ubm", "die": die, "row": row, "col": col, "status": status, "error": None,
         "attempt": attempt, "fullscan": False, "qinj": False, "phases": {"power_on": power_on},
         "short_check": {rail: {"voltage": 1.2, "current": 0.3, "abort_above": 0.54, "abort_below": 0.1,
                                "ok": True} for rail in ("analog", "digital")},

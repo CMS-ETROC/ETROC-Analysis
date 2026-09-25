@@ -1,12 +1,14 @@
 """plot_wafer.py -- tables and figures for one tested wafer.
 
-    python plot_wafer.py --path <path> --batchName <batch> --waferName <wafer>
-    python plot_wafer.py --path <path> --batchID <id> --waferID <id>
+    python plot_wafer.py --path <path> --waferStage <stage> --batchName <batch> --waferName <wafer>
+    python plot_wafer.py --path <path> --waferStage <stage> --batchID <id> --waferID <id>
 
-with the --path of the wafer run. It reads the die folders of the wafer
-folder the station wrote, <path>/BatchID_<id>_Name_<batch>/WaferID_<id>_Name_<wafer>/
-(X for an ID the wafer does not have), found by the name, the ID or both at
-each level (a folder with X only by its name), and writes into its plots/
+with the --path of the wafer run. It reads the die folders of one stage of
+the wafer folder the station wrote,
+<path>/BatchID_<id>_Name_<batch>/WaferID_<id>_Name_<wafer>/<stage>/
+(X for an ID the wafer does not have; the stage pre_ubm or post_ubm), found
+by the name, the ID or both at each level (a folder with X only by its
+name), and writes into the stage folder's plots/
 the tables dies.csv, pixels.csv and qinj.csv (wafer_tables.py) and the
 figures (wafer_plots.py), named by the two folder names, the wafer's labels.
 It only reads
@@ -26,10 +28,16 @@ from wafer_tables import collect, grade_counts, write_tables
 REPO = Path(__file__).resolve().parent
 
 
+STAGES = ("pre_ubm", "post_ubm")
+
+
 def build_arg_parser():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--path', required=True,
                         help='The --path of the wafer run: the mother directory of all results')
+    parser.add_argument('--waferStage', required=True, choices=STAGES, dest='wafer_stage',
+                        help='Stage the wafer was probed at: pre_ubm (bare, before UBM and bumps) or '
+                             'post_ubm (after UBM and bumping), a folder of its own under the wafer folder')
     parser.add_argument('--batchName', default=None, help='Batch (lot) name of the wafer run, e.g. N62M23')
     parser.add_argument('--batchID', type=int, default=None,
                         help='Batch ID of the wafer run, e.g. 0 (with --batchName, both must match)')
@@ -41,7 +49,7 @@ def build_arg_parser():
     parser.add_argument('--before', default=None,
                         help='Use the newest run of each die that started before this time, e.g. '
                              '"2026-09-22 15:30" on the DAQ computer clock (default: the newest run)')
-    parser.add_argument('--out', default=None, help='Output folder (default: <wafer folder>/plots)')
+    parser.add_argument('--out', default=None, help='Output folder (default: <wafer folder>/<stage>/plots)')
     parser.add_argument('--tables-only', action='store_true', dest='tables_only',
                         help='Write the CSV tables only, no figures')
     parser.add_argument('--no-qinj', action='store_true', dest='no_qinj',
@@ -94,19 +102,37 @@ def main(argv=None):
             print(f"  {folder}")
         return 2
     wafer_dir = found[0]
-    label = f"{wafer_dir.parent.name} / {wafer_dir.name}"
-    print(f"reading {wafer_dir}")
+    stage_dir = wafer_dir / args.wafer_stage
+    loose = [p for p in wafer_dir.glob("die*") if p.is_dir()]
+    if loose:
+        print(f"warning: {len(loose)} die folders directly in {wafer_dir}, outside a stage folder, "
+              "are not read")
+    if not stage_dir.is_dir():
+        there = [s for s in STAGES if (wafer_dir / s).is_dir()]
+        print(f"no {args.wafer_stage} folder in {wafer_dir}; the stages there: {', '.join(there) or 'none'}")
+        return 2
+    label = f"{wafer_dir.parent.name} / {wafer_dir.name} / {args.wafer_stage}"
+    print(f"reading {stage_dir}")
     try:
         before = datetime.fromisoformat(args.before) if args.before else None
     except ValueError:
         print(f'--before {args.before!r}: expected a time such as "2026-09-22 15:30"')
         return 2
-    out_dir = Path(args.out) if args.out else wafer_dir / "plots"
+    out_dir = Path(args.out) if args.out else stage_dir / "plots"
 
-    dies, pixels, qinj, warnings = collect(wafer_dir, load_wafer_map(args.wafer_map), before=before,
+    dies, pixels, qinj, warnings = collect(stage_dir, load_wafer_map(args.wafer_map), before=before,
                                            with_qinj=not args.no_qinj)
     for warning in warnings:
         print(f"warning: {warning}")
+    ran = dies[dies["run"].notna()] if "run" in dies else dies.iloc[0:0]
+    stages = ran["wafer_stage"] if "wafer_stage" in ran else ran["die"].map(lambda d: None)
+    other = ran[stages.notna() & (stages != args.wafer_stage)]
+    if len(other):
+        print(f"{len(other)} dies in {stage_dir} ran as another stage, nothing written: "
+              + ", ".join(f"die {d} ({s})" for d, s in zip(other["die"], other["wafer_stage"])))
+        return 2
+    if stages.isna().any():
+        print(f"warning: {int(stages.isna().sum())} dies ran without a recorded stage")
     counts, passed, tested = grade_counts(dies)
     share = f" ({100 * passed / tested:.1f} %)" if tested else ""
     print(f"{label}: {tested} of {len(dies)} dies tested, PASSED {passed}{share}")

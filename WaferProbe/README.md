@@ -13,12 +13,16 @@ its own; when the station's grading changes, `station.py` follows it.
 ## Getting the results
 
 The station laptop writes results under
-`<path>/BatchID_<id>_Name_<batch>/WaferID_<id>_Name_<wafer>/`, with the batch
+`<path>/BatchID_<id>_Name_<batch>/WaferID_<id>_Name_<wafer>/<stage>/`, with the batch
 and wafer IDs of the station's `configs/wafers.csv` (`X` for a wafer it does
 not list, such as a test wafer). The two folder names are the wafer's
 labels, which the station also stamps on the prober (Velox lot id and wafer
-id) and on its saved wafer map; the plots name the wafer by them too. Copy
-that folder here, keeping both levels, e.g. with `rsync`:
+id) and on its saved wafer map; the plots name the wafer by them too. The
+stage is where the wafer was in its processing when it was probed:
+`pre_ubm` for a bare wafer, `post_ubm` after under-bump metallisation and
+bumping. A wafer probed at both stages has both folders, and every run
+records its stage in `summary.json` (`wafer_stage`). Copy the wafer folder
+here, keeping both label levels, e.g. with `rsync`:
 
 ```
 rsync -av <station host>:<path>/BatchID_0_Name_N62M23/WaferID_3_Name_08A5/ \
@@ -33,6 +37,14 @@ station's two wafers of that time were renamed once, by hand
 taken before then needs the same rename, because `plot_wafer.py` finds a
 wafer folder by its labels only.
 
+Results written before the station recorded the stage (2026-09-25) sat
+directly in the wafer folder. The four N62M23 wafers of that time (08A5,
+07B2, 06B7, 05C4), all bare, were moved once into `pre_ubm/`, and the
+practice wafer FFF2p00 N60R91, probed after UBM and bumping, into
+`post_ubm/`. `"wafer_stage"` was added to their `summary.json` files
+together with `"wafer_stage_added"`, the date it was added, so a record that
+got its stage afterwards says so. A copy taken before then needs the same move.
+
 ## Environment
 
 Python >= 3.9 with `numpy`, `pandas`, `pyarrow` and `matplotlib`. On lxplus,
@@ -42,8 +54,8 @@ Python >= 3.9 with `numpy`, `pandas`, `pyarrow` and `matplotlib`. On lxplus,
 ## Running it
 
 ```
-python plot_wafer.py --path <results dir> --batchName FFF2p00 --waferName N60R91
-python plot_wafer.py --path <results dir> --batchID 0 --waferID 3
+python plot_wafer.py --path <results dir> --waferStage pre_ubm --batchName N62M23 --waferName 08A5
+python plot_wafer.py --path <results dir> --waferStage pre_ubm --batchID 0 --waferID 3
 ```
 
 It finds the wafer folder by the name, the ID or both of each level
@@ -51,8 +63,13 @@ It finds the wafer folder by the name, the ID or both of each level
 must match, and an ID never finds a folder with `X`, so a wafer without IDs
 is found by its names. It refuses to guess when there is not exactly one
 match, and lists the folders that match (or, when none does, every wafer
-folder under `--path`). It then prints the grade counts and writes into
-the folder's `plots/` (`--out` for another folder). A die is represented by its newest run folder
+folder under `--path`). It reads the runs of the `--waferStage` folder
+only (`pre_ubm` or `post_ubm`, always given): it stops when the wafer has no
+such folder, naming the stages it does have, and when a run in the folder
+recorded another stage; it warns about runs that recorded no stage and
+about die folders lying directly in the wafer folder, which it does not
+read. It then prints the grade counts and writes into the stage folder's
+`plots/` (`--out` for another folder). A die is represented by its newest run folder
 that holds a `summary.json`, passing over runs aborted with Ctrl+C: the run
 whose grade the station map shows. Two exceptions: a run made by hand with
 `master_run_script.py` counts here but never reaches the map, and a pass
@@ -75,8 +92,8 @@ die-position map, otherwise the bundled `wafer_map.csv` is used.
 
 The tables, as csv:
 
-- `dies.csv`, one row per die: grade and map text, run folder, status and
-  error; the median current and voltage of every rail at power-on, at high
+- `dies.csv`, one row per die: grade and map text, run folder, the wafer
+  stage the run recorded (`wafer_stage`), status and error; the median current and voltage of every rail at power-on, at high
   power and during QInj (`<rail>_I_on`, `<rail>_I_high`, `<rail>_I_qinj` and
   `_V_`; the first sweep of each phase is dropped, it can still catch the
   rails switching: the power-on current at high power, vref ramping at
@@ -136,7 +153,7 @@ is hatched. Colour ranges span the 2nd to 98th percentile of the PASSED dies
 (of all dies in the alignment maps and the full-scan galleries; fixed for
 efficiencies and counts), so one broken die does not flatten the rest. Every
 figure title starts with the wafer's labels
-(`BatchID_0_Name_N62M23 / WaferID_3_Name_08A5`), on a line of their own when
+and stage (`BatchID_0_Name_N62M23 / WaferID_3_Name_08A5 / pre_ubm`), on a line of their own when
 the figure is too narrow for the whole first line (`pixel_issues` without
 full-scan dies, say). Under every figure a note names the wafer by its
 labels, which run of each die was used (the newest, or the newest before
