@@ -59,6 +59,14 @@ rest are for whoever writes the next figure.
   combination's value and no band. A figure built on maps pooled over every combination (the
   merge cost, figure 7 of the merged notebook) says so in its footer.
 
+## Pixel maps
+
+- Every map states its frame on the figure. The resolution maps (`resolution/pixel_maps.py`) are
+  drawn in the chip frame: both axes inverted, pixel (0, 0) at the bottom right.
+- One colour scale for every map of a notebook (0-120 ps for the IRRAD 2026 resolution maps,
+  `VMIN` and `VMAX` in `resolution/pixel_maps.py`), so maps compare by colour; a pixel outside it
+  is counted as saturated, a pixel without a value is grey.
+
 ## IV figures
 
 - Currents are drawn as abs(I). A binned scan is the mean voltage and the median current per

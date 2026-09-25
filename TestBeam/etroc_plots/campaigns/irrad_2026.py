@@ -307,8 +307,8 @@ JULY_STEPS_OFFSET = 20
 JULY_MIN_PLATEAU_H = 4.0
 
 # July 1.5e15: the sensors irradiated in March, measured again after four months of cooling
-# down. They are not on display_runs_jul.csv (that list holds the display runs at the two July
-# steps); july_1p5e15_selection() draws the runs that are on the good-run list, have RFSel
+# down. The IV figures do not take them from display_runs_jul.csv, which lists them too:
+# july_1p5e15_selection() draws the runs that are on the good-run list, have RFSel
 # JULY_1P5E15_RFSEL and Disc offset JULY_1P5E15_OFFSET on EVERY board in the July yaml, and have
 # an HV-monitor plateau in JULY_REF_CSV (status "ok"). Runs 3 and 4 of H1 and run 3 of F1 ended
 # before the July HV-monitor timeline starts (status "no_hv_log") and cannot be drawn.

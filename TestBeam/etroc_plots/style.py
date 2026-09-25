@@ -18,6 +18,7 @@ What the campaign is (experiment text, header lines, telescopes and chips, fluen
 from the active campaign module, etroc_plots.campaigns.
 """
 import json
+import math
 import os
 import subprocess
 import time
@@ -383,10 +384,21 @@ def flatten_panels(out_dir, stem, paths):
             os.rmdir(parent)
 
 
+def _json_safe(x):
+    """`x` with every NaN or infinite float replaced by None: JSON has no NaN."""
+    if isinstance(x, float) and not math.isfinite(x):
+        return None
+    if isinstance(x, dict):
+        return {k: _json_safe(v) for k, v in x.items()}
+    if isinstance(x, (list, tuple)):
+        return [_json_safe(v) for v in x]
+    return x
+
+
 def write_values(out_dir, stem, payload, *, conventions, script=None, inputs=None):
     """<out_dir>/<stem>_values.json: the numbers drawn (`payload`) with provenance (script,
     commit, inputs, time) and `conventions`, a dict saying what the numbers are (units, binning,
-    selection) for this kind of figure."""
+    selection) for this kind of figure. A missing number (NaN) is written as null."""
     os.makedirs(out_dir, exist_ok=True)
     doc = {"figure": stem, "script": script, "commit": git_hash(),
            "inputs": inputs or [], "written_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -394,7 +406,7 @@ def write_values(out_dir, stem, payload, *, conventions, script=None, inputs=Non
            "values": payload}
     p = os.path.join(out_dir, "%s_values.json" % stem)
     with open(p, "w") as fh:
-        json.dump(doc, fh, indent=1, sort_keys=False)
+        json.dump(_json_safe(doc), fh, indent=1, sort_keys=False, allow_nan=False)
     return p
 
 
