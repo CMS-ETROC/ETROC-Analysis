@@ -20,4 +20,12 @@ a642b89d6dcceb84a7558a54e2f9cab4  march/preirrad_cache/preirrad_current_stats.cs
 1cb0c649b8d5fce857c8272134dfa917  march/preirrad_cache/preirrad_log_10s.csv.gz
 7ca35697202c78ad85e4302153eabfe0  march/preirrad_cache/preirrad_run_windows.csv
 a50f32ea1f5b8e87668705f703a8b54e  march/quick_iv_F1_m25C_17cm_15e14_03252026_0605_binned_iv_data.csv
+e471061fed4bd67dea7dae0e8c28dc72  tables/irrad/PIXEL_TABLES_README.md
+d778b9ec3c65ba1aa452a2c824e99223  tables/irrad/board_table_irrad.csv
+166c02f9555ab95cf5e3a8fd12853234  tables/irrad/pixel_table_irrad.csv.gz
+e33c62d4c5aa2d523cc1d5b40abbce02  tables/merged/PIXEL_TABLES_README.md
+96524e1f5b216e31660b5a1651eb8af2  tables/merged/board_table_merged.csv
+afc445a0879d8fa0c8f2b139370d2528  tables/merged/per_pixel_cost_summary.csv
+e5257742f55811329508e838716abbf8  tables/merged/pixel_table_merged.csv
+7229f766e120727691cc435d9ffb997f  tables/runs_summary.csv
 db95934d10de336961727755d2d6c3d5  vgl/vgl_points.csv

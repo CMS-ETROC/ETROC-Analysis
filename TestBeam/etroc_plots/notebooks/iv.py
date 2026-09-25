@@ -27,7 +27,7 @@
 #    and slow-control logs from `/eos/user/m/musafdar/CERN_IRRAD_Mar2026/IVCurves`.
 #    `../campaigns/irrad_2026_inputs.md` lists every table with where it came from, and ends
 #    with a table of the environment variables that point the notebook at your own copies
-#    (`ETROC_IV_INPUTS` for the tables, `ETROC_IV_EOS_MARCH` for the raw tree). The first code
+#    (`ETROC_INPUTS` for the tables, `ETROC_IV_EOS_MARCH` for the raw tree). The first code
 #    cell checks that every table and raw file exists and can be read, and stops with a list of
 #    all that cannot; a table whose checksum differs from the published list is named, and the
 #    run goes on.
@@ -110,20 +110,8 @@ def show(stem):
 
 
 def flatten_panels(stem, paths):
-    """Move style.save_panel's nested panels/<stem>/NN_name.{png,pdf} next to the compound figure,
-    flat-named <stem>_NN_name.* (this notebook's single-panel naming), and remove the now-empty
-    nested folder."""
-    nested_dir = None
-    for p in paths:
-        nested_dir = os.path.dirname(p)
-        base = os.path.basename(p)
-        name, ext = base.rsplit(".", 1)
-        os.replace(p, os.path.join(OUT, "%s_%s.%s" % (stem, name, ext)))
-    if nested_dir and os.path.isdir(nested_dir) and not os.listdir(nested_dir):
-        os.rmdir(nested_dir)
-        parent = os.path.dirname(nested_dir)
-        if os.path.isdir(parent) and not os.listdir(parent):
-            os.rmdir(parent)
+    """style.flatten_panels into this notebook's output folder."""
+    style.flatten_panels(OUT, stem, paths)
 
 
 def export_panels(stem, draw, panel_subject, line1=None):

@@ -8,7 +8,8 @@ a fresh Python process (in a notebook: restart the kernel).
 
 The package README (etroc_plots/README.md, "A new campaign") gives the steps to plot a new
 campaign. REQUIRED lists the names each part of the package reads: every figure needs the
-"style" names, the IV helpers and the IV notebook also the "iv" names. Importing a part stops
+"style" names, the IV helpers and the IV notebook also the "iv" names, the resolution helpers and
+their notebooks the "resolution" names. Importing a part stops
 with the list of names the campaign module is missing.
 """
 import importlib
@@ -41,6 +42,12 @@ REQUIRED = {
         "RAD_STOP_UTC", "RAW_INPUTS", "RUNS_AT_FLUENCE", "VALUES_CONVENTIONS", "VERY_LATE",
         "VGL_DROP_ABOVE", "VGL_F1", "VGL_H1", "VGL_REF_ALTERNATES", "VGL_VENDOR",
         "VGL_XGRID_MAX", "VGL_XGRID_N",
+    ),
+    # result tables, read by etroc_plots.resolution and the resolution notebooks
+    "resolution": (
+        "BAND_STEPS", "BOARD_TABLE", "BOARD_TABLE_MERGED", "FLUENCE_CONVENTION", "INPUTS",
+        "INPUTS_MANIFEST", "MERGE_COST_CSV", "PIXEL_TABLE", "PIXEL_TABLE_MERGED",
+        "RUNS_SUMMARY_CSV", "TABLE_CAMPAIGN", "TABLE_TEL",
     ),
 }
 

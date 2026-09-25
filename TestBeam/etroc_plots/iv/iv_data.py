@@ -13,7 +13,6 @@ legacy.binned_table makes from the raw logs of that step (`python -m etroc_plots
 INPUTS/march/<stem>_binned_iv_data.csv, in this same 8-column format; they load through the
 same March loader as everything else.
 """
-import hashlib
 import json
 import os
 
@@ -27,7 +26,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # These names are defined by the campaign module and re-bound here, so this module and the
 # notebook use them as ivd.<NAME>.
 from ..campaigns import active as _campaign
-INPUTS = _campaign.INPUTS            # the campaign's input folder (ETROC_IV_INPUTS overrides it)
+from ..inputs import check_inputs as _check_inputs
+INPUTS = _campaign.INPUTS            # the campaign's input folder (ETROC_INPUTS overrides it)
 INPUTS_JULY = _campaign.INPUTS_JULY
 INPUTS_MARCH = _campaign.INPUTS_MARCH
 INPUTS_VGL = _campaign.INPUTS_VGL
@@ -63,79 +63,18 @@ MIN_N_JULY_FINE = 3     # minimum per-bin sample count (~3 s dwell); thinner bin
 
 
 # ---------------------------------------------------------------------------- inputs
-def _read_problem(path):
-    """None if `path` (a file or a folder) can be read, else "missing" or "unreadable (why)"."""
-    try:
-        if os.path.isdir(path):
-            os.listdir(path)
-        else:
-            with open(path, "rb") as fh:
-                fh.read(1)
-    except (FileNotFoundError, NotADirectoryError):
-        return "missing"
-    except OSError as err:
-        return "unreadable (%s)" % (err.strerror or err)
-    return None
+# the folders of the campaign's tables folder that the IV figures read
+IV_TABLE_FOLDERS = ("july/", "march/", "vgl/")
 
 
 def check_inputs(inputs=None, manifest=None, raw_inputs=None):
-    """Check every input the campaign reads before any figure is drawn.
-
-    Two sets: the tables in INPUTS, against the campaign's checksum list (INPUTS_MANIFEST), and
-    the raw files read in place (the campaign's RAW_INPUTS: the March scans and slow-control
-    logs, the July board-config yaml, any table moved by its own environment variable). Every
-    file must exist and be readable; all problems are collected, missing apart from unreadable
-    (no permission), and raised together. A table whose content differs from the published one
-    (a cache you rebuilt, say) is reported and the run goes on, but the figures drawn from it
-    will differ. The arguments default to the campaign's INPUTS, INPUTS_MANIFEST and RAW_INPUTS.
-    """
-    inputs = INPUTS if inputs is None else inputs
-    manifest = _campaign.INPUTS_MANIFEST if manifest is None else manifest
+    """The IV notebook's input check: the IV tables of the campaign's manifest (IV_TABLE_FOLDERS)
+    and the raw files the campaign reads in place (its RAW_INPUTS: the March scans and
+    slow-control logs, the July board-config yaml, any table moved by its own environment
+    variable). See etroc_plots.inputs.check_inputs; the arguments default to the campaign's
+    INPUTS, INPUTS_MANIFEST and RAW_INPUTS."""
     raw_inputs = _campaign.RAW_INPUTS if raw_inputs is None else raw_inputs
-    with open(manifest) as fh:
-        listed = [line.split(None, 1) for line in fh if line.strip()]
-    missing, unreadable, changed = [], [], []
-
-    def note(path, problem):
-        if problem == "missing":
-            missing.append(path)
-        else:
-            unreadable.append("%s: %s" % (path, problem))
-
-    for md5, name in listed:
-        name = name.strip()
-        path = os.path.join(inputs, name)
-        problem = _read_problem(path)
-        if problem:
-            note(path, problem)
-            continue
-        digest = hashlib.md5()
-        try:
-            with open(path, "rb") as f:
-                for block in iter(lambda: f.read(1 << 20), b""):
-                    digest.update(block)
-        except OSError as err:
-            note(path, "unreadable (%s)" % (err.strerror or err))
-            continue
-        if digest.hexdigest() != md5:
-            changed.append(name)
-    for path in raw_inputs:
-        problem = _read_problem(path)
-        if problem:
-            note(path, problem)
-    if missing or unreadable:
-        raise RuntimeError(
-            "input check failed for campaign %s (tables folder %s, %d tables and %d raw inputs "
-            "checked):\n%s\nMissing: point the campaign's input variables at a full copy; "
-            "campaigns/%s_inputs.md lists every variable and its default. "
-            "Unreadable: ask the owner of that area for read access."
-            % (_campaign.__name__, inputs, len(listed), len(raw_inputs),
-               "\n".join(["  missing: %s" % p for p in missing]
-                         + ["  unreadable: %s" % p for p in unreadable]),
-               _campaign.__name__.split(".")[-1]))
-    for name in changed:
-        print("note: %s differs from the published file, so figures drawn from it will too"
-              % name)
+    _check_inputs(inputs, manifest, raw_inputs, only=IV_TABLE_FOLDERS)
 
 
 # ---------------------------------------------------------------------------- loaders

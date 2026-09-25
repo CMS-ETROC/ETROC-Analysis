@@ -49,6 +49,9 @@ FLUENCE_UNIT = r"p/cm$^2$"
 
 PREAMP_POWER = "high"     # preamp power mode of every run (run metadata power_mode)
 
+# what a fluence number in a values file is (every figure that states a fluence)
+FLUENCE_CONVENTION = "facility bookkeeping, p/cm2, 24 GeV protons; no n_eq"
+
 # what the numbers in the values files are, where this campaign decides it
 VALUES_CONVENTIONS = {
     "binning": "March scans: mean voltage and median current per voltage bin (QUICK_BINS and "
@@ -63,18 +66,18 @@ VALUES_CONVENTIONS = {
                "bin of fewer than 3 samples is dropped, or replaced by linear interpolation "
                "between its well-sampled neighbours when it lies between two of them",
     "scan_time": "UTC; March raw logs are recorded local CET = UTC+1",
-    "fluence": "facility bookkeeping, p/cm2, 24 GeV protons; no n_eq",
+    "fluence": FLUENCE_CONVENTION,
 }
 
 # ======================================================================================= inputs
-# The tables the figures read, 31 MB, kept out of the repository in one folder. Set
-# ETROC_IV_INPUTS to use a copy of it.
-INPUTS = (os.environ.get("ETROC_IV_INPUTS")
+# The tables the figures read, 100 MB, kept out of the repository in one folder. Set
+# ETROC_INPUTS to use a copy of it.
+INPUTS = (os.environ.get("ETROC_INPUTS")
           or "/eos/user/m/musafdar/ETROC_plot_inputs/irrad_2026")
 INPUTS_JULY = os.path.join(INPUTS, "july")
 INPUTS_MARCH = os.path.join(INPUTS, "march")
 INPUTS_VGL = os.path.join(INPUTS, "vgl")
-# every file in INPUTS with its md5 (md5sum format); iv_data.check_inputs() compares them
+# every file in INPUTS with its md5 (md5sum format); inputs.check_inputs() compares them
 INPUTS_MANIFEST = os.path.join(os.path.dirname(os.path.abspath(__file__)), "irrad_2026_inputs.md5")
 # The raw March tree (IV scans and slow-control logs in week1/, week2/ and laptop_mirror_15e14/),
 # read in place. Every raw path below is built from EOS_ROOT: set ETROC_IV_EOS_MARCH to use a copy
@@ -498,8 +501,32 @@ PREIRRAD_RAMP_NOTE = {"text": "bracketing IV scans\n(quick / fine ramps, to ~240
 # the boxes never touch; a campaign with more spike runs needs more entries
 PREIRRAD_SPIKE_LABEL_Y = {0: (9.0, 0.33), 1: (1.5, 0.26)}
 
+# ======================================================================= resolution tables
+# campaigns.REQUIRED["resolution"]: etroc_plots.resolution and the resolution notebooks read
+# these. The test-beam chain's results as flat tables, in the tables/ folder of INPUTS
+# (irrad_2026_inputs.md says how each was made; resolution/tables.py describes their columns):
+INPUTS_TABLES = os.path.join(INPUTS, "tables")
+BOARD_TABLE = os.path.join(INPUTS_TABLES, "irrad", "board_table_irrad.csv")          # per board
+PIXEL_TABLE = os.path.join(INPUTS_TABLES, "irrad", "pixel_table_irrad.csv.gz")       # per pixel
+BOARD_TABLE_MERGED = os.path.join(INPUTS_TABLES, "merged", "board_table_merged.csv")  # merged runs
+PIXEL_TABLE_MERGED = os.path.join(INPUTS_TABLES, "merged", "pixel_table_merged.csv")
+# per merge and board: how far the merged pixel map sits from the single runs' maps
+MERGE_COST_CSV = os.path.join(INPUTS_TABLES, "merged", "per_pixel_cost_summary.csv")
+# per run: status, and per board the chip, bias, bookkeeping fluence, threshold offset and RFSel
+RUNS_SUMMARY_CSV = os.path.join(INPUTS_TABLES, "runs_summary.csv")
+# the tables' own keys: their campaign column, and the telescope column of RUNS_SUMMARY_CSV (the
+# board and pixel tables use "h1" / "f1")
+TABLE_CAMPAIGN = {"march": "IRRAD_Mar2026", "july": "IRRAD_Jul2026"}
+TABLE_TEL = GOOD_RUNS_TEL
+# Fluence steps whose board widths are drawn as a combo band (resolution.tables.band): at 3.5e15
+# one board's width depends on the combo it is solved in (the July re-analysis traced this to a
+# term shared by the boards of one HV group), so a figure shows the range over the combos instead
+# of one combo's value, for single runs and merges alike. A figure comparing the combos themselves
+# draws each combo's value instead of the band.
+BAND_STEPS = (3.5e15,)
+
 # ============================================================== raw inputs, read in place
-# iv_data.check_inputs checks each one exists and is readable.
+# iv_data.check_inputs checks each one exists and is readable (the IV notebook reads them).
 def _outside_inputs(paths):
     """The paths not under INPUTS (the md5 manifest covers those), sorted, each once."""
     inside = os.path.join(os.path.abspath(INPUTS), "")

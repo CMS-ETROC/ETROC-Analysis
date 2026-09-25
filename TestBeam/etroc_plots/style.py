@@ -259,15 +259,16 @@ def merged_handle(scale=1.0, label="merged runs"):
 
 
 def two_legends(ax, steps, chips, scale=1.0, merged=False, loc_f="upper left",
-                loc_c="upper right"):
+                loc_c="upper right", ncol_c=1):
     """Fluence legend and chip legend on one axis (matplotlib keeps only the last ax.legend,
-    so the first is re-added as an artist)."""
+    so the first is re-added as an artist). `ncol_c` is the chip legend's number of columns: 1
+    stacks the entries, more lay them out in rows that take less of the axis height."""
     s = sizes(scale)
     lf = ax.legend(handles=fluence_handles(steps, scale), loc=loc_f, fontsize=s["legend"],
                    title="fluence", title_fontsize=s["legend_title"])
     ax.add_artist(lf)
     hc = chip_handles(chips, scale) + ([merged_handle(scale)] if merged else [])
-    lc = ax.legend(handles=hc, loc=loc_c, fontsize=s["legend"])
+    lc = ax.legend(handles=hc, loc=loc_c, fontsize=s["legend"], ncol=ncol_c)
     return lf, lc
 
 
@@ -366,6 +367,22 @@ def save_figure(fig, out_dir, stem, dpi=200, audit=True):
     return paths, problems
 
 
+def flatten_panels(out_dir, stem, paths):
+    """Move save_panel's nested panels/<stem>/NN_name.{png,pdf} next to the compound figure,
+    flat-named <out_dir>/<stem>_NN_name.* (the notebooks' single-panel naming), and remove the
+    nested folder once it is empty."""
+    nested_dir = None
+    for p in paths:
+        nested_dir = os.path.dirname(p)
+        name, ext = os.path.basename(p).rsplit(".", 1)
+        os.replace(p, os.path.join(out_dir, "%s_%s.%s" % (stem, name, ext)))
+    if nested_dir and os.path.isdir(nested_dir) and not os.listdir(nested_dir):
+        os.rmdir(nested_dir)
+        parent = os.path.dirname(nested_dir)
+        if os.path.isdir(parent) and not os.listdir(parent):
+            os.rmdir(parent)
+
+
 def write_values(out_dir, stem, payload, *, conventions, script=None, inputs=None):
     """<out_dir>/<stem>_values.json: the numbers drawn (`payload`) with provenance (script,
     commit, inputs, time) and `conventions`, a dict saying what the numbers are (units, binning,
@@ -388,7 +405,8 @@ def write_values(out_dir, stem, payload, *, conventions, script=None, inputs=Non
 RFSEL_RF_KOHM = {0: 20.0, 1: 10.0, 2: 5.7, 3: 4.4}
 
 
-def _rf_text(rfsel):
+def rfsel_text(rfsel):
+    """One RFSel with its feedback resistor, e.g. 'RFSel 2 (R_f = 5.7 kOhm)'."""
     r = RFSEL_RF_KOHM[int(rfsel)]
     r = ("%d" % r) if float(r).is_integer() else ("%.1f" % r)
     return r"RFSel %d (R$_\mathrm{f}$ = %s k$\Omega$)" % (int(rfsel), r)
@@ -409,7 +427,7 @@ def settings_text(rfsel=2, offset=20, power=None, sep=", "):
             ks = ["%g" % RFSEL_RF_KOHM[r] for r in rs]
             parts.append(r"RFSel %s (R$_\mathrm{f}$ = %s k$\Omega$)" % ("/".join(map(str, rs)), "/".join(ks)))
         else:
-            parts.append(_rf_text(rfsel))
+            parts.append(rfsel_text(rfsel))
     if offset is not None:
         if isinstance(offset, tuple) and len(offset) == 2:
             o = "%d-%d" % (int(offset[0]), int(offset[1]))

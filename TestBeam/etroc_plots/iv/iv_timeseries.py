@@ -41,7 +41,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # These names are defined by the campaign module and re-bound here, so this module and the
 # notebook use them as tsdata.<NAME>.
 from ..campaigns import active as _campaign
-INPUTS = _campaign.INPUTS            # the campaign's input folder (ETROC_IV_INPUTS overrides it)
+INPUTS = _campaign.INPUTS            # the campaign's input folder (ETROC_INPUTS overrides it)
 EOS_ROOT = _campaign.EOS_ROOT
 DISPLAY_RUNS_JUL_CSV = _campaign.DISPLAY_RUNS_JUL_CSV
 TELESCOPE_CHIPS = _campaign.TELESCOPE_CHIPS

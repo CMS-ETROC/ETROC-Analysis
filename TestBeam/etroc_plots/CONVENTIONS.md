@@ -50,6 +50,14 @@ rest are for whoever writes the next figure.
 - Every figure or panel showing resolution or TDC data states the front-end operating point in its
   title: RFSel with the feedback resistor, the discriminator threshold as baseline + offset, and the
   preamp power. `style.settings_text` writes it.
+- A board's value comes from one 3-board combination, the anointed one: boards 0-1-2 for boards
+  0, 1 and 2, boards 1-2-3 for board 3. Where the value depends on the combination
+  (`BAND_STEPS` in the campaign module: 3.5e15 for IRRAD 2026), the board is drawn as a band: a
+  shaded box over its value in every combination containing it, the marker at the box's centre,
+  the bar the anointed combination's pixel spread (`resolution.tables.band`). The footer says so
+  (`tables.BAND_FOOTER`). A figure that compares the combinations themselves shows each
+  combination's value and no band. A figure built on maps pooled over every combination (the
+  merge cost, figure 7 of the merged notebook) says so in its footer.
 
 ## IV figures
 
