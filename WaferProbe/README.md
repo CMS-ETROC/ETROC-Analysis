@@ -142,6 +142,11 @@ full-scan dies, say). Under every figure a note names the wafer by its
 labels, which run of each die was used (the newest, or the newest before
 `--before`) and when it was plotted.
 
+The pixel maps (`fullscan_*`, `pixel_issues`) show each die as the wafer maps
+do, seen with the notch up. The chip sits upside down in that view, so pixel
+(0, 0) is at the top left and (15, 15) at the bottom right. In the chip's own frame, as in
+the test-beam plots, (0, 0) is at the bottom right.
+
 ### Baseline and noise-width notes
 
 A die can pass every check of the station and still have a baseline or

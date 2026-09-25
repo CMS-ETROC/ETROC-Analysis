@@ -10,8 +10,11 @@ from unittest.mock import patch
 
 HAVE_PLOTS = all(importlib.util.find_spec(m) for m in ("numpy", "pandas", "pyarrow", "matplotlib"))
 if HAVE_PLOTS:
+    import matplotlib.pyplot as plt
     from plot_wafer import main
-    from wafer_plots import FIGURES
+    from station import load_wafer_map
+    from wafer_plots import FIGURES, fig_fullscan, fig_pixel_issues
+    from wafer_tables import collect
     from tests.wafer_results import (FULL_PIXELS, QUICK_PIXELS, baseline, event, run_power, summary,
                                      write_map, write_run)
 
@@ -59,6 +62,20 @@ class PlotWaferTest(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertIn("BatchID_X_Name_B / WaferID_X_Name_W: 5 of 6 dies tested, PASSED 4 (80.0 %)", printed)
         self.assertEqual(written, TABLES | {f"{name}.png" for name in FIGURES})
+
+    def test_pixel_maps_are_drawn_notch_up(self):
+        # seen with the notch up the chip is upside down: pixel (0, 0) top left, (15, 15) bottom right
+        self.full_qinj_die(2)
+        dies, pixels, _, _ = collect(self.wafer, load_wafer_map(self.root / "map.csv"))
+        for fig in (fig_fullscan(dies, pixels, "t", "baseline", "baseline"), fig_pixel_issues(dies, pixels, "t")):
+            maps = [ax for ax in fig.axes if ax.images]
+            self.assertTrue(maps)
+            for ax in maps:
+                (x0, y0), (x15, y15) = ax.transData.transform([(0, 0), (15, 15)])
+                self.assertLess(x0, x15)
+                self.assertGreater(y0, y15)
+            self.assertIn("notch up", fig._suptitle.get_text())
+            plt.close(fig)
 
     def test_figures_without_data_are_left_out_and_older_copies_removed(self):
         self.out.mkdir()

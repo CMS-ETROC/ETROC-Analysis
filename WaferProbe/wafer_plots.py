@@ -457,7 +457,8 @@ def fig_fullscan(dies, pixels, title, column, what):
     _colourbar(fig, None, norm, cmap, f"{what} (DAC code)", sel.loc[~zero, column],
                cax=fig.add_axes([0.915, 0.3, 0.015, 0.4]))
     _suptitle(fig, title, f"{what} of every pixel, {len(full)} full-scan dies at their wafer positions\n"
-                          "each die: row 0 at the top, column 0 at the left; red = read zero; grey frame = no full scan",
+                          "each die seen with the notch up: pixel (0, 0) top left (bottom right in the chip's own frame); "
+                          "red = read zero; grey frame = no full scan",
                           fontsize=11)
     return fig
 
@@ -506,7 +507,9 @@ def fig_pixel_issues(dies, pixels, title):
         _colourbar(fig, ax, norm, cmap, label, img, integer=counts)
         ax.set_title(what, fontsize=10)
     _suptitle(fig, title, "per pixel, over dies (a pixel counts for zero readings only in dies that "
-                          f"calibrated it: {int(calibrated.max())} dies at most)", fontsize=11)
+                          f"calibrated it: {int(calibrated.max())} dies at most)\n"
+                          "seen with the notch up: pixel (0, 0) top left (bottom right in the chip's own frame)",
+                          fontsize=11)
     return fig
 
 
