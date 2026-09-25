@@ -3,7 +3,7 @@ wafer figures (wafer_plots.py; plot_wafer.py runs both) and for anyone
 who wants the numbers.
 
 Reads only what master_run_script.run_die writes, under
-<path>/BatchID_<id>_Name_<batch>/WaferID_<id>_Name_<wafer>/die<nnn>/run_<k>_<suffix>/:
+<path>/BatchID_<id>_Name_<batch>/WaferID_<id>_Name_<wafer>/<stage>/die<nnn>/run_<k>_<suffix>/:
 summary.json, power.parquet, baseline.parquet and, after --doQinj, the .nem
 files of the QInj run (qinj_files).
 
@@ -29,6 +29,7 @@ in wafer_run.py.
           efficiency, and CAL, TOA and TOT mean and std over the hits
           with |CAL - the pixel's most common CAL value| < 3
 """
+import csv
 import json
 import re
 from datetime import datetime
@@ -460,10 +461,20 @@ def bl_nw_notes(dies, pixels):
     return dies["die"].map(lambda die: "; ".join(found.get(die, [])))
 
 
-def collect(wafer_dir, wafer_map, before=None, with_qinj=True):
-    """(dies, pixels, qinj, warnings) for one wafer folder. wafer_map maps
-    the die number to its (row, col) on the station map, as
-    station.load_wafer_map reads wafer_map.csv."""
+def invalid_dies(path):
+    """The dies a wafer map csv marks invalid (1 in its `invalid` column):
+    tested, but never to be used, so out of the yield. A map without the
+    column has none."""
+    with open(path, newline="") as f:
+        return {int(row["location_id"]) for row in csv.DictReader(f)
+                if (row.get("invalid") or "0").strip() == "1"}
+
+
+def collect(wafer_dir, wafer_map, before=None, with_qinj=True, invalid=()):
+    """(dies, pixels, qinj, warnings) for one stage folder of a wafer.
+    wafer_map maps the die number to its (row, col) on the station map, as
+    station.load_wafer_map reads wafer_map.csv; the dies in `invalid`
+    (invalid_dies) get True in the dies table's `invalid` column."""
     wafer_dir = Path(wafer_dir)
     warnings = []
     listed = {f"die{d:03d}" for d in wafer_map}
@@ -498,6 +509,7 @@ def collect(wafer_dir, wafer_map, before=None, with_qinj=True):
             qinj += [{"die": die, **s} for s in qinj_pixel_stats(hits, events)]
         dies.append(record)
     dies = pd.DataFrame(dies)
+    dies.insert(dies.columns.get_loc("detail") + 1, "invalid", dies["die"].isin(set(invalid)))
     pixels = pd.concat(pixels, ignore_index=True) if pixels else pd.DataFrame(columns=PIXEL_COLUMNS)
     qinj = pd.DataFrame(qinj, columns=QINJ_COLUMNS)
     if "qinj_events" in dies:
@@ -507,7 +519,11 @@ def collect(wafer_dir, wafer_map, before=None, with_qinj=True):
 
 
 def grade_counts(dies):
-    """([(grade name, count)] in bin order, passed, tested) for a dies table."""
+    """([(grade name, count)] in bin order, passed, tested) over the valid
+    dies of a dies table; the invalid ones keep their grades in the table
+    but are not counted."""
+    if "invalid" in dies:
+        dies = dies[~dies["invalid"].astype(bool)]
     counts = dies.groupby(["bin", "grade"]).size()
     rows = [(name, int(n)) for (_, name), n in counts.sort_index().items()]
     tested = int((dies["grade"] != "NOT_TESTED").sum())

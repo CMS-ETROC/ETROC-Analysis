@@ -1,6 +1,6 @@
 """Synthetic wafer results laid out as master_run_script.run_die writes
 them, for tests/test_wafer_tables.py and tests/test_plot_wafer.py:
-<wafer>/die<nnn>/run_<k>_noEfuse/ with summary.json, power.parquet,
+<wafer folder>/<stage>/die<nnn>/run_<k>_noEfuse/ with summary.json, power.parquet,
 baseline.parquet and qinj_run2/file_<n>.nem. Needs pandas and pyarrow."""
 import json
 from pathlib import Path
@@ -85,7 +85,8 @@ def write_run(wafer_dir, die, run, summary=None, power=None, baseline=None, nem=
     return run_dir
 
 
-def write_map(path, wafer_map):
-    """A wafer map csv as wafer_map.csv has it."""
-    rows = ["location_id,row,col"] + [f"{d},{r},{c}" for d, (r, c) in sorted(wafer_map.items())]
+def write_map(path, wafer_map, invalid=()):
+    """A wafer map csv as wafer_map.csv has it, the dies in `invalid` marked."""
+    rows = ["location_id,row,col,invalid"] + [f"{d},{r},{c},{int(d in invalid)}"
+                                               for d, (r, c) in sorted(wafer_map.items())]
     Path(path).write_text("\n".join(rows) + "\n")

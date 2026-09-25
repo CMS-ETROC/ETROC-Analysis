@@ -88,29 +88,39 @@ figures (and warns when `--out` already holds some, which it leaves as they
 are), `--no-qinj` skips reading the QInj data. `--waferMap` overrides the
 die-position map, otherwise the bundled `wafer_map.csv` is used.
 
+The bundled map is the station's `configs/wafer_map.csv` with one more
+column, `invalid`: 1 marks a die never to be used. Dies 57 and 58, the two
+dies of column 0, are such dies; the dicing and flip-chip companies know
+not to use them. The station tests them like any other die, and they keep
+their grade in `dies.csv`, but they are left out of the grade counts and
+the yield (`114 of 114 valid dies tested, PASSED 111 (97.4 %); invalid,
+not counted: 57, 58`), and every wafer map and full-scan gallery draws
+them grey with INVALID written across them.
+
 ## What it writes
 
 The tables, as csv:
 
-- `dies.csv`, one row per die: grade and map text, run folder, the wafer
-  stage the run recorded (`wafer_stage`), status and error; the median current and voltage of every rail at power-on, at high
-  power and during QInj (`<rail>_I_on`, `<rail>_I_high`, `<rail>_I_qinj` and
-  `_V_`; the first sweep of each phase is dropped, it can still catch the
-  rails switching: the power-on current at high power, vref ramping at
-  power-on; a run without a power log gets its power-on rail-check reading
-  as `_on`); the rail-check thresholds the run used; the I2C verdicts and
-  failure lists; baseline and noise-width mean and std over the pixels that
-  did not read zero, with the zero readings listed apart; the QInj verdict
-  of the station's check (`qinj_check_*`; over the files after the first,
-  or the last file alone in runs without `qinj_seconds`), the events of all
-  the files read (`qinj_events`), the trailers with a nonzero chip
-  status (`qinj_flagged_trailers`), the EA-flagged hit words and the lowest
-  efficiency over the injected pixels; the chuck position at contact minus
-  the station's map position (`dx_um`, `dy_um`); a note on a baseline or
-  noise width that stands out (`bl_nw_note`, see "Baseline and noise-width
-  notes"). Power-on logs only two
-  sweeps, so `vref_V_on` is a single reading and can still be settling
-  (1.01-1.11 V on 25 dies of N60R91, against 1.00 V at high power).
+- `dies.csv`, one row per die: grade and map text, whether the wafer map
+  marks it invalid (`invalid`), run folder, the wafer stage the run recorded
+  (`wafer_stage`), status and error; the median current and voltage of every
+  rail at power-on, at high power and during QInj (`<rail>_I_on`,
+  `<rail>_I_high`, `<rail>_I_qinj` and `_V_`; the first sweep of each phase is
+  dropped, it can still catch the rails switching: the power-on current at
+  high power, vref ramping at power-on; a run without a power log gets its
+  power-on rail-check reading as `_on`); the rail-check thresholds the run
+  used; the I2C verdicts and failure lists; baseline and noise-width mean and
+  std over the pixels that did not read zero, with the zero readings listed
+  apart; the QInj verdict of the station's check (`qinj_check_*`; over the
+  files after the first, or the last file alone in runs without
+  `qinj_seconds`), the events of all the files read (`qinj_events`), the
+  trailers with a nonzero chip status (`qinj_flagged_trailers`), the
+  EA-flagged hit words and the lowest efficiency over the injected pixels; the
+  chuck position at contact minus the station's map position (`dx_um`,
+  `dy_um`); a note on a baseline or noise width that stands out (`bl_nw_note`,
+  see "Baseline and noise-width notes"). Power-on logs only two sweeps, so
+  `vref_V_on` is a single reading and can still be settling (1.01-1.11 V on 25
+  dies of N60R91, against 1.00 V at high power).
 - `pixels.csv`, one row per calibrated pixel: baseline and noise width.
 - `qinj.csv`, one row per pixel with hits in the QInj data (the files of
   `qinj/` after the first, which can hold malformed events from the start of
@@ -134,7 +144,7 @@ mixes two plots:
 
 | figure | shows |
 |--------|-------|
-| `grades` | grade per die, the counts and the yield; `*` = graded on the retry; a superscript letter = a baseline or noise-width note, listed under the map |
+| `grades` | grade per die, the counts and the yield over the valid dies; `*` = graded on the retry; a superscript letter = a baseline or noise-width note, listed under the map |
 | `currents` | analog and digital current per die at power-on and at high power, and the difference |
 | `currents_small_rails` | the other rails at high power |
 | `current_hists` | the analog and digital currents as histograms, with the check thresholds the runs used |
@@ -148,16 +158,16 @@ mixes two plots:
 | `qinj_pixels` | CAL, TOA and TOT mean and std per injected pixel, one dot per die |
 
 Wafer maps draw each die at its `wafer_map.csv` place, row 0 at the top as on
-the station display, and print the value in the cell; a die without a value
-is hatched. Colour ranges span the 2nd to 98th percentile of the PASSED dies
-(of all dies in the alignment maps and the full-scan galleries; fixed for
-efficiencies and counts), so one broken die does not flatten the rest. Every
-figure title starts with the wafer's labels
-and stage (`BatchID_0_Name_N62M23 / WaferID_3_Name_08A5 / pre_ubm`), on a line of their own when
-the figure is too narrow for the whole first line (`pixel_issues` without
-full-scan dies, say). Under every figure a note names the wafer by its
-labels, which run of each die was used (the newest, or the newest before
-`--before`) and when it was plotted.
+the station display, and print the value in the cell; a die without a value is
+hatched, an invalid die grey with INVALID across it. Colour ranges span the
+2nd to 98th percentile of the PASSED dies (of all dies in the alignment maps
+and the full-scan galleries; fixed for efficiencies and counts), so one broken
+die does not flatten the rest. Every figure title starts with the wafer's
+labels and stage (`BatchID_0_Name_N62M23 / WaferID_3_Name_08A5 / pre_ubm`), on
+a line of their own when the figure is too narrow for the whole first line
+(`pixel_issues` without full-scan dies, say). Under every figure a note names
+the wafer by its labels, which run of each die was used (the newest, or the
+newest before `--before`) and when it was plotted.
 
 The pixel maps (`fullscan_*`, `pixel_issues`) show each die as the wafer maps
 do, seen with the notch up. The chip sits upside down in that view, so pixel

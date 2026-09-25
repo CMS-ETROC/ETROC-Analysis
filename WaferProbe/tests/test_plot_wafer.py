@@ -13,8 +13,8 @@ if HAVE_PLOTS:
     import matplotlib.pyplot as plt
     from plot_wafer import main
     from station import load_wafer_map
-    from wafer_plots import FIGURES, fig_fullscan, fig_pixel_issues
-    from wafer_tables import collect
+    from wafer_plots import FIGURES, fig_fullscan, fig_grades, fig_pixel_issues, wafer_map
+    from wafer_tables import collect, invalid_dies
     from tests.wafer_results import (FULL_PIXELS, QUICK_PIXELS, baseline, event, run_power, summary,
                                      write_map, write_run)
 
@@ -173,6 +173,54 @@ class PlotWaferTest(unittest.TestCase):
         with contextlib.redirect_stderr(err), self.assertRaises(SystemExit):
             main(["--path", str(self.root), "--batchName", "B", "--waferName", "W"])
         self.assertIn("--waferStage", err.getvalue())
+
+    def test_the_bundled_map_marks_dies_57_and_58_invalid(self):
+        bundled = Path(__file__).resolve().parents[1] / "wafer_map.csv"
+        self.assertEqual((len(load_wafer_map(bundled)), invalid_dies(bundled)), (116, {57, 58}))
+
+    def test_an_invalid_die_is_out_of_the_yield_and_marked_in_the_table(self):
+        import pandas as pd
+        write_map(self.root / "map.csv", WAFER_MAP, invalid={6})
+        for die in (1, 2):
+            self.quick_die(die)
+        write_run(self.wafer / STAGE, 6, 1, summary(6, *WAFER_MAP[6], status="over_current"))
+        rc, printed, _ = self.plot("--tables-only")
+        self.assertEqual(rc, 0)
+        self.assertIn("/ pre_ubm: 2 of 5 valid dies tested, PASSED 2 (100.0 %); invalid, not counted: 6\n", printed)
+        self.assertNotIn("POWER_SHORT", printed)
+        dies = pd.read_csv(self.out / "dies.csv")
+        self.assertEqual(dies.loc[dies["invalid"], "die"].tolist(), [6])
+        self.assertEqual(dies.loc[dies["die"] == 6, "grade"].item(), "POWER_SHORT")
+
+    def test_an_invalid_die_reads_invalid_on_the_maps_and_stays_out_of_the_colour_range(self):
+        write_map(self.root / "map.csv", WAFER_MAP, invalid={6})
+        for die in WAFER_MAP:
+            self.full_qinj_die(die)
+        dies, pixels, _, _ = collect(self.wafer / STAGE, load_wafer_map(self.root / "map.csv"), invalid={6})
+        row, col = WAFER_MAP[6]
+
+        def marks(fig):
+            return [p for a in fig.axes for p in a.patches if p.get_gid() == "invalid"]
+
+        fig, ax = plt.subplots()
+        self.addCleanup(plt.close, fig)
+        wafer_map(ax, dies, [1.0, 2.0, 3.0, 4.0, 5.0, 1000.0], title="t")  # die 6 last
+        (mark,) = marks(fig)
+        box = mark.get_path().get_extents()
+        self.assertAlmostEqual(box.width, box.height, delta=0.01)  # corner to corner, not level
+        self.assertTrue(col - 0.5 < box.x0 < box.x1 < col + 0.5 and row - 0.5 < box.y0 < box.y1 < row + 0.5)
+        self.assertAlmostEqual((box.x0 + box.x1) / 2, col, delta=0.05)
+        self.assertEqual([t.get_position() for t in ax.texts if t.get_position() == (col, row)], [])
+        self.assertLess(fig.axes[1].get_ylim()[1], 100.0)  # the colour bar spans the valid dies' 1-5
+        grades = fig_grades(dies, "t")
+        self.addCleanup(plt.close, grades)
+        self.assertEqual(len(marks(grades)), 1)
+        self.assertIn("PASSED 5 of 5 valid dies tested", grades.axes[0].get_title())
+        self.assertIn("INVALID, not counted: 6", [t.get_text() for t in grades.axes[0].get_legend().get_texts()])
+        gallery = fig_fullscan(dies, pixels, "t", "baseline", "baseline")
+        self.addCleanup(plt.close, gallery)
+        self.assertEqual(len(marks(gallery)), 1)
+        self.assertIn("5 full-scan dies", gallery._suptitle.get_text())
 
     def test_a_missing_results_folder_is_refused(self):
         rc, printed, written = self.plot("--waferName", "nowhere")

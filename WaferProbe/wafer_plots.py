@@ -8,7 +8,10 @@ row 0 at the top as on the station's map display, and print the value in
 the cell; a die without a value is hatched grey. Colour scales span the
 2nd to 98th percentile of the PASSED dies, so one bad die does not flatten
 the rest; values beyond take the end colours. Pixel maps draw row 0 at
-the top and column 0 at the left. The note (which runs, when plotted) sits
+the top and column 0 at the left. A die the wafer map marks invalid (never
+to be used) is drawn grey with INVALID written across it, on every wafer
+map and full-scan gallery, and stays out of the colour scales and the
+yield. The note (which runs, when plotted) sits
 in a band under the figure, clear of the axis labels. The grade and
 baseline maps put a letter on a die with a BL/NW note
 (wafer_tables.bl_nw_notes) and list the notes under the maps.
@@ -24,9 +27,11 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 from matplotlib.cm import ScalarMappable  # noqa: E402
 from matplotlib.colors import ListedColormap, Normalize, to_rgba  # noqa: E402
-from matplotlib.patches import Patch, Rectangle  # noqa: E402
+from matplotlib.font_manager import FontProperties  # noqa: E402
+from matplotlib.patches import Patch, PathPatch, Rectangle  # noqa: E402
+from matplotlib.textpath import TextPath  # noqa: E402
 from matplotlib.ticker import MaxNLocator  # noqa: E402
-from matplotlib.transforms import ScaledTranslation  # noqa: E402
+from matplotlib.transforms import Affine2D, ScaledTranslation  # noqa: E402
 
 from wafer_tables import (DIE_MEANS, NOTE_DIE_SIGMA, NOTE_MIN_DIES, NOTE_PIXEL_BL,  # noqa: E402
                           NOTE_PIXEL_NW, grade_counts, injected_pixels, offset_trend,
@@ -41,6 +46,8 @@ GRADE_COLOURS = {
 }
 MAIN_RAILS = ("analog", "digital")
 ZERO_COLOUR = "#e41a1c"
+INVALID_FILL, INVALID_INK = "#d9d9d9", "#4d4d4d"
+INVALID_TEXT = TextPath((0, 0), "INVALID", size=1, prop=FontProperties(weight="bold"))
 FULL_SCAN_PIXELS = 256
 NOTES_LISTED = 8  # BL/NW notes printed under a figure; dies.csv has them all
 
@@ -60,6 +67,32 @@ def _num(dies, column):
 
 def _passed(dies):
     return (dies["grade"] == "PASSED").to_numpy()
+
+
+def _invalid(dies):
+    """Mask of the dies the wafer map marks invalid."""
+    if "invalid" not in dies:
+        return np.zeros(len(dies), dtype=bool)
+    return dies["invalid"].fillna(False).to_numpy(dtype=bool)
+
+
+def _write_invalid(ax, x, y, side):
+    """INVALID written corner to corner across the square of `side` data
+    units centred on (x, y), rising to the right. The text is a path in data
+    units, so it fills the cell whatever the figure size; the axes needs
+    equal aspect and its y axis pointing down, as the wafer and pixel maps
+    have."""
+    ext = INVALID_TEXT.get_extents()
+    scale = 0.92 * side * np.sqrt(2) / (ext.width + ext.height)  # the 45-degree box is (w + h) / sqrt 2
+    place = (Affine2D().translate(-ext.x0 - ext.width / 2, -ext.y0 - ext.height / 2).scale(scale)
+             .rotate_deg(45).scale(1, -1).translate(x, y))
+    ax.add_patch(PathPatch(place.transform_path(INVALID_TEXT), facecolor=INVALID_INK, edgecolor="none",
+                           gid="invalid"))
+
+
+def _invalid_cell(ax, col, row):
+    ax.add_patch(Rectangle((col - .5, row - .5), 1, 1, facecolor=INVALID_FILL, edgecolor="white", lw=0.6))
+    _write_invalid(ax, col, row, 1.0)
 
 
 def _shape(dies):
@@ -165,8 +198,10 @@ def wafer_map(ax, dies, values, *, title, label="", fmt="{:.0f}", cmap="viridis"
     mask) picks the dies that set the colour range, `vrange` fixes it,
     `frame` (a mask) outlines dies in red, `marks` (one string per row)
     follows the value in its cell; `integer` puts whole numbers on the
-    colour bar (counts)."""
-    values = np.asarray(values, dtype=float)
+    colour bar (counts). An invalid die reads INVALID and its value is
+    left out of the colour range."""
+    invalid = _invalid(dies)
+    values = np.where(invalid, np.nan, np.asarray(values, dtype=float))
     rows = dies["die_row"].to_numpy(dtype=int)
     cols = dies["die_col"].to_numpy(dtype=int)
     marks = [""] * len(values) if marks is None else marks
@@ -176,8 +211,10 @@ def wafer_map(ax, dies, values, *, title, label="", fmt="{:.0f}", cmap="viridis"
     norm = Normalize(*vrange)
     cmap = plt.get_cmap(cmap)
     _wafer_axes(ax, _shape(dies))
-    for r, c, v, mark in zip(rows, cols, values, marks):
-        if np.isfinite(v):
+    for r, c, v, mark, out in zip(rows, cols, values, marks, invalid):
+        if out:
+            _invalid_cell(ax, c, r)
+        elif np.isfinite(v):
             colour = cmap(norm(v))
             ax.add_patch(Rectangle((c - .5, r - .5), 1, 1, facecolor=colour, edgecolor="white", lw=0.6))
             ax.text(c, r, fmt.format(v) + mark, ha="center", va="center", fontsize=fontsize,
@@ -186,6 +223,7 @@ def wafer_map(ax, dies, values, *, title, label="", fmt="{:.0f}", cmap="viridis"
             ax.add_patch(Rectangle((c - .5, r - .5), 1, 1, facecolor="#f4f4f4", edgecolor="#c8c8c8",
                                    hatch="////", lw=0.5))
     if frame is not None:
+        frame = frame & ~invalid
         for r, c in zip(rows[frame], cols[frame]):
             ax.add_patch(Rectangle((c - .44, r - .44), 0.88, 0.88, fill=False, edgecolor=ZERO_COLOUR, lw=1.5))
     _colourbar(ax.figure, ax, norm, cmap, label, values, integer=integer)
@@ -201,11 +239,11 @@ def _pixel_values(dies, qinj, pixel, column):
 
 def _note_letters(dies):
     """die -> footnote letter (a, b, ..., z, aa, ab, ...), in die order,
-    for the dies with a BL/NW note (wafer_tables.bl_nw_notes); none for a
-    dies table without the column (a dies.csv from before the notes)."""
+    for the valid dies with a BL/NW note (wafer_tables.bl_nw_notes); none
+    for a dies table without the column (a dies.csv from before the notes)."""
     if "bl_nw_note" not in dies:
         return {}
-    noted = dies.loc[dies["bl_nw_note"].fillna("") != "", "die"]
+    noted = dies.loc[(dies["bl_nw_note"].fillna("") != "") & ~_invalid(dies), "die"]
     letters = {}
     for k, die in enumerate(noted, start=1):
         name = ""
@@ -256,7 +294,11 @@ def fig_grades(dies, title):
     fig, ax = plt.subplots(figsize=(9.8, 6.8), layout="constrained")
     _wafer_axes(ax, _shape(dies))
     letters = _note_letters(dies)
-    for d in dies.itertuples(index=False):
+    invalid = _invalid(dies)
+    for d, out in zip(dies.itertuples(index=False), invalid):
+        if out:
+            _invalid_cell(ax, d.die_col, d.die_row)
+            continue
         colour = GRADE_COLOURS.get(d.grade, "white")
         ax.add_patch(Rectangle((d.die_col - .5, d.die_row - .5), 1, 1, facecolor=colour,
                                edgecolor="white", lw=0.8))
@@ -265,9 +307,13 @@ def fig_grades(dies, title):
                 ha="center", va="center", fontsize=7, color=_ink(colour))
     counts, passed, tested = grade_counts(dies)
     handles = [Patch(facecolor=GRADE_COLOURS.get(g, "white"), label=f"{g}: {n}") for g, n in counts]
+    if invalid.any():
+        handles.append(Patch(facecolor=INVALID_FILL, label="INVALID, not counted: "
+                             + ", ".join(str(d) for d in dies.loc[invalid, "die"])))
     ax.legend(handles=handles, loc="upper left", bbox_to_anchor=(1.01, 1.0), frameon=False, fontsize=8)
     share = f" ({100 * passed / tested:.1f} %)" if tested else ""
-    ax.set_title(f"{title}: grade per die, PASSED {passed} of {tested} tested{share}\n"
+    valid = " valid dies" if invalid.any() else ""
+    ax.set_title(f"{title}: grade per die, PASSED {passed} of {tested}{valid} tested{share}\n"
                  "die number in each cell; * = graded on the retry"
                  + ("; letter = a note below" if letters else ""), fontsize=10)
     _bl_nw_footnotes(fig, dies, letters)
@@ -417,7 +463,8 @@ def fig_alignment(dies, title):
 def fig_fullscan(dies, pixels, title, column, what):
     """Every full-scan die's 16 x 16 map at its place on the wafer; zero
     readings in red; the other dies as grey frames."""
-    full = set(dies.loc[_num(dies, "n_pixels") >= FULL_SCAN_PIXELS, "die"])
+    invalid = set(dies.loc[_invalid(dies), "die"])
+    full = set(dies.loc[_num(dies, "n_pixels") >= FULL_SCAN_PIXELS, "die"]) - invalid
     if not full:
         return None
     nrow, ncol = _shape(dies)
@@ -436,7 +483,12 @@ def fig_fullscan(dies, pixels, title, column, what):
         ax.set_xlim(-0.5, 15.5)
         ax.set_ylim(15.5, -0.5)
         ax.set_aspect("equal")
-        if d.die in full:
+        if d.die in invalid:
+            ax.set_facecolor(INVALID_FILL)
+            for spine in ax.spines.values():
+                spine.set_color("#dddddd")
+            _write_invalid(ax, 7.5, 7.5, 16)
+        elif d.die in full:
             p = sel[sel["die"] == d.die]
             img = np.full((16, 16), np.nan)
             img[p["pix_row"].to_numpy(int), p["pix_col"].to_numpy(int)] = p[column].to_numpy(float)
@@ -458,7 +510,8 @@ def fig_fullscan(dies, pixels, title, column, what):
                cax=fig.add_axes([0.915, 0.3, 0.015, 0.4]))
     _suptitle(fig, title, f"{what} of every pixel, {len(full)} full-scan dies at their wafer positions\n"
                           "each die seen with the notch up: pixel (0, 0) top left (bottom right in the chip's own frame); "
-                          "red = read zero; grey frame = no full scan",
+                          "red = read zero; grey frame = no full scan"
+                          + ("; INVALID = a die never to be used" if invalid else ""),
                           fontsize=11)
     return fig
 

@@ -23,7 +23,7 @@ from datetime import datetime
 from pathlib import Path
 
 from station import load_wafer_map
-from wafer_tables import collect, grade_counts, write_tables
+from wafer_tables import collect, grade_counts, invalid_dies, write_tables
 
 REPO = Path(__file__).resolve().parent
 
@@ -45,7 +45,8 @@ def build_arg_parser():
     parser.add_argument('--waferID', type=int, default=None,
                         help='Wafer ID of the wafer run, e.g. 3 (with --waferName, both must match)')
     parser.add_argument('--waferMap', default=str(REPO / 'wafer_map.csv'), dest='wafer_map',
-                        help='CSV mapping the die number (location_id) to its row and col on the wafer map')
+                        help='CSV mapping the die number (location_id) to its row and col on the wafer map, '
+                             'and, in an optional invalid column, 1 for a die never to be used')
     parser.add_argument('--before', default=None,
                         help='Use the newest run of each die that started before this time, e.g. '
                              '"2026-09-22 15:30" on the DAQ computer clock (default: the newest run)')
@@ -121,7 +122,7 @@ def main(argv=None):
     out_dir = Path(args.out) if args.out else stage_dir / "plots"
 
     dies, pixels, qinj, warnings = collect(stage_dir, load_wafer_map(args.wafer_map), before=before,
-                                           with_qinj=not args.no_qinj)
+                                           with_qinj=not args.no_qinj, invalid=invalid_dies(args.wafer_map))
     for warning in warnings:
         print(f"warning: {warning}")
     ran = dies[dies["run"].notna()] if "run" in dies else dies.iloc[0:0]
@@ -135,7 +136,12 @@ def main(argv=None):
         print(f"warning: {int(stages.isna().sum())} dies ran without a recorded stage")
     counts, passed, tested = grade_counts(dies)
     share = f" ({100 * passed / tested:.1f} %)" if tested else ""
-    print(f"{label}: {tested} of {len(dies)} dies tested, PASSED {passed}{share}")
+    invalid = dies.loc[dies["invalid"], "die"].tolist()
+    if invalid:
+        print(f"{label}: {tested} of {len(dies) - len(invalid)} valid dies tested, PASSED {passed}{share}; "
+              f"invalid, not counted: {', '.join(map(str, invalid))}")
+    else:
+        print(f"{label}: {tested} of {len(dies)} dies tested, PASSED {passed}{share}")
     for name, n in counts:
         print(f"  {name:16s} {n}")
 
