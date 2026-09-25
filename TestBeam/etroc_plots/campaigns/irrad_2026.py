@@ -92,11 +92,23 @@ MARCH_EOS_WEEK2 = (os.environ.get("ETROC_IV_EOS_MARCH_WEEK2")
 MARCH_EOS_15E14 = (os.environ.get("ETROC_IV_EOS_MARCH_15E14")
                    or os.path.join(EOS_ROOT, "laptop_mirror_15e14"))
 
-# End of each irradiation step, UTC. For the July steps the stamp is the first IV scan after
-# the step, an upper bound on the end of the beam.
+# End of each irradiation step, UTC: the best stated beam stop, settled 2026-09-25 from the
+# shift logbook and the operators' messages. Before that the March values were HV-logger
+# restarts (9e14 was 58 min early) and the July values the first IV scan after the step.
+# RAD_STOP_BOUNDS_UTC brackets each stop with the (earliest, latest) time consistent with the
+# records; only 2e15 is wide — its stop is known from a ~19:00 CEST message and the F1 LV
+# return at 18:17:43 UTC (LV comes back only once the telescopes leave the zone). Per-telescope
+# HV-log stops (H1/F1 within ~1 min) stay in iv.current_vs_run as cross-checks.
 RAD_STOP_UTC = {
-    3e14: "2026-03-16 17:07:00", 9e14: "2026-03-19 17:01:00", 1.5e15: "2026-03-22 22:30:00",
-    2e15: "2026-07-20 18:37:00", 3.5e15: "2026-07-25 16:09:00",
+    3e14: "2026-03-16 17:11:29", 9e14: "2026-03-19 17:59:00", 1.5e15: "2026-03-22 22:30:00",
+    2e15: "2026-07-20 17:00:00", 3.5e15: "2026-07-25 15:50:26",
+}
+RAD_STOP_BOUNDS_UTC = {
+    3e14: ("2026-03-16 17:10:29", "2026-03-16 17:12:29"),
+    9e14: ("2026-03-19 17:58:00", "2026-03-19 18:00:00"),
+    1.5e15: ("2026-03-22 22:20:00", "2026-03-22 22:30:00"),
+    2e15: ("2026-07-20 16:30:00", "2026-07-20 18:17:43"),
+    3.5e15: ("2026-07-25 15:49:26", "2026-07-25 15:51:26"),
 }
 
 # ============================================================================== March: IV scans
