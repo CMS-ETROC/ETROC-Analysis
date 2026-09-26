@@ -14,7 +14,9 @@ map and full-scan gallery, and stays out of the colour scales and the
 yield. The note (which runs, when plotted) sits
 in a band under the figure, clear of the axis labels. The grade and
 baseline maps put a letter on a die with a BL/NW note
-(wafer_tables.bl_nw_notes) and list the notes under the maps.
+(wafer_tables.bl_nw_notes) and list the notes under the maps. The grade
+map puts a + on a die whose QInj stage failed behind the finding that
+graded it (wafer_tables.qinj_also) and lists those dies in its legend.
 """
 import json
 import textwrap
@@ -254,6 +256,23 @@ def _note_letters(dies):
     return letters
 
 
+def _qinj_also(dies):
+    """{grade name: [die, ...]} of the valid dies whose QInj stage failed
+    behind the finding that graded them (the dies table's
+    qinj_also_failed); {} for a dies table without the column."""
+    if "qinj_also_failed" not in dies:
+        return {}
+    also = dies.loc[(dies["qinj_also_failed"] != "") & ~_invalid(dies)]
+    return {name: group["die"].tolist() for name, group in also.groupby("qinj_also_failed", sort=True)}
+
+
+def _also_label(name, dies):
+    """The legend entry of the dies whose QInj failed too with `name`,
+    wrapped so that a long die list does not widen the legend."""
+    return "+ QInj failed too,\n" + textwrap.fill(f"{name}: " + ", ".join(str(d) for d in dies), 38,
+                                                  initial_indent="   ", subsequent_indent="   ")
+
+
 def _mark(letters, die):
     """A die's footnote letter as a superscript for its cell, "" for none."""
     return rf"$^{{\rm {letters[die]}}}$" if die in letters else ""
@@ -294,6 +313,8 @@ def fig_grades(dies, title):
     fig, ax = plt.subplots(figsize=(9.8, 6.8), layout="constrained")
     _wafer_axes(ax, _shape(dies))
     letters = _note_letters(dies)
+    also = _qinj_also(dies)
+    plus = {die for group in also.values() for die in group}
     invalid = _invalid(dies)
     for d, out in zip(dies.itertuples(index=False), invalid):
         if out:
@@ -303,18 +324,22 @@ def fig_grades(dies, title):
         ax.add_patch(Rectangle((d.die_col - .5, d.die_row - .5), 1, 1, facecolor=colour,
                                edgecolor="white", lw=0.8))
         retry = str(getattr(d, "map_text", "")).endswith("_retry")
-        ax.text(d.die_col, d.die_row, f"{d.die}{'*' if retry else ''}{_mark(letters, d.die)}",
+        ax.text(d.die_col, d.die_row,
+                f"{d.die}{'*' if retry else ''}{'+' if d.die in plus else ''}{_mark(letters, d.die)}",
                 ha="center", va="center", fontsize=7, color=_ink(colour))
     counts, passed, tested = grade_counts(dies)
     handles = [Patch(facecolor=GRADE_COLOURS.get(g, "white"), label=f"{g}: {n}") for g, n in counts]
     if invalid.any():
         handles.append(Patch(facecolor=INVALID_FILL, label="INVALID, not counted: "
                              + ", ".join(str(d) for d in dies.loc[invalid, "die"])))
+    handles += [Patch(facecolor="none", edgecolor="none", label=_also_label(name, group))
+                for name, group in also.items()]
     ax.legend(handles=handles, loc="upper left", bbox_to_anchor=(1.01, 1.0), frameon=False, fontsize=8)
     share = f" ({100 * passed / tested:.1f} %)" if tested else ""
     valid = " valid dies" if invalid.any() else ""
     ax.set_title(f"{title}: grade per die, PASSED {passed} of {tested}{valid} tested{share}\n"
                  "die number in each cell; * = graded on the retry"
+                 + ("; + = its QInj failed too" if plus else "")
                  + ("; letter = a note below" if letters else ""), fontsize=10)
     _bl_nw_footnotes(fig, dies, letters)
     return fig

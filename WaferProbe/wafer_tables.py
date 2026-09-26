@@ -18,8 +18,9 @@ started before that time, to see the wafer as it stood then. Every die of
 the wafer map gets a row; a die without such a run grades NOT_TESTED, as
 in wafer_run.py.
 
-  dies    one row per die: position, run, grade and map text, status and
-          error, the median current and voltage of every rail in each run
+  dies    one row per die: position, run, grade and map text, the grade
+          of a failed QInj stage behind a finding before it (qinj_also),
+          status and error, the median current and voltage of every rail in each run
           phase, the I2C verdicts, the baseline and noise-width statistics,
           the QInj verdict, event counts and lowest pixel efficiency,
           the chuck-minus-map offset at contact, and a note on a baseline
@@ -38,7 +39,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from station import grade, result_text
+from station import _before_qinj, _qinj_failure, grade, result_text
 from station import nem_files
 
 # power.parquet phase -> column suffix in the dies table
@@ -239,11 +240,34 @@ def _prober_columns(summary):
     return out
 
 
+def qinj_also(summary):
+    """The grade the run's failed QInj stage alone gives, as the station
+    grades it, when a finding before QInj (station._before_qinj: a failed
+    I2C check, an unverified eFuse, BL or NW = 0) took the die's grade:
+    NO_LINK_OR_DATA with what the check saw, "(no data)" for no complete
+    event or "(off pattern)" for events off the injected pattern, or
+    EFUSE_TRAILER_FAIL on the trailer chip ID alone; "" for any other run.
+    The station's map and bin show only the first finding: a die whose zero
+    pixel took its grade reads the same there whether its QInj worked or
+    gave no data at all."""
+    if summary.get("status") != "failed" or "qinj_start" not in (summary.get("phases") or {}) \
+            or _before_qinj(summary) is None:
+        return ""
+    name = _qinj_failure(summary, summary.get("error")).name
+    check = summary.get("qinj_check") or {}
+    if name == "NO_LINK_OR_DATA" and not check.get("events"):
+        return f"{name} (no data)"
+    if name == "NO_LINK_OR_DATA" and check.get("bad"):
+        return f"{name} (off pattern)"
+    return name
+
+
 def die_record(die, position, run_dir=None, summary=None, baseline=None, power=None):
     """One row of the dies table; a die without a run grades NOT_TESTED."""
     g = grade(summary)
     record = {"die": die, "die_row": position[0], "die_col": position[1],
-              "grade": g.name, "bin": g.bin, "detail": g.detail}
+              "grade": g.name, "bin": g.bin, "detail": g.detail,
+              "qinj_also_failed": qinj_also(summary) if summary else ""}
     if summary is None:
         return record
     attempt = summary.get("attempt") or 1

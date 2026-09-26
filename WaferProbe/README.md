@@ -101,7 +101,13 @@ them grey with INVALID written across them.
 
 The tables, as csv:
 
-- `dies.csv`, one row per die: grade and map text, whether the wafer map
+- `dies.csv`, one row per die: grade and map text; for a die graded by a
+  finding before QInj (I2C_PIXELS, EFUSE_FAIL, BL_NW_ZERO) whose QInj stage
+  failed as well, the grade that failure alone gives (`qinj_also_failed`:
+  `NO_LINK_OR_DATA (no data)` when no complete event came,
+  `NO_LINK_OR_DATA (off pattern)` when the events came off the injected
+  pattern, or EFUSE_TRAILER_FAIL on the trailer chip ID alone; the station's
+  map and bin show only the first finding); whether the wafer map
   marks it invalid (`invalid`), run folder, the wafer stage the run recorded
   (`wafer_stage`), status and error; the median current and voltage of every
   rail at power-on, at high power and during QInj (`<rail>_I_on`,
@@ -144,7 +150,7 @@ mixes two plots:
 
 | figure | shows |
 |--------|-------|
-| `grades` | grade per die, the counts and the yield over the valid dies; `*` = graded on the retry; a superscript letter = a baseline or noise-width note, listed under the map |
+| `grades` | grade per die, the counts and the yield over the valid dies; `*` = graded on the retry; `+` = its QInj failed too (`qinj_also_failed`, the dies listed in the legend by that grade); a superscript letter = a baseline or noise-width note, listed under the map |
 | `currents` | analog and digital current per die at power-on and at high power, and the difference |
 | `currents_small_rails` | the other rails at high power |
 | `current_hists` | the analog and digital currents as histograms, with the check thresholds the runs used |

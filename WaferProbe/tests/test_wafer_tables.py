@@ -112,6 +112,48 @@ class DieRecordTest(TempWafer):
         self.assertEqual((rec["n_pixels"], rec["n_zero_pixels"], json.loads(rec["zero_pixels"])), (3, 1, [[0, 1]]))
         self.assertEqual((rec["bl_mean"], rec["nw_mean"]), (401.0, 7.0))
 
+    def test_a_failed_qinj_behind_a_zero_pixel_is_kept_beside_the_grade(self):
+        # 09A0 post-UBM die 45: a zero pixel, then no QInj data at all
+        failed = {"status": "failed", "error": "QInj data: only file_0.nem, and the first file is not checked",
+                  "phases": {"power_on": "2026-09-25 17:47:20.000", "qinj_start": "2026-09-25 17:47:29.000"},
+                  "qinj_check": {"ok": False, "events": 0, "bad": 0},
+                  "calibration": {"n_pixels": 2, "zero_pixels": [[15, 14]]}}
+        for name, extra, also in (
+                ("no QInj data", failed, "NO_LINK_OR_DATA (no data)"),
+                ("events off the pattern", {**failed, "qinj_check": {"ok": False, "events": 9, "bad": 3}},
+                 "NO_LINK_OR_DATA (off pattern)"),
+                ("trailer chip ID alone", {**failed, "qinj_check": {"ok": False, "events": 9, "bad": 0,
+                                                                   "chip_id_bad": 9}}, "EFUSE_TRAILER_FAIL"),
+                ("QInj OK", {"phases": failed["phases"], "calibration": failed["calibration"],
+                             "qinj_check": {"ok": True, "events": 9, "bad": 0}}, ""),
+                ("stopped before QInj", {**failed, "phases": {"power_on": "2026-09-25 17:47:20.000",
+                                                              "i2c_start": "2026-09-25 17:47:22.000"}}, "")):
+            with self.subTest(name):
+                s = summary(45, 5, 12, **extra)
+                bl = baseline([(15, 13), (15, 14)], zero=[(15, 14)])
+                rec = die_record(45, (5, 12), write_run(self.wafer / name, 45, 1, s), s, baseline=bl)
+                self.assertEqual((rec["grade"], rec["qinj_also_failed"]), ("BL_NW_ZERO", also))
+
+    def test_the_other_findings_before_qinj_keep_a_failed_qinj_beside_them_too(self):
+        failed = {"status": "failed", "error": "QInj data: only file_0.nem",
+                  "phases": {"power_on": "2026-09-25 17:47:20.000", "qinj_start": "2026-09-25 17:47:29.000"},
+                  "qinj_check": {"ok": False, "events": 0, "bad": 0},
+                  "calibration": {"n_pixels": 2, "zero_pixels": []}}
+        for name, extra in (
+                ("I2C_PIXELS", {"i2c": {"0x60": {"pixel_id": {"passed": False, "failed_pixels": [[7, 3]]}}}}),
+                ("EFUSE_FAIL", {"efuse": {"0x60": {"verified": False, "reason": "reads 0x0"}}})):
+            with self.subTest(name):
+                s = summary(45, 5, 12, **failed, **extra)
+                rec = die_record(45, (5, 12), write_run(self.wafer / name, 45, 1, s), s,
+                                 baseline=baseline([(15, 13), (15, 14)]))
+                self.assertEqual((rec["grade"], rec["qinj_also_failed"]), (name, "NO_LINK_OR_DATA (no data)"))
+
+    def test_a_die_graded_by_its_qinj_failure_has_nothing_beside_it(self):
+        s = summary(45, 5, 12, status="failed", error="QInj data: only file_0.nem",
+                    phases={"power_on": "2026-09-25 17:47:20.000", "qinj_start": "2026-09-25 17:47:29.000"})
+        rec = die_record(45, (5, 12), write_run(self.wafer, 45, 1, s), s, baseline=baseline([(15, 14)]))
+        self.assertEqual((rec["grade"], rec["qinj_also_failed"]), ("NO_LINK_OR_DATA", ""))
+
     def test_a_die_without_a_run_is_not_tested(self):
         rec = die_record(5, (1, 2))
         self.assertEqual((rec["grade"], rec["die_row"], rec["die_col"]), ("NOT_TESTED", 1, 2))

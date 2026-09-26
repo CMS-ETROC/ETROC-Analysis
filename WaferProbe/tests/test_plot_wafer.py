@@ -178,6 +178,37 @@ class PlotWaferTest(unittest.TestCase):
         bundled = Path(__file__).resolve().parents[1] / "wafer_map.csv"
         self.assertEqual((len(load_wafer_map(bundled)), invalid_dies(bundled)), (116, {57, 58}))
 
+    def test_a_die_whose_qinj_failed_behind_its_grade_gets_a_plus_and_a_legend_line(self):
+        import pandas as pd
+        for die in (1, 3):
+            self.quick_die(die)
+        for die in (2, 4):  # a zero pixel, then no QInj data (09A0 post-UBM die 45)
+            row, col = WAFER_MAP[die]
+            write_run(self.wafer / STAGE, die, 1,
+                      summary(die, row, col, status="failed", error="QInj data: only file_0.nem",
+                              phases={"power_on": "2026-09-22 15:00:00.000", "qinj_start": "2026-09-22 15:00:09.000"},
+                              calibration={"n_pixels": 9, "zero_pixels": [[5, 5]]}),
+                      power=run_power(), baseline=baseline(QUICK_PIXELS, zero=[(5, 5)]))
+        for invalid, texts, entry in (
+                ((), ["1", "2+", "3", "4+", "5", "6"], "   NO_LINK_OR_DATA (no data): 2, 4"),
+                ({4}, ["1", "2+", "3", "5", "6"], "   NO_LINK_OR_DATA (no data): 2")):
+            with self.subTest(invalid=invalid):
+                dies, _, _, _ = collect(self.wafer / STAGE, WAFER_MAP, invalid=invalid)
+                fig = fig_grades(dies, "W")
+                ax = fig.axes[0]
+                self.assertEqual(sorted(t.get_text() for t in ax.texts), sorted(texts))
+                self.assertIn("+ QInj failed too,\n" + entry, [t.get_text() for t in ax.get_legend().get_texts()])
+                self.assertIn("+ = its QInj failed too", ax.get_title())
+                self.assertEqual(dict(zip(dies["die"], dies["grade"]))[2], "BL_NW_ZERO")
+                plt.close(fig)
+
+    def test_a_long_list_of_dies_whose_qinj_failed_too_wraps(self):
+        from wafer_plots import _also_label
+        label = _also_label("NO_LINK_OR_DATA (off pattern)", list(range(1, 31)))
+        lines = label.split("\n")
+        self.assertLessEqual(max(len(line) for line in lines), 38)
+        self.assertEqual(" ".join(lines[1:]).replace(",", " ").split()[3:], [str(d) for d in range(1, 31)])
+
     def test_an_invalid_die_is_out_of_the_yield_and_marked_in_the_table(self):
         import pandas as pd
         write_map(self.root / "map.csv", WAFER_MAP, invalid={6})
