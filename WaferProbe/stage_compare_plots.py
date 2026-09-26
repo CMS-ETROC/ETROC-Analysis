@@ -15,8 +15,8 @@ import numpy as np  # noqa: E402
 from matplotlib.patches import Patch, Rectangle  # noqa: E402
 from matplotlib.transforms import ScaledTranslation  # noqa: E402
 
-from stage_compare import (MAIN_RAILS, QINJ_QUANTITIES, SAME_CHIP_R, STAGE_ORDER, passed_unchecked,  # noqa: E402
-                           qinj_compared, transitions)
+from stage_compare import (MAIN_RAILS, QINJ_QUANTITIES, SAME_CHIP_R, STAGE_ORDER, qinj_compared,  # noqa: E402
+                           transitions, unchecked_text)
 from wafer_plots import (GRADE_COLOURS, _edges, _ink, _invalid, _invalid_cell, _num, _shape,  # noqa: E402
                          _suptitle, _wafer_axes, wafer_map)
 from wafer_tables import UNTESTED  # noqa: E402
@@ -70,13 +70,12 @@ def fig_grade_changes(changes, title):
     ax.legend(handles=handles, loc="upper left", bbox_to_anchor=(1.01, 1.0), frameon=False, fontsize=7.5)
     passed = [int((valid[f"grade_{s}"] == "PASSED").sum()) for s in ("pre", "post")]
     tested = [int((~valid[f"grade_{s}"].isin(UNTESTED)).sum()) for s in ("pre", "post")]
-    unchecked = [(s, len(passed_unchecked(changes, tag))) for s, tag in zip(STAGE_ORDER, ("pre", "post"))]
+    unchecked = [(s, unchecked_text(changes, tag)) for s, tag in zip(STAGE_ORDER, ("pre", "post"))]
     ax.set_title(f"{title}: grade per die after UBM, PASSED {passed[0]} of {tested[0]} before, "
                  f"{passed[1]} of {tested[1]} after\n"
                  f"framed = grade changed, with before → after; {sum(len(d) for *_, d in moves)} valid dies "
                  "changed"
-                 + "".join(f"\n{s}: {n} dies PASSED without an I2C record, on their power readings "
-                           "and, where taken, baselines alone" for s, n in unchecked if n), fontsize=10)
+                 + "".join(f"\n{s}: {text}" for s, text in unchecked if text), fontsize=10)
     return fig
 
 

@@ -170,6 +170,27 @@ class StageCompareTest(unittest.TestCase):
         self.assertNotIn("post_ubm: 3 dies PASSED without", printed)
         self.assertIn("no pixel was calibrated in both stages: no baseline comparison", printed)
 
+    def test_a_february_stage_with_the_step_to_high_power_compares_its_currents(self):
+        # as the February 2026 import writes a die whose log shows the switch to high power: power
+        # phases from the log, no I2C record, reached_high_power recorded
+        checks = {rail: {"voltage": 1.36, "current": current, "abort_above": 0.63, "ok": True}
+                  for rail, current in (("analog", 0.31), ("digital", 0.12))}
+        for die, reached in ((1, True), (2, True), (3, False)):
+            row, col = WAFER_MAP[die]
+            write_run(self.wafer / "pre_ubm", die, 1,
+                      summary(die, row, col, short_check=checks, i2c={},
+                              imported={"source": "Wafer_N62C72_18F7", "reached_high_power": reached}),
+                      power=run_power(on=0.31, high=0.45) if reached else None)
+            self.post_die(die)
+        printed, files, changes = self.plot()
+        self.assertIn("current_changes.png", files)
+        self.assertEqual(changes.loc[[1, 2], "d_analog_I_high"].round(6).tolist(), [0.01, 0.01])
+        self.assertTrue(np.isnan(changes.loc[3, "d_analog_I_high"]))
+        self.assertEqual(changes.loc[[1, 2, 3], "reached_high_power_pre"].tolist(), [True, True, False])
+        self.assertIn("pre_ubm: 3 dies PASSED without an I2C record, on their power readings and, where taken, "
+                      "baselines alone; 2 of them reached high power, so their I2C writes went through", printed)
+        self.assertNotIn("post_ubm: 3 dies PASSED without", printed)
+
     def test_an_imported_stage_with_the_power_phases_compares_its_currents(self):
         # as the April 2026 N62M23 station runs imported into pre_ubm
         for die in (1, 2):

@@ -113,7 +113,9 @@ The tables, as csv:
   map and bin show only the first finding); whether the wafer map
   marks it invalid (`invalid`), run folder, the wafer stage the run recorded
   (`wafer_stage`), status and error, whether the run was imported from
-  earlier data by the station's `import_runs.py` (`imported`); the median current and voltage of every
+  earlier data by the station's `import_runs.py` (`imported`) and, for the
+  February 2026 import, whether its log shows the switch to high power
+  (`reached_high_power`); the median current and voltage of every
   rail at power-on, at high power and during QInj (`<rail>_I_on`,
   `<rail>_I_high`, `<rail>_I_qinj` and `_V_`; the first sweep of each phase is
   dropped, it can still catch the rails switching: the power-on current at
@@ -247,17 +249,21 @@ baselines of N62H30 01D4 and 02C7, read by hand from the imported runs'
 these wafers get no same-chip r today): their dies matched their own
 before-UBM baselines at median r 0.98 and 0.97 and the other wafer's at 0.45.
 
-Currents compare only where both stages logged the station's power
-phases. The February 2026 before_bump import holds one current per rail
-instead, from a sequence of its own (463 mA analog on the PASSED dies of
-N62H30 01D4, against 299 mA at power-on and 444 mA at high power on the
-same dies after UBM), so its currents are not compared; the April 2026
-N62M23 runs imported into `pre_ubm` logged the phases and compare like any
-other. A die of the February import passed on nothing but its power
+Currents compare only where both stages have the power phases. The
+station logs them; the February 2026 before_bump import takes them from
+its power log (the station's `import_runs.py` from f1723a4 on): power-on
+before the analog current steps up to high power, high power after. A
+February die without that step (a short at a supply's limit) has one
+reading per rail and no current change; the April 2026 N62M23 runs
+imported into `pre_ubm` logged the phases like any station run. The
+supply setpoints differ between the campaigns (February: analog 1.359 V,
+digital 1.254 V; September: 1.363-1.364 V and 1.298 V), which the figure's title
+gives. A die of the February import passed on nothing but its power
 readings and, where taken, 8-pixel baselines (the report's I2C findings
 are the only I2C record the import has), and the grade figure counts the
-dies that PASSED so: a die graded I2C_PIXELS after UBM may have been one
-before.
+dies that PASSED so, with how many of them reached high power: the test
+switched to it after its I2C writes, so those went through, but a die
+graded I2C_PIXELS after UBM may have been one before.
 
 ## Tests
 

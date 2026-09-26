@@ -14,17 +14,20 @@ stages (the digital rail went from 1.255 V to 1.298 V between April and
 September 2026), so the median power-on voltage of each rail is reported
 beside the current changes.
 
-Currents compare only where both stages logged the station's power
-phases (a high-power current in the dies table). The February 2026
-before_bump import holds one current per rail instead, the median over a
-sequence of its own: 463 mA analog on the PASSED dies of N62H30 01D4,
-against 299 mA at power-on and 444 mA at high power on the same dies after
-UBM, so no station phase matches it. The April 2026 N62M23 runs imported
-into pre_ubm were station runs with the phases logged, and compare like
-any other. A stage with no I2C record (the February import) is graded on
-its power readings and baselines alone (8 pixels, and none at all on five
-of the ten wafers; the report's I2C findings are the only I2C record it
-has): a die graded I2C_PIXELS after UBM may have been one before.
+Currents compare only where both stages have the power phases (a
+high-power current in the dies table). The station logs them; the
+February 2026 before_bump import (the station's import_runs.py from
+f1723a4 on) takes them from its power log, power_on before the analog
+current steps up to high power and high_power after, and a February die
+whose log shows no such step (a short at a supply's limit) has one
+reading per rail and no current change. The April 2026 N62M23 runs
+imported into pre_ubm were station runs with the phases logged. A stage
+with no I2C record (the February import) is graded on its power readings
+and baselines alone (8 pixels, and none at all on five of the ten wafers;
+the report's I2C findings are the only I2C record it has): a die graded
+I2C_PIXELS after UBM may have been one before. Its reached_high_power
+says whether the log shows the step, which the test made after its I2C
+writes, so that they went through.
 """
 import numpy as np
 import pandas as pd
@@ -143,6 +146,8 @@ def die_changes(pre, post, pixel_rows, qinj_rows):
     out["passed_both"] = both
     for name, stage in (("pre", pre), ("post", post)):
         out[f"i2c_{name}"] = out["die"].map(_present(stage, "pixel_id_ok")).fillna(False).astype(bool)
+        if "reached_high_power" in stage:
+            out[f"reached_high_power_{name}"] = out["die"].map(dict(zip(stage["die"], stage["reached_high_power"])))
     for rail in MAIN_RAILS:
         phased = (out["die"].map(_column(pre, f"{rail}_I_high")).notna()
                   & out["die"].map(_column(post, f"{rail}_I_high")).notna())
@@ -183,6 +188,23 @@ def passed_unchecked(changes, tag):
     baselines alone."""
     rows = changes[(changes[f"grade_{tag}"] == "PASSED") & ~changes[f"i2c_{tag}"] & ~changes["invalid"].astype(bool)]
     return sorted(rows["die"].tolist())
+
+
+def unchecked_text(changes, tag):
+    """The note on the valid dies PASSED in the stage `tag` (pre or post)
+    without an I2C record, with how many of them reached high power where
+    the stage records it; "" for none."""
+    dies = passed_unchecked(changes, tag)
+    if not dies:
+        return ""
+    text = f"{len(dies)} dies PASSED without an I2C record, on their power readings and, where taken, baselines alone"
+    column = f"reached_high_power_{tag}"
+    if column in changes:
+        reached = changes.loc[changes["die"].isin(dies), column].dropna()
+        if len(reached):
+            text += (f"; {int(reached.astype(bool).sum())} of them reached high power, "
+                     "so their I2C writes went through")
+    return text
 
 
 def transitions(changes):

@@ -26,7 +26,7 @@ from datetime import datetime
 from pathlib import Path
 
 from station import load_wafer_map
-from stage_compare import MAIN_RAILS, STAGE_ORDER, compare, passed_unchecked, qinj_compared, transitions
+from stage_compare import MAIN_RAILS, STAGE_ORDER, compare, qinj_compared, transitions, unchecked_text
 from wafer_tables import collect, grade_counts, invalid_dies, write_tables
 
 REPO = Path(__file__).resolve().parent
@@ -142,10 +142,9 @@ def compare_stages(args, wafer_dir, tables):
     for stage, tag in zip(STAGE_ORDER, ("pre", "post")):
         if not any(changes[f"{rail}_I_high_{tag}"].notna().any() for rail in MAIN_RAILS):
             print(f"  {stage} logged no power phases: its currents are not compared")
-        unchecked = passed_unchecked(changes, tag)
+        unchecked = unchecked_text(changes, tag)
         if unchecked:
-            print(f"  {stage}: {len(unchecked)} dies PASSED without an I2C record, on their power readings "
-                  "and, where taken, baselines alone")
+            print(f"  {stage}: {unchecked}")
     if pixel_rows.empty:
         print("  no pixel was calibrated in both stages: no baseline comparison")
     if not qinj_compared(changes).any():

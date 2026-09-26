@@ -294,6 +294,7 @@ def die_record(die, position, run_dir=None, summary=None, baseline=None, power=N
         "attempt": attempt, "retry_reason": summary.get("retry_reason"),
         "fullscan": bool(summary.get("fullscan")), "qinj": bool(summary.get("qinj")),
         "elapsed_s": summary.get("elapsed_s"), "imported": bool(summary.get("imported")),
+        "reached_high_power": (summary.get("imported") or {}).get("reached_high_power"),
     })
     record.update(_rail_columns(summary, power))
     record.update(_i2c_columns(summary))
