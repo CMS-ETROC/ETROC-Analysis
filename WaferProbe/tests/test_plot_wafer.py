@@ -103,12 +103,14 @@ class PlotWaferTest(unittest.TestCase):
         self.assertEqual((rc, written), (0, TABLES | {"grades.png"}))
         self.assertIn("the 1 figures already in", printed)
 
-    def test_every_station_grade_has_a_colour(self):
+    def test_every_station_grade_has_a_colour_and_a_letter(self):
         import station
+        from stage_compare_plots import GRADE_LETTERS
         from wafer_plots import GRADE_COLOURS
         names = {name for name, value in vars(station).items()
                  if name.isupper() and not name.startswith("_") and name != "N_BINS" and isinstance(value, int)}
         self.assertEqual(names - set(GRADE_COLOURS), set())
+        self.assertEqual(names - set(GRADE_LETTERS), set())
 
     def test_every_dies_column_the_figures_read_is_in_the_table(self):
         import re

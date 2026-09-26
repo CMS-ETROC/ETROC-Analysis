@@ -14,7 +14,7 @@ if HAVE_TABLES:
     import pandas as pd
 
     from wafer_tables import (CURRENT_NOTE_FACTOR, NOTE_MIN_DIES, NOTE_PIXEL_BL, NOTE_PIXEL_NW, bl_nw_notes,
-                              collect, current_notes,
+                              collect, current_notes, grade_counts,
                               die_record, lowest_efficiency, offset_trend, phase_values, pick_run,
                               qinj_files, qinj_pixel_stats, read_nem_hits, unchecked_die_means)
     from tests.wafer_results import QUICK_PIXELS, baseline, event, power, run_power, summary, write_run
@@ -240,6 +240,22 @@ class CollectTest(TempWafer):
         self.assertEqual((len(pixels), len(qinj)), (9, 9))
         self.assertEqual((dies.loc[0, "qinj_events"], dies.loc[0, "qinj_min_eff"]), (3, 1.0))
         self.assertTrue(math.isnan(dies.loc[2, "qinj_min_eff"]))
+
+    def test_a_die_the_station_would_not_step_to_is_a_contact_failure(self):
+        # the summary wafer_run.py writes for it, alone in its run folder
+        write_run(self.wafer, 1, 1, summary(1, 0, 0), power=run_power())
+        write_run(self.wafer, 2, 1, {
+            "status": "contact_failure", "error": "StepToDie 2: [896] [Automation] Pattern matching could not "
+                                                  "locate wafer model", "batch": "B", "wafer": "W",
+            "batch_id": None, "wafer_id": None, "wafer_stage": "pre_ubm", "die": 2, "row": 0, "col": 1,
+            "phases": {"step_refused": "2026-09-26 13:34:49.949"}, "attempt": 1, "retry_reason": None,
+            "prober": {"batch": "B", "wafer": "W", "die": 2, "expected_row": 0, "expected_col": 1,
+                       "error_code": 896}, "run": "run_01_noEfuse"})
+        dies, pixels, qinj, warnings = collect(self.wafer, {1: (0, 0), 2: (0, 1)})
+        self.assertEqual(dies["grade"].tolist(), ["PASSED", "CONTACT_FAILURE"])
+        self.assertEqual((dies.loc[1, "bin"], dies.loc[1, "map_text"]), (12, "CONTACT_FAILURE"))
+        self.assertTrue(math.isnan(dies.loc[1, "analog_I_on"]))
+        self.assertEqual(grade_counts(dies)[1:], (1, 1))  # passed, tested: no test ran on die 2
 
     def test_a_qinj_run_that_wrote_a_single_file_has_no_qinj_data(self):
         pixels = [list(p) for p in QUICK_PIXELS]

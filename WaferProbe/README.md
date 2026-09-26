@@ -83,7 +83,10 @@ a data-phase scan) under another; give that other `--path` here to plot
 them apart.
 `--before "2026-09-22 15:30"` (DAQ computer clock) takes the newest run that
 started before that time instead, to see the wafer as it stood then. A die of
-the wafer map without a run grades `NOT_TESTED`. `--tables-only` skips the
+the wafer map without a run grades `NOT_TESTED`; a die the station would not
+step to grades `CONTACT_FAILURE`, from a run folder that holds only the
+`summary.json` `wafer_run.py` wrote for it (no test ran), which stands for
+the die like any other run; neither counts among the dies tested. `--tables-only` skips the
 figures (and warns when `--out` already holds some, which it leaves as they
 are), `--no-qinj` skips reading the QInj data. `--waferMap` overrides the
 die-position map, otherwise the bundled `wafer_map.csv` is used.

@@ -1,5 +1,5 @@
 """station.py -- helpers copied verbatim from the station repo
-ETROC-WaferProbe, branch psu-identify at commit 6327218: the whole of
+ETROC-WaferProbe, branch psu-identify at commit 113b1da: the whole of
 src/grading.py, plus nem_files (from src/qinj_check.py) and load_wafer_map
 (from prober_move.py). Brought in so plot_wafer.py, wafer_tables.py and
 wafer_plots.py can run here without the rest of the station repo.
@@ -59,6 +59,12 @@ The mapping is read off run_die's own code path, not guessed:
   there and powered off, with status "stuck" and the limit and the last
   phase marked in summary["error"]; its I2C checks, calibration and eFuse
   records hold whatever the test had reached.
+- a die the probe station could not step to (wafer_run.py: StepToDie
+  refused with a code of CONTACT_FAILURE_CODES, e.g. 896 when Velox's
+  pattern matching cannot find the trained wafer model at the die) never
+  reaches the die test: wafer_run.py writes its summary.json itself, with
+  status "contact_failure", the station's reply in summary["error"] and
+  nothing else of a test.
 """
 
 
@@ -78,7 +84,8 @@ BL_NW_ZERO = 8
 EFUSE_FAIL = 9
 EFUSE_TRAILER_FAIL = 10
 TEST_FAILURE = 11
-N_BINS = 12  # bins 0 .. N_BINS - 1, all read by wafer_run.start_checks
+CONTACT_FAILURE = 12
+N_BINS = 13  # bins 0 .. N_BINS - 1, all read by wafer_run.start_checks
 
 # SetDieResult: "Result (optional) -- No spaces (maximum 256 characters)"
 # (Velox remote-interface manual, the SetDieResult entry).
@@ -197,6 +204,9 @@ def grade(summary):
         )
         return Grade("POWER_SHORT", POWER_SHORT, detail or "over-current")
 
+    if status == "contact_failure":
+        return Grade("CONTACT_FAILURE", CONTACT_FAILURE, summary.get("error") or "no contact")
+
     if status == "rail_open":
         opened = _open_rails(summary)
         detail = "-".join(
@@ -239,7 +249,7 @@ def result_text(grade, attempt):
     """The SetDieResult text for the die: "<GRADE>", or "<GRADE>_retry" when
     the graded attempt is the retry (attempt > 1). The grade's detail is
     recorded in the pass's wafer_<YYYYmmdd_HHMMSS>.json and the log, never
-    on the map, so the station's Result column takes one of 2 x 12 values.
+    on the map, so the station's Result column takes one of 2 x 13 values.
     Sanitised to [A-Za-z0-9_.-] and the station's 256-character limit all
     the same."""
     parts = [grade.name]

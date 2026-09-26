@@ -68,6 +68,9 @@ NOTE_PIXELS_LISTED = 3  # pixels a note names, the furthest from the median firs
 # and 687 mA at high power (1.6 x), 11 mA under the 698 mA of its analog
 # short check at high power.
 CURRENT_NOTE_FACTOR = 1.5
+# The grades of a die no test ran on (no run, or the station would not step
+# to it), out of the dies tested
+UNTESTED = ("NOT_TESTED", "CONTACT_FAILURE")
 DIE_MEANS = (("bl_mean", "baseline mean", "{:.0f}"), ("nw_mean", "noise-width mean", "{:.2f}"))
 
 PIXEL_COLUMNS = ["die", "pix_row", "pix_col", "baseline", "noise_width"]
@@ -596,13 +599,13 @@ def collect(wafer_dir, wafer_map, before=None, with_qinj=True, invalid=()):
 
 def grade_counts(dies):
     """([(grade name, count)] in bin order, passed, tested) over the valid
-    dies of a dies table; the invalid ones keep their grades in the table
-    but are not counted."""
+    dies of a dies table, tested leaving out the UNTESTED grades; the
+    invalid ones keep their grades in the table but are not counted."""
     if "invalid" in dies:
         dies = dies[~dies["invalid"].astype(bool)]
     counts = dies.groupby(["bin", "grade"]).size()
     rows = [(name, int(n)) for (_, name), n in counts.sort_index().items()]
-    tested = int((dies["grade"] != "NOT_TESTED").sum())
+    tested = int((~dies["grade"].isin(UNTESTED)).sum())
     passed = int((dies["grade"] == "PASSED").sum())
     return rows, passed, tested
 

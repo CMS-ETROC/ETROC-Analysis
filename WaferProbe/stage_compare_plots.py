@@ -19,6 +19,7 @@ from stage_compare import (MAIN_RAILS, QINJ_QUANTITIES, SAME_CHIP_R, STAGE_ORDER
                            qinj_compared, transitions)
 from wafer_plots import (GRADE_COLOURS, _edges, _ink, _invalid, _invalid_cell, _num, _shape,  # noqa: E402
                          _suptitle, _wafer_axes, wafer_map)
+from wafer_tables import UNTESTED  # noqa: E402
 
 FIGURES = ("grade_changes", "current_changes", "baseline_changes", "qinj_changes")
 
@@ -26,7 +27,7 @@ FIGURES = ("grade_changes", "current_changes", "baseline_changes", "qinj_changes
 GRADE_LETTERS = {
     "PASSED": "P", "POWER_SHORT": "S", "I2C_NACK": "N", "I2C_PIXELS": "X", "NO_LINK_OR_DATA": "L",
     "OTHER_FAIL": "O", "NOT_TESTED": "-", "RAIL_OPEN": "R", "BL_NW_ZERO": "Z", "EFUSE_FAIL": "E",
-    "EFUSE_TRAILER_FAIL": "T", "TEST_FAILURE": "F",
+    "EFUSE_TRAILER_FAIL": "T", "TEST_FAILURE": "F", "CONTACT_FAILURE": "C",
 }
 EFF_DROP = 0.01  # a die whose lowest pixel efficiency fell by more than this is named
 
@@ -68,7 +69,7 @@ def fig_grade_changes(changes, title):
         handles.append(Patch(facecolor="none", edgecolor="black", label=label))
     ax.legend(handles=handles, loc="upper left", bbox_to_anchor=(1.01, 1.0), frameon=False, fontsize=7.5)
     passed = [int((valid[f"grade_{s}"] == "PASSED").sum()) for s in ("pre", "post")]
-    tested = [int((valid[f"grade_{s}"] != "NOT_TESTED").sum()) for s in ("pre", "post")]
+    tested = [int((~valid[f"grade_{s}"].isin(UNTESTED)).sum()) for s in ("pre", "post")]
     unchecked = [(s, len(passed_unchecked(changes, tag))) for s, tag in zip(STAGE_ORDER, ("pre", "post"))]
     ax.set_title(f"{title}: grade per die after UBM, PASSED {passed[0]} of {tested[0]} before, "
                  f"{passed[1]} of {tested[1]} after\n"
