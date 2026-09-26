@@ -371,6 +371,36 @@ class PlotWaferTest(unittest.TestCase):
         self.assertEqual([t.get_text() for t in plain.axes[0].texts], ["1*", "2*", "3"])
         self.assertNotIn("letters:", "\n".join(t.get_text() for t in plain.texts))
 
+    def test_a_die_with_a_current_note_gets_an_arrow_and_a_legend_line(self):
+        import matplotlib.pyplot as plt
+        import pandas as pd
+        from wafer_plots import fig_currents, fig_grades
+        note = "analog power-on 571 mA, 1.90 x the median 300 mA"
+        dies = pd.DataFrame({"die": [1, 2, 3], "die_row": [0, 0, 1], "die_col": [0, 1, 0],
+                             "grade": ["PASSED", "PASSED", "POWER_SHORT"], "bin": [0, 0, 1],
+                             "map_text": ["PASSED", "PASSED", "POWER_SHORT"], "invalid": False,
+                             "analog_I_on": [0.30, 0.571, 0.65], "analog_I_high": [0.40, 0.687, None],
+                             "digital_I_on": [0.13, 0.13, 0.20], "digital_I_high": [0.12, 0.12, None],
+                             "current_note": ["", note, ""]})
+        fig = fig_grades(dies, "B / W")
+        self.addCleanup(plt.close, fig)
+        self.assertEqual([t.get_text() for t in fig.axes[0].texts], ["1", "2\u2191", "3"])
+        legend = [t.get_text() for t in fig.axes[0].get_legend().get_texts()]
+        self.assertTrue(any(text.startswith("\u2191 PASSED at over 1.5 x") and text.endswith(": 2")
+                            for text in legend), legend)
+        self.assertIn("\u2191 = high current", fig.axes[0].get_title())
+        currents = fig_currents(dies, "B / W")
+        self.addCleanup(plt.close, currents)
+        self.assertEqual([t.get_text() for t in currents.axes[0].texts if t.get_text().startswith("5")], ["571\u2191"])
+        # the note names analog at power-on: no arrow on the other maps
+        self.assertEqual([t.get_text() for t in currents.axes[1].texts if t.get_text().startswith("6")], ["687"])
+        self.assertFalse(any("\u2191" in t.get_text() for ax in currents.axes[1:6] for t in ax.texts))
+        dies["current_note"] = ""
+        plain = fig_grades(dies, "B / W")
+        self.addCleanup(plt.close, plain)
+        self.assertEqual([t.get_text() for t in plain.axes[0].texts], ["1", "2", "3"])
+        self.assertNotIn("high current", plain.axes[0].get_title())
+
 
 if __name__ == "__main__":
     unittest.main()

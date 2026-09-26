@@ -16,7 +16,10 @@ in a band under the figure, clear of the axis labels. The grade and
 baseline maps put a letter on a die with a BL/NW note
 (wafer_tables.bl_nw_notes) and list the notes under the maps. The grade
 map puts a + on a die whose QInj stage failed behind the finding that
-graded it (wafer_tables.qinj_also) and lists those dies in its legend.
+graded it (wafer_tables.qinj_also) and lists those dies in its legend;
+the grade and current maps put an arrow on a PASSED die drawing far more
+current than the others (wafer_tables.current_notes), which the grade
+map's legend lists too.
 """
 import json
 import textwrap
@@ -35,9 +38,9 @@ from matplotlib.textpath import TextPath  # noqa: E402
 from matplotlib.ticker import MaxNLocator  # noqa: E402
 from matplotlib.transforms import Affine2D, ScaledTranslation  # noqa: E402
 
-from wafer_tables import (DIE_MEANS, NOTE_DIE_SIGMA, NOTE_MIN_DIES, NOTE_PIXEL_BL,  # noqa: E402
-                          NOTE_PIXEL_NW, grade_counts, injected_pixels, offset_trend,
-                          unchecked_die_means)
+from wafer_tables import (CURRENT_NOTE_FACTOR, DIE_MEANS, NOTE_DIE_SIGMA, NOTE_MIN_DIES,  # noqa: E402
+                          NOTE_PIXEL_BL, NOTE_PIXEL_NW, grade_counts, injected_pixels, noted_currents,
+                          offset_trend, unchecked_die_means)
 
 # grade -> colour; the legend lists them in the bin order of the grading in station.py
 GRADE_COLOURS = {
@@ -52,6 +55,7 @@ INVALID_FILL, INVALID_INK = "#d9d9d9", "#4d4d4d"
 INVALID_TEXT = TextPath((0, 0), "INVALID", size=1, prop=FontProperties(weight="bold"))
 FULL_SCAN_PIXELS = 256
 NOTES_LISTED = 8  # BL/NW notes printed under a figure; dies.csv has them all
+HIGH_CURRENT = "\u2191"  # the mark of a die with a current note
 
 FIGURES = ("grades", "currents", "currents_small_rails", "current_hists", "baseline_maps",
            "baseline_hists", "alignment", "fullscan_baseline", "fullscan_noise_width",
@@ -266,6 +270,21 @@ def _qinj_also(dies):
     return {name: group["die"].tolist() for name, group in also.groupby("qinj_also_failed", sort=True)}
 
 
+def _high_current(dies):
+    """The valid dies with a current note (wafer_tables.current_notes), in
+    die order; none for a dies table without the column."""
+    if "current_note" not in dies:
+        return []
+    return dies.loc[(dies["current_note"].fillna("") != "") & ~_invalid(dies), "die"].tolist()
+
+
+def _high_current_label(dies):
+    """The grade legend's entry for the dies with a current note."""
+    return (f"{HIGH_CURRENT} PASSED at over {CURRENT_NOTE_FACTOR:g} x the\n   median current of the PASSED\n"
+            + textwrap.fill("dies (dies.csv current_note): " + ", ".join(str(d) for d in dies), 38,
+                            initial_indent="   ", subsequent_indent="   "))
+
+
 def _also_label(name, dies):
     """The legend entry of the dies whose QInj failed too with `name`,
     wrapped so that a long die list does not widen the legend."""
@@ -315,6 +334,7 @@ def fig_grades(dies, title):
     letters = _note_letters(dies)
     also = _qinj_also(dies)
     plus = {die for group in also.values() for die in group}
+    high = _high_current(dies)
     invalid = _invalid(dies)
     for d, out in zip(dies.itertuples(index=False), invalid):
         if out:
@@ -325,7 +345,8 @@ def fig_grades(dies, title):
                                edgecolor="white", lw=0.8))
         retry = str(getattr(d, "map_text", "")).endswith("_retry")
         ax.text(d.die_col, d.die_row,
-                f"{d.die}{'*' if retry else ''}{'+' if d.die in plus else ''}{_mark(letters, d.die)}",
+                f"{d.die}{'*' if retry else ''}{'+' if d.die in plus else ''}"
+                f"{HIGH_CURRENT if d.die in high else ''}{_mark(letters, d.die)}",
                 ha="center", va="center", fontsize=7, color=_ink(colour))
     counts, passed, tested = grade_counts(dies)
     handles = [Patch(facecolor=GRADE_COLOURS.get(g, "white"), label=f"{g}: {n}") for g, n in counts]
@@ -334,12 +355,15 @@ def fig_grades(dies, title):
                              + ", ".join(str(d) for d in dies.loc[invalid, "die"])))
     handles += [Patch(facecolor="none", edgecolor="none", label=_also_label(name, group))
                 for name, group in also.items()]
+    if high:
+        handles.append(Patch(facecolor="none", edgecolor="none", label=_high_current_label(high)))
     ax.legend(handles=handles, loc="upper left", bbox_to_anchor=(1.01, 1.0), frameon=False, fontsize=8)
     share = f" ({100 * passed / tested:.1f} %)" if tested else ""
     valid = " valid dies" if invalid.any() else ""
     ax.set_title(f"{title}: grade per die, PASSED {passed} of {tested}{valid} tested{share}\n"
                  "die number in each cell; * = graded on the retry"
                  + ("; + = its QInj failed too" if plus else "")
+                 + (f"; {HIGH_CURRENT} = high current" if high else "")
                  + ("; letter = a note below" if letters else ""), fontsize=10)
     _bl_nw_footnotes(fig, dies, letters)
     return fig
@@ -350,17 +374,24 @@ def fig_currents(dies, title):
     if not rails:
         return None
     ok = _passed(dies)
+    noted = set(_high_current(dies))
+    # a die's arrow goes on the maps of the rails and phases its note names
+    named = {die: noted_currents(note) for die, note in zip(dies["die"], dies["current_note"])} if noted else {}
     fig, axes = plt.subplots(len(rails), 3, figsize=(17, 5.0 * len(rails)), squeeze=False,
                              layout="constrained")
     for i, rail in enumerate(rails):
         on = _num(dies, f"{rail}_I_on") * 1e3
         high = _num(dies, f"{rail}_I_high") * 1e3
-        wafer_map(axes[i, 0], dies, on, title=f"{rail}: power-on current", label="mA", ref=ok)
-        wafer_map(axes[i, 1], dies, high, title=f"{rail}: high-power current", label="mA", ref=ok)
+        for j, (values, phase) in enumerate(((on, "power-on"), (high, "high-power"))):
+            marks = [HIGH_CURRENT if die in noted and (rail, phase) in named[die] else "" for die in dies["die"]]
+            wafer_map(axes[i, j], dies, values, title=f"{rail}: {phase} current", label="mA", ref=ok, marks=marks)
         wafer_map(axes[i, 2], dies, high - on, title=f"{rail}: high power minus power-on",
                   label="mA", ref=ok)
     _suptitle(fig, title, "rail currents, median over each run phase "
-                          "(first sweep of every phase dropped)", fontsize=12)
+                          "(first sweep of every phase dropped)"
+                          + (f"\n{HIGH_CURRENT} = a PASSED die over {CURRENT_NOTE_FACTOR:g} x the median of the "
+                             "PASSED dies, on the map of that rail and phase: " + ", ".join(map(str, sorted(noted)))
+                             if noted else ""), fontsize=12)
     return fig
 
 

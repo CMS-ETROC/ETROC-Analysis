@@ -125,7 +125,11 @@ The tables, as csv:
   EA-flagged hit words and the lowest efficiency over the injected pixels; the
   chuck position at contact minus the station's map position (`dx_um`,
   `dy_um`); a note on a baseline or noise width that stands out (`bl_nw_note`,
-  see "Baseline and noise-width notes"). Power-on logs only two sweeps, so
+  see "Baseline and noise-width notes"); and a note on a PASSED die whose
+  analog or digital current, at power-on or at high power, is more than 1.5
+  times the median of the PASSED dies (`current_note`, checked when at least
+  20 dies PASSED; a mark, the grade stays: N62H30 02C7 die 73 passed at
+  571 mA analog at power-on and 687 mA at high power). Power-on logs only two sweeps, so
   `vref_V_on` is a single reading and can still be settling (1.01-1.11 V on 25
   dies of N60R91, against 1.00 V at high power).
 - `pixels.csv`, one row per calibrated pixel: baseline and noise width.
@@ -151,8 +155,8 @@ mixes two plots:
 
 | figure | shows |
 |--------|-------|
-| `grades` | grade per die, the counts and the yield over the valid dies; `*` = graded on the retry; `+` = its QInj failed too (`qinj_also_failed`, the dies listed in the legend by that grade); a superscript letter = a baseline or noise-width note, listed under the map |
-| `currents` | analog and digital current per die at power-on and at high power, and the difference |
+| `grades` | grade per die, the counts and the yield over the valid dies; `*` = graded on the retry; `+` = its QInj failed too (`qinj_also_failed`, the dies listed in the legend by that grade); ↑ = a current note (`current_note`, the dies listed in the legend); a superscript letter = a baseline or noise-width note, listed under the map |
+| `currents` | analog and digital current per die at power-on and at high power, and the difference; ↑ = a current note, on the maps of the rail and phase it names |
 | `currents_small_rails` | the other rails at high power |
 | `current_hists` | the analog and digital currents as histograms, with the check thresholds the runs used |
 | `baseline_maps` | baseline and noise-width mean and std per die; red frame = some pixels read zero; letters and notes as in `grades` |

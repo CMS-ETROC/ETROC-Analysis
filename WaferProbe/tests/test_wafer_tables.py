@@ -13,7 +13,8 @@ if HAVE_TABLES:
     import numpy as np
     import pandas as pd
 
-    from wafer_tables import (NOTE_MIN_DIES, NOTE_PIXEL_BL, NOTE_PIXEL_NW, bl_nw_notes, collect,
+    from wafer_tables import (CURRENT_NOTE_FACTOR, NOTE_MIN_DIES, NOTE_PIXEL_BL, NOTE_PIXEL_NW, bl_nw_notes,
+                              collect, current_notes,
                               die_record, lowest_efficiency, offset_trend, phase_values, pick_run,
                               qinj_files, qinj_pixel_stats, read_nem_hits, unchecked_die_means)
     from tests.wafer_results import QUICK_PIXELS, baseline, event, power, run_power, summary, write_run
@@ -319,6 +320,53 @@ class BlNwNoteTest(unittest.TestCase):
         dies.loc[dies["die"] == 5, "nw_mean"] = 9.4
         self.assertEqual(self.notes(dies, self.pixels(5))[5], "")
         self.assertEqual(unchecked_die_means(dies), [(256, ["bl_mean", "nw_mean"])])
+
+
+@needs_tables
+class CurrentNoteTest(unittest.TestCase):
+    """A note on a PASSED die drawing far more current than the PASSED dies."""
+
+    def wafer(self, n=None):
+        """n valid PASSED dies (NOTE_MIN_DIES by default) at 0.30 A analog and
+        0.13 A digital at power-on, 0.40 and 0.12 A at high power."""
+        dies = list(range(1, (n or NOTE_MIN_DIES) + 1))
+        return pd.DataFrame({"die": dies, "grade": "PASSED", "invalid": False,
+                             "analog_I_on": 0.30, "analog_I_high": 0.40,
+                             "digital_I_on": 0.13, "digital_I_high": 0.12})
+
+    def notes(self, dies):
+        return dict(zip(dies["die"], current_notes(dies)))
+
+    def test_a_passed_die_far_above_the_median_is_noted(self):
+        # N62H30 02C7 post-UBM die 73
+        dies = self.wafer()
+        dies.loc[dies["die"] == 7, ["analog_I_on", "analog_I_high"]] = [0.571, 0.687]
+        notes = self.notes(dies)
+        self.assertEqual(notes[7], "analog power-on 571 mA, 1.90 x the median 300 mA; "
+                                   "analog high-power 687 mA, 1.72 x the median 400 mA")
+        self.assertEqual({die for die, note in notes.items() if note}, {7})
+
+    def test_a_current_at_the_factor_is_not_noted(self):
+        dies = self.wafer()
+        dies.loc[dies["die"] == 7, "digital_I_on"] = 0.13 * CURRENT_NOTE_FACTOR
+        self.assertEqual(self.notes(dies)[7], "")
+
+    def test_only_valid_passed_dies_are_noted_and_make_the_median(self):
+        shorts = pd.DataFrame({"die": range(101, 131), "grade": "POWER_SHORT", "invalid": False,
+                               "analog_I_on": 0.65, "analog_I_high": None, "digital_I_on": 0.13,
+                               "digital_I_high": None})
+        invalid = pd.DataFrame({"die": [57, 58], "grade": "PASSED", "invalid": True, "analog_I_on": 0.65,
+                                "analog_I_high": 0.70, "digital_I_on": 0.30, "digital_I_high": 0.30})
+        dies = pd.concat([self.wafer(), shorts, invalid], ignore_index=True)
+        dies.loc[dies["die"] == 7, "analog_I_on"] = 0.46
+        notes = self.notes(dies)
+        self.assertEqual({die for die, note in notes.items() if note}, {7})
+        self.assertEqual(notes[7], "analog power-on 460 mA, 1.53 x the median 300 mA")
+
+    def test_the_check_needs_enough_passed_dies(self):
+        dies = self.wafer(NOTE_MIN_DIES - 1)
+        dies.loc[dies["die"] == 7, "analog_I_on"] = 0.60
+        self.assertEqual(self.notes(dies)[7], "")
 
 
 if __name__ == "__main__":

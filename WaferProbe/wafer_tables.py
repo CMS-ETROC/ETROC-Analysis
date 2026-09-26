@@ -23,8 +23,9 @@ in wafer_run.py.
           status and error, the median current and voltage of every rail in each run
           phase, the I2C verdicts, the baseline and noise-width statistics,
           the QInj verdict, event counts and lowest pixel efficiency,
-          the chuck-minus-map offset at contact, and a note on a baseline
-          or noise width that stands out (bl_nw_notes)
+          the chuck-minus-map offset at contact, a note on a baseline
+          or noise width that stands out (bl_nw_notes) and one on a
+          PASSED die drawing far more current than the others (current_notes)
   pixels  one row per calibrated pixel: baseline and noise width
   qinj    one row per pixel with hits in the QInj data (qinj_files): hits,
           efficiency, and CAL, TOA and TOT mean and std over the hits
@@ -58,6 +59,15 @@ NOTE_DIE_SIGMA = 5    # a die's baseline or noise-width mean further than this m
                       # PASSED dies calibrated over as many pixels (quick test or full scan)
 NOTE_MIN_DIES = 20    # such PASSED dies with a mean that the die check needs
 NOTE_PIXELS_LISTED = 3  # pixels a note names, the furthest from the median first
+
+# Current notes (current_notes): a PASSED die whose analog or digital
+# current, at power-on or at high power, is more than CURRENT_NOTE_FACTOR
+# times the median of the valid PASSED dies (NOTE_MIN_DIES of them at
+# least) gets a note, which the figures mark; a note never changes a grade.
+# N62H30 02C7 post-UBM die 73 passed at 571 mA analog at power-on (1.9 x)
+# and 687 mA at high power (1.6 x), 11 mA under the 698 mA of its analog
+# short check at high power.
+CURRENT_NOTE_FACTOR = 1.5
 DIE_MEANS = (("bl_mean", "baseline mean", "{:.0f}"), ("nw_mean", "noise-width mean", "{:.2f}"))
 
 PIXEL_COLUMNS = ["die", "pix_row", "pix_col", "baseline", "noise_width"]
@@ -494,6 +504,38 @@ def bl_nw_notes(dies, pixels):
     return dies["die"].map(lambda die: "; ".join(found.get(die, [])))
 
 
+def current_notes(dies):
+    """A note per die of the dies table ("" for none) on a valid PASSED die
+    whose analog or digital current, at power-on or at high power, is more
+    than CURRENT_NOTE_FACTOR times the median of the valid PASSED dies in
+    that rail and phase; a rail and phase with fewer than NOTE_MIN_DIES
+    such dies is not checked. A note marks a die, it never grades it."""
+    found = {}
+    ok = (dies["grade"] == "PASSED") & ~dies["invalid"].astype(bool)
+    for rail in ("analog", "digital"):
+        for tag, phase in (("on", "power-on"), ("high", "high-power")):
+            column = f"{rail}_I_{tag}"
+            if column not in dies:
+                continue
+            current = pd.to_numeric(dies[column], errors="coerce")
+            reference = current[ok].dropna()
+            if len(reference) < NOTE_MIN_DIES:
+                continue
+            median = float(reference.median())
+            for die, value in zip(dies.loc[ok, "die"], current[ok]):
+                if value > CURRENT_NOTE_FACTOR * median:  # NaN compares False
+                    found.setdefault(die, []).append(f"{rail} {phase} {value * 1e3:.0f} mA, "
+                                                     f"{value / median:.2f} x the median {median * 1e3:.0f} mA")
+    return dies["die"].map(lambda die: "; ".join(found.get(die, [])))
+
+
+def noted_currents(note):
+    """[(rail, phase), ...] that a current note (current_notes) names, the
+    phase "power-on" or "high-power"; [] for no note (a NaN in a dies.csv)."""
+    note = note if isinstance(note, str) else ""
+    return [tuple(entry.split(" ", 2)[:2]) for entry in note.split("; ") if entry]
+
+
 def invalid_dies(path):
     """The dies a wafer map csv marks invalid (1 in its `invalid` column):
     tested, but never to be used, so out of the yield. A map without the
@@ -548,6 +590,7 @@ def collect(wafer_dir, wafer_map, before=None, with_qinj=True, invalid=()):
     if "qinj_events" in dies:
         dies["qinj_min_eff"] = lowest_efficiency(dies, qinj)
     dies["bl_nw_note"] = bl_nw_notes(dies, pixels)
+    dies["current_note"] = current_notes(dies)
     return dies, pixels, qinj, warnings
 
 
