@@ -109,7 +109,8 @@ The tables, as csv:
   pattern, or EFUSE_TRAILER_FAIL on the trailer chip ID alone; the station's
   map and bin show only the first finding); whether the wafer map
   marks it invalid (`invalid`), run folder, the wafer stage the run recorded
-  (`wafer_stage`), status and error; the median current and voltage of every
+  (`wafer_stage`), status and error, whether the run was imported from
+  earlier data by the station's `import_runs.py` (`imported`); the median current and voltage of every
   rail at power-on, at high power and during QInj (`<rail>_I_on`,
   `<rail>_I_high`, `<rail>_I_qinj` and `_V_`; the first sweep of each phase is
   dropped, it can still catch the rails switching: the power-on current at
@@ -211,6 +212,45 @@ both checks (pixel (8,8) at baseline 257 against the die's 554; noise-width
 mean 9.36, +7.7 sigma from the wafer's 7.18). On every other die no pixel
 is more than 80 codes from its die's median baseline, or more than 7 from
 its median noise width.
+
+## Comparing the two stages
+
+When the wafer folder holds both stage folders, `plot_wafer.py` also reads
+the other stage (the newest run of each die, whatever `--before` says) and
+writes what changed into the wafer folder's `pre_vs_post/` (`<out>/pre_vs_post`
+with `--out`); `--no-compare` skips it. It prints the dies whose grade
+changed, grouped by before -> after. Only what both stages measured is
+compared:
+
+| file | what |
+|---|---|
+| `changes.csv` | one row per die of the wafer map: its grade in each stage and whether it has an I2C record there, the rail currents in each and their change, and per die the mean baseline and noise-width change, the same-chip r, the median TOA, TOT and CAL change and the lowest pixel efficiency in each stage |
+| `grade_changes` | the grade after UBM per die; a die whose grade changed is framed, with before -> after in the one-letter codes of the legend |
+| `current_changes` | power-on and high-power current change per rail for the dies PASSED in both stages, and after against before; the title gives each stage's median power-on voltage, since the setpoints can differ (digital 1.255 V before, 1.298 V after on the N62M23 wafers) |
+| `baseline_changes` | mean baseline and noise-width change per die over the pixels calibrated in both stages, and the per-pixel changes; a red frame marks a die whose within-die baseline pattern does not match its own before (r < 0.7: another chip?) |
+| `qinj_changes` | median TOA, TOT and CAL change per die over the pixels injected and hit in both stages, and the per-pixel changes; the dies whose lowest efficiency (`qinj_min_eff` of each stage, a pixel without a hit counting 0) fell by more than 1 % are named |
+
+A figure whose data one stage lacks is left out. A quick test (9 pixels)
+against a full scan (256) compares at the 9 common pixels; a stage without
+QInj gives no `qinj_changes`. The same-chip r correlates each pixel's
+baseline minus its die's mean, before against after, over at least 6
+common pixels. The 0.7 threshold comes from the February 8-pixel
+baselines of N62H30 01D4 and 02C7, read by hand from the imported runs'
+`BaselineHistory.sqlite` (the import does not put them in `pixels.csv`, so
+these wafers get no same-chip r today): their dies matched their own
+before-UBM baselines at median r 0.98 and 0.97 and the other wafer's at 0.45.
+
+Currents compare only where both stages logged the station's power
+phases. The February 2026 before_bump import holds one current per rail
+instead, from a sequence of its own (463 mA analog on the PASSED dies of
+N62H30 01D4, against 299 mA at power-on and 444 mA at high power on the
+same dies after UBM), so its currents are not compared; the April 2026
+N62M23 runs imported into `pre_ubm` logged the phases and compare like any
+other. A die of the February import passed on nothing but its power
+readings and, where taken, 8-pixel baselines (the report's I2C findings
+are the only I2C record the import has), and the grade figure counts the
+dies that PASSED so: a die graded I2C_PIXELS after UBM may have been one
+before.
 
 ## Tests
 

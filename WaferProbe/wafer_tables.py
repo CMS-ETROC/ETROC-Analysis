@@ -280,7 +280,7 @@ def die_record(die, position, run_dir=None, summary=None, baseline=None, power=N
         "status": summary.get("status"), "error": summary.get("error"),
         "attempt": attempt, "retry_reason": summary.get("retry_reason"),
         "fullscan": bool(summary.get("fullscan")), "qinj": bool(summary.get("qinj")),
-        "elapsed_s": summary.get("elapsed_s"),
+        "elapsed_s": summary.get("elapsed_s"), "imported": bool(summary.get("imported")),
     })
     record.update(_rail_columns(summary, power))
     record.update(_i2c_columns(summary))
@@ -370,21 +370,30 @@ def _recorded(value):
     return [tuple(p) for p in json.loads(value)] if isinstance(value, str) and value else None
 
 
-def lowest_efficiency(dies, qinj):
-    """Per die (dies order), the lowest efficiency over the pixels its QInj
-    run injected; a pixel without a hit counts 0. The pixels are the list
-    the run recorded; for a run that recorded none, the wafer's injected
-    pixels when its QInj check expected that many hits per event. NaN
-    without a QInj run, or when the injected pixels are not known."""
+def injected_by_die(dies, qinj):
+    """Per die (dies order), the pixels its QInj run injected: the list the
+    run recorded; for a run that recorded none, the wafer's injected pixels
+    when its QInj check expected that many hits per event; None when they
+    are not known."""
     wafer_set = injected_pixels(qinj)
-    eff = {(int(d), int(r), int(c)): e for d, r, c, e in
-           qinj[["die", "pix_row", "pix_col", "eff"]].itertuples(index=False)}
     out = []
     for d in dies.itertuples(index=False):
-        events = getattr(d, "qinj_events", None)
         pixels = _recorded(getattr(d, "qinj_pixels", None))
         if pixels is None and wafer_set and getattr(d, "qinj_hits_expected", None) == len(wafer_set):
             pixels = wafer_set
+        out.append(pixels)
+    return out
+
+
+def lowest_efficiency(dies, qinj):
+    """Per die (dies order), the lowest efficiency over the pixels its QInj
+    run injected (injected_by_die); a pixel without a hit counts 0. NaN
+    without a QInj run, or when the injected pixels are not known."""
+    eff = {(int(d), int(r), int(c)): e for d, r, c, e in
+           qinj[["die", "pix_row", "pix_col", "eff"]].itertuples(index=False)}
+    out = []
+    for d, pixels in zip(dies.itertuples(index=False), injected_by_die(dies, qinj)):
+        events = getattr(d, "qinj_events", None)
         if events is None or not np.isfinite(events) or pixels is None:
             out.append(float("nan"))
         elif events == 0:

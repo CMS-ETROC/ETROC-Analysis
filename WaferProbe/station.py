@@ -1,5 +1,5 @@
 """station.py -- helpers copied verbatim from the station repo
-ETROC-WaferProbe, branch psu-identify at commit cbf3c96: the whole of
+ETROC-WaferProbe, branch psu-identify at commit 6327218: the whole of
 src/grading.py, plus nem_files (from src/qinj_check.py) and load_wafer_map
 (from prober_move.py). Brought in so plot_wafer.py, wafer_tables.py and
 wafer_plots.py can run here without the rest of the station repo.
@@ -30,7 +30,8 @@ The mapping is read off run_die's own code path, not guessed:
   "current", "abort_above", "ok"} for every rail, before raising to set
   summary["status"] = "over_current" -- the rail name and its measured
   current are already there for any rail with ok == False, nothing new to
-  add. The open-rail check that follows it adds "abort_below" for the
+  add. The same check runs again once the chip is at high power, into
+  summary["short_check_high"] (runs from 2026-09-26 on). The open-rail check that follows it adds "abort_below" for the
   rails with a yaml min_current and sets status "rail_open" when one
   draws less than that.
 - summary["i2c"][chip_hex] = {"pixel_id": {...}, "peripheral": {...}} comes
@@ -46,7 +47,7 @@ The mapping is read off run_die's own code path, not guessed:
 - summary["efuse"][chip_hex] = {"word", "before", "after", "writes",
   "verified", "reason"} is filled in by src/efuse_check.burn_efuse during
   the eFuse burn (--doEfuse), or by src/efuse_check.verify_efuse, which
-  reads the fuses and writes nothing (--verifyEfuse); either comes after
+  reads the fuses and writes nothing to them (--verifyEfuse); either comes after
   the calibration and before QInj, and one that did not verify does not
   stop the run. Both are graded alike.
 - summary["qinj_check"] is src/qinj_check.run_verdict's record. With
@@ -54,7 +55,12 @@ The mapping is read off run_die's own code path, not guessed:
   whose trailer carries another chip ID than the word's (chip_id_bad); a
   failed run with such events and none off the record pattern (bad)
   failed on the chip ID alone.
+- a test still running at its time limit (src/die_watchdog.py) is stopped
+  there and powered off, with status "stuck" and the limit and the last
+  phase marked in summary["error"]; its I2C checks, calibration and eFuse
+  records hold whatever the test had reached.
 """
+
 
 Grade = namedtuple("Grade", ["name", "bin", "detail"])
 
@@ -71,7 +77,8 @@ RAIL_OPEN = 7
 BL_NW_ZERO = 8
 EFUSE_FAIL = 9
 EFUSE_TRAILER_FAIL = 10
-N_BINS = 11  # bins 0 .. N_BINS - 1, all read by wafer_run.start_checks
+TEST_FAILURE = 11
+N_BINS = 12  # bins 0 .. N_BINS - 1, all read by wafer_run.start_checks
 
 # SetDieResult: "Result (optional) -- No spaces (maximum 256 characters)"
 # (Velox remote-interface manual, the SetDieResult entry).
@@ -79,12 +86,14 @@ _RESULT_TEXT_LIMIT = 256
 
 
 def _shorted_rails(summary):
-    """[(rail, current_amps, fault), ...] for every rail marked not ok in
-    the power-on check, in the yaml order."""
+    """[(rail, current_amps, fault, suffix), ...] for every rail marked not
+    ok in the power-on check (suffix "") or the high-power one ("_high"),
+    in the yaml order."""
     out = []
-    for rail, info in summary.get("short_check", {}).items():
-        if not info.get("ok", True) and info.get("fault") != "open":
-            out.append((rail, info.get("current"), info.get("fault")))
+    for key, suffix in (("short_check", ""), ("short_check_high", "_high")):
+        for rail, info in (summary.get(key) or {}).items():
+            if not info.get("ok", True) and info.get("fault") != "open":
+                out.append((rail, info.get("current"), info.get("fault"), suffix))
     return out
 
 
@@ -183,8 +192,8 @@ def grade(summary):
     if status == "over_current":
         shorted = _shorted_rails(summary)
         detail = "-".join(
-            f"{rail}_{round((current or 0) * 1000)}mA" + ("_sag" if fault == "sag" else "")
-            for rail, current, fault in shorted
+            f"{rail}_{round((current or 0) * 1000)}mA" + ("_sag" if fault == "sag" else "") + suffix
+            for rail, current, fault, suffix in shorted
         )
         return Grade("POWER_SHORT", POWER_SHORT, detail or "over-current")
 
@@ -197,6 +206,15 @@ def grade(summary):
 
     if status == "completed":
         return _before_qinj(summary) or Grade("PASSED", PASSED, "")
+
+    if status == "stuck":
+        # The test ran past its time limit (src/die_watchdog.py) and was
+        # stopped there; a finding made before it follows in the detail.
+        detail = summary.get("error") or "stuck"
+        first = _before_qinj(summary)
+        if first:
+            detail = f"{detail}; after {first.name}: {first.detail}"
+        return Grade("TEST_FAILURE", TEST_FAILURE, detail)
 
     if status == "failed":
         phases = summary.get("phases", {})
@@ -221,7 +239,7 @@ def result_text(grade, attempt):
     """The SetDieResult text for the die: "<GRADE>", or "<GRADE>_retry" when
     the graded attempt is the retry (attempt > 1). The grade's detail is
     recorded in the pass's wafer_<YYYYmmdd_HHMMSS>.json and the log, never
-    on the map, so the station's Result column takes one of 2 x 11 values.
+    on the map, so the station's Result column takes one of 2 x 12 values.
     Sanitised to [A-Za-z0-9_.-] and the station's 256-character limit all
     the same."""
     parts = [grade.name]
