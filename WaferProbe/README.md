@@ -265,6 +265,56 @@ dies that PASSED so, with how many of them reached high power: the test
 switched to it after its I2C writes, so those went through, but a die
 graded I2C_PIXELS after UBM may have been one before.
 
+## Comparing the lots
+
+```
+python plot_lots.py --path <path> --lot N62C72 --lot N62H30 --lot N62M23
+python plot_lots.py --path <path> --lot "N62C72 earlier UBM=N62C72:02G4,03F5"
+```
+
+puts together the wafers of each lot that have both stage folders, reading
+them as `plot_wafer.py` does (the newest run of each die). A lot is a set of
+wafers that went through UBM and bumping together: `--lot BATCH` takes every
+wafer of the batch, `--lot LABEL=BATCH:WAFER,WAFER` the ones listed, under
+that label. Wafers of one batch sent for UBM at different times are separate
+lots, each with its own `--lot` and label. Wafers with one stage only are
+named and left out.
+
+Each die tested in both stages is graded in both with the test both of its
+runs made (`lot_compare.like_with_like`). The quick test calibrates 9 pixels
+(`station.QUICK_PIXELS`; their first 8 before 2026-09-22 and in the February
+2026 import, which has no baselines at all on some wafers), the full scan
+all 256, and either may run QInj and burn or verify the eFuse. A run loses
+its zero pixels outside the pixels the other run calibrated, its QInj stage
+where the other had none (a run that failed or got stuck there counts as
+completed), and its eFuse record where the other neither burned nor
+verified. The high-power short check came in on 2026-09-26: a run without
+it, where the other made it, is checked on its own high-power currents
+against the other run's limits. So a full scan after UBM against a quick
+test before is graded as a quick test. I2C findings compare as recorded,
+and the February import's I2C record is its campaign report's findings
+(see above): a die graded I2C_PIXELS after UBM may have been one before.
+The script prints every die so regraded, the figures name them, and
+`lot_dies.csv` keeps the measured grade (`measured_pre`, `measured_post`).
+What happened to each die is one of: passed both, recovered, new analog
+short (the short names the analog rail), new digital short, new short on
+another or an unknown rail, new other failure, failed both, untested in a
+stage. The dies at risk are the valid dies PASSED
+before UBM and tested after it; fractions of them carry 68 % Wilson
+intervals.
+
+It writes into `--out` (default `<path>/lot_summary/`):
+
+| file | what |
+|---|---|
+| `lot_dies.csv` | one row per die of every wafer of the lots given: the `changes.csv` columns, the lot, the grade detail, run, scan type and rail voltages of each stage, the measured grade of a regraded die, what happened to it, and whether it sits on the wafer map's edge ring |
+| `<label>_yield` | per wafer, the dies that did not pass both stages, stacked by what happened to them, with PASSED before -> after |
+| `<label>_transitions` | one wafer map per wafer, each die coloured by what happened to it |
+| `<label>_edges` | per die position, on how many wafers it became a new analog short, or failed newly in any way; the new-failure fraction per map row and per map column; the title compares the edge ring with the interior |
+| `<label>_currents` | the current changes of the dies PASSED in both stages per wafer; the analog change minus its wafer's median per die position and per map row; each wafer's rail voltages before and after |
+| `<label>_shorts` | every die graded POWER_SHORT after UBM: voltage and current of each main rail at the check that stopped it, new shorts filled, edge-ring dies square |
+| `lots.png` | with two lots or more: the new failures of each lot by kind, and its new analog shorts per map row and column; the title says how each lot's stages were tested |
+
 ## Tests
 
 ```
@@ -273,6 +323,7 @@ python -m unittest discover -s tests
 
 run from this folder (`WaferProbe/`). Needs `numpy`, `pandas` and `pyarrow`
 for `tests/test_wafer_tables.py`; also `matplotlib` for
-`tests/test_plot_wafer.py`, else that file's tests are skipped. Both test
+`tests/test_plot_wafer.py`, `tests/test_stage_compare.py` and
+`tests/test_plot_lots.py`, else their tests are skipped. The test
 files build synthetic run folders (`tests/wafer_results.py`) laid out as the
 station writes them and do not need real wafer data.

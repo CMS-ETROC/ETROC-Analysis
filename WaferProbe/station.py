@@ -1,8 +1,10 @@
 """station.py -- helpers copied verbatim from the station repo
 ETROC-WaferProbe, branch psu-identify at commit 113b1da: the whole of
 src/grading.py, plus nem_files (from src/qinj_check.py) and load_wafer_map
-(from prober_move.py). Brought in so plot_wafer.py, wafer_tables.py and
-wafer_plots.py can run here without the rest of the station repo.
+(from prober_move.py), and at commit 6327218 the quick test's pixels (from
+master_run_script.py). Brought in so plot_wafer.py, wafer_tables.py,
+wafer_plots.py and plot_lots.py can run here without the rest of the
+station repo.
 
 The station decides the grades, not this copy: when src/grading.py changes
 on ETROC-WaferProbe, this file must be updated to follow it.
@@ -282,3 +284,12 @@ def load_wafer_map(path):
         for row in csv.DictReader(f):
             wafer_map[int(row["location_id"])] = (int(row["row"]), int(row["col"]))
     return wafer_map
+
+
+# ---------------------------------------------------------------------------
+# master_run_script.py: the pixels the quick test (no --doFullScan)
+# calibrates, verbatim from run_die's pixels_of_interest.
+# ---------------------------------------------------------------------------
+
+QUICK_PIXELS = [(2, 2), (2, 10), (10, 2), (10, 10), (5, 5), (5, 13), (13, 5), (13, 13),
+                (15, 15)]  # one pixel of the outermost ring
