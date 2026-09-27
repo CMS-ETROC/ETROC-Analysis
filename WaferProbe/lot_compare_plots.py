@@ -9,6 +9,7 @@ wafer_plots.py: row 0 at the top, the wafer seen as on the station's map
 display, invalid dies grey with INVALID across. Only the valid dies count.
 """
 import math
+import textwrap
 
 import matplotlib
 matplotlib.use("Agg")
@@ -296,7 +297,7 @@ def fig_lots(lots, title="lots"):
             bottom += f
         lo, hi = profile(lot.assign(all=0), "all").loc[0, ["lo", "hi"]] if len(risk) else (np.nan, np.nan)
         ax.errorbar(i, bottom, yerr=[[bottom - 100 * lo], [100 * hi - bottom]], color="black", capsize=3, lw=1)
-    ax.set_xticks(range(len(labels)), [f"{label}\n{lots[label]['wafer'].nunique()} wafers\nPASSED "
+    ax.set_xticks(range(len(labels)), [f"{textwrap.fill(label, 16)}\n{lots[label]['wafer'].nunique()} wafers\nPASSED "
                                        f"{passed(lots[label], 'pre')} → {passed(lots[label], 'post')}"
                                        for label in labels], fontsize=8)
     ax.set_ylabel("% of the dies at risk failing newly after UBM", fontsize=8)
