@@ -10,8 +10,8 @@ pixels every wafer of the lot injected (common_injected). Two measures:
   pairwise r  for two wafers, the correlation of a die-level quantity over
               the positions both measured. Dies that behave alike at one
               place make it positive; without that it stays at the level of
-              the same wafers with their dies moved to random positions of
-              their own (shuffled_r). An offset or a scale factor between
+              the same wafers with each wafer's values moved at random
+              among the places it measured (shuffled_r). An offset or a scale factor between
               two wafers, or two test setups, does not change it.
   map r       for two full-scan dies, the correlation over the pixels both
               read of each pixel's baseline (or noise width) minus its
@@ -67,6 +67,25 @@ def common_injected(tables):
     sorted; [] when no wafer has QInj data."""
     sets = [set(injected_pixels(qinj)) for _, _, qinj in tables.values() if not qinj.empty]
     return sorted(set.intersection(*sets)) if sets else []
+
+
+def injected_notes(tables):
+    """Lines naming what common_injected leaves out: a wafer's injected
+    pixels beyond the ones every wafer injected, or, when no pixel is
+    common to all, that and any wafer with QInj data but no injected
+    pixel."""
+    sets = {w: set(injected_pixels(qinj)) for w, (_, _, qinj) in tables.items() if not qinj.empty}
+    common = set.intersection(*sets.values()) if sets else set()
+    lines = []
+    for wafer, pixels in sets.items():
+        if not pixels:
+            lines.append(f"{wafer}: no pixel hit in half the events of half its QInj dies")
+        elif common and pixels - common:
+            extra = ", ".join(f"({r},{c})" for r, c in sorted(pixels - common))
+            lines.append(f"{wafer}: injected {extra} too, left out of the QInj means")
+    if sets and not common:
+        lines.append("no pixel injected on every wafer with QInj data: CAL, TOA and TOT left out")
+    return lines
 
 
 def die_values(tables):
@@ -129,13 +148,19 @@ def mean_r(r):
 
 
 def shuffled_r(values, quantity, n=SHUFFLES, seed=0):
-    """The mean pairwise r, n times, with each wafer's values moved to random
-    positions of its own: what the lot shows with no position effect."""
+    """The mean pairwise r, n times, with each wafer's values moved at
+    random among the places it measured: what the lot shows with no
+    position effect."""
     wide = _wide(values, quantity)
     rng = np.random.default_rng(seed)
     out = np.empty(n)
     for k in range(n):
-        shuffled = pd.DataFrame({w: rng.permutation(wide[w].to_numpy()) for w in wide}, index=wide.index)
+        shuffled = wide.copy()
+        for w in wide:
+            v = wide[w].to_numpy(copy=True)
+            read = np.isfinite(v)
+            v[read] = rng.permutation(v[read])
+            shuffled[w] = v
         out[k] = mean_r(shuffled.corr(min_periods=MIN_POSITIONS))
     return out
 

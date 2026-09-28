@@ -334,13 +334,14 @@ folder of each wafer as `plot_wafer.py` does and keeps the wafers with full
 scans or QInj data there; a lot needs two. Per die it takes the mean
 baseline and noise width of the full scan (pixels reading 0 left out) and
 the mean CAL, TOA and TOT of the pixels every wafer of the lot injected
-(each with at least 10 hits). Wafers tested at different times or on
+(each with at least 10 hits); it names the pixels a wafer injected beyond
+those, and says so when no pixel is common to all. Wafers tested at different times or on
 different setups go in one lot: every measure takes each wafer's own offset
 out (`position_compare.py` explains each):
 
 - the pairwise r of two wafers, the correlation of a die-level value over
-  the places both measured, against the same with each wafer's dies moved
-  to random places of its own;
+  the places both measured, against the same with each wafer's values
+  moved at random among the places it measured;
 - the map r of two dies' pixel maps, after each die's mean and the pattern
   every chip shares are taken out, for the same place on two wafers against
   different places, with the same die measured in the other stage as what

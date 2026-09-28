@@ -12,9 +12,9 @@ if HAVE_PLOTS:
     import numpy as np
     import pandas as pd
     from plot_positions import main
-    from position_compare import (MIN_QINJ_HITS, centred, die_values, map_pairs, mean_r, pairwise_r, place_tilts,
-                                  residual_maps, same_die_r, shuffled_r, tilts)
-    from tests.wafer_results import FULL_PIXELS, QUICK_PIXELS, run_power, summary, write_map, write_run
+    from position_compare import (MIN_QINJ_HITS, centred, die_values, injected_notes, map_pairs, mean_r, measured,
+                                  pairwise_r, place_tilts, residual_maps, same_die_r, shuffled_r, tilts)
+    from tests.wafer_results import FULL_PIXELS, QUICK_PIXELS, event, run_power, summary, write_map, write_run
 
 GRID = {d: ((d - 1) // 5, (d - 1) % 5) for d in range(1, 26)}   # 25 dies, 5 x 5
 COMMON = [(2, 2), (2, 10), (10, 2), (10, 10), (5, 5), (5, 13), (13, 5), (13, 13)]
@@ -60,11 +60,11 @@ def lot(n_wafers, place=0.0, shared=30.0, own=0.0, noise=2.0, place_die=0.0, til
     return tables
 
 
-def qinj_table(pixels, toa=200.0, extra=None, few=None):
-    """QInj rows of every die for `pixels`: TOA `toa`, or for the pixel of
-    extra = (pixel, toa) that one; the (die, pixel) `few` gets fewer hits
-    than MIN_QINJ_HITS."""
-    return pd.DataFrame([{"die": d, "pix_row": r, "pix_col": c, "hits": 100, "eff": 1.0, "cal_mode": 180,
+def qinj_table(pixels, toa=200.0, extra=None, few=None, eff=1.0):
+    """QInj rows of every die for `pixels`, hit in a fraction `eff` of the
+    events: TOA `toa`, or for the pixel of extra = (pixel, toa) that one;
+    the (die, pixel) `few` gets fewer hits than MIN_QINJ_HITS."""
+    return pd.DataFrame([{"die": d, "pix_row": r, "pix_col": c, "hits": 100, "eff": eff, "cal_mode": 180,
                           "n_sel": MIN_QINJ_HITS - 1 if (d, (r, c)) == few else 100,
                           "toa_mean": extra[1] if extra and (r, c) == extra[0] else toa, "toa_std": 1.0,
                           "tot_mean": 70.0, "tot_std": 1.0, "cal_mean": 180.0, "cal_std": 0.5}
@@ -81,6 +81,12 @@ class PositionCompareTest(unittest.TestCase):
         self.assertLess(np.percentile(shuffled, 97.5), 0.5)
         values = die_values(lot(4, place_die=0.0))
         self.assertLess(abs(mean_r(pairwise_r(values, "baseline"))), 0.3)
+
+    def test_the_shuffled_level_keeps_each_wafer_on_the_places_it_measured(self):
+        rng = np.random.default_rng(3)   # baseline on 25 places per wafer, 35 more places with a TOA value only
+        values = pd.DataFrame({"wafer": w, "die": d, "baseline": rng.normal() if d <= 25 else np.nan, "toa": 1.0}
+                              for w in ("W0", "W1", "W2") for d in range(1, 61))
+        self.assertTrue(np.isfinite(shuffled_r(values, "baseline", n=20)).all())
 
     def test_each_wafer_is_centred_on_its_median_and_invalid_dies_are_left_out(self):
         tables = lot(3, invalid=(7,))
@@ -129,11 +135,13 @@ class PositionCompareTest(unittest.TestCase):
     def test_the_same_die_in_the_other_stage_matches_itself(self):
         pre = lot(3, own=5.0, seed=4)
         post = {w: (dies, pixels.assign(baseline=pixels["baseline"] + np.random.default_rng(9).normal(
-                    0, 2, len(pixels))), qinj) for w, (dies, pixels, qinj) in pre.items()}
+                    0, 2, len(pixels))), qinj) for w, (dies, pixels, qinj) in reversed(pre.items()) if w != "W1"}
+        dies, pixels, qinj = post["W0"]
+        post["W0"] = (dies, pixels[pixels["die"] > 5], qinj)   # the other stage: W2 and W0 without dies 1-5
         index, maps, _ = residual_maps(pre, "baseline")
         o_index, o_maps, _ = residual_maps(post, "baseline")
         r = same_die_r(index, maps, o_index, o_maps)
-        self.assertEqual(len(r), 3 * len(GRID))
+        self.assertEqual(len(r), 2 * len(GRID) - 5)
         self.assertGreater(np.median(r), 0.8)
         same, _, _ = map_pairs(index, maps)
         self.assertLess(abs(np.median(same)), 0.15)   # no likeness by place
@@ -149,6 +157,18 @@ class PositionCompareTest(unittest.TestCase):
         self.assertEqual(values.loc[("W1", 1), "toa"], 201.0)
         self.assertTrue(np.isnan(values.loc[("W0", 3), "toa"]))   # one pixel below MIN_QINJ_HITS
         self.assertFalse(np.isnan(values.loc[("W0", 3), "baseline"]))
+        self.assertEqual(injected_notes(tables), ["W0: injected (15,15) too, left out of the QInj means",
+                                                  "W1: injected (7,8) too, left out of the QInj means"])
+
+    def test_a_wafer_without_injected_pixels_empties_the_qinj_means_and_says_so(self):
+        tables = lot(2)
+        for wafer, eff in (("W0", 1.0), ("W1", 0.4)):
+            dies, pixels, _ = tables[wafer]
+            tables[wafer] = (dies, pixels, qinj_table(COMMON, eff=eff))
+        self.assertEqual(injected_notes(tables), ["W1: no pixel hit in half the events of half its QInj dies",
+                                                  "no pixel injected on every wafer with QInj data: CAL, TOA and TOT "
+                                                  "left out"])
+        self.assertEqual(measured(die_values(tables)), ["baseline", "noise_width"])
 
 
 @unittest.skipUnless(HAVE_PLOTS, "needs numpy, pandas, pyarrow and matplotlib (the wafer-daq venv)")
@@ -162,7 +182,10 @@ class PlotPositionsTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def wafer(self, name, stage, pixels, seed):
+    def wafer(self, name, stage, pixels, seed, qinj=None):
+        """The runs of wafer `name`: a calibration of `pixels` on every die
+        and, with `qinj`, 12 QInj events hitting those pixels (after a
+        first .nem file, which the reader leaves out)."""
         rng = np.random.default_rng(seed)
         place = np.random.default_rng(0).normal(0, 5, (26, 16, 16))
         for d, (r, c) in GRID.items():
@@ -170,10 +193,11 @@ class PlotPositionsTest(unittest.TestCase):
                                                                               + rng.normal(0, 1))),
                                   "noise_width": 6, "timestamp": "2026-09-22 15:00:05", "chip_name": "0x60"}
                                  for pr, pc in pixels])
+            extra = {"qinj": True, "qinj_pixels": [list(p) for p in qinj]} if qinj else {}
             record = summary(d, r, c, batch="B1", wafer=name, wafer_stage=stage, fullscan=len(pixels) == 256,
-                             power_on=f"2026-09-22 15:{d:02d}:00.000")
+                             power_on=f"2026-09-22 15:{d:02d}:00.000", **extra)
             write_run(self.root / "BatchID_X_Name_B1" / f"WaferID_X_Name_{name}" / stage, d, 1, record,
-                      run_power(), base)
+                      run_power(), base, nem={"qinj": [event(qinj) * 2, event(qinj) * 12]} if qinj else None)
 
     def run_positions(self, *argv):
         out = io.StringIO()
@@ -198,6 +222,21 @@ class PlotPositionsTest(unittest.TestCase):
         table = pd.read_csv(out / "B1_pre_ubm_positions.csv")
         self.assertEqual(sorted(table["wafer"].unique()), ["A1", "A2", "A3"])
         self.assertEqual(len(table), 3 * len(GRID))
+
+    def test_the_qinj_path_takes_the_common_pixels_and_keeps_a_wafer_with_qinj_data_only(self):
+        self.wafer("A1", "pre_ubm", FULL_PIXELS, seed=0, qinj=QUICK_PIXELS)
+        self.wafer("A2", "pre_ubm", FULL_PIXELS, seed=1, qinj=QUICK_PIXELS)
+        self.wafer("A3", "pre_ubm", QUICK_PIXELS, seed=2, qinj=QUICK_PIXELS[:8] + [(7, 8)])
+        rc, printed = self.run_positions("--stage", "pre_ubm", "--lot", "B1")
+        self.assertEqual(rc, 0, printed)
+        self.assertNotIn("left out: no full scan", printed)
+        self.assertIn("A1: injected (15,15) too, left out of the QInj means", printed)
+        self.assertIn("A3: injected (7,8) too, left out of the QInj means", printed)
+        self.assertIn("TOA mean", printed)
+        table = pd.read_csv(self.root / "out" / "B1_pre_ubm_positions.csv")
+        a3 = table[table["wafer"] == "A3"]
+        self.assertEqual(len(a3), len(GRID))
+        self.assertTrue(a3["toa"].notna().all() and a3["baseline"].isna().all())
 
     def test_a_lot_needs_two_wafers_with_data(self):
         self.wafer("A1", "pre_ubm", FULL_PIXELS, seed=0)

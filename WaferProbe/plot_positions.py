@@ -37,8 +37,8 @@ import pandas as pd
 from plot_lots import parse_lot, slug, wafer_label
 from plot_wafer import find_wafer_dirs
 from position_compare import (DIE_QUANTITIES, MAP_QUANTITIES, centred, common_injected, die_values, full_scan,
-                              map_pairs, mean_r, measured, months_tested, pairwise_r, place_tilts, residual_maps,
-                              same_die_r, shuffled_r, tilts)
+                              injected_notes, map_pairs, mean_r, measured, months_tested, pairwise_r, place_tilts,
+                              residual_maps, same_die_r, shuffled_r, tilts)
 from stage_compare import STAGE_ORDER
 from station import load_wafer_map
 from wafer_tables import collect, invalid_dies
@@ -106,6 +106,8 @@ def compare_lot(label, wafer_dirs, stage, wafer_map, invalid, with_qinj):
         print(f"{label}: {len(tables)} wafer{'s' if len(tables) != 1 else ''} with data in {stage}; "
               "a comparison needs two")
         return None
+    for line in injected_notes(tables):
+        print(f"{label}: {line}")
     values = die_values(tables)
     for q in DIE_QUANTITIES:
         values[f"{q}_centred"] = centred(values, q)
