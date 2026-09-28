@@ -321,6 +321,49 @@ It writes into `--out` (default `<path>/lot_summary/`):
 | `<label>_shorts` | every die graded POWER_SHORT after UBM: voltage and current of each main rail at the check that stopped it, new shorts filled, edge-ring dies square |
 | `lots.png` | with two lots or more: the new failures of each lot by kind, and its new analog shorts per map row and column; the title says how each lot's stages were tested |
 
+## Comparing the places on the wafer
+
+```
+python plot_positions.py --path <path> --stage pre_ubm --lot N62M23
+python plot_positions.py --path <path> --stage pre_ubm --no-qinj --lot "N62C72=N62C72:02G4,03F7,04F2"
+```
+
+asks whether the dies at one place on the wafer behave alike on every wafer
+of a lot, in one stage (`--lot` as for `plot_lots.py`). It reads the stage
+folder of each wafer as `plot_wafer.py` does and keeps the wafers with full
+scans or QInj data there; a lot needs two. Per die it takes the mean
+baseline and noise width of the full scan (pixels reading 0 left out) and
+the mean CAL, TOA and TOT of the pixels every wafer of the lot injected
+(each with at least 10 hits). Wafers tested at different times or on
+different setups go in one lot: every measure takes each wafer's own offset
+out (`position_compare.py` explains each):
+
+- the pairwise r of two wafers, the correlation of a die-level value over
+  the places both measured, against the same with each wafer's dies moved
+  to random places of its own;
+- the map r of two dies' pixel maps, after each die's mean and the pattern
+  every chip shares are taken out, for the same place on two wafers against
+  different places, with the same die measured in the other stage as what
+  one chip measured twice gives;
+- the tilt across each die, the plane fitted to its pixel map, at each
+  place, and the same-place map r with it taken out.
+
+Every wafer is tested in die-number order, row by row from the top of the
+wafer map, so a drift during a pass would repeat by place on every wafer as
+a top-to-bottom trend; `position_pairs` shows each wafer's values in that
+order. When every wafer is loaded the same way round, a place on the wafer
+is also a place on the prober's chuck, and these figures cannot tell the
+two apart.
+
+It writes into `--out` (default `<path>/position_summary/`), per lot:
+
+| file | what |
+|---|---|
+| `<label>_<stage>_positions.csv` | one row per die: its values and each minus its wafer's median |
+| `<label>_<stage>_position_maps` | per quantity, the median over the wafers of each die's value minus its wafer's median, at its place, with the pairwise r |
+| `<label>_<stage>_position_pairs` | per quantity, the pairwise r of every two wafers, and each wafer's values in test order |
+| `<label>_<stage>_pixel_patterns` | per pixel quantity, the pattern every chip shares, the map r histograms, the median same-place map r at each place, and the tilt across the die at each place |
+
 ## Tests
 
 ```
@@ -329,7 +372,8 @@ python -m unittest discover -s tests
 
 run from this folder (`WaferProbe/`). Needs `numpy`, `pandas` and `pyarrow`
 for `tests/test_wafer_tables.py`; also `matplotlib` for
-`tests/test_plot_wafer.py`, `tests/test_stage_compare.py` and
-`tests/test_plot_lots.py`, else their tests are skipped. The test
+`tests/test_plot_wafer.py`, `tests/test_stage_compare.py`,
+`tests/test_plot_lots.py` and `tests/test_positions.py`, else their tests
+are skipped. The test
 files build synthetic run folders (`tests/wafer_results.py`) laid out as the
 station writes them and do not need real wafer data.

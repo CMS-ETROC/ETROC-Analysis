@@ -15,7 +15,7 @@ if HAVE_PLOTS:
     from station import load_wafer_map
     import numpy as np
     from matplotlib.patches import Patch
-    from wafer_plots import FIGURES, add_note, fig_fullscan, fig_grades, fig_pixel_issues, wafer_map
+    from wafer_plots import FIGURES, add_note, fig_fullscan, fig_grades, fig_pixel_issues, number, wafer_map
     from wafer_tables import collect, invalid_dies
     from tests.wafer_results import (FULL_PIXELS, QUICK_PIXELS, baseline, event, run_power, summary,
                                      write_map, write_run)
@@ -256,6 +256,18 @@ class PlotWaferTest(unittest.TestCase):
         self.addCleanup(plt.close, gallery)
         self.assertEqual(len(marks(gallery)), 1)
         self.assertIn("5 full-scan dies", gallery._suptitle.get_text())
+
+    def test_a_value_that_shows_as_zero_has_no_minus(self):
+        write_map(self.root / "map.csv", WAFER_MAP)
+        for die in WAFER_MAP:
+            self.full_qinj_die(die)
+        dies, _, _, _ = collect(self.wafer / STAGE, load_wafer_map(self.root / "map.csv"))
+        fig, ax = plt.subplots()
+        self.addCleanup(plt.close, fig)
+        wafer_map(ax, dies, [-0.004, 0.004, -0.07, 0.3, -0.2, 0.0], title="t", fmt="{:+.2f}")
+        self.assertEqual(sorted(t.get_text() for t in ax.texts), ["+0.00", "+0.00", "+0.00", "+0.30", "-0.07", "-0.20"])
+        self.assertEqual(number("{:.0f}", -0.4), "0")
+        self.assertEqual(number("{:.2f}", -0.07), "-0.07")
 
     def test_a_missing_results_folder_is_refused(self):
         rc, printed, written = self.plot("--waferName", "nowhere")

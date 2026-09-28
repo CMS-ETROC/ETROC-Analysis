@@ -17,7 +17,7 @@ from matplotlib.patches import Patch, Rectangle  # noqa: E402
 from stage_compare import (MAIN_RAILS, QINJ_QUANTITIES, SAME_CHIP_R, STAGE_ORDER, qinj_compared,  # noqa: E402
                            transitions, unchecked_text)
 from wafer_plots import (GRADE_COLOURS, _edges, _ink, _invalid, _invalid_cell, _num, _shape,  # noqa: E402
-                         _suptitle, _wafer_axes, add_note, wafer_map)
+                         _suptitle, _wafer_axes, add_note, number, wafer_map)
 from wafer_tables import UNTESTED  # noqa: E402
 
 FIGURES = ("grade_changes", "current_changes", "baseline_changes", "qinj_changes")
@@ -97,7 +97,7 @@ def fig_current_changes(changes, title, setpoints):
             if keep.any():
                 ax.scatter(x[keep], y[keep], s=12, color=colour, alpha=0.8,
                            label=f"{name}: {int(keep.sum())} dies, median change "
-                                 f"{np.median(y[keep] - x[keep]):+.1f} mA")
+                                 f"{number('{:+.1f}', np.median(y[keep] - x[keep]))} mA")
         lo, hi = ax.get_xlim()
         lo, hi = min(lo, ax.get_ylim()[0]), max(hi, ax.get_ylim()[1])
         ax.plot([lo, hi], [lo, hi], color="#777777", lw=1, ls="--", label="after = before")
@@ -131,7 +131,7 @@ def fig_baseline_changes(changes, pixel_rows, title):
         ax.axvline(0, color="#777777", lw=1, ls="--")
         ax.set_xlabel(f"{what} after minus before (DAC codes)", fontsize=9)
         ax.set_ylabel("pixels", fontsize=9)
-        ax.set_title(f"{what}: {len(v)} pixels, median {np.median(v):+.1f}", fontsize=10)
+        ax.set_title(f"{what}: {len(v)} pixels, median {number('{:+.1f}', np.median(v))}", fontsize=10)
     flagged = changes.loc[flag, "die"].tolist()
     same = (f"; red frame = within-die baseline pattern r < {SAME_CHIP_R} before vs after "
             f"(another chip?): {', '.join(map(str, flagged))}" if flagged else
@@ -158,7 +158,7 @@ def fig_qinj_changes(changes, qinj_rows, title):
         ax.axvline(0, color="#777777", lw=1, ls="--")
         ax.set_xlabel(f"mean {q.upper()} code, after minus before", fontsize=9)
         ax.set_ylabel("pixels", fontsize=9)
-        ax.set_title(f"{q.upper()}: {len(v)} pixels, median {np.median(v) if len(v) else np.nan:+.1f}",
+        ax.set_title(f"{q.upper()}: {len(v)} pixels, median {number('{:+.1f}', np.median(v) if len(v) else np.nan)}",
                      fontsize=10)
     drop = changes[both & ((changes["eff_min_pre"] - changes["eff_min_post"]) > EFF_DROP).to_numpy()]
     eff = ("; lowest pixel efficiency fell by more than 1 % on die(s) "

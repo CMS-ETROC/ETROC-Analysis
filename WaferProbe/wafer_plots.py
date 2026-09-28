@@ -137,7 +137,13 @@ def _edges(values, target=40):
 
 def _signed(v):
     """'+ 1.23' or '− 1.23', for a term of a printed formula."""
-    return f"{'+' if v >= 0 else '−'} {abs(v):.2f}"
+    return f"{'+' if round(v, 2) >= 0 else '−'} {abs(v):.2f}"
+
+
+def number(fmt, v):
+    """fmt.format(v), with no minus on a value that shows as zero."""
+    text, zero = fmt.format(v), fmt.format(0.0)
+    return zero if text.replace("-", "").replace("+", "") == zero.replace("-", "").replace("+", "") else text
 
 
 def _ink(colour):
@@ -252,7 +258,7 @@ def wafer_map(ax, dies, values, *, title, label="", fmt="{:.0f}", cmap="viridis"
         elif np.isfinite(v):
             colour = cmap(norm(v))
             ax.add_patch(Rectangle((c - .5, r - .5), 1, 1, facecolor=colour, edgecolor="white", lw=0.6))
-            ax.text(c, r, fmt.format(v) + mark, ha="center", va="center", fontsize=fontsize,
+            ax.text(c, r, number(fmt, v) + mark, ha="center", va="center", fontsize=fontsize,
                     color=_ink(colour))
         else:
             ax.add_patch(Rectangle((c - .5, r - .5), 1, 1, facecolor="#f4f4f4", edgecolor="#c8c8c8",
