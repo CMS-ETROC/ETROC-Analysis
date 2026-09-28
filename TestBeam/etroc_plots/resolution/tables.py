@@ -103,6 +103,24 @@ def read_runs_summary(path):
     return pd.read_csv(path)
 
 
+def preferred_runs(path, rfsel, offset):
+    """{telescope: [run, ...]} of a display-run list (the campaign's DISPLAY_RUNS_JUL_CSV; columns
+    telescope, fluence, rfsel, os, run, preferred): the preferred run of each fluence step at
+    RFSel `rfsel` and threshold offset `offset`, lowest fluence first. A settings cell holding
+    several values ("8/10") matches neither; two preferred runs at one step raise ValueError."""
+    df = pd.read_csv(path, usecols=["telescope", "fluence", "rfsel", "os", "run", "preferred"])
+    num = {c: pd.to_numeric(df[c], errors="coerce") for c in ("rfsel", "os", "preferred")}
+    df = df[(num["preferred"] == 1) & (num["rfsel"] == rfsel) & (num["os"] == offset)]
+    out = {}
+    for tel, g in df.groupby(df["telescope"].str.strip().str.lower()):
+        g = g.assign(fluence=g["fluence"].astype(float)).sort_values("fluence")
+        if g["fluence"].duplicated().any():
+            raise ValueError("%s: more than one preferred run at one fluence step (RFSel %g, "
+                             "offset %g): %s" % (tel, rfsel, offset, list(g["run"])))
+        out[tel] = [int(r) for r in g["run"]]
+    return out
+
+
 # ---------------------------------------------------------------------------- selections
 def board_rows(bt, telescope, run, variant, floor, campaign=None, board_idx=None, anointed=True):
     """The board-table rows of one run (a run number or a merge name), sorted by board; anointed

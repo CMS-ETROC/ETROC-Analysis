@@ -221,6 +221,17 @@ def compound_header(axes, tag=None, data=None, line1=None, line2=None, scale=1.0
     return s
 
 
+def header_axis(fig, ml_frac, y_frac, width_frac):
+    """An invisible axis spanning the header band, to carry header() above a grid of panels
+    (figure fractions: left edge, bottom, width)."""
+    hax = fig.add_axes([ml_frac, y_frac, width_frac, 1e-6])
+    hax.set_xticks([])
+    hax.set_yticks([])
+    for sp in hax.spines.values():
+        sp.set_visible(False)
+    return hax
+
+
 def panel_title(ax, telescope, extra=None, scale=1.0):
     """Panel title, the campaign's TELESCOPE_TITLE ('H1 telescope, HPK', + ' · extra'), written
     on the header RIGHT (below any facility line already there).  Nothing is ever written on the

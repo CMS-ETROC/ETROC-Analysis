@@ -18,6 +18,7 @@ lists, chips, fluence steps, input locations). No data lives in the repository.
 | `notebooks/iv.ipynb` (and `iv.py`) | IV scans, bias currents and gain-layer depletion voltages of CERN IRRAD 2026, 42 figures |
 | `notebooks/merged.ipynb` (and `merged.py`) | the July IRRAD 2026 run merges against their single runs, and the cost of merging, 7 figures |
 | `notebooks/maps.ipynb` (and `maps.py`) | per-pixel time-resolution maps of CERN IRRAD 2026, one run per fluence step, 18 figures |
+| `notebooks/overview.ipynb` (and `overview.py`) | the CERN IRRAD 2026 setup and method as schematics (telescope, beam profile, boards, track selection, the RFSel setting) and the timeline of both campaigns, 6 figures |
 | `campaigns/irrad_2026.py` | that campaign: header text, telescopes and chips, fluence ladder, scan catalogue, run settings, input locations |
 | `campaigns/irrad_2026_inputs.md` | every input table (contents, origin), where the inputs live, the environment variables that move them; checksums in `irrad_2026_inputs.md5` |
 | `style.py` | the house look: header, footer, legends, colours, saving figures and values files |
@@ -25,7 +26,9 @@ lists, chips, fluence steps, input locations). No data lives in the repository.
 | `checks.py` | the house rules as code, run on every figure as it is drawn and on an output folder afterwards |
 | `iv/` | IV loaders and drawing helpers: March slow-control logs, July HV-monitor extracts, k-factor and V_gl |
 | `resolution/` | the test-beam result tables: readers, the anointed-combination selection, the combination band, run settings; the pixel-map layouts |
+| `overview/` | the setup and method schematics, and the campaign timeline with its run-time table builder |
 | `inputs.py` | the input check every notebook runs first |
+| `lv_log.py` | the July LV power log: its file-spans table builder, the LV-off periods and the LV-on time before a run |
 | `CONVENTIONS.md` | the rules every figure follows |
 
 ## Running a notebook
@@ -36,8 +39,9 @@ lists, chips, fluence steps, input locations). No data lives in the repository.
         --ExecutePreprocessor.timeout=600
     cd ../.. && python3 -m etroc_plots.checks $ETROC_FIGURES/iv
 
-or open `iv.ipynb` in Jupyter and run all cells; the same for `merged.ipynb` and `maps.ipynb`,
-whose figures go to `$ETROC_FIGURES/merged` and `$ETROC_FIGURES/maps`. Without `ETROC_FIGURES` the figures go to `figures/iv/` in the notebook's
+or open `iv.ipynb` in Jupyter and run all cells; the same for `merged.ipynb`, `maps.ipynb` and
+`overview.ipynb`, whose figures go to `$ETROC_FIGURES/merged`, `$ETROC_FIGURES/maps` and
+`$ETROC_FIGURES/overview`. Without `ETROC_FIGURES` the figures go to `figures/iv/` in the notebook's
 folder; check them from `TestBeam/` with
 `python3 -m etroc_plots.checks etroc_plots/notebooks/figures/iv`. The inputs are on EOS, in an area
 that needs a share from its owner; `campaigns/irrad_2026_inputs.md` says where they are and how to
@@ -73,16 +77,19 @@ If `~/.local` holds packages that clash with LCG_104d (a second pandas, say), ru
    tables with their checksums in `campaigns/<name>_inputs.md5` (`md5sum` output, paths relative to
    the tables folder), point `INPUTS_MANIFEST` at it, and describe the tables in
    `campaigns/<name>_inputs.md`.
-2. Start the campaign's notebook from a copy of `notebooks/iv.py` (or `merged.py`, `maps.py`)
-   and set `CAMPAIGN = "<name>"` in its setup cell. The notebooks themselves are written for
-   IRRAD 2026: their per-figure choices name that campaign's scans, chips and runs (in
-   `merged.py`: the constants cell under "The tables and the merges", `TABLE_CAMPAIGN`,
-   `DATA_TEXT` and `MERGES`; in `maps.py`: the constants cell under "The tables and the runs",
-   `RUNS`, `PAIR_FLUENCE`, `PAIR_RUNS`, `DEFAULT_RFSEL`, `CAMPAIGN_TEXT`, `RUNS_TEXT`,
-   `PAIR_RUNS_TEXT` and `BLOCK_TITLE`; the maps' colour scale and fit threshold are `VMIN`,
-   `VMAX` and `N_MIN_FIT` in `resolution/pixel_maps.py`, whose layouts draw four boards per
-   telescope). An exported `ETROC_CAMPAIGN` must match `CAMPAIGN` (the
-   notebook stops otherwise); for the command-line modules, such as
+2. Start the campaign's notebook from a copy of `notebooks/iv.py` (or `merged.py`, `maps.py`,
+   `overview.py`) and set `CAMPAIGN = "<name>"` in its setup cell. The notebooks themselves are
+   written for IRRAD 2026: their per-figure choices name that campaign's scans, chips and runs (in
+   `merged.py`: the constants cell under "The tables and the merges", `TABLE_CAMPAIGN`, `DATA_TEXT`
+   and `MERGES`; in `maps.py`: the constants cell under "The tables and the runs", `JULY_SETTINGS`
+   (the settings of the display runs taken from the display-run list; `RUNS` is made from these and
+   the campaign's `MARCH_DISPLAY_RUNS`), `PAIR_FLUENCE`, `PAIR_RUNS`, `DEFAULT_RFSEL`,
+   `CAMPAIGN_TEXT`, `RUNS_TEXT`, `PAIR_RUNS_TEXT` and `BLOCK_TITLE`; the maps' colour scale and fit
+   threshold are `VMIN`, `VMAX` and `N_MIN_FIT` in `resolution/pixel_maps.py`, whose layouts draw
+   four boards per telescope; in `overview.py`: the words and setup facts in each figure's cell and
+   `TIMELINE_FOOTER`, while the sensors, beam, run folders, LV log folders and March display runs
+   are in the campaign module). An exported `ETROC_CAMPAIGN` must match `CAMPAIGN` (the notebook
+   stops otherwise); for the command-line modules, such as
    `python3 -m etroc_plots.iv.preirrad_current`, it alone chooses the campaign. The campaign is
    read once, on the first `etroc_plots` import.
 3. On import, the package checks that the campaign module defines every name its code reads

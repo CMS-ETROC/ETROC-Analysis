@@ -8,11 +8,13 @@ campaigns/<campaign>_inputs.md, says where it comes from).
 
 Inputs, all named in the campaign file:
   JULY_REF_CSV       per-run log: start time (UTC), run length, per-board bias voltage and
-                     logging status (ok / no_hv_log / hv_off_by_design), radiation-stop stamps
+                     logging status (ok / no_hv_log / hv_off_by_design)
   JULY_TIMELINE      the HV slow-control log in 60 s bins (tb, channel, i_uA, tel)
   HV_CYCLES_JUL_CSV  HV / LV cycle, irradiation-step and DAQ-restart marks per run
+  LV_SPANS_JUL_CSV   the files of the LV power log, for the LV-on time after each step
   DISPLAY_RUNS_JUL_CSV  the display runs (ink triangle; preferred ones get "(p)")
-Channel 0-3 = the telescope's chips in board order (the campaign's TELESCOPE_CHIPS).
+Channel 0-3 = the telescope's chips in board order (the campaign's TELESCOPE_CHIPS). The radiation
+stop after each step is the campaign's RAD_STOP_UTC, the earliest stop the records allow.
 
     python -m etroc_plots.iv.current_vs_run --out DIR [--tel h1|f1|both] [--no-panels]
 
@@ -33,7 +35,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
-from .. import style
+from .. import lv_log, style
 from . import iv_plot as ivp
 from ..campaigns import active as campaign
 
@@ -72,9 +74,9 @@ DAQ_RESTART_WORD = "DAQ restart"          # as on the resolution-vs-run figure; 
 # additionally get "(p)" in the run-number label. Legend text as on the resolution-vs-run figure.
 DISPLAY_RUN_LEGEND_TEXT = "display run; (p) = preferred when one run is shown"
 # An extra ink-coloured tick (distinct from the purple irradiation-step tick)
-# beside each irradiation-step mark, quoting the logged radiation-stop stamp + LV-on time.
+# beside each irradiation-step mark, quoting the radiation stop + LV-on time.
 RAD_STOP_COLOR = style.INK
-RAD_STOP_LEGEND_TEXT = "logged radiation stop"
+RAD_STOP_LEGEND_TEXT = "radiation stop (the earliest the records allow)"
 RAD_STOP_SOURCE_TEXT = campaign.RAD_STOP_SOURCE_TEXT
 # No file names on figures: the same sentence in plain words for the drawn footer;
 # RAD_STOP_SOURCE_TEXT keeps them because it is stored as the values file's rad_stop_source
@@ -163,9 +165,10 @@ def _restart_flag(value, where):
 def load_hv_cycles():
     """Per (tel, run) -> dict(hv_cycled (bool: ANY board with status "ok" has b*_cycled "True"),
     lv_event (str: none / lv_cycle / irradiation_step / n/a / 'no data'), restart (bool), plus the
-    raw CSV fields (gap_h, b_status / b_gap_min_V / b_cycled per board 0-3, lv_on_utc / lv_off_utc
-    / lv_off_h, prev_run) for the values file. Read from the campaign's HV_CYCLES_JUL_CSV, never
-    recomputed."""
+    raw CSV fields (gap_h, b_status / b_gap_min_V / b_cycled per board 0-3, prev_run) for the
+    values file. Read from the campaign's HV_CYCLES_JUL_CSV, never recomputed. The table's own LV
+    times (lv_on_utc, lv_off_utc, lv_off_h) are not read: they are the first record of the log
+    file in use at the run's start, not the end of the LV-off period (lv_on_utc below)."""
     out = {}
     with open(HV_CYCLES_CSV) as fh:
         for row in csv.DictReader(fh):
@@ -190,8 +193,6 @@ def load_hv_cycles():
                 hv_cycled=any_ok_cycled,
                 restart=_restart_flag(row["restart"], "%s, %s run %d" % (HV_CYCLES_CSV, tel, run)),
                 lv_event=row["lv_event"],
-                lv_on_utc=row["lv_on_utc"], lv_off_utc=row["lv_off_utc"],
-                lv_off_h=(float(row["lv_off_h"]) if row["lv_off_h"] else None),
             )
     return out
 
@@ -249,18 +250,14 @@ def load_display_runs():
     return all_runs, pref_runs
 
 
-def load_rad_stop_utc():
-    """{(tel, run_num): rad_stop_utc string} from JULY_REF_CSV (the file load_currents_meta()
-    reads; the first row per (tel, run) wins, as there). The stamps differ per telescope:
-    H1 run11 2026-07-20 18:37:57, H1 run14 2026-07-25 16:08:57, F1 run10 2026-07-20 18:39:00,
-    F1 run13 2026-07-25 16:09:11."""
-    out = {}
-    with open(CURRENTS_CSV) as fh:
-        for row in csv.DictReader(fh):
-            key = (row["tel"].lower(), int(row["run_num"]))
-            if key not in out and row.get("rad_stop_utc"):
-                out[key] = row["rad_stop_utc"]
-    return out
+def step_before(tel, run):
+    """The fluence of the last irradiation step that ended before run `run` of telescope `tel`
+    started: the campaign's RAD_STOP_UTC entry latest at or before the run's start (from
+    JULY_REF_CSV), or None when no step ended before it."""
+    run_win, _ = load_currents_meta()
+    start = run_win[(tel, run)]["start_utc"].strftime("%Y-%m-%d %H:%M:%S")
+    ended = [(stop, f) for f, stop in campaign.RAD_STOP_UTC.items() if stop <= start]
+    return max(ended)[1] if ended else None
 
 
 def _fmt_utc_stamp(s):
@@ -274,18 +271,29 @@ def _fmt_utc_stamp(s):
     return dt.strftime("%m-%d %H:%M")
 
 
+def lv_on_utc(tel, run):
+    """'YYYY-MM-DD HH:MM:SS' UTC: when the LV came back before run `run` of telescope `tel`, the
+    end of the last LV-off period longer than the campaign's LV_OFF_MIN_H before the run's start
+    (lv_log.lv_on_before; start from JULY_REF_CSV), or None. The HV / LV cycle table's lv_on_utc
+    is the end of the last LV cycle of any length instead, later where the LV cycled again before
+    the run (H1 run 11, F1 run 13)."""
+    run_win, _ = load_currents_meta()
+    t = lv_log.lv_on_before(tel, run_win[(tel, run)]["start_utc"])
+    return t.strftime("%Y-%m-%d %H:%M:%S") if t is not None else None
+
+
 def rad_stop_lv_on_map(hv_cycles):
     """{(tel, run): (rad_stop_fmt, lv_on_fmt)} for exactly the runs hv_cycles_jul.csv marks
-    lv_event=='irradiation_step' (H1 runs 11/14, F1 runs 10/13), requiring both a
-    rad_stop_utc (july_inrun_currents.csv) and an lv_on_utc (hv_cycles_jul.csv, already loaded by
-    load_hv_cycles()) to be present."""
-    rad_stop = load_rad_stop_utc()
+    lv_event=='irradiation_step' (H1 runs 11/14, F1 runs 10/13, the first run after each
+    irradiation step), requiring both a radiation stop (step_before) and an LV-on time
+    (lv_on_utc) to be present."""
     out = {}
     for (tel, run), row in hv_cycles.items():
         if row.get("lv_event") != "irradiation_step":
             continue
-        rs = _fmt_utc_stamp(rad_stop.get((tel, run)))
-        lv = _fmt_utc_stamp(row.get("lv_on_utc"))
+        step = step_before(tel, run)
+        rs = _fmt_utc_stamp(campaign.RAD_STOP_UTC[step]) if step is not None else None
+        lv = _fmt_utc_stamp(lv_on_utc(tel, run))
         if rs and lv:
             out[(tel, run)] = (rs, lv)
     return out
@@ -500,7 +508,7 @@ def _draw_one_panel(ax, tel, run, pd_, meta_row, board_meta, y_max, x_max, fs, h
                linewidth=1.0, clip_on=False, solid_capstyle="butt")
         tick_y -= 0.010
     # extra ink-coloured tick (distinct from the purple irradiation-step tick above) for the
-    # logged radiation-stop stamp, on the irradiation-step runs that have one.
+    # radiation stop, on the irradiation-step runs that have one.
     if rad_stop_line:
         ax.plot([0.44, 0.56], [tick_y, tick_y], transform=ax.transAxes, color=RAD_STOP_COLOR,
                linewidth=1.0, clip_on=False, solid_capstyle="butt")
@@ -684,7 +692,6 @@ def build_values_json(tel, runs, panel_data, meta, board_meta, y_max, y_mode, x_
     chips = campaign.TELESCOPE_CHIPS[tel]
     display_runs, pref_runs = load_display_runs()
     rad_stop_map = rad_stop_lv_on_map(hv_cycles)
-    rad_stop_raw = load_rad_stop_utc()
     per_run = {}
     for run in runs:
         pd_ = panel_data[run]
@@ -709,14 +716,14 @@ def build_values_json(tel, runs, panel_data, meta, board_meta, y_max, y_mode, x_
             offsets=m["offsets"], rfsels=m["rfsels"], is_spike=(run in SPIKE_RUNS[tel]),
             run_length_h=pd_["length_h"], no_hv_log=pd_["nolog"], chips=chip_rows,
             is_display_run=is_display, preferred=is_preferred,
-            rad_stop_utc=(rad_stop_raw.get((tel, run)) if (tel, run) in rad_stop_map else None),
+            rad_stop_utc=(campaign.RAD_STOP_UTC[step_before(tel, run)]
+                          if (tel, run) in rad_stop_map else None),
             hv_cycle=dict(
                 prev_run=hv_row.get("prev_run"), gap_h=hv_row.get("gap_h"),
                 b_status=hv_row.get("b_status"), b_gap_min_V=hv_row.get("b_gap_min_V"),
                 b_cycled=hv_row.get("b_cycled"), hv_cycled=hv_row.get("hv_cycled"),
                 lv_event=hv_row.get("lv_event"), restart=hv_row.get("restart"),
-                lv_on_utc=hv_row.get("lv_on_utc"), lv_off_utc=hv_row.get("lv_off_utc"),
-                lv_off_h=hv_row.get("lv_off_h"), mark_text=mark, restart_text=restart_word,
+                mark_text=mark, restart_text=restart_word,
                 tick_colors=tick_colors,
             ),
         )
@@ -744,15 +751,17 @@ def build_values_json(tel, runs, panel_data, meta, board_meta, y_max, y_mode, x_
         display_runs={t: sorted(display_runs.get(t, ())) for t in TELS},
         display_runs_preferred={t: sorted(pref_runs.get(t, ())) for t in TELS},
         rad_stop_legend=RAD_STOP_LEGEND_TEXT, rad_stop_source=RAD_STOP_SOURCE_TEXT,
-        rad_stop_runs={"%s/%d" % (t, r): {"rad_stop_utc": rad_stop_raw.get((t, r)),
-                                         "lv_on_utc": hv_cycles.get((t, r), {}).get("lv_on_utc")}
-                      for (t, r) in rad_stop_map},
+        rad_stop_runs={"%s/%d" % (t, r): {
+            "step": step_before(t, r), "rad_stop_utc": campaign.RAD_STOP_UTC[step_before(t, r)],
+            "rad_stop_bounds_utc": campaign.RAD_STOP_BOUNDS_UTC[step_before(t, r)],
+            "lv_on_utc": lv_on_utc(t, r)} for (t, r) in rad_stop_map},
         per_run=per_run,
         overlap_problems=list(problems),
     )
     return ivp.write_values(OUT, stem or ("current_vs_run_jul_%s" % tel), payload,
                             script="TestBeam/etroc_plots/iv/current_vs_run.py",
-                            inputs=[CURRENTS_CSV, TIMELINE_60S, combo_json_path, HV_CYCLES_CSV],
+                            inputs=[CURRENTS_CSV, TIMELINE_60S, combo_json_path, HV_CYCLES_CSV,
+                                    DISPLAY_RUNS_JUL_CSV, campaign.LV_SPANS_JUL_CSV],
                             conventions=ivp.CURRENTS_CONVENTIONS)
 
 

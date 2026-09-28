@@ -9,6 +9,7 @@ b7312457c81bb2a34989f4216fa3211f  july/july_inrun_currents.csv
 ad3426abcc9a836818faaab4cad7cf42  july/july_iv_scans.csv
 45a7618697886bb17f351fcd9fb95691  july/july_timeline.json
 7db338fbaa737caa3622de20a497b714  july/logging_gaps.csv
+a2a8f869ea8803f844b6a1ebdc60ce75  july/lv_spans_jul.csv
 581192dcf42117f4a7fdc0a3c9f877bc  july/res_vs_run_combo_check_jul_values.json
 68fe8f53a72a85f6d6be6f9ad3b83500  july/timeline_60s.csv.gz
 c33826a5208622897d3be4c539dc6874  march/conditions_March2026_H1_HPK.csv
@@ -27,5 +28,6 @@ e33c62d4c5aa2d523cc1d5b40abbce02  tables/merged/PIXEL_TABLES_README.md
 96524e1f5b216e31660b5a1651eb8af2  tables/merged/board_table_merged.csv
 afc445a0879d8fa0c8f2b139370d2528  tables/merged/per_pixel_cost_summary.csv
 e5257742f55811329508e838716abbf8  tables/merged/pixel_table_merged.csv
+eaeac639f3f2cc62730d9e0bf9d270be  tables/run_times.csv
 7229f766e120727691cc435d9ffb997f  tables/runs_summary.csv
 db95934d10de336961727755d2d6c3d5  vgl/vgl_points.csv

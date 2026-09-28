@@ -17,6 +17,8 @@ import os
 import matplotlib as mpl
 import mplhep as hep
 from matplotlib.legend import Legend
+from matplotlib.patches import FancyArrowPatch
+from matplotlib.path import Path
 from matplotlib.text import Annotation, Text
 
 # ------------------------------------------------------------------ board identity
@@ -103,7 +105,8 @@ def text_extent(t, renderer):
 
 def check_no_clipping(fig, name, min_overlap=0.16, pad_px=1.0):
     """Every text artist must sit inside the canvas and clear every other text artist, and no
-    annotation arrow may cross another text.
+    arrow (an annotation's, or a FancyArrowPatch added to an axes or the figure) may cross a
+    text.
 
     Reported, never silently fixed: these figures are laid out in inches by hand, so a report here
     means a placement has to change.  A tick label whose tick lies outside the drawn view is
@@ -141,23 +144,36 @@ def check_no_clipping(fig, name, min_overlap=0.16, pad_px=1.0):
                           text=" ".join(str(artist.get_text()).split())[:46]))
 
     def collect_arrow(t, owner):
-        """The arrow of an annotation matplotlib drew, whatever its text, as a path in pixels."""
+        """The arrow of an annotation matplotlib drew, whatever its text, as polylines in pixels.
+        A closed head ("-|>") ends in a CLOSEPOLY whose vertex is a placeholder at (0, 0);
+        to_polygons closes the head on its first vertex instead, so no segment runs to the
+        figure's corner."""
         patch = getattr(t, "arrow_patch", None)
         if patch is None or not (t.get_visible() and patch.get_visible()):
             return
         if t.get_window_extent(renderer=r).bounds == (0, 0, 1, 1):      # not drawn
             return
-        arrows.append(dict(owner=owner, artist=t,
-                           text=" ".join(str(t.get_text()).split())[:46],
-                           path=patch.get_transform().transform_path(patch.get_path())))
+        add_arrow(patch, owner, t, " ".join(str(t.get_text()).split())[:46])
+
+    def add_arrow(patch, owner, artist, text):
+        arrows.append(dict(owner=owner, artist=artist, text=text,
+                           paths=[Path(v) for v in patch.get_transform().transform_path(
+                               patch.get_path()).to_polygons(closed_only=False)]))
+
+    def collect_arrow_patches(patches, owner):
+        for p in patches:
+            if isinstance(p, FancyArrowPatch) and p.get_visible():
+                add_arrow(p, owner, p, "(arrow patch)")
 
     for t in fig.texts:
         collect(t, "figure", "text")
         collect_arrow(t, "figure")
+    collect_arrow_patches(fig.patches, "figure")
     for who, ax in named_axes(fig):
         for t in ax.texts:
             collect(t, who, "text")
             collect_arrow(t, who)
+        collect_arrow_patches(ax.patches, who)
         for attr in ("title", "_left_title", "_right_title"):
             collect(getattr(ax, attr, None), who, "title")
         collect(ax.xaxis.label, who, "xlabel")
@@ -205,7 +221,8 @@ def check_no_clipping(fig, name, min_overlap=0.16, pad_px=1.0):
 
     for a in arrows:
         for b in items:
-            if b["artist"] is not a["artist"] and a["path"].intersects_bbox(b["bb"], filled=False):
+            if b["artist"] is not a["artist"] and any(
+                    p.intersects_bbox(b["bb"], filled=False) for p in a["paths"]):
                 problems.append("arrow through text: %s arrow %r  vs  %s %s %r"
                                 % (a["owner"], a["text"], b["owner"], b["kind"], b["text"]))
 

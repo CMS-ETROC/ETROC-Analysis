@@ -67,6 +67,17 @@ rest are for whoever writes the next figure.
   `VMIN` and `VMAX` in `resolution/pixel_maps.py`), so maps compare by colour; a pixel outside it
   is counted as saturated, a pixel without a value is grey.
 
+## Schematics
+
+- The setup and method figures of the overview notebook draw no measured data. Every number on
+  them (sensor names, beam width, event counts) comes from the campaign module, the notebook or
+  `overview/cartoons.py` (its illustrative tracks and pulses) and is listed in the values file.
+  A figure that could be read as data says so on the image: the beam profile is a model, the
+  track counts and the pulse shapes are illustrative.
+- They carry no fluence, so their colours mean other things: the board index
+  (`etroc_style.BOARD_COLOR`), the track chosen for a pixel, R_f on a grey ramp, and the RFSel
+  switch in the alert colour.
+
 ## IV figures
 
 - Currents are drawn as abs(I). A binned scan is the mean voltage and the median current per
