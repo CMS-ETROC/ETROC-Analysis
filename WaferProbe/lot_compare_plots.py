@@ -9,7 +9,6 @@ wafer_plots.py: row 0 at the top, the wafer seen as on the station's map
 display, invalid dies grey with INVALID across. Only the valid dies count.
 """
 import math
-import textwrap
 
 import matplotlib
 matplotlib.use("Agg")
@@ -18,16 +17,17 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 from matplotlib.lines import Line2D  # noqa: E402
 from matplotlib.patches import Patch, Rectangle  # noqa: E402
-from matplotlib.transforms import ScaledTranslation  # noqa: E402
 
-from lot_compare import (CLASSES, NEW_FAILURES, at_risk, counts, median_by_position, passed,  # noqa: E402
-                         per_position, profile, relative_change, stage_text, valid_positions)
+from lot_compare import (CLASSES, NEW_FAILURES, at_risk, chronology, counts, lot_batch, lot_name,  # noqa: E402
+                         lot_names, median_by_position, passed, per_position, profile, relative_change,
+                         stage_months, stage_text, valid_positions)
 from stage_compare import MAIN_RAILS  # noqa: E402
-from wafer_plots import _ink, _invalid_cell, _shape, _suptitle, _wafer_axes, wafer_map  # noqa: E402
+from wafer_plots import _ink, _invalid_cell, _shape, _suptitle, _wafer_axes, add_note, wafer_map  # noqa: E402
 
 CLASS_COLOURS = {
     "passed both": "#2ca02c", "recovered": "#98df8a", "new analog short": "#d62728",
-    "new digital short": "#ff7f0e", "new short, other or unknown rail": "#8c564b", "new other failure": "#9467bd",
+    "new digital short": "#ff7f0e", "new short, other or unknown rail": "#8c564b", "new I2C NACK": "#1f77b4",
+    "new I2C pixel or register failure": "#17becf", "new BL/NW = 0": "#bcbd22", "new other failure": "#9467bd",
     "failed both": "#7f7f7f", "untested in a stage": "#dcdcdc",
 }
 LOT_FIGURES = ("yield", "transitions", "edges", "currents", "shorts")
@@ -43,10 +43,22 @@ def _valid(lot):
     return lot[~lot["invalid"].astype(bool)]
 
 
+def _class_label(lot, c):
+    """The class as the legends name it; a new other failure also names
+    the grades after UBM it stands for."""
+    if c != "new other failure":
+        return c
+    valid = _valid(lot)
+    grades = sorted(set(valid.loc[valid["transition"] == c, "grade_post"]))
+    return f"{c} ({', '.join(grades)})" if grades else c
+
+
 def _class_handles(lot, classes=CLASSES):
+    """Legend entries of the classes of the lot's valid dies, with their
+    counts; a class no die fell into is left out."""
     n = counts(lot)
-    return [Patch(facecolor=CLASS_COLOURS[c], edgecolor="#555555", lw=0.4, label=f"{c}: {n[c]}")
-            for c in classes if n[c] or c in NEW_FAILURES]
+    return [Patch(facecolor=CLASS_COLOURS[c], edgecolor="#555555", lw=0.4, label=f"{_class_label(lot, c)}: {n[c]}")
+            for c in classes if n[c]]
 
 
 def fig_yield(lot, title):
@@ -105,7 +117,7 @@ def fig_transitions(lot, title):
     for ax in axes.flat[len(wafers):]:
         ax.axis("off")
     fig.legend(handles=_class_handles(lot), loc="outside lower center", ncol=4, fontsize=8, frameon=False)
-    _suptitle(fig, title, "what happened to each die after UBM; row 0 at the top, as on the station's map",
+    _suptitle(fig, title, "what happened to each die after UBM, graded with the test both of its runs made",
               fontsize=11)
     return fig
 
@@ -281,10 +293,16 @@ def fig_shorts(lot, title):
 
 
 def fig_lots(lots, title="lots"):
-    """The lots side by side: the new failures of the dies at risk by
-    class, and the new analog shorts per map row and column."""
-    labels = list(lots)
+    """The lots side by side in the order they were tested (chronology),
+    each named by its batch and test months (lot_names): the new failures
+    of the dies at risk by class, and the new analog shorts per map row
+    and column."""
+    labels = sorted(lots, key=lambda label: chronology(lots[label]))
+    names = lot_names(lots)
+    short = {label: f"{lot_batch(lots[label])} {stage_months(lots[label], 'pre')} → {stage_months(lots[label], 'post')}"
+             + (f" ({label})" if names[label] != lot_name(lots[label]) else "") for label in labels}
     colours = {label: WAFER_COLOURS[i % len(WAFER_COLOURS)] for i, label in enumerate(labels)}
+    shown = [c for c in NEW_FAILURES if any((at_risk(lot)["transition"] == c).any() for lot in lots.values())]
     fig, axes = plt.subplots(1, 3, figsize=(19, 6.8), layout="constrained")
     ax = axes[0]
     for i, label in enumerate(labels):
@@ -297,12 +315,14 @@ def fig_lots(lots, title="lots"):
             bottom += f
         lo, hi = profile(lot.assign(all=0), "all").loc[0, ["lo", "hi"]] if len(risk) else (np.nan, np.nan)
         ax.errorbar(i, bottom, yerr=[[bottom - 100 * lo], [100 * hi - bottom]], color="black", capsize=3, lw=1)
-    ax.set_xticks(range(len(labels)), [f"{textwrap.fill(label, 16)}\n{lots[label]['wafer'].nunique()} wafers\nPASSED "
-                                       f"{passed(lots[label], 'pre')} → {passed(lots[label], 'post')}"
-                                       for label in labels], fontsize=8)
+    ticks = [f"{lot_batch(lot)}\npre-UBM test\n{stage_months(lot, 'pre')}\npost-UBM test\n{stage_months(lot, 'post')}"
+             + (f"\n({label})" if names[label] != lot_name(lot) else "")
+             + f"\n{lot['wafer'].nunique()} wafers\nPASSED {passed(lot, 'pre')} → {passed(lot, 'post')}"
+             for label, lot in ((label, lots[label]) for label in labels)]
+    ax.set_xticks(range(len(labels)), ticks, fontsize=8)
     ax.set_ylabel("% of the dies at risk failing newly after UBM", fontsize=8)
     ax.tick_params(axis="y", labelsize=7)
-    ax.legend(handles=[Patch(facecolor=CLASS_COLOURS[c], label=c) for c in NEW_FAILURES], fontsize=7, frameon=False,
+    ax.legend(handles=[Patch(facecolor=CLASS_COLOURS[c], label=c) for c in shown], fontsize=7, frameon=False,
               loc="upper left")
     ax.set_title(f"new failures by kind; bar: {ERRORS} of the total", fontsize=10)
     for ax, by, name in ((axes[1], "die_row", "map row (0 at the top)"), (axes[2], "die_col", "map column (0 at the left)")):
@@ -311,14 +331,14 @@ def fig_lots(lots, title="lots"):
             dx = (k - (len(labels) - 1) / 2) * 0.12
             ax.errorbar(p.index + dx, 100 * p["fraction"],
                         yerr=[100 * (p["fraction"] - p["lo"]), 100 * (p["hi"] - p["fraction"])],
-                        fmt="o-", ms=4, lw=1, capsize=2, color=colours[label], label=label)
+                        fmt="o-", ms=4, lw=1, capsize=2, color=colours[label], label=names[label])
         ax.set_ylim(bottom=0)
         ax.tick_params(labelsize=7)
         ax.set_xlabel(name, fontsize=8)
         ax.set_ylabel("% of the dies at risk becoming a new analog short", fontsize=8)
         ax.legend(fontsize=7, frameon=False)
         ax.set_title(f"new analog shorts per {name.split(' (')[0]}; bars: {ERRORS}", fontsize=10)
-    stages = "\n".join(f"{label}: before {stage_text(lots[label], 'pre')}; after {stage_text(lots[label], 'post')}"
+    stages = "\n".join(f"{short[label]}: before {stage_text(lots[label], 'pre')}; after {stage_text(lots[label], 'post')}"
                        for label in labels)
     _suptitle(fig, title, "what UBM and bumping did to each lot, over the dies at risk (valid, PASSED before, "
                           "tested after)\n" + stages, fontsize=10)
@@ -327,8 +347,7 @@ def fig_lots(lots, title="lots"):
 
 def _save(fig, path, note, dpi):
     if note:
-        fig.text(1.0, 0.0, note, ha="right", va="top", fontsize=6.5, color="#777777", wrap=True,
-                 transform=fig.transFigure + ScaledTranslation(0, -8 / 72, fig.dpi_scale_trans))
+        add_note(fig, note, wrap=True)
     fig.savefig(path, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
 

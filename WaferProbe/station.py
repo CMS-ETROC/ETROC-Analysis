@@ -1,5 +1,5 @@
 """station.py -- helpers copied verbatim from the station repo
-ETROC-WaferProbe, branch psu-identify at commit 113b1da: the whole of
+ETROC-WaferProbe, branch psu-identify at commit 949c043: the whole of
 src/grading.py, plus nem_files (from src/qinj_check.py) and load_wafer_map
 (from prober_move.py), and at commit 6327218 the quick test's pixels (from
 master_run_script.py). Brought in so plot_wafer.py, wafer_tables.py,
@@ -46,6 +46,9 @@ The mapping is read off run_die's own code path, not guessed:
   baseline or noise width read 0. The calibration runs after the I2C
   checks and before QInj, and a zero reading does not stop the run, so a
   run that reached QInj also carries its verdict (summary["qinj_check"]).
+  An imported run may add pixels its calibration did not read, carried
+  over from another test by import_runs.py; they are listed again in
+  summary["calibration"]["carried_over"] and counted apart.
 - summary["efuse"][chip_hex] = {"word", "before", "after", "writes",
   "verified", "reason"} is filled in by src/efuse_check.burn_efuse during
   the eFuse burn (--doEfuse), or by src/efuse_check.verify_efuse, which
@@ -167,9 +170,18 @@ def _before_qinj(summary):
                      ", ".join(f"{chip}: {reason}" for chip, reason in unverified) + _qinj_note(summary))
     zero = zero_pixels(summary)
     if zero:
-        n = (summary.get("calibration") or {}).get("n_pixels")
-        count = f"{len(zero)} of {n} pixels" if n else f"{len(zero)} pixels"
-        return Grade("BL_NW_ZERO", BL_NW_ZERO, f"{count} BL or NW = 0" + _qinj_note(summary))
+        calibration = summary.get("calibration") or {}
+        carried = {tuple(p) for p in calibration.get("carried_over") or []}
+        read = [p for p in zero if tuple(p) not in carried]
+        n = calibration.get("n_pixels")
+        more = len(zero) - len(read)
+        if not read:
+            count = f"{more} pixel{'s' if more > 1 else ''} BL or NW = 0, carried over from another test"
+        else:
+            count = (f"{len(read)} of {n} pixels" if n else f"{len(read)} pixels") + " BL or NW = 0"
+            if more:
+                count += f", {more} more carried over from another test"
+        return Grade("BL_NW_ZERO", BL_NW_ZERO, count + _qinj_note(summary))
     return None
 
 

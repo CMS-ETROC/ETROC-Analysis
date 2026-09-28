@@ -9,7 +9,10 @@ BATCH, all of them or the ones listed, under the label LABEL (the batch
 name when no label is given). Wafers of one batch that went through UBM
 at different times are separate lots: give each set its own --lot and
 label. Only the wafers with both stage folders, pre_ubm and post_ubm, are
-compared; the others are named and left out.
+compared; the others are named and left out. The label names the files;
+the figures name each lot by its batch and the months its stages were
+tested (lot_compare.lot_names), and lots.png puts the lots in the order
+they were tested.
 
 It reads both stages of every wafer as plot_wafer.py does (the newest run
 of each die), grades each die in both stages with the test both of its
@@ -29,7 +32,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from lot_compare import wafer_rows
+from lot_compare import lot_names, wafer_rows
 from plot_wafer import find_wafer_dirs
 from stage_compare import STAGE_ORDER
 from station import load_wafer_map
@@ -153,8 +156,10 @@ def main(argv=None):
     if not args.tables_only:
         from lot_compare_plots import plot_lot, plot_lots  # matplotlib is needed from here on only
         stamp = f"plot_lots.py {datetime.now():%Y-%m-%d %H:%M}"
+        titles = lot_names({label: lot for label, (lot, *_) in lots.items()})
         for label, (lot, setpoints, _) in lots.items():
-            written += plot_lot(out_dir, slug(label), lot, setpoints, title=label, note=f"{notes[label]}; {stamp}")
+            written += plot_lot(out_dir, slug(label), lot, setpoints, title=titles[label],
+                                note=f"{notes[label]}; {stamp}")
         if len(lots) > 1:
             written.append(plot_lots(out_dir, {label: lot for label, (lot, *_) in lots.items()},
                                      note=f"{' | '.join(notes.values())}; {stamp}"))

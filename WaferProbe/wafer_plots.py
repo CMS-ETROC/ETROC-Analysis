@@ -197,6 +197,35 @@ def _suptitle(fig, title, text, fontsize):
     return heading
 
 
+def add_note(fig, note, wrap=False):
+    """The note in grey, right-aligned under everything the figure draws (a
+    legend below its axes included), where the tight bounding box of
+    savefig takes it in and no axis label can reach it; with wrap, broken
+    into lines as wide as the figure at most. The layout is drawn and kept
+    first, and the figure legends anchored where it put them: savefig's
+    tight bounding box takes the note in, and a legend anchored to the
+    figure's box, as fig.legend's are, would move down with it onto the
+    note."""
+    fig.canvas.draw()
+    fig.set_layout_engine("none")
+    for legend in fig.legends:
+        legend.set_bbox_to_anchor((0, 0, 1, 1), transform=fig.transFigure)
+    renderer = fig.canvas.get_renderer()
+    low = min(0.0, fig.get_tightbbox(renderer).y0)
+    if wrap:
+        font = FontProperties(size=6.5)
+        lines = [""]
+        for word in note.split(" "):
+            trial = f"{lines[-1]} {word}" if lines[-1] else word
+            if lines[-1] and renderer.get_text_width_height_descent(trial, font, ismath=False)[0] > fig.bbox.width:
+                lines.append(word)
+            else:
+                lines[-1] = trial
+        note = "\n".join(lines)
+    return fig.text(1.0, 0.0, note, ha="right", va="top", fontsize=6.5, color="#777777",
+                    transform=fig.transFigure + ScaledTranslation(0, low - 8 / 72, fig.dpi_scale_trans))
+
+
 def wafer_map(ax, dies, values, *, title, label="", fmt="{:.0f}", cmap="viridis",
               ref=None, centre=None, vrange=None, frame=None, marks=None, fontsize=6.5, integer=False):
     """Colour each die of the dies table by `values` (one per row), print
@@ -716,10 +745,7 @@ def plot_all(out_dir, dies, pixels, qinj, title, note="", dpi=130):
             path.unlink(missing_ok=True)
             continue
         if note:
-            # below the figure's bottom edge: the tight bounding box of savefig
-            # takes it in, and no axis label can reach it
-            fig.text(1.0, 0.0, note, ha="right", va="top", fontsize=6.5, color="#777777",
-                     transform=fig.transFigure + ScaledTranslation(0, -8 / 72, fig.dpi_scale_trans))
+            add_note(fig, note)
         fig.savefig(path, dpi=dpi, bbox_inches="tight")
         plt.close(fig)
         written.append(path)

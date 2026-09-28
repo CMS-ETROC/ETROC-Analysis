@@ -11,7 +11,8 @@ from pathlib import Path
 HAVE_PLOTS = all(importlib.util.find_spec(m) for m in ("numpy", "pandas", "pyarrow", "matplotlib"))
 if HAVE_PLOTS:
     import pandas as pd
-    from lot_compare import edge_ring, profile, short_rails, transition_class, wilson
+    from lot_compare import chronology, edge_ring, lot_name, lot_names, profile, short_rails, transition_class, wilson
+    from lot_compare_plots import _class_handles
     from plot_lots import main, parse_lot
     from tests.wafer_results import run_power, summary, write_map, write_run
 
@@ -41,7 +42,10 @@ class LotHelpersTest(unittest.TestCase):
         self.assertEqual(transition_class("PASSED", "POWER_SHORT", "digital_300mA"), "new digital short")
         self.assertEqual(transition_class("PASSED", "POWER_SHORT", "ws_analog_90mA"), "new short, other or unknown rail")
         self.assertEqual(transition_class("PASSED", "POWER_SHORT", "over-current"), "new short, other or unknown rail")
-        self.assertEqual(transition_class("PASSED", "BL_NW_ZERO"), "new other failure")
+        self.assertEqual(transition_class("PASSED", "BL_NW_ZERO"), "new BL/NW = 0")
+        self.assertEqual(transition_class("PASSED", "I2C_NACK"), "new I2C NACK")
+        self.assertEqual(transition_class("PASSED", "I2C_PIXELS"), "new I2C pixel or register failure")
+        self.assertEqual(transition_class("PASSED", "NO_LINK_OR_DATA"), "new other failure")
         self.assertEqual(transition_class("I2C_NACK", "PASSED"), "recovered")
         self.assertEqual(transition_class("POWER_SHORT", "POWER_SHORT"), "failed both")
         self.assertEqual(transition_class("PASSED", "CONTACT_FAILURE"), "untested in a stage")
@@ -56,6 +60,31 @@ class LotHelpersTest(unittest.TestCase):
         for n in range(1, 401):
             self.assertEqual(wilson(0, n)[0], 0.0, n)
             self.assertEqual(wilson(n, n)[1], 1.0, n)
+
+    def lot(self, pre, post):
+        """Lot rows of three dies: tested before UBM at the times pre (one
+        die NOT_TESTED), after at post."""
+        return pd.DataFrame({"batch": "BatchID_X_Name_N62C72", "run_pre": 1, "run_post": 1,
+                             "grade_pre": ["PASSED", "PASSED", "NOT_TESTED"], "grade_post": "PASSED",
+                             "start_pre": [*pre, "2027-01-01 00:00:00"], "start_post": post})
+
+    def test_a_lot_is_named_by_its_batch_and_the_months_it_was_tested(self):
+        feb = self.lot(["2025-09-30 10:00:00", "2025-10-02 09:00:00"], "2026-02-10 12:00:00")
+        self.assertEqual(lot_name(feb), "N62C72, pre-UBM test 09/2025-10/2025, post-UBM test 02/2026")
+        apr = self.lot(["2025-10-20 10:00:00", "2025-10-21 10:00:00"], "2026-04-02 12:00:00")
+        late = self.lot(["2026-02-03 10:00:00", "2026-02-04 10:00:00"], "2026-09-25 12:00:00")
+        lots = {"late": late, "apr": apr, "feb": feb, "feb again": feb.copy()}
+        self.assertEqual(sorted(lots, key=lambda label: chronology(lots[label])), ["feb", "feb again", "apr", "late"])
+        names = lot_names(lots)
+        self.assertEqual(names["apr"], "N62C72, pre-UBM test 10/2025, post-UBM test 04/2026")
+        self.assertEqual(names["feb again"], "N62C72, pre-UBM test 09/2025-10/2025, post-UBM test 02/2026 (feb again)")
+
+    def test_the_legends_leave_out_empty_classes_and_name_the_other_failures(self):
+        lot = pd.DataFrame({"invalid": [False, False, False, True],
+                            "transition": ["passed both", "new other failure", "new I2C NACK", "new analog short"],
+                            "grade_post": ["PASSED", "NO_LINK_OR_DATA", "I2C_NACK", "POWER_SHORT"]})
+        self.assertEqual([h.get_label() for h in _class_handles(lot)],
+                         ["passed both: 1", "new I2C NACK: 1", "new other failure (NO_LINK_OR_DATA): 1"])
 
     def test_parse_lot(self):
         self.assertEqual(parse_lot("N62C72"), ("N62C72", "N62C72", None))
@@ -162,6 +191,18 @@ class PlotLotsTest(unittest.TestCase):
         self.assertIn("W6 post_ubm die 2: BL_NW_ZERO as measured, PASSED with the test both stages made "
                       "(no pixels, no QInj)", printed)
 
+    def test_a_zero_pixel_carried_over_counts_in_both_stages(self):
+        # the February import: a zero the full scan before UBM read, carried over to the 8-pixel test after
+        self.die("F", "W8", "pre_ubm", 1, full=True, calibration={"zero_pixels": [[15, 15]], "n_pixels": 256})
+        self.die("F", "W8", "post_ubm", 1, calibration={"zero_pixels": [[15, 15]], "n_pixels": 8,
+                                                        "carried_over": [[15, 15]]})
+        rc, printed = self.run_lots("F", extra=["--tables-only"])
+        self.assertEqual(rc, 0, printed)
+        t = self.table()
+        self.assertEqual(t.loc[("W8", 1), ["grade_pre", "grade_post", "transition"]].tolist(),
+                         ["BL_NW_ZERO", "BL_NW_ZERO", "failed both"])
+        self.assertTrue(t.loc[("W8", 1), ["measured_pre", "measured_post"]].isna().all())   # neither regraded
+
     def test_a_run_without_the_high_power_check_is_checked_on_its_currents(self):
         limits = {"analog": {"voltage": 1.3, "current": 0.45, "abort_above": 0.698, "ok": True},
                   "digital": {"voltage": 1.3, "current": 0.45, "abort_above": 0.9, "ok": True}}
@@ -206,9 +247,9 @@ class PlotLotsTest(unittest.TestCase):
         rc, printed = self.run_lots("B", extra=["--tables-only"])
         self.assertEqual(rc, 0, printed)
         t = self.table()["transition"]
-        self.assertEqual(t.loc["W1"].to_dict(), {1: "passed both", 2: "new other failure", 3: "passed both",
+        self.assertEqual(t.loc["W1"].to_dict(), {1: "passed both", 2: "new BL/NW = 0", 3: "passed both",
                                                  4: "new analog short", 5: "new digital short", 6: "passed both"})
-        self.assertEqual(t.loc["W2"].to_dict(), {1: "new other failure", 2: "failed both", 3: "recovered",
+        self.assertEqual(t.loc["W2"].to_dict(), {1: "new BL/NW = 0", 2: "failed both", 3: "recovered",
                                                  4: "passed both", 5: "passed both", 6: "passed both"})
 
     def test_the_new_analog_shorts_by_row_count_the_dies_at_risk(self):

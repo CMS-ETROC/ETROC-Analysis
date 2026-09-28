@@ -19,8 +19,8 @@ short check came in on 2026-09-26, so a die's run in one stage can test
 more than its run in the other, and fail on what the other never looked
 at. Each die is graded in both stages with the test both of its runs made
 (like_with_like, common_grade): a run loses its zero pixels outside the
-pixels the other calibrated (calibrated), its QInj stage where the other
-had none, and its eFuse record where the other neither burned nor
+pixels the other calibrated or carried over from another test
+(calibrated), its QInj stage where the other had none, and its eFuse record where the other neither burned nor
 verified; a run without the high-power check gets one made from its own
 high-power currents against the other run's limits. The measured grade of
 a die so regraded is kept in measured_pre or measured_post. A die left
@@ -48,13 +48,27 @@ TAGS = dict(zip(STAGE_ORDER, ("pre", "post")))
 
 # what happened to a die, in the order the figures stack them
 CLASSES = ("passed both", "recovered", "new analog short", "new digital short", "new short, other or unknown rail",
-           "new other failure", "failed both", "untested in a stage")
-NEW_FAILURES = CLASSES[2:6]
+           "new I2C NACK", "new I2C pixel or register failure", "new BL/NW = 0", "new other failure",
+           "failed both", "untested in a stage")
+NEW_FAILURES = tuple(c for c in CLASSES if c.startswith("new "))
+# the new failures named by the grade after UBM, a short aside
+NEW_BY_GRADE = {"I2C_NACK": "new I2C NACK", "I2C_PIXELS": "new I2C pixel or register failure",
+                "BL_NW_ZERO": "new BL/NW = 0"}
 STAGE_COLUMNS = ("detail", "run", "start", "fullscan", "qinj", "imported",
                  "analog_V_on", "analog_V_high", "digital_V_on", "digital_V_high")
 
 
 def calibrated(summary):
+    """The pixels whose BL or NW a run's summary.json holds: the pixels its
+    calibration read, and any carried over from another test
+    (calibration.carried_over: the February import's bl_nw_zero finding
+    of a pixel the full scan before UBM read 0 and the quick test after
+    did not read), which the run counts as zero."""
+    carried = (summary.get("calibration") or {}).get("carried_over") or []
+    return _read(summary) | frozenset(tuple(_pixel(p)) for p in carried)
+
+
+def _read(summary):
     """The pixels a run's summary.json says it calibrated: all 256 for a
     full scan; else by its calibration record's n_pixels, QUICK_PIXELS for
     9 and their first 8 for 8 (the quick test before (15, 15) came in on
@@ -166,7 +180,8 @@ def transition_class(pre, post, detail_post=""):
     """What happened to a die between its grade before UBM (pre) and after
     (post), one of CLASSES. A new short is an analog one when its detail
     names the analog rail, whatever else it names, else a digital one when
-    it names the digital rail."""
+    it names the digital rail; any other new failure is named by its grade
+    after UBM (NEW_BY_GRADE), else counted as a new other failure."""
     if pre in UNTESTED or post in UNTESTED:
         return "untested in a stage"
     if pre != "PASSED":
@@ -174,7 +189,7 @@ def transition_class(pre, post, detail_post=""):
     if post == "PASSED":
         return "passed both"
     if post != "POWER_SHORT":
-        return "new other failure"
+        return NEW_BY_GRADE.get(post, "new other failure")
     rails = short_rails(detail_post)
     if "analog" in rails:
         return "new analog short"
@@ -258,11 +273,55 @@ def relative_change(lot, column):
     return values - values.groupby(lot["wafer"]).transform("median")
 
 
+def _ran(lot, tag):
+    """The rows of the dies a run tested in the stage `tag` (pre or post)."""
+    return (lot[lot[f"run_{tag}"].notna() & ~lot[f"grade_{tag}"].isin(UNTESTED)] if f"run_{tag}" in lot
+            else lot.iloc[0:0])
+
+
+def _days(lot, tag):
+    return pd.to_datetime(_ran(lot, tag).get(f"start_{tag}"), errors="coerce").dropna()
+
+
+def stage_months(lot, tag):
+    """When the dies of a stage were tested: "MM/YYYY", or "MM/YYYY-MM/YYYY"
+    from the first month to the last; "?" without dates."""
+    days = _days(lot, tag)
+    if days.empty:
+        return "?"
+    first, last = f"{days.min():%m/%Y}", f"{days.max():%m/%Y}"
+    return first if first == last else f"{first}-{last}"
+
+
+def lot_batch(lot):
+    """The batch name of the lot's wafers ("N62C72")."""
+    return "+".join(dict.fromkeys(b.split("_Name_")[-1] for b in lot["batch"]))
+
+
+def lot_name(lot):
+    """The lot's batch and when each stage was tested, as the figures name
+    it: "N62C72, pre-UBM test 09/2025-10/2025, post-UBM test 02/2026"."""
+    return f"{lot_batch(lot)}, pre-UBM test {stage_months(lot, 'pre')}, post-UBM test {stage_months(lot, 'post')}"
+
+
+def lot_names(lots):
+    """{label: lot_name} for the lots ({label: lot rows}), the label added
+    to the names two lots share."""
+    names = {label: lot_name(lot) for label, lot in lots.items()}
+    shared = {name for name in names.values() if list(names.values()).count(name) > 1}
+    return {label: name + (f" ({label})" if name in shared else "") for label, name in names.items()}
+
+
+def chronology(lot):
+    """A sort key putting lots in the order they were tested: by the first
+    test after UBM, then the first before (lots without dates last)."""
+    return tuple(_days(lot, tag).min() if len(_days(lot, tag)) else pd.Timestamp.max for tag in ("post", "pre"))
+
+
 def stage_text(lot, tag):
     """How a stage of the lot was tested: "116 quick tests, 0 with QInj
     (116 imported), 2026-02-10 to 2026-02-19", over the dies a run tested."""
-    ran = (lot[lot[f"run_{tag}"].notna() & ~lot[f"grade_{tag}"].isin(UNTESTED)] if f"run_{tag}" in lot
-           else lot.iloc[0:0])
+    ran = _ran(lot, tag)
     if ran.empty:
         return "no runs"
     full = ran[f"fullscan_{tag}"].fillna(False).astype(bool)

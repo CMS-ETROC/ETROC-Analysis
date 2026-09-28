@@ -13,7 +13,9 @@ if HAVE_PLOTS:
     import matplotlib.pyplot as plt
     from plot_wafer import main
     from station import load_wafer_map
-    from wafer_plots import FIGURES, fig_fullscan, fig_grades, fig_pixel_issues, wafer_map
+    import numpy as np
+    from matplotlib.patches import Patch
+    from wafer_plots import FIGURES, add_note, fig_fullscan, fig_grades, fig_pixel_issues, wafer_map
     from wafer_tables import collect, invalid_dies
     from tests.wafer_results import (FULL_PIXELS, QUICK_PIXELS, baseline, event, run_power, summary,
                                      write_map, write_run)
@@ -402,6 +404,28 @@ class PlotWaferTest(unittest.TestCase):
         self.addCleanup(plt.close, plain)
         self.assertEqual([t.get_text() for t in plain.axes[0].texts], ["1", "2", "3"])
         self.assertNotIn("high current", plain.axes[0].get_title())
+
+
+@unittest.skipUnless(HAVE_PLOTS, "needs numpy, pandas, pyarrow and matplotlib (the wafer-daq venv)")
+class NoteTest(unittest.TestCase):
+    def test_the_note_stays_under_a_figure_legend_below_the_axes(self):
+        fig, ax = plt.subplots(figsize=(6, 3), layout="constrained")
+        ax.axis("off")
+        fig.legend(handles=[Patch(facecolor="#ff0000", label="")] * 3, loc="outside lower center", ncol=3)
+        add_note(fig, "note " * 300, wrap=True)
+        png = io.BytesIO()
+        fig.savefig(png, format="png", dpi=100, bbox_inches="tight")
+        plt.close(fig)
+        png.seek(0)
+        rgb = np.round(plt.imread(png)[..., :3] * 255)
+        legend = np.where((rgb == (255, 0, 0)).all(axis=2).any(axis=1))[0]
+        # the note's grey text, in the left fifth: the legend sits in the middle
+        left = rgb[:, :rgb.shape[1] // 5]
+        note = np.where(((left[..., 0] == left[..., 1]) & (left[..., 1] == left[..., 2]) & (left[..., 0] < 200))
+                        .any(axis=1))[0]
+        self.assertTrue(len(legend) and len(note))
+        self.assertLess(legend.max(), note.min())
+        self.assertLessEqual(rgb.shape[1], 6 * 100 + 20)   # wrapped to the figure's width
 
 
 if __name__ == "__main__":

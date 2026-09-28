@@ -13,12 +13,11 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 from matplotlib.patches import Patch, Rectangle  # noqa: E402
-from matplotlib.transforms import ScaledTranslation  # noqa: E402
 
 from stage_compare import (MAIN_RAILS, QINJ_QUANTITIES, SAME_CHIP_R, STAGE_ORDER, qinj_compared,  # noqa: E402
                            transitions, unchecked_text)
 from wafer_plots import (GRADE_COLOURS, _edges, _ink, _invalid, _invalid_cell, _num, _shape,  # noqa: E402
-                         _suptitle, _wafer_axes, wafer_map)
+                         _suptitle, _wafer_axes, add_note, wafer_map)
 from wafer_tables import UNTESTED  # noqa: E402
 
 FIGURES = ("grade_changes", "current_changes", "baseline_changes", "qinj_changes")
@@ -187,8 +186,7 @@ def plot_changes(out_dir, changes, pixel_rows, qinj_rows, setpoints, title, note
             path.unlink(missing_ok=True)
             continue
         if note:
-            fig.text(1.0, 0.0, note, ha="right", va="top", fontsize=6.5, color="#777777",
-                     transform=fig.transFigure + ScaledTranslation(0, -8 / 72, fig.dpi_scale_trans))
+            add_note(fig, note)
         fig.savefig(path, dpi=dpi, bbox_inches="tight")
         plt.close(fig)
         written.append(path)

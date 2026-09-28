@@ -278,14 +278,18 @@ wafers that went through UBM and bumping together: `--lot BATCH` takes every
 wafer of the batch, `--lot LABEL=BATCH:WAFER,WAFER` the ones listed, under
 that label. Wafers of one batch sent for UBM at different times are separate
 lots, each with its own `--lot` and label. Wafers with one stage only are
-named and left out.
+named and left out. The label names the files; the figures name each lot
+by its batch and the months its stages were tested ("N62C72, pre-UBM test
+09/2025-10/2025, post-UBM test 02/2026"), and `lots.png` puts the lots in
+the order they were tested (after UBM, then before).
 
 Each die tested in both stages is graded in both with the test both of its
 runs made (`lot_compare.like_with_like`). The quick test calibrates 9 pixels
 (`station.QUICK_PIXELS`; their first 8 before 2026-09-22 and in the February
 2026 import, which has no baselines at all on some wafers), the full scan
 all 256, and either may run QInj and burn or verify the eFuse. A run loses
-its zero pixels outside the pixels the other run calibrated, its QInj stage
+its zero pixels outside the pixels the other run calibrated (or carried
+over from another test: the February import's `bl_nw_zero` findings), its QInj stage
 where the other had none (a run that failed or got stuck there counts as
 completed), and its eFuse record where the other neither burned nor
 verified. The high-power short check came in on 2026-09-26: a run without
@@ -298,8 +302,10 @@ The script prints every die so regraded, the figures name them, and
 `lot_dies.csv` keeps the measured grade (`measured_pre`, `measured_post`).
 What happened to each die is one of: passed both, recovered, new analog
 short (the short names the analog rail), new digital short, new short on
-another or an unknown rail, new other failure, failed both, untested in a
-stage. The dies at risk are the valid dies PASSED
+another or an unknown rail, new I2C NACK, new I2C pixel or register failure
+(I2C_PIXELS), new BL/NW = 0 (on the pixels both runs read), new other
+failure (the legends name its grades), failed both, untested in a stage;
+the legends show the classes some die fell into. The dies at risk are the valid dies PASSED
 before UBM and tested after it; fractions of them carry 68 % Wilson
 intervals.
 
