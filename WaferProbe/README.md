@@ -30,7 +30,7 @@ rsync -av <station host>:<path>/BatchID_0_Name_N62M23/WaferID_3_Name_08A5/ \
 ```
 
 Results written before the station took these labels (ETROC-WaferProbe
-before commit fcae979, 2026-09-23) sat in `<path>/<batch>/<wafer>/`. The
+before commit 751ef37, 2026-09-23) sat in `<path>/<batch>/<wafer>/`. The
 station's two wafers of that time were renamed once, by hand
 (`FFF2p00/N60R91` to `BatchID_X_Name_FFF2p00/WaferID_X_Name_N60R91`,
 `N62M23/08A5` to `BatchID_0_Name_N62M23/WaferID_3_Name_08A5`); a copy
@@ -262,7 +262,7 @@ before-UBM baselines at median r 0.98 and 0.97 and the other wafer's at 0.45.
 
 Currents compare only where both stages have the power phases. The
 station logs them; the February 2026 before_bump import takes them from
-its power log (the station's `import_runs.py` from f1723a4 on): power-on
+its power log (the station's `import_runs.py` from 38aa9c0 on): power-on
 before the analog current steps up to high power, high power after. A
 February die without that step (a short at a supply's limit) has one
 reading per rail and no current change; the April 2026 N62M23 runs

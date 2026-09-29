@@ -17,7 +17,7 @@ beside the current changes.
 Currents compare only where both stages have the power phases (a
 high-power current in the dies table). The station logs them; the
 February 2026 before_bump import (the station's import_runs.py from
-f1723a4 on) takes them from its power log, power_on before the analog
+38aa9c0 on) takes them from its power log, power_on before the analog
 current steps up to high power and high_power after, and a February die
 whose log shows no such step (a short at a supply's limit) has one
 reading per rail and no current change. The April 2026 N62M23 runs

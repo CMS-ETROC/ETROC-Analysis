@@ -1,7 +1,7 @@
 """station.py -- helpers copied verbatim from the station repo
-ETROC-WaferProbe, branch psu-identify at commit 949c043: the whole of
+ETROC-WaferProbe, branch psu-identify at commit 1c9ce93: the whole of
 src/grading.py, plus nem_files (from src/qinj_check.py) and load_wafer_map
-(from prober_move.py), and at commit 6327218 the quick test's pixels (from
+(from prober_move.py), and at commit 2d1c7a3 the quick test's pixels (from
 master_run_script.py). Brought in so plot_wafer.py, wafer_tables.py,
 wafer_plots.py and plot_lots.py can run here without the rest of the
 station repo.
