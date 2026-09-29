@@ -45,6 +45,17 @@ practice wafer FFF2p00 N60R91, probed after UBM and bumping, into
 together with `"wafer_stage_added"`, the date it was added, so a record that
 got its stage afterwards says so. A copy taken before then needs the same move.
 
+On 2026-09-29 two sets of runs filed under a wrong label were moved on the
+station, in `wafer_probe` and `wafer_probe_firstlife`. N62M23 06B7 is a bare
+wafer; its runs of 2026-09-28, filed under `post_ubm/`, are now in
+`pre_ubm/`. The practice wafer is N60R91 03G5: its runs under
+`BatchID_X_Name_FFF2p00/WaferID_X_Name_N60R91/` and
+`BatchID_X_Name_N60R91/WaferID_X_Name_01G5/` are now under
+`BatchID_X_Name_N60R91/WaferID_X_Name_03G5/`. Where two folders of a die were
+merged, its runs were renumbered in time order. Every `summary.json` and
+wafer record that changed carries `"relabeled"`: the date and the old values
+of the fields that changed. A copy taken before then is best copied again.
+
 ## Environment
 
 Python >= 3.9 with `numpy`, `pandas`, `pyarrow` and `matplotlib`. On lxplus,
