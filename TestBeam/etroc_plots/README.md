@@ -22,7 +22,7 @@ lists, chips, fluence steps, input locations). No data lives in the repository.
 | `campaigns/irrad_2026.py` | that campaign: header text, telescopes and chips, fluence ladder, scan catalogue, run settings, input locations |
 | `campaigns/irrad_2026_inputs.md` | every input table (contents, origin), where the inputs live, the environment variables that move them; checksums in `irrad_2026_inputs.md5` |
 | `style.py` | the house look: header, footer, legends, colours, saving figures and values files |
-| `etroc_style.py` | the mplhep CMS style underneath it, the text-overlap audit, single-panel export |
+| `etroc_style.py` | the mplhep CMS style underneath it, the overlap audit (texts, arrows and tagged marks), single-panel export |
 | `checks.py` | the house rules as code, run on every figure as it is drawn and on an output folder afterwards |
 | `iv/` | IV loaders and drawing helpers: March slow-control logs, July HV-monitor extracts, k-factor and V_gl |
 | `resolution/` | the test-beam result tables: readers, the anointed-combination selection, the combination band, run settings; the pixel-map layouts |

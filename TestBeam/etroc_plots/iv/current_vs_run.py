@@ -424,6 +424,15 @@ def _chip_style(tel, chip):
     return dict(color=CHIP_COLOR[idx], linestyle=style.chip_linestyle(chip), linewidth=1.1)
 
 
+def _mark(ax, xs, ys, **kw):
+    """A mark drawn in axes fraction outside the plot (a flag tick, the display-run triangle),
+    tagged so the overlap audit (etroc_style.check_no_clipping) reports it crossing a text or
+    touching another mark."""
+    line, = ax.plot(xs, ys, transform=ax.transAxes, clip_on=False, **kw)
+    line._etroc_mark = True
+    return line
+
+
 def _draw_one_panel(ax, tel, run, pd_, meta_row, board_meta, y_max, x_max, fs, hv_cycles,
                     is_display=False, is_preferred=False, rad_stop_line=None, title_pad=3.0):
     chips = campaign.TELESCOPE_CHIPS[tel]
@@ -480,12 +489,12 @@ def _draw_one_panel(ax, tel, run, pd_, meta_row, board_meta, y_max, x_max, fs, h
     # small filled ink triangle above the panel for every
     # display_runs_jul.csv run (preferred runs already carry their own "(p)" in the label stack).
     if is_display:
-        ax.plot([0.5], [1.055], transform=ax.transAxes, marker="^", color=style.INK,
-               markersize=4.0, clip_on=False, linestyle="none", zorder=5)
+        _mark(ax, [0.5], [1.055], marker="^", color=style.INK, markersize=4.0,
+              linestyle="none", zorder=5)
 
-    # stacked label block below panel (the resolution-vs-run figure's 5 lines); pitch tuned
-    # to the panel's own axes height in inches so it does not depend on the compound-vs-single
-    # aspect ratio (fs["stack_pitch"]/fs["stack_gap"] are set by the caller from the axes bbox).
+    # stacked label block below the panel (the resolution-vs-run figure's 5 lines, then up to
+    # three appended ones): fs["stack_gap"] (axes edge to the first line) and fs["stack_pitch"]
+    # (line to line) are axes fractions that each caller sets by hand for its own figure kind.
     pitch = fs.get("stack_pitch", 0.030)
     gap = fs.get("stack_gap", 0.022)
     for i, txt in enumerate(lines):
@@ -493,25 +502,26 @@ def _draw_one_panel(ax, tel, run, pd_, meta_row, board_meta, y_max, x_max, fs, h
         ax.text(0.5, -gap - pitch * i, txt, transform=ax.transAxes, ha="center", va="top",
                fontsize=fs["stack"], color=color, clip_on=False)
 
-    # red spike tick: short, thin (~1pt), centred on the panel's own bottom axis, not a bar
-    # across the whole axis. HV-cycle/LV-cycle/irradiation-step ticks reuse the same
-    # short-centred-tick geometry, stacked below it in the resolution-vs-run figure's colours
-    # (orange then teal/purple); no tick for 'DAQ restart' (text only; that figure's legend
-    # has no restart tick either).
+    # flag ticks: 1 pt lines over the middle 12 % of the panel width, stacked below the bottom
+    # spine at fixed axes fractions (the same fractions in both figure kinds): the in-run spike
+    # (red) first, then the HV-cycle / LV-cycle / irradiation-step ticks in the resolution-vs-run
+    # figure's colours (orange, then teal or purple); no tick for 'DAQ restart' (text only; that
+    # figure's legend has no restart tick either). Each is a tagged mark (_mark), so the overlap
+    # audit reports a tick that crosses the label stack or touches its neighbour.
     tick_y = -0.012
     if is_spike:
-        ax.plot([0.44, 0.56], [tick_y, tick_y], transform=ax.transAxes, color=SPIKE_COLOR,
-               linewidth=1.0, clip_on=False, solid_capstyle="butt")
+        _mark(ax, [0.44, 0.56], [tick_y, tick_y], color=SPIKE_COLOR, linewidth=1.0,
+              solid_capstyle="butt")
         tick_y -= 0.010
     for color in tick_colors:
-        ax.plot([0.44, 0.56], [tick_y, tick_y], transform=ax.transAxes, color=color,
-               linewidth=1.0, clip_on=False, solid_capstyle="butt")
+        _mark(ax, [0.44, 0.56], [tick_y, tick_y], color=color, linewidth=1.0,
+              solid_capstyle="butt")
         tick_y -= 0.010
     # extra ink-coloured tick (distinct from the purple irradiation-step tick above) for the
     # radiation stop, on the irradiation-step runs that have one.
     if rad_stop_line:
-        ax.plot([0.44, 0.56], [tick_y, tick_y], transform=ax.transAxes, color=RAD_STOP_COLOR,
-               linewidth=1.0, clip_on=False, solid_capstyle="butt")
+        _mark(ax, [0.44, 0.56], [tick_y, tick_y], color=RAD_STOP_COLOR, linewidth=1.0,
+              solid_capstyle="butt")
         tick_y -= 0.010
 
     ax.tick_params(axis="both", labelsize=fs["tick"], length=2.5)

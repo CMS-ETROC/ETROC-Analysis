@@ -17,7 +17,9 @@ rest are for whoever writes the next figure.
 - Top band (checked): at most 60 px of blank above the topmost ink, at 200 dpi.
 - Text (checked): no text touches an axes frame, overlaps other text or runs off the canvas.
   An annotation arrow is not text: it may reach its target, a frame included, but it never
-  crosses another text.
+  crosses another text. A mark drawn outside the axes (a flag tick, a symbol above a panel) is
+  tagged `_etroc_mark` so the audit sees it: it never crosses a text and never touches another
+  mark.
 - No callbacks (checked): no figure or slide numbers, notes folders, script or notebook names,
   or facility and home paths (/eos, /afs, /store, home folders) on a figure. It has to stand on its
   own wherever it is shown.
