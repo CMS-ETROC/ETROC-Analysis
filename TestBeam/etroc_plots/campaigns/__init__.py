@@ -9,8 +9,8 @@ a fresh Python process (in a notebook: restart the kernel).
 The package README (etroc_plots/README.md, "A new campaign") gives the steps to plot a new
 campaign. REQUIRED lists the names each part of the package reads: every figure needs the
 "style" names, the IV helpers and the IV notebook also the "iv" names, the resolution helpers and
-their notebooks the "resolution" names. Importing a part stops
-with the list of names the campaign module is missing.
+their notebooks the "resolution" names, the overview helpers and notebook the "overview" names.
+Importing a part stops with the list of names the campaign module is missing.
 """
 import importlib
 import os
@@ -32,22 +32,32 @@ REQUIRED = {
         "INPUTS_VGL", "JULY_1P5E15_OFFSET", "JULY_1P5E15_RFSEL", "JULY_FINE_SCANS",
         "JULY_MIN_PLATEAU_H", "JULY_REF_CSV", "JULY_SCANS", "JULY_STEPS", "JULY_STEPS_OFFSET",
         "JULY_STEPS_RFSEL", "JULY_TEL", "JULY_TIMELINE", "JULY_TIMELINE_JSON", "JULY_YAML",
-        "LATE_LABELS", "LINE1_PARKED", "MARCH_EOS_15E14", "MARCH_EOS_WEEK2",
-        "MARCH_F1_RUN_NUMS", "MARCH_H1_RUNS", "MARCH_OFFSET", "MARCH_RAW_FILES", "MARCH_SCANS",
-        "MARCH_SPARK_CSV", "MARCH_YAML", "NIEL_24GEV", "PREIRRAD_CACHE_DIR",
+        "LATE_LABELS", "LINE1_PARKED", "LV_OFF_MIN_H", "LV_SPANS_JUL_CSV", "MARCH_EOS_15E14",
+        "MARCH_EOS_WEEK2", "MARCH_F1_RUN_NUMS", "MARCH_H1_RUNS", "MARCH_OFFSET",
+        "MARCH_RAW_FILES", "MARCH_SCANS", "MARCH_SPARK_CSV", "MARCH_YAML", "NIEL_24GEV",
+        "PREIRRAD_CACHE_DIR",
         "PREIRRAD_CHANNELS", "PREIRRAD_CONDITIONS_CSV", "PREIRRAD_LOG",
         "PREIRRAD_LOG_UTC_OFFSET_H", "PREIRRAD_MAX_RUN_MIN", "PREIRRAD_RAMP_NOTE",
         "PREIRRAD_REF_MEDIANS", "PREIRRAD_REF_PLATEAU_H", "PREIRRAD_SPIKE_LABEL_Y",
-        "PREIRRAD_TEXT", "PROMPT", "RAD_STOP_SOURCE_TEXT", "RAD_STOP_SOURCE_TEXT_FIGURE",
-        "RAD_STOP_UTC", "RAW_INPUTS", "RUNS_AT_FLUENCE", "VALUES_CONVENTIONS", "VERY_LATE",
+        "PREIRRAD_TEXT", "PROMPT", "RAD_STOP_BOUNDS_UTC", "RAD_STOP_SOURCE_TEXT",
+        "RAD_STOP_SOURCE_TEXT_FIGURE", "RAD_STOP_UTC", "RAW_INPUTS", "RUNS_AT_FLUENCE",
+        "VALUES_CONVENTIONS", "VERY_LATE",
         "VGL_DROP_ABOVE", "VGL_F1", "VGL_H1", "VGL_REF_ALTERNATES", "VGL_VENDOR",
         "VGL_XGRID_MAX", "VGL_XGRID_N",
     ),
     # result tables, read by etroc_plots.resolution and the resolution notebooks
     "resolution": (
-        "BAND_STEPS", "BOARD_TABLE", "BOARD_TABLE_MERGED", "FLUENCE_CONVENTION", "INPUTS",
-        "INPUTS_MANIFEST", "MERGE_COST_CSV", "PIXEL_TABLE", "PIXEL_TABLE_MERGED",
-        "RUNS_SUMMARY_CSV", "TABLE_CAMPAIGN", "TABLE_TEL",
+        "BAND_STEPS", "BOARD_TABLE", "BOARD_TABLE_MERGED", "DISPLAY_RUNS_JUL_CSV",
+        "FLUENCE_CONVENTION", "INPUTS", "INPUTS_MANIFEST", "MARCH_DISPLAY_RUNS", "MERGE_COST_CSV",
+        "PIXEL_TABLE", "PIXEL_TABLE_MERGED", "RUNS_SUMMARY_CSV", "TABLE_CAMPAIGN", "TABLE_TEL",
+    ),
+    # setup facts, run times and the campaign's time marks, read by etroc_plots.overview
+    "overview": (
+        "BEAM_EXPOSURES", "BEAM_FWHM_CM", "BEAM_TABLE", "BEAM_WINDOW_CM",
+        "DISPLAY_RUNS_JUL_CSV", "FLUENCE_CONVENTION", "HV_CYCLES_JUL_CSV", "INPUTS",
+        "INPUTS_MANIFEST", "LV_LOG_DIRS", "LV_OFF_MIN_H", "LV_SPANS_JUL_CSV",
+        "MARCH_DISPLAY_RUNS", "RAD_STOP_UTC", "RUN_LIST_YAML", "RUN_METADATA_DIRS", "RUN_TIMES_CSV",
+        "TELESCOPE_SENSORS",
     ),
 }
 

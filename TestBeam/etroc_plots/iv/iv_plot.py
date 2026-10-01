@@ -447,8 +447,8 @@ def two_look_legends(ax, looks, chips, scale=SCALE_LIN, loc_f=LOC_LOOK_LIN, loc_
 def days_after_step(fluence, start_utc):
     """Days between a fluence step's end and a scan's own start.
 
-    The step end is iv_data.RAD_STOP_UTC (for the July steps that is the first post-irradiation
-    IV scan, an upper bound on the true stop, so a July day count is a slight UNDER-estimate).
+    The step end is iv_data.RAD_STOP_UTC, the earliest stop the records allow (the campaign's
+    RAD_STOP_BOUNDS_UTC holds the latest too; only 2e15 is wide, 1.8 h).
     Returns None for pre-irradiation (no step to count from) or an unparsable time.
     """
     k = style.fluence_key(fluence)

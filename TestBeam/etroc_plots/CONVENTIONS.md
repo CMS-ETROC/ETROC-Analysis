@@ -17,7 +17,9 @@ rest are for whoever writes the next figure.
 - Top band (checked): at most 60 px of blank above the topmost ink, at 200 dpi.
 - Text (checked): no text touches an axes frame, overlaps other text or runs off the canvas.
   An annotation arrow is not text: it may reach its target, a frame included, but it never
-  crosses another text.
+  crosses another text. A mark drawn outside the axes (a flag tick, a symbol above a panel) is
+  tagged `_etroc_mark` so the audit sees it: it never crosses a text and never touches another
+  mark.
 - No callbacks (checked): no figure or slide numbers, notes folders, script or notebook names,
   or facility and home paths (/eos, /afs, /store, home folders) on a figure. It has to stand on its
   own wherever it is shown.
@@ -66,6 +68,17 @@ rest are for whoever writes the next figure.
 - One colour scale for every map of a notebook (0-120 ps for the IRRAD 2026 resolution maps,
   `VMIN` and `VMAX` in `resolution/pixel_maps.py`), so maps compare by colour; a pixel outside it
   is counted as saturated, a pixel without a value is grey.
+
+## Schematics
+
+- The setup and method figures of the overview notebook draw no measured data. Every number on
+  them (sensor names, beam width, event counts) comes from the campaign module, the notebook or
+  `overview/cartoons.py` (its illustrative tracks and pulses) and is listed in the values file.
+  A figure that could be read as data says so on the image: the beam profile is a model, the
+  track counts and the pulse shapes are illustrative.
+- They carry no fluence, so their colours mean other things: the board index
+  (`etroc_style.BOARD_COLOR`), the track chosen for a pixel, R_f on a grey ramp, and the RFSel
+  switch in the alert colour.
 
 ## IV figures
 

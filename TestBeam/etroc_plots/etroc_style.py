@@ -7,8 +7,8 @@ same proportions through `scale`, so text stays legible at 200 dpi.  The header 
 campaign's experiment label on the left, at most two lines on the right) is written by
 style.header, which knows the campaign.
 
-The module also holds the text-overlap audit run before a figure is saved (check_no_clipping)
-and the single-panel export of compound figures (--panel).
+The module also holds the overlap audit run before a figure is saved (check_no_clipping: texts,
+arrows and tagged marks) and the single-panel export of compound figures (--panel).
 
 Colour follows the BOARD INDEX (physical slot in the telescope), never its rank.  Marker shape
 repeats the same identity so nothing is carried by colour alone.
@@ -16,7 +16,10 @@ repeats the same identity so nothing is carried by colour alone.
 import os
 import matplotlib as mpl
 import mplhep as hep
+from matplotlib.colors import to_hex
 from matplotlib.legend import Legend
+from matplotlib.patches import FancyArrowPatch
+from matplotlib.path import Path
 from matplotlib.text import Annotation, Text
 
 # ------------------------------------------------------------------ board identity
@@ -102,8 +105,18 @@ def text_extent(t, renderer):
 
 
 def check_no_clipping(fig, name, min_overlap=0.16, pad_px=1.0):
-    """Every text artist must sit inside the canvas and clear every other text artist, and no
-    annotation arrow may cross another text.
+    """Every text artist must sit inside the canvas and clear every other text artist, no
+    arrow (an annotation's, or a FancyArrowPatch added to an axes or the figure) may cross a
+    text, and no mark may cross a text or touch another mark.
+
+    A mark is a Line2D tagged `_etroc_mark = True` (the way a footer carries `_etroc_footer`) in
+    the lines of any axes or of the figure: a flag tick or a symbol drawn outside the axes, where
+    neither the data view nor the text checks above would see it.  Its box is its window extent
+    (a marker's already includes half the marker size), grown by half the marker edge width when
+    it has a marker and by half the line width when it draws a line, so a horizontal tick of zero
+    height gets the height of its stroke; against a text the box is padded by pad_px, against
+    another mark by half a pixel on each side, and boxes meet when they share any area.  Untagged
+    lines (data curves, a leader line drawn to reach its own label) are not marks.
 
     Reported, never silently fixed: these figures are laid out in inches by hand, so a report here
     means a placement has to change.  A tick label whose tick lies outside the drawn view is
@@ -141,23 +154,54 @@ def check_no_clipping(fig, name, min_overlap=0.16, pad_px=1.0):
                           text=" ".join(str(artist.get_text()).split())[:46]))
 
     def collect_arrow(t, owner):
-        """The arrow of an annotation matplotlib drew, whatever its text, as a path in pixels."""
+        """The arrow of an annotation matplotlib drew, whatever its text, as polylines in pixels.
+        A closed head ("-|>") ends in a CLOSEPOLY whose vertex is a placeholder at (0, 0);
+        to_polygons closes the head on its first vertex instead, so no segment runs to the
+        figure's corner."""
         patch = getattr(t, "arrow_patch", None)
         if patch is None or not (t.get_visible() and patch.get_visible()):
             return
         if t.get_window_extent(renderer=r).bounds == (0, 0, 1, 1):      # not drawn
             return
-        arrows.append(dict(owner=owner, artist=t,
-                           text=" ".join(str(t.get_text()).split())[:46],
-                           path=patch.get_transform().transform_path(patch.get_path())))
+        add_arrow(patch, owner, t, " ".join(str(t.get_text()).split())[:46])
+
+    def add_arrow(patch, owner, artist, text):
+        arrows.append(dict(owner=owner, artist=artist, text=text,
+                           paths=[Path(v) for v in patch.get_transform().transform_path(
+                               patch.get_path()).to_polygons(closed_only=False)]))
+
+    def collect_arrow_patches(patches, owner):
+        for p in patches:
+            if isinstance(p, FancyArrowPatch) and p.get_visible():
+                add_arrow(p, owner, p, "(arrow patch)")
+
+    marks = []
+    px_per_pt = fig.dpi / 72.0
+
+    def collect_marks(lines, owner):
+        """The tagged lines (`_etroc_mark`), each as its stroke's box in pixels, named by colour."""
+        for ln in lines:
+            if not (getattr(ln, "_etroc_mark", False) and ln.get_visible()):
+                continue
+            grow = 0.0
+            if str(ln.get_marker()) not in ("None", "none", "", " "):
+                grow += 0.5 * ln.get_markeredgewidth() * px_per_pt
+            if str(ln.get_linestyle()) not in ("None", "none", "", " "):
+                grow += 0.5 * ln.get_linewidth() * px_per_pt
+            marks.append(dict(bb=ln.get_window_extent(renderer=r).padded(grow), owner=owner,
+                              text=to_hex(ln.get_color())))
 
     for t in fig.texts:
         collect(t, "figure", "text")
         collect_arrow(t, "figure")
+    collect_arrow_patches(fig.patches, "figure")
+    collect_marks(fig.lines, "figure")
     for who, ax in named_axes(fig):
         for t in ax.texts:
             collect(t, who, "text")
             collect_arrow(t, who)
+        collect_arrow_patches(ax.patches, who)
+        collect_marks(ax.lines, who)
         for attr in ("title", "_left_title", "_right_title"):
             collect(getattr(ax, attr, None), who, "title")
         collect(ax.xaxis.label, who, "xlabel")
@@ -205,13 +249,31 @@ def check_no_clipping(fig, name, min_overlap=0.16, pad_px=1.0):
 
     for a in arrows:
         for b in items:
-            if b["artist"] is not a["artist"] and a["path"].intersects_bbox(b["bb"], filled=False):
+            if b["artist"] is not a["artist"] and any(
+                    p.intersects_bbox(b["bb"], filled=False) for p in a["paths"]):
                 problems.append("arrow through text: %s arrow %r  vs  %s %s %r"
                                 % (a["owner"], a["text"], b["owner"], b["kind"], b["text"]))
 
-    print("  overlap check on %s: %d text items, %s"
-          % (name, len(items), "nothing clips" if not problems
-             else "%d PROBLEM(S)" % len(problems)))
+    def meet(a, b):
+        return (min(a.x1, b.x1) - max(a.x0, b.x0) > 0
+                and min(a.y1, b.y1) - max(a.y0, b.y0) > 0)
+
+    for m in marks:
+        mb = m["bb"].padded(pad_px)
+        for b in items:
+            if meet(mb, b["bb"]):
+                problems.append("mark through text: %s mark %r  vs  %s %s %r"
+                                % (m["owner"], m["text"], b["owner"], b["kind"], b["text"]))
+    for i in range(len(marks)):
+        for j in range(i + 1, len(marks)):
+            a, b = marks[i], marks[j]
+            if meet(a["bb"].padded(0.5), b["bb"].padded(0.5)):
+                problems.append("marks touch: %s mark %r  vs  %s mark %r"
+                                % (a["owner"], a["text"], b["owner"], b["text"]))
+
+    print("  overlap check on %s: %d text items, %s%s"
+          % (name, len(items), "%d marks, " % len(marks) if marks else "",
+             "nothing clips" if not problems else "%d PROBLEM(S)" % len(problems)))
     for p in problems:
         print("      %s" % p)
     return problems
