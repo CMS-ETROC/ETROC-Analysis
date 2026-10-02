@@ -597,6 +597,65 @@ RUN_METADATA_DIRS = {
 }
 RUN_TIMES_CSV = os.path.join(INPUTS_TABLES, "run_times.csv")
 
+# ================================================================================ front end
+# campaigns.REQUIRED["frontend"]: etroc_plots.frontend and notebooks/frontend.py read these.
+# The two looks at 1.5e15 per telescope, (March run, July run): before cooling down, the March run
+# of the 1.5e15 step whose leakage current matches the July run's (its lowest bias: H1 400 V, F1
+# 265 V); after four months of cooling down, the July preferred display run at that step. Read by
+# the frontend notebook (BL/NW pair, TDC histograms, CAL maps), by frontend.rebuild (the default
+# runs of its TDC part) and by notebooks/maps.py (figures 17-18).
+REST_PAIRS = {"h1": (17, 4), "f1": (17, 9)}
+# The runs whose hits the frontend tables are built from, per campaign and telescope: in March
+# the step runs of MARCH_DISPLAY_RUNS and the March run of REST_PAIRS; in July the July run of
+# REST_PAIRS and the runs of the RFSel comparisons (H1 47 at RFSel 1; F1 47, 52 and 86 at RFSel
+# 1, 2 and 3). frontend.rebuild.frontend_runs() adds the July display runs of DISPLAY_RUNS_JUL_CSV
+# at FRONTEND_JULY_SETTINGS (they are in an input table, not here) and takes the result as the
+# run set of `--runs frontend`. The BL/NW part of the rebuild covers every run of the run
+# metadata whatever this says.
+FRONTEND_JULY_SETTINGS = dict(rfsel=2, offset=20)
+FRONTEND_RUNS = {
+    "march": {t: sorted(set(MARCH_DISPLAY_RUNS[t]) | {REST_PAIRS[t][0]}) for t in REST_PAIRS},
+    "july": {"h1": sorted({REST_PAIRS["h1"][1], 47}),
+             "f1": sorted({REST_PAIRS["f1"][1], 47, 52, 86})},
+}
+# Jongho's merged hits, one folder of loop_<N>.feather files per run (columns evt, bcid,
+# l1a_counter, ea, row, col, toa, tot, cal, board). Read only by `python -m
+# etroc_plots.frontend.rebuild` (its TDC part), never by a notebook. Read-only.
+DECODED_ROOT = os.environ.get("ETROC_DECODED_ROOT") or "/eos/user/j/jongho"
+DECODED_DIRS = {   # format with TEL ("H1"), tel ("h1") and run
+    "march": os.path.join(DECODED_ROOT, "ETROC_Irrad_2026Mar", "{TEL}", "Run_{run}_feather"),
+    "july": os.path.join(DECODED_ROOT, "ETROC_Irrad_2026Jul", "{TEL}", "{tel}_Run_{run}_feather",
+                         "merged_hits"),
+}
+# The autocalibration scan histories of the telescope PCs (BaselineHistory sqlite): the only
+# record of each pixel's baseline and noise width. Read only by the rebuild's BL/NW part, which
+# joins each run's DAQ run_metadata.yaml (RUN_METADATA_DIRS) to the scan it used. Read-only.
+# The files sit on the LPC EOS and sqlite cannot open them in place there or from lxplus: copy
+# them, keeping the folders below BLNW_ROOT, and point ETROC_BLNW_ROOT at the copy.
+BLNW_ROOT = os.environ.get("ETROC_BLNW_ROOT") or "/eos/uscms/store/group/lpcmtdstudies"
+BLNW_SQLITES = {   # per (campaign, telescope), in time order: the July history was split in two
+    ("march", "h1"): [os.path.join(BLNW_ROOT, "IRRad_CERN_2026Mar", "H1_telescope",
+                                   "ETROC-History", "BaselineHistory.sqlite")],
+    ("march", "f1"): [os.path.join(BLNW_ROOT, "IRRad_CERN_2026Mar", "F1_telescope",
+                                   "ETROC-History", "BaselineHistory.sqlite")],
+    ("july", "h1"): [os.path.join(BLNW_ROOT, "IRRad_CERN_2026Jul", "H1_telescope",
+                                  "baseline_history", "BaselineHistory%s.sqlite" % v)
+                     for v in ("_v1", "")],
+    ("july", "f1"): [os.path.join(BLNW_ROOT, "IRRad_CERN_2026Jul", "F1_telescope",
+                                  "baseline_history", "BaselineHistory%s.sqlite" % v)
+                     for v in ("_v1", "")],
+}
+# Hours the scan clock runs ahead of UTC: the March PCs wrote local time (CET, UTC+1; summer time
+# began after the campaign), the July histories write UTC. With these offsets every scan whose
+# baseline map equals a run's DAC map minus its threshold offset lies before that run's start.
+BLNW_SQLITE_UTC_OFFSET_H = {"march": 1.0, "july": 0.0}
+# The frontend tables, in the frontend/ folder of INPUTS (made by frontend.rebuild;
+# irrad_2026_inputs.md describes their columns).
+INPUTS_FRONTEND = os.path.join(INPUTS, "frontend")
+BLNW_CSV = os.path.join(INPUTS_FRONTEND, "blnw_by_run.csv")
+TDC_PIXEL_HISTS_CSV = os.path.join(INPUTS_FRONTEND, "tdc_pixel_hists.csv")
+TDC_CAL_MODES_CSV = os.path.join(INPUTS_FRONTEND, "tdc_cal_modes.csv")
+
 # ============================================================== raw inputs, read in place
 # iv_data.check_inputs checks each one exists and is readable (the IV notebook reads them).
 def _outside_inputs(paths):

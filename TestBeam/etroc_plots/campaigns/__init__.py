@@ -9,7 +9,8 @@ a fresh Python process (in a notebook: restart the kernel).
 The package README (etroc_plots/README.md, "A new campaign") gives the steps to plot a new
 campaign. REQUIRED lists the names each part of the package reads: every figure needs the
 "style" names, the IV helpers and the IV notebook also the "iv" names, the resolution helpers and
-their notebooks the "resolution" names, the overview helpers and notebook the "overview" names.
+their notebooks the "resolution" names, the overview helpers and notebook the "overview" names,
+the frontend helpers and notebook the "frontend" names.
 Importing a part stops with the list of names the campaign module is missing.
 """
 import importlib
@@ -49,7 +50,8 @@ REQUIRED = {
     "resolution": (
         "BAND_STEPS", "BOARD_TABLE", "BOARD_TABLE_MERGED", "DISPLAY_RUNS_JUL_CSV",
         "FLUENCE_CONVENTION", "INPUTS", "INPUTS_MANIFEST", "MARCH_DISPLAY_RUNS", "MERGE_COST_CSV",
-        "PIXEL_TABLE", "PIXEL_TABLE_MERGED", "RUNS_SUMMARY_CSV", "TABLE_CAMPAIGN", "TABLE_TEL",
+        "PIXEL_TABLE", "PIXEL_TABLE_MERGED", "REST_PAIRS", "RUNS_SUMMARY_CSV", "TABLE_CAMPAIGN",
+        "TABLE_TEL",
     ),
     # setup facts, run times and the campaign's time marks, read by etroc_plots.overview
     "overview": (
@@ -58,6 +60,16 @@ REQUIRED = {
         "INPUTS_MANIFEST", "LV_LOG_DIRS", "LV_OFF_MIN_H", "LV_SPANS_JUL_CSV",
         "MARCH_DISPLAY_RUNS", "RAD_STOP_UTC", "RUN_LIST_YAML", "RUN_METADATA_DIRS", "RUN_TIMES_CSV",
         "TELESCOPE_SENSORS",
+    ),
+    # front-end tables and the sources they are rebuilt from, read by etroc_plots.frontend and
+    # notebooks/frontend.py
+    "frontend": (
+        "BLNW_CSV", "BLNW_SQLITE_UTC_OFFSET_H", "BLNW_SQLITES", "DECODED_DIRS",
+        "DISPLAY_RUNS_JUL_CSV", "FLUENCE_CONVENTION", "FLUENCE_TEXT_PLAIN",
+        "FRONTEND_JULY_SETTINGS", "FRONTEND_RUNS", "INPUTS", "INPUTS_MANIFEST",
+        "MARCH_DISPLAY_RUNS", "RAD_STOP_UTC", "REST_PAIRS", "RUN_LIST_YAML",
+        "RUN_METADATA_DIRS", "RUN_TIMES_CSV", "RUNS_SUMMARY_CSV", "TABLE_CAMPAIGN", "TABLE_TEL",
+        "TDC_CAL_MODES_CSV", "TDC_PIXEL_HISTS_CSV",
     ),
 }
 

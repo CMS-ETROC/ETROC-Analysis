@@ -1,6 +1,7 @@
 # IRRAD 2026 inputs
 
-The notebooks (`../notebooks/iv.ipynb`, `merged.ipynb`, `maps.ipynb` and `overview.ipynb`) draw
+The notebooks (`../notebooks/iv.ipynb`, `merged.ipynb`, `maps.ipynb`, `overview.ipynb` and
+`frontend.ipynb`) draw
 the CERN IRRAD 2026 figures (March and July) from two kinds of input, in two EOS locations. Raw data (the March IV
 scans, the slow-control logs and the week-1 spark-test log, read by the IV notebook only) are read
 in place from the March tree:
@@ -9,16 +10,18 @@ in place from the March tree:
 
 (`EOS_ROOT` in `irrad_2026.py`; its `week1/`, `week2/` and `laptop_mirror_15e14/` subfolders). The
 tables listed below (binned scans, reduced HV-monitor logs, run lists, small caches and the
-test-beam result tables: 33 files, 100 MB) sit in one folder outside the repository:
+test-beam result tables: 36 files, 100 MB) sit in one folder outside the repository:
 
     /eos/user/m/musafdar/ETROC_plot_inputs/irrad_2026
 
 `irrad_2026.py` reads from there by default (its `INPUTS`). Both locations are in a personal EOS
-area, so reading them needs a share from its owner (Murtaza Safdari). Rebuilding two of the tables
-reads two more places, which the notebooks never read: the LV power-log copies (`LV_LOG_ROOT`, in
-the same personal area) for `july/lv_spans_jul.csv`, and the DAQ's run folders
-(`RUN_METADATA_ROOT`, another personal EOS area) for `tables/run_times.csv`; each needs a share
-from its owner. To work from your own copy,
+area, so reading them needs a share from its owner (Murtaza Safdari). Rebuilding some of the
+tables reads more places, which the notebooks never read: the LV power-log copies (`LV_LOG_ROOT`,
+in the same personal area) for `july/lv_spans_jul.csv`; the DAQ's run folders
+(`RUN_METADATA_ROOT`, another personal EOS area) for `tables/run_times.csv` and
+`frontend/blnw_by_run.csv`; the merged hits (`DECODED_ROOT`, the same area) for the two TDC tables
+of `frontend/`; and the autocalibration scan histories (`BLNW_ROOT`, a group area on the LPC EOS)
+for `frontend/blnw_by_run.csv`. Each needs a share from its owner. To work from your own copy,
 copy the folders and point `ETROC_INPUTS` and `ETROC_IV_EOS_MARCH` at them (all the variables
 are in the table at the end):
 
@@ -56,6 +59,7 @@ Run from `TestBeam/`. The rebuild is the authority for these files.
 | `march/preirrad_cache/` (3 files) | the pre-irradiation stability figure's cache: the slow-control log as 10 s medians, per-run and per-board statistics, the run windows. The rebuild writes the same bytes when nothing has changed, so `md5sum -c` shows whether the published cache was stale | `python -m etroc_plots.iv.preirrad_current --out FIGDIR --cache DIR --rebuild` |
 | `march/fine_iv_F1_m25C_17cm_15e14_*_binned_iv_data.csv`, `march/quick_iv_F1_m25C_17cm_15e14_*_binned_iv_data.csv` (3 files) | the F1 IV scans of the 1.5e15 step, on the same voltage bins as the other March scans (the March tree holds no binned version of them): each slow-control log of that step (a `*_interpolated.csv.gz` file in `laptop_mirror_15e14/F1/` of the March tree; `BINNED_FROM_RAW` in `irrad_2026.py` names each with its window) cut to its scan's window, then each channel to its up-sweep; mean voltage and median current per bin (`FINE_BINS` or `QUICK_BINS` in `iv/legacy.py`). The command prints each table's md5, which matches its line in `irrad_2026_inputs.md5` | `python -m etroc_plots.iv.legacy --out DIR` |
 | `july/lv_spans_jul.csv` | the July LV power log, one row per file: campaign, telescope, file name, first and last record (UTC, to the second) and number of records. The log records only while the LV is on, so every gap between files is an LV cycle (overview notebook, figure 6, draws those longer than 1 h; the LV-on time on the IV notebook's figures 24 and 25 is the end of the last such gap before the run). Read from the log folders `LV_LOG_DIRS` of the campaign module (`<LV_LOG_ROOT>/H1` and `<LV_LOG_ROOT>/F1`), copies of the DAQ's folders `/store/user/lpcmtdstudies/IRRad_CERN_2026Jul/{H1,F1}_telescope/power_history/lv_history/` on the LPC EOS | `python -c "from etroc_plots import lv_log; lv_log.build_lv_spans('FILE')"`, or with `dirs={("july", "h1"): H1_FOLDER, ("july", "f1"): F1_FOLDER}` for other folders |
+| `frontend/` (3 files) | the front-end notebook's tables: the baseline and noise width of every board in every run, and the TDC codes of one pixel per chip and the CAL code of every pixel in the `REST_PAIRS` runs. Columns, sources and run times in "Front-end tables" below | `python -m etroc_plots.frontend.rebuild --out DIR` |
 
 ## Made outside this package
 
@@ -103,6 +107,78 @@ length in minutes, taken from each run's `run_metadata.yaml` (`run_info.timestam
 (`RUN_METADATA_DIRS` in the campaign module). Made 2026-09-25 by `build_run_times()` of
 `../overview/timeline.py`; its docstring gives the command.
 
+## Front-end tables
+
+The front-end notebook (`../notebooks/frontend.ipynb`) reads three tables in `frontend/`. They are
+made by
+
+    python -m etroc_plots.frontend.rebuild --out DIR [--part blnw|tdc] [--runs ...]
+
+run from `TestBeam/` (`../frontend/rebuild.py`; copy the files into `frontend/` and update the
+checksum lines to use them). `--runs` takes `pairs` (the runs of `REST_PAIRS`), `frontend` (the
+runs of `FRONTEND_RUNS` and the July display runs at RFSel 2, threshold offset 20) or
+`campaign:telescope:run` items such as `july:h1:4`.
+
+* The BL/NW part reads every DAQ run folder (`RUN_METADATA_DIRS`: each run's `run_metadata.yaml`,
+  the run start and per chip the threshold offset and the threshold DAC of every pixel), the
+  run-config yamls (`RUN_LIST_YAML`: the bias of each board) and the autocalibration scan
+  histories of the telescope PCs (`BLNW_SQLITES`, under `BLNW_ROOT`, default
+  `/eos/uscms/store/group/lpcmtdstudies`: `BaselineHistory.sqlite` per telescope, July in two
+  files). sqlite cannot open the histories in place on EOS: copy them, keeping the folders below
+  `BLNW_ROOT`, and point `ETROC_BLNW_ROOT` at the copy. It joins each run to the scan the DAQ set
+  its thresholds from (`../frontend/blnw.py` gives the rule).
+* The TDC part reads every loop file of the merged hits of each run (`DECODED_DIRS`, under
+  `DECODED_ROOT`, default `/eos/user/j/jongho`): about 1 s per file on one lxplus core, 5.5 min
+  for the four `REST_PAIRS` runs (328 files, 812 million hits), and prints each run's hit counts
+  before and after each cut.
+
+The published `frontend/blnw_by_run.csv` (2026-10-02) was not made by this rebuild: the scan
+histories could not be read from CERN or the LPC that day. It is the 2026-09-02 build of the same
+join (made outside this repository, from the same histories and run folders), its columns renamed
+to the ones below and its chips named as in `TELESCOPE_CHIPS`, every number unchanged. Rebuilding
+it with the command above replaces it. The two TDC tables were made by the rebuild (`--part tdc`,
+default runs) on 2026-10-02.
+
+`frontend/blnw_by_run.csv`, 384 rows (97 runs). One row = one board in one run.
+
+| column | contents |
+|---|---|
+| `campaign`, `tel`, `run` | `march` or `july`, `h1` or `f1`, the run number |
+| `board_idx`, `chip` | the board (0-3, the DAQ's elink / 4) and its chip as `TELESCOPE_CHIPS` names it (`IH7`) |
+| `start_utc` | the run start, UTC |
+| `rfsel`, `rfsel_src` | the RFSel of the run and where it was read: `scan` (the gain mode the scan history records), `run_name` (`RFSel<N>` in the run name), `run_yaml` (the run-config yaml) or `none` (every March run: the March records carry none; they ran at RFSel 2) |
+| `offset` | the threshold offset of the chip in the run (DAC) |
+| `hv` | the sensor bias of the board in the run-config yaml (V) |
+| `scan_utc`, `scan_gap_min` | the start of the scan joined to the run (UTC; the March PCs wrote CET, converted) and the minutes from it to the run start |
+| `match`, `n_mismatch` | how well the scan's baseline map equals the run's threshold DAC minus its offset: `exact` (no pixel differs), `near_exact` (1-3 pixels), `nearest` (more; the closest earlier scan is used) or `none` (no scan before the run); the number of pixels that differ, railed pixels left out |
+| `bl_mean_allpix`, `bl_std_allpix` | mean and standard deviation of the scan's baseline over all 256 pixels (DAC), a railed or dead pixel as stored |
+| `nw_mean_allpix`, `nw_std_allpix` | the same for the noise width (DAC), a pixel without a noise width counted as 0 |
+| `bl_mean`, `bl_std`, `n_pixels_bl` | the same over the pixels with 50 < baseline < 1020 DAC and not railed in the run, and their number |
+| `nw_mean`, `nw_std`, `n_pixels_nw` | the same over the pixels with a noise width above 0, and their number |
+
+`frontend/tdc_pixel_hists.csv`, 19162 rows. One row = one non-empty bin of one histogram of one
+pixel in one run. The pixel of each chip is its most populated in the July run of `REST_PAIRS`
+(hits after the cuts), the same pixel in the March run; the hits are those with `ea == 0` and a CAL
+code within 3 of the pixel's CAL mode in that loop file.
+
+| column | contents |
+|---|---|
+| `campaign`, `tel`, `run`, `board_idx`, `chip` | as above |
+| `row`, `col` | the pixel (chip frame) |
+| `quantity` | `cal_code`, `toa_code`, `tot_code` (the 10-bit codes), `toa_ns` (12.5 - toa x 3.125 / m) or `tot_ns` ((2 tot - floor(tot / 32)) x 3.125 / m), m the pixel's CAL mode in that loop file |
+| `bin_lo` | the code, or the lower edge of the 0.1 ns bin (bins not clipped to any range) |
+| `count` | hits in the bin |
+
+`frontend/tdc_cal_modes.csv`, 4096 rows. One row = one pixel of one board in one run of
+`REST_PAIRS`.
+
+| column | contents |
+|---|---|
+| `campaign`, `tel`, `run`, `board_idx`, `chip`, `row`, `col` | as above |
+| `cal_mode` | the median over the loop files of the pixel's most frequent CAL code in each file (hits with `ea == 0`) |
+| `n_hits_all`, `n_hits_ea0`, `n_hits` | the pixel's hits: all, with `ea == 0`, and also inside the CAL window |
+| `n_files` | the loop files of the run, all read |
+
 ## Environment variables
 
 Every variable the package and the notebooks read. Set them before the notebook's first import of
@@ -122,5 +198,7 @@ Every variable the package and the notebooks read. Set them before the notebook'
 | `ETROC_HV_CYCLES_JUL_CSV` | `$ETROC_INPUTS/july/hv_cycles_jul.csv` | the July HV / LV cycle table of the IV notebook's figures 24 and 25 and the overview notebook's figure 6 (its DAQ restarts) |
 | `ETROC_LV_SPANS_JUL_CSV` | `$ETROC_INPUTS/july/lv_spans_jul.csv` | the LV power log's files: the LV-off periods of the overview notebook's figure 6, the LV-on time of the IV notebook's figures 24 and 25 |
 | `ETROC_LV_LOG_ROOT` | `/eos/user/m/musafdar/ETROC_TB_2026_combo_tables/lv_history_jul` | the LV power log folders (`LV_LOG_DIRS`), read only by `lv_log.build_lv_spans` |
-| `ETROC_RUN_METADATA_ROOT` | `/eos/user/j/jongho` | the DAQ's run folders (`RUN_METADATA_DIRS`), read only by `overview.timeline.build_run_times` |
+| `ETROC_RUN_METADATA_ROOT` | `/eos/user/j/jongho` | the DAQ's run folders (`RUN_METADATA_DIRS`), read only by `overview.timeline.build_run_times` and the BL/NW part of `frontend.rebuild` |
+| `ETROC_BLNW_ROOT` | `/eos/uscms/store/group/lpcmtdstudies` | the autocalibration scan histories (`BLNW_SQLITES`), read only by the BL/NW part of `frontend.rebuild` |
+| `ETROC_DECODED_ROOT` | `/eos/user/j/jongho` | the merged hits (`DECODED_DIRS`), read only by the TDC part of `frontend.rebuild` |
 | `ETROC_FIGURES` | `figures` (next to the notebook) | where the notebooks write; figures go to `$ETROC_FIGURES/<notebook>/`, such as `$ETROC_FIGURES/iv/` |

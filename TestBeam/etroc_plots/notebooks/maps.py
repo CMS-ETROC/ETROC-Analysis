@@ -134,9 +134,9 @@ def show(stem):
 #   (`july/display_runs_jul.csv` in the inputs folder) at RFSel 2 and threshold offset 20
 #   (`JULY_SETTINGS`), read by `tables.preferred_runs`.
 #
-# Figures 17-18 take their runs from `PAIR_RUNS` instead: in March the run of the 1.5e15 step
-# whose leakage current matches the July run's, its lowest-bias run (run 17: H1 400 V, F1 265 V);
-# in July the display run of `RUNS` at that step.
+# Figures 17-18 take their runs from `PAIR_RUNS` (the campaign's `REST_PAIRS`) instead: in March
+# the run of the 1.5e15 step whose leakage current matches the July run's, its lowest-bias run
+# (run 17: H1 400 V, F1 265 V); in July the display run of `RUNS` at that step.
 #
 # Each run's bookkeeping fluence, threshold offset and RFSel are read from runs_summary, and
 # every board of a run has to share them. runs_summary does not record the RFSel of the March
@@ -153,10 +153,8 @@ RUNS = {(c, t): (campaign.MARCH_DISPLAY_RUNS[t] if c == "march" else _july[t])
         for c in ("march", "july") for t in campaign.TELESCOPE_CHIPS}
 print("RUNS (campaign, telescope): runs, lowest fluence first:", RUNS)
 PAIR_FLUENCE = 1.5e15  # figures 17-18: one run per campaign at this fluence
-PAIR_RUNS = {          # telescope -> {campaign: run}, figures 17-18 (March: July's leakage current)
-    "h1": {"march": 17, "july": 4},
-    "f1": {"march": 17, "july": 9},
-}
+PAIR_RUNS = {         # telescope -> {campaign: run}, figures 17-18 (March: July's leakage current)
+    t: {"march": m, "july": j} for t, (m, j) in campaign.REST_PAIRS.items()}
 DEFAULT_RFSEL = {"march": 2}   # campaign -> the RFSel of every run, where runs_summary has none
 CAMPAIGN_TEXT = {"march": "March 2026", "july": "July 2026"}   # the campaigns, in drawing order
 RUNS_TEXT = (u"Runs: March, the highest-bias run at threshold offset 20 of each fluence step; "
@@ -235,7 +233,7 @@ def steps_in_order(camp, tel):
 # ## The words on the figures
 
 # %%
-FRAME_TEXT = u"chip frame, pixel (0, 0) at the bottom right"
+FRAME_TEXT = pixel_maps.FRAME_TEXT
 MAPS_TEXT = (u"Maps: %s; one colour scale, %d-%d ps, for every map; grey = no value"
              % (FRAME_TEXT, pixel_maps.VMIN, pixel_maps.VMAX))
 SAT_TEXT = u"sat = pixels outside the colour scale"
