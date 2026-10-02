@@ -1,8 +1,9 @@
 # IRRAD 2026 inputs
 
-The notebooks (`../notebooks/iv.ipynb`, `merged.ipynb`, `maps.ipynb`, `overview.ipynb` and
-`frontend.ipynb`) draw
-the CERN IRRAD 2026 figures (March and July) from two kinds of input, in two EOS locations. Raw data (the March IV
+The notebooks (`../notebooks/iv.ipynb`, `merged.ipynb`, `maps.ipynb`, `overview.ipynb`,
+`frontend.ipynb` and `universality.ipynb`) draw
+the CERN IRRAD 2026 figures (March and July; the universality notebook draws DESY 2026 runs beside
+them) from two kinds of input, in two EOS locations. Raw data (the March IV
 scans, the slow-control logs and the week-1 spark-test log, read by the IV notebook only) are read
 in place from the March tree:
 
@@ -10,7 +11,7 @@ in place from the March tree:
 
 (`EOS_ROOT` in `irrad_2026.py`; its `week1/`, `week2/` and `laptop_mirror_15e14/` subfolders). The
 tables listed below (binned scans, reduced HV-monitor logs, run lists, small caches and the
-test-beam result tables: 44 files, 117 MB) sit in one folder outside the repository:
+test-beam result tables: 50 files, 129 MB) sit in one folder outside the repository:
 
     /eos/user/m/musafdar/ETROC_plot_inputs/irrad_2026
 
@@ -22,7 +23,9 @@ in the same personal area) for `july/lv_spans_jul.csv`; the DAQ's run folders
 tables of `frontend/`; the merged hits (`DECODED_ROOT`, the same area) for the two TDC tables
 of `frontend/`; the reconstructed tracks (`ANALYSIS_ROOT`, the personal area of the tables) for the
 eight track tables of `frontend/`; and the autocalibration scan histories (`BLNW_ROOT`, a group
-area on the LPC EOS) for the two BL/NW tables of `frontend/`. Each needs a share from its owner. To work from your own copy,
+area on the LPC EOS) for the two BL/NW tables of `frontend/`; the TWC-transfer study's coefficient bank
+(`TWC_TRANSFER_ROOT`, the personal area of the tables) and its own folder (`TWC_RESULTS_ROOT`, no
+default) for `universality/`. Each needs a share from its owner. To work from your own copy,
 copy the folders and point `ETROC_INPUTS` and `ETROC_IV_EOS_MARCH` at them (all the variables
 are in the table at the end):
 
@@ -94,6 +97,11 @@ The code that made these is not in this repository; the origin column says what 
 | `march/irrad_f1_inrun_currents_2026mar.csv` | F1 in-run leakage current per run: median, MAD, first and last hour, drift, window | the H1 in-run recipe run on the F1 slow-control logs, 2026-09-02 |
 | `march/conditions_March2026_H1_HPK.csv` | H1 run conditions: run start (UTC), chip, role, HV and threshold offset per board, fluence label | the DAQ run metadata |
 | `vgl/vgl_points.csv` | V_gl (gain-layer depletion voltage) per chip and fluence | the campaign IV notebooks (`ExtractIVCurves.ipynb`), k-factor peak of the fine low-V scans; the file's header records the cross-check |
+| `universality/univ_cells.csv` | every cell of the TWC-transfer study (one comparison of a source and a target): its level or axis, its source and target runs | the study's job lists (its toolkit is not in this repository; specification dated 2026-09-09), reduced by `python -m etroc_plots.universality.reduce`. Columns and command in "Universality tables" below |
+| `universality/univ_master_cells.csv` | the study's verdict table of the level cells | the inputs of the study's round-1 report of 2026-09-04 (its `master_cells.csv`), copied byte for byte by the same command |
+| `universality/univ_axis_r2.csv` | the follow-up axes A-E and I-K, every arm of every cell | the study's eight axis tables, concatenated by the same command |
+| `universality/univ_axis_F_wide.csv`, `universality/univ_axis_F_long.csv` | axis F, the source correction with its linear term refitted on the target: the arms side by side, and in the shape of the other axes | the study's two axis-F tables, copied by the same command |
+| `universality/twc_bank_best.csv` | one time-walk correction per pixel and run, DESY May and August and IRRAD March and July 2026: the quadratic's coefficients, and the TOT range and histogram behind it | the study's coefficient bank (63 files, 102 MB), reduced to the best fit per pixel by the same command |
 
 ## Test-beam result tables
 
@@ -360,6 +368,160 @@ one of its runs, every event of each.
 | `bin_lo_ns`, `count` | the lower edge of the bin (0-20 ns) and its events |
 | `group` | the runs of the pair or group, joined by `+` (`47+18`, `52+86`, `32+52+86`) |
 
+## Universality tables
+
+The universality notebook (`../notebooks/universality.ipynb`) reads the six tables in
+`universality/`. They hold the outputs of the TWC-transfer study, which asked whether a time-walk
+correction (TWC) fitted on one source (a run, a board, a pixel) can be applied to a target without
+losing time resolution. The correction is a quadratic per pixel, `delta(TOT) = c2 TOT^2 + c1 TOT +
+c0` (TOT and delta in ps). Each comparison is a cell; within a cell each way of correcting the
+target is an arm, compared with the baseline `self_cf` (the target's own correction, fitted on the
+other half of its events). The study's code (its toolkit) and its specification (dated 2026-09-09)
+are not in this repository. The six tables are made by
+
+    python -m etroc_plots.universality.reduce --out DIR --results-root S [--twc-root R] [--part cells|master|axes|bank ...]
+
+run from `TestBeam/` on lxplus (`../universality/reduce.py`; copy the files into `universality/`
+and update the checksum lines to use them). R is `TWC_TRANSFER_ROOT` (default
+`/eos/user/m/musafdar/DESY_May2026/analysis/twc_transfer`): the coefficient bank,
+`bank/coeffs_<campaign>_<run>.parquet`, and the round-1 report's inputs,
+`figs/transfer_2026-09-04/inputs/master_cells.csv`. S is the study's own folder
+(`TWC_RESULTS_ROOT`, no default; the command stops without it): `condor/` (the seven job lists),
+`results_r2/axis_{A,B,C,D,E,I,J,K}.csv` and `results_r3/` (`axis_F.csv`, `axis_F_long.csv`,
+`summary_F.md`). On one lxplus core the cells, master and axes parts take 3 s together and the
+bank part 12 s. Published 2026-10-02:
+
+| file | rows | columns | md5 |
+|---|---|---|---|
+| `univ_cells.csv` | 131 | 8 | `2fcde80b93bff79a4d9eb54292546318` |
+| `univ_master_cells.csv` | 43 | 105 | `62cfc93f96be1dcbab6cad770da772fa` |
+| `univ_axis_r2.csv` | 5890 | 24 | `6e064643ee1522656c4d7f59dc87dece` |
+| `univ_axis_F_wide.csv` | 167 | 46 | `44c661a62fdbf95b05dd7d67cd86cb74` |
+| `univ_axis_F_long.csv` | 2863 | 24 | `8cead873b7cc767f21b356cbd74bd136` |
+| `twc_bank_best.csv` | 18414 | 20 | `001872b9be344ec9d9aa252bf1b9a011` |
+
+The study's words, used in every table:
+
+* Campaign `desy` (DESY May 2026), `aug` (DESY August 2026), `mar` and `jul` (CERN IRRAD March
+  and July 2026); run `run26` (DESY) or `h1_run19` (IRRAD, telescope first). The DESY runs'
+  settings are in `desy_2026.py`.
+* A target triple is one pixel on each of the three boards of a combination, with the tracks
+  through all three. Its three pair widths are measured, its board resolutions solved from them;
+  a row's difference is the arm's width minus the baseline's on the same triple and events.
+* The arms: `notwc` (no correction), `notwc_1b` (no correction on the transferred board alone),
+  `self_in` (the target's own correction fitted on the same events: in-sample, optimistic),
+  `self_cf` (the baseline), `xfer` (the source's correction), `placebo_self` and `placebo` (the
+  controls: corrections fitted with the TOT values shuffled, on the target and on the source),
+  and the leave-pair-out arms
+  `self_cf_lpo`, `xfer_lpo` and `xfer_lin_lpo`, whose fits leave out the other board of the pair
+  scored (the guard against a correction that has learned that pair). The variants of `xfer`:
+  `xfer_clip` (TOT clipped to the source's 0.5-99.5 % range), `xfer_shift` (TOT shifted by the
+  difference of the medians), `xfer_rescale` (TOT shifted and scaled to the source's median and
+  spread), `xfer_calfix` (TOT scaled by the ratio of the mean CAL codes), and `xfer_lin` (axis F:
+  the source's `c2` kept, the linear term refitted on the target, fold-matched).
+* The family: `interp` when the target's TOT lies within the source's (coverage `C`, the target's
+  share inside the source's 0.5-99.5 % range, at least 0.98, and the lever, the rms change of the
+  correction from clipping over all target events, at most 5 ps), else `extrap`. Transfer is
+  claimed on `interp` only.
+* The decision per row: TOST equivalence at alpha 0.05 against the margin max(1.0 ps, 2 % of the
+  baseline width), PASS when the 90 % interval of the difference lies inside +-margin. A transfer
+  row whose leave-pair-out guard is absent or uninformative reads `NA-unguarded`. No claim is made
+  below 0.45 ps.
+* Retention R = 1 - difference / (`notwc` width - `self_cf` width): the share of the correction's
+  gain the transfer keeps.
+
+`universality/univ_cells.csv`, 131 rows. One row = one cell, from the job lists that ran it, read
+in the order `cells.tsv`, `cells_stage1.tsv`, `cells_stage2.tsv`, `cells_stage2_held.tsv`,
+`cells_stage3.tsv`, `cells_rerun.tsv`, `cells_guardfix_rerun.tsv` (a later list that names a cell
+again redefines it: the latest rerun wins). Every cell the other tables name is a row here.
+
+| column | contents |
+|---|---|
+| `cell` | the cell's name, such as `b1_30to0` (level b, from 30 deg to 0 deg) or `F4_lin_b1_30to0` (axis F) |
+| `level_or_axis` | the level (`a` stability floor, `b` angle, `bp` angle on the offset holder, `c` pixel to board, `d` board to board, `e` pooled source, `f` the analytic comparison of the curves of one bank file, `g` fluence, `h` March to July) or the follow-up axis (`A`-`K`) |
+| `src_campaign`, `src_run`, `tgt_campaign`, `tgt_run` | the source and the target, from each job's command; `src_run` is empty for a pooled source (level e), and a level-f cell has its bank file's run on both sides |
+| `base_cell` | for an axis-F cell, the level cell it re-scores (from the cell table of `summary_F.md`); else empty |
+| `dbias_v` | for a level-h cell, the July target's bias minus the March source's, each the median over the run's boards in `tables/runs_summary.csv` (V); else empty |
+
+`universality/univ_master_cells.csv`, 43 rows. One row = one level cell (levels a to e, g and h)
+at its campaign's primary error factor, sorted by level and cell. The binding row of a cell is
+its primary row (`xfer`, pair, `interp`) furthest from equivalence (largest abs(mu) / margin).
+Widths and differences in ps.
+
+| column | contents |
+|---|---|
+| `cell`, `level` | the cell and its level |
+| `ftag`, `group`, `f` | the aggregation (such as `agg_desy_f0p8153`), its campaign, and the factor f that scales the half-split error (measured per campaign: 0.8153 DESY May, 0.8979 August, 0.9524 March, 0.9259 July) |
+| `campaign`, `run` | the target |
+| `thin_target` | 1 when the target is one of the thin runs listed before the study ran (its PASS is supporting only) |
+| `n_pair_interp`, `n_pair_extrap`, `npix_interp`, `npix_extrap` | the primary pair rows in each family and the differences behind them |
+| `bind_name`, `mu`, `se`, `tau`, `ci_lo`, `ci_hi`, `margin`, `tost`, `n_pix`, `sigma_base`, `R_median`, `frac_over`, `chi2_red`, `p95` | the binding row: its pair, the pooled difference (random effects) and its error, the spread between triples, the 90 % interval, the margin, the verdict, the differences pooled, the median baseline width, the median retention, the share of differences over the margin, the reduced chi2 and the 95th percentile of the differences |
+| `mu_min`, `mu_max`, `mu_ivw`, `se_ivw` | over the primary rows: the smallest and largest difference, their inverse-variance mean and its error |
+| `n_row_fail`, `n_row_unguarded`, `n_row_pass`, `n_row_underpowered` | the primary rows that FAIL, are unguarded, PASS, and FAIL without showing non-equivalence (p above 0.5) |
+| `p_nonequiv_min`, `p_nonequiv_max`, `holm_missing` | the range of the non-equivalence p values over the primary rows; 1 when none carries a Holm correction |
+| `verdict_pair_interp`, `verdict_pair_extrap`, `verdict_board_interp`, `verdict_board_extrap` | the cell's verdict over the `xfer` rows of each kind and family: PASS only when every row passes, else FAIL, NA-UNGUARDED, FAIL+UNGUARDED (a guarded FAIL beside an unguarded row), MIXED or NO-ROWS |
+| `mu_extrap`, `se_extrap`, `npix_e` | the binding `extrap` pair row |
+| `placebo_present`, `placebo_R_absmax`, `placebo_mu_med`, `placebo_self_R_absmax`, `notwc_mu_med`, `placebo_ok` | the controls: whether a placebo row exists, its largest abs(R) and median difference, the largest abs(R) of `placebo_self`, the median `notwc` difference, and 1 when the placebo's abs(R) is below 0.05 |
+| `has_xfer_lpo`, `guard_verdict`, `cheat_absmax`, `self_lpo_absmax`, `margin_min`, `cheat_over_margin`, `cheat_missing`, `lpo_ok` | the leave-pair-out guard over the primary rows (the `extrap` rows when there are none): whether `xfer_lpo` exists, its verdicts (`ok`, `absent`, or `uninformative` when the baseline's own leave-pair-out cost exceeds the margin), the largest abs of the guard statistic (`xfer` - `xfer_lpo`) - (`self_cf` - `self_cf_lpo`) and of the baseline's cost, the smallest margin, and three flags: the statistic over that margin, the statistic missing, the guard clear |
+| `gate_fail`, `k_cal` | the median share of width fits that failed their goodness-of-fit gate, and the median calibration k of the half-split error |
+| `lever_X` | the median lever over all target events (the toolkit's `lever_X_all`) |
+| `n_src`, `mu_src_spread` | the source triples, and the spread of the difference between them |
+| `xfer_lpo_verdict`, `xfer_lpo_mu` | the verdict and median difference of `xfer_lpo` (pair, `interp`) |
+| `final`, `below_noclaim` | the cell's final verdict (the pair-`interp` verdict; UNSTABLE when it changes with the error factor; SUPPORTING for a thin target's PASS) and 1 when abs(`mu`) is below 0.45 ps |
+| `all_bind_name`, `all_mu`, `all_se`, `all_margin`, `all_tost`, `all_npix`, `all_ivw_mu`, `all_ivw_se`, `all_verdict`, `all_sigma_base` | the same over all triples, both families pooled (descriptive): the binding pair row and its numbers, the inverse-variance mean and its error, the verdict over the rows, the median baseline width |
+| `n_interp`, `n_extrap`, `n_censored`, `n_below_nmin` | the differences in each family, the triples censored as degenerate, and those under the 600-event floor |
+| `allb_name`, `allb_mu`, `allb_se`, `allb_tost`, `allb_margin` | the binding board row over all triples |
+| `n_tgt_triples`, `src_run`, `interp_frac`, `f_verdicts` | the target triples, the source run, the share of differences in `interp`, and the pair-`interp` verdict at each error factor of the campaign (`;`-joined) |
+| `n_pair_rows`, `n_interp_pair_rows`, `n_triples`, `n_tri_any_interp`, `n_tri_all_interp` | the `xfer` pair rows (all, `interp`), the target triples, and those with at least one or all of their pairs in `interp` |
+| `n_same_triple`, `n_same_triple_interp`, `all_mu_excl`, `all_se_excl`, `int_mu_excl`, `int_se_excl` | the rows whose source triple is the target triple (all, `interp`), and the inverse-variance mean difference and its error without them (all triples, `interp`) |
+| `all_mu_spec`, `all_se_spec`, `int_mu_spec`, `int_se_spec` | the same means with each row's error as the specification first wrote it (half the difference of the two halves' differences, times k), all triples and `interp` |
+
+`universality/univ_axis_r2.csv`, 5890 rows (axis A 800, B 620, C 660, D 1089, E 1383, I 393, J 369,
+K 576), and `universality/univ_axis_F_long.csv`, 2863 rows, have the same 24 columns. One row =
+one cell, arm, kind, pair or board, family and error factor, every arm included.
+
+| column | contents |
+|---|---|
+| `axis`, `cell`, `arm`, `kind` | the axis, the cell, the arm, `pair` or `board` |
+| `board_or_role` | the pair (its two roles, hyphen-joined) or the board's role |
+| `family` | `interp`, `extrap`, or `na` for the arms that use no source |
+| `n_pix`, `n_tgt`, `n_src` | the differences pooled, the target triples and the source triples |
+| `mu_ps`, `se_ps`, `tau`, `margin_ps`, `tost`, `guard_verdict` | the pooled difference from `self_cf` and its error, the spread between triples, the margin, the verdict and the guard's verdict |
+| `spec_primary_row` | 1 for the rows the specification makes primary (pair rows, except `xfer_lpo` on the pair without the transferred board, a guard control), else 0 |
+| `R_median` | the median retention |
+| `placebo_minus_notwc1b_ps` | `placebo` minus `notwc_1b`: on a cell that transfers one board, the control that says whether the cell is readable |
+| `cov_C`, `lever_X`, `lever_X_all` | the mean coverage, and the lever over the target events outside the source's range and over all of them |
+| `f_inflate`, `f_variant_is_primary`, `agg_tag` | the error factor; True at the campaign's measured factor (the DESY May cells are also given at 1.0, the August cells at 0.8153 and 1.0); the aggregation |
+
+`universality/univ_axis_F_wide.csv`, 167 rows. One row = one axis-F cell, kind, pair or board and
+family at the primary error factor, with the arms side by side.
+
+| column | contents |
+|---|---|
+| `cell`, `kind`, `board_or_role`, `family`, `agg_tag`, `f_inflate` | as in the long table |
+| `<arm>_n_pix`, `<arm>_mu_ps`, `<arm>_se_ps`, `<arm>_tau`, `<arm>_tost`, `<arm>_guard_verdict`, `<arm>_present` | for each of `xfer`, `xfer_lin`, `xfer_lin_lpo`, `xfer_clip` and `xfer_rescale`, the columns of the long table and whether the arm has the row (35 columns) |
+| `cov_C`, `lever_X`, `lever_X_all`, `spec_primary_row` | of the `xfer` row |
+| `delta_xferlin_minus_xfer_mu_ps` | `xfer_lin_mu_ps` minus `xfer_mu_ps` |
+
+`universality/twc_bank_best.csv`, 18414 rows from the 63 bank files (DESY May 17 files and 3878
+rows; August 10 and 2286; March H1 13 and 4620, F1 15 and 5448; July H1 4 and 884, F1 4 and
+1298). One row = one board pixel in one run: of its fits on the whole run with every board in
+the solve, not a placebo, fitted on the pixel's own tracks, the one with the most events
+(`n_fit`; the first such row on a tie, the study's own rule). The bank's `hv`, `temp` and
+`angle_deg` columns are empty in every file and left out; the conditions come from the campaign
+modules.
+
+| column | contents |
+|---|---|
+| `campaign`, `run`, `telescope` | the study's codes; the telescope (`h1`, `f1`) for IRRAD, empty for DESY |
+| `board_id`, `role`, `row`, `col` | the board, its role in the combination, and the pixel |
+| `combo`, `src_triple` | the combination and the triple the fit was made on |
+| `n_fit` | the events of the fit (at most 6000) |
+| `c2`, `c1`, `c0` | the correction delta(TOT) = c2 TOT^2 + c1 TOT + c0, TOT and delta in ps |
+| `q05`, `q95`, `tot_min`, `tot_max` | the 5 % and 95 % quantiles, the smallest and the largest TOT of those events (ps) |
+| `cal_mean` | the board's mean CAL code in those events |
+| `hist_lo`, `hist` | the TOT histogram of those events: the lower edge (ps) and the counts in 25 ps bins, as a JSON list |
+
 ## Environment variables
 
 Every variable the package and the notebooks read. Set them before the notebook's first import of
@@ -383,4 +545,6 @@ Every variable the package and the notebooks read. Set them before the notebook'
 | `ETROC_BLNW_ROOT` | `/eos/uscms/store/group/lpcmtdstudies` | the autocalibration scan histories (`BLNW_SQLITES`), read only by the BL/NW part of `frontend.rebuild` |
 | `ETROC_DECODED_ROOT` | `/eos/user/j/jongho` | the merged hits (`DECODED_DIRS`), read only by the TDC part of `frontend.rebuild` |
 | `ETROC_ANALYSIS_ROOT` | `/eos/user/m/musafdar` | the reconstructed tracks (`ANALYSIS_DIRS`), read only by the tracks part of `frontend.rebuild` |
+| `ETROC_TWC_TRANSFER_ROOT` | `/eos/user/m/musafdar/DESY_May2026/analysis/twc_transfer` | the TWC-transfer study's coefficient bank and round-1 report inputs (`TWC_TRANSFER_ROOT`), read only by `universality.reduce` (its bank and master parts, and the cells part's check against the master table) |
+| `ETROC_TWC_RESULTS_ROOT` | none | the TWC-transfer study's own folder (`TWC_RESULTS_ROOT`: its job lists and axis tables), read only by the cells and axes parts of `universality.reduce`, which stop without it (or `--results-root`) |
 | `ETROC_FIGURES` | `figures` (next to the notebook) | where the notebooks write; figures go to `$ETROC_FIGURES/<notebook>/`, such as `$ETROC_FIGURES/iv/` |
