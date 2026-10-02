@@ -102,6 +102,25 @@ rest are for whoever writes the next figure.
   in DAC codes (`settings.x_over_nw`, from `blnw_by_run.csv`). Its bar, offset * nw_std /
   nw_mean^2, is the pixel-to-pixel spread of the noise width carried to x_B to first order: a
   spread, not an uncertainty.
+- Threshold over the noise (`settings.threshold_over_noise`): x_B of every board with its bar,
+  x = chip, the settings classes side by side in each chip's slot. Colour = RFSel as everywhere,
+  but the marker is the offset class (`settings.offset_markers`, in offset order), not the chip:
+  the chip is already the x axis, and the marker then tells the offset apart where two classes
+  share an RFSel. The only settings figure whose marker is not the chip.
+- Resolution against x_B (`settings.res_vs_x`): the band of every board at its x_B, without an x
+  bar (a bar would be the noise-width spread, not an error on x_B). The footer quotes that spread
+  instead (`settings.spread_text`: its 10-90 % range over the boards and its extremes).
+- Baseline and noise width against RFSel (st06): `frontend.blnw.ladder_vs_fluence` with the RFSel
+  categories on the x axis in place of the fluence steps, colour = board as in the front-end
+  figures; both statistics (all 256 pixels, and the live pixels) are drawn, the live one named
+  with the range of pixels it leaves out. The runs of a category stand side by side at one pitch
+  for every category (`blnw.points(pitch=...)`).
+- What RFSel changes (st07, `overview.cartoons.rfsel_measured`): the block diagram, one measured
+  RFSel pair (`frontend.tot_shapes.rfsel_curves`, the pixels counted in both runs) and the design
+  lines with their sources; the measured lines under them are computed in the notebook (median TOT
+  shift per pair, the chip's resolution in the runs, the time after the irradiation and the bias
+  of both runs). A design line without a source in the design description is left out and listed
+  in the values file.
 - The setting is named "preamp feedback setting RFSel r (R_f = k kOhm)" (`style.rfsel_text`
   writes the RFSel part); what it changes is the preamp gain. Never "gain mode", "high gain" or
   "low gain".

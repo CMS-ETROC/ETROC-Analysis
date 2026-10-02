@@ -34,7 +34,8 @@ Scan times: the scan clock runs BLNW_SQLITE_UTC_OFFSET_H hours ahead of UTC; eve
 table is UTC.
 
 The drawing (ladder_vs_fluence, rest_pair) colours by board (etroc_style.BOARD_COLOR, marker by
-chip): the fluence step or the look is the x axis. The words on the figures are arguments.
+chip): the fluence step, the look or the RFSel setting (the settings notebook's st06) is the x
+axis. The words on the figures are arguments.
 """
 import glob
 import os
@@ -328,7 +329,7 @@ def ladder_runs(display_runs, extra_runs):
             for step, runs in display_runs.items()}
 
 
-def points(table, steps, quantities, stats, span=0.5):
+def points(table, steps, quantities, stats, span=0.5, pitch=None):
     """Every point a BL/NW figure draws: one per step, telescope, run, board, quantity and
     statistic, as dicts (the values-file payload).
 
@@ -337,14 +338,16 @@ def points(table, steps, quantities, stats, span=0.5):
     stats       [dict(key="allpix" or "live", ...), ...]: "allpix" reads <q>_mean_allpix and
                 <q>_std_allpix over 256 pixels, "live" reads <q>_mean and <q>_std over
                 n_pixels_<q>
-    The runs of one step are offset side by side over `span`; the four boards of one run share
-    that offset. A board missing from the table raises ValueError."""
+    The runs of one step are offset side by side over `span`, or `pitch` apart when given (then
+    a step of few runs keeps them close); the four boards of one run share that offset. A board
+    missing from the table raises ValueError."""
     out = []
     for i, st in enumerate(steps):
         for tel, runs in st["runs"].items():
             runs = sorted(runs)
             dx = ({runs[0]: 0.0} if len(runs) == 1 else
-                  {r: (j - (len(runs) - 1) / 2.0) * span / (len(runs) - 1)
+                  {r: (j - (len(runs) - 1) / 2.0) * (span / (len(runs) - 1) if pitch is None
+                                                     else pitch)
                    for j, r in enumerate(runs)})
             for run in runs:
                 sub = table[(table["campaign"] == st["campaign"]) & (table["tel"] == tel)
@@ -454,11 +457,14 @@ def ladder_vs_fluence(pts, steps, quantities, stats, *, tick_labels, xlabel, tel
     pts         points(table, steps, quantities, stats)
     quantities  [dict(key, ylabel), ...]; stats [dict(key, label, open), ...]
     tel_titles  {telescope: panel subject}; tag, data: the header's facility line
-    footer      the footer text. Returns the figure."""
+    footer      the footer text; the bottom margin grows for more than four lines
+    `steps` may be any categories (the RFSel settings, say): with boundary_after None no line is
+    drawn. Returns the figure."""
     tels = list(tel_titles)
     n = len(steps)
     fig, axes = _grid(len(quantities), len(tels), aw=7.4, ah=3.6, ml=1.25, mr=0.3, mt=0.62,
-                      mb=1.05, gx=0.85, gy=0.95, scale=scale)
+                      mb=1.05 + style.footer_extra_in(footer, scale, fits=4), gx=0.85, gy=0.95,
+                      scale=scale)
     s = style.sizes(scale)
     for i, q in enumerate(quantities):
         row_pts = [p for p in pts if p["quantity"] == q["key"]]

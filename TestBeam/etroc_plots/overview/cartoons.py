@@ -5,11 +5,15 @@
   board_facts       the chips, sensors and HV channels of each telescope
   track_selection   how one resolution value per pixel and one number per board are chosen
   rfsel_explainer   what the ETROC2 RFSel setting changes in the front end
+  rfsel_measured    where RFSel acts, a measured RFSel pair (frontend.tot_shapes) and what RFSel
+                    changes, with the measured numbers the caller computes (the settings notebook)
 
 The chips, sensors and beam come from the campaign module (TELESCOPE_CHIPS, TELESCOPE_SENSORS,
 BEAM_*) and R_f from style.RFSEL_RF_KOHM; the illustrative numbers (the tracks of figure 4, the
 pulses of figure 5) and the selection they draw (TRACK_*) are constants of this module. Every
-other word on a figure is an argument, so the notebook holds it. Each function returns the
+other word on a figure is an argument, so the notebook holds it. rfsel_measured is the one function
+here that draws measured data: its middle panel is tot_shapes.draw_rfsel_pair on a panel the
+caller built with tot_shapes.rfsel_curves. Each function returns the
 figure (and, where it has panels, the single-panel figures on request) and draws nothing to
 disk.
 """
@@ -591,3 +595,93 @@ def rfsel_explainer(name, line1, titles, lines, closing, footer_text, standard=2
             style.header(phax, name=name, line1=line1, line2=panel_line2, scale=0.9)
             out.append((key, pfig))
     return fig, out
+
+
+# ===================================================================== RFSel, measured
+def _flow_text(ax, blocks, sizes_):
+    """A text panel laid out top down by the measured height of each block, every text wrapped
+    to the panel's width. blocks: [(kind, text)], kind "head" (bold ink), "bullet" (a (head,
+    body) pair: bold ink head, muted body), "body" (muted), "italic" (italic ink) or "rule" (a
+    grey line; text ignored). Returns the lowest y reached (axes fraction)."""
+    fig = ax.figure
+    ax.axis("off")
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    r = fig.canvas.get_renderer()
+    box = ax.get_window_extent(renderer=r)
+    big, small = sizes_["legend"], sizes_["ann"]
+    gap = 0.45 * small / 72.0 * fig.dpi / box.height        # between blocks, axes fraction
+    y = 1.0
+
+    def put(text, fs, **kw):
+        nonlocal y
+        width = 90
+        # a number and its unit stay on one line (_wrap never breaks at \0)
+        text = re.sub(r"(\d) (?=(ps|ns|h|d|V|days)\b|k\$)", "\\1\0", text)
+        while True:
+            t = ax.text(0.0, y, _wrap(text, width), ha="left", va="top", fontsize=fs,
+                        transform=ax.transAxes, linespacing=1.25, **kw)
+            bb = t.get_window_extent(renderer=r)
+            if bb.width <= box.width or width <= 20:
+                break
+            t.remove()
+            width -= 2
+        y -= bb.height / box.height
+        return t
+
+    for kind, text in blocks:
+        if kind == "rule":
+            y -= gap
+            ax.axhline(y, xmin=0.0, xmax=1.0, color=GRID, linewidth=1.0)
+            y -= gap
+            continue
+        if kind == "bullet":
+            head, body = text
+            put(u"\u2022 %s:" % head, big, color=INK, weight="bold")
+            y -= 0.15 * gap
+            put(body, small, color=INK_MUTED)
+        elif kind == "head":
+            put(text, big, color=INK, weight="bold")
+        elif kind == "italic":
+            put(text, small, color=INK, style="italic")
+        else:
+            put(text, small, color=INK_MUTED)
+        y -= gap
+    return y
+
+
+def rfsel_measured(panel, *, xrange, top, xlabel, ylabel, lines, measured_head, measured,
+                   closing, subjects, tag, data, footer, scale=0.8):
+    """Three panels in one row: (1) where RFSel acts (the block diagram of rfsel_explainer);
+    (2) a measured RFSel pair, frontend.tot_shapes.draw_rfsel_pair on `panel` (from
+    tot_shapes.rfsel_curves) with `xrange`, `top`, `xlabel`, `ylabel`; (3) the text panel:
+    `lines` [(head, body)], what RFSel changes by design; under a rule `measured_head` and the
+    `measured` lines (computed by the caller); then `closing` (italic; None for none).
+
+    subjects  the three panel titles, one line each (the right side of the header)
+    tag, data join the facility line; footer: the footer text, in its own band
+    Returns the figure."""
+    from ..frontend import tot_shapes
+    style.apply_style(scale)
+    s = style.sizes(scale)
+    ml, mr, mt = 0.4, 0.3, 0.62
+    mb = 1.0 + style.footer_extra_in(footer, scale, fits=4)
+    widths, gaps, ph = (4.9, 5.4, 5.7), (1.3, 0.55), 5.6
+    W = ml + sum(widths) + sum(gaps) + mr
+    H = mb + ph + mt
+    fig = plt.figure(figsize=(W, H))
+    axes, x = [], ml
+    for i, w in enumerate(widths):
+        axes.append(fig.add_axes([x / W, mb / H, w / W, ph / H]))
+        x += w + (gaps[i] if i < len(gaps) else 0.0)
+    _rf_block_diagram(axes[0])
+    tot_shapes.draw_rfsel_pair(axes[1], panel, xrange=xrange, top=top, xlabel=xlabel,
+                               ylabel=ylabel, scale=scale, prune="lower")
+    blocks = [("bullet", hb) for hb in lines] + [("rule", None), ("head", measured_head)]
+    blocks += [("body", m) for m in measured]
+    if closing:
+        blocks += [("rule", None), ("italic", closing)]
+    _flow_text(axes[2], blocks, s)
+    style.compound_header(axes, tag=tag, data=data, scale=scale, subjects=subjects)
+    style.footer(fig, footer, scale)
+    return fig
