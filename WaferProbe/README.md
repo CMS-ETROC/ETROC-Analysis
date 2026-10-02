@@ -136,7 +136,9 @@ The tables, as csv:
   std over the pixels that did not read zero, with the zero readings listed
   apart; the QInj verdict of the station's check (`qinj_check_*`; over the
   files after the first, or the last file alone in runs without
-  `qinj_seconds`), the events of all the files read (`qinj_events`), the
+  `qinj_seconds`), the events of all the files read (`qinj_events`; the files
+  are read as one stream, and the records before its first event header and
+  a last event the run's stop cut before its end are left out), the
   trailers with a nonzero chip status (`qinj_flagged_trailers`), the
   EA-flagged hit words and the lowest efficiency over the injected pixels; the
   chuck position at contact minus the station's map position (`dx_um`,
@@ -154,7 +156,8 @@ The tables, as csv:
   the run; for older runs with a flush run `qinj_run1/`, all of the data run
   `qinj_run2/`; a `qinj/` run that wrote a single file, as a broken readout
   can, leaves nothing, and its QInj columns in `dies.csv` stay empty): hits,
-  efficiency (hits per event), the most common CAL code, and the mean and
+  efficiency (hits per event, over the same events as `qinj_events`), the
+  most common CAL code, and the mean and
   sample std of CAL, TOA and TOT over the hits with |CAL - that code| < 3.
   Hits whose EA field is not 0 (the chip's own flag) are left out. The
   injected pixels are the list the run recorded (`qinj_pixels` in

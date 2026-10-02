@@ -181,6 +181,14 @@ class QInjTest(TempWafer):
         events, flagged, hits = read_nem_hits(files)
         self.assertEqual((events, flagged, hits.shape), (4, 0, (8, 6)))
 
+    def test_an_event_cut_at_either_end_of_the_run_stays_out(self):
+        pixels = QUICK_PIXELS
+        run_dir = write_run(self.wafer, 3, 1, nem={"qinj": [
+            event(pixels), event(pixels)[5:] + event(pixels) * 2, event(pixels) + event(pixels)[:6]]})
+        events, flagged, hits = read_nem_hits(qinj_files(run_dir))
+        self.assertEqual((events, flagged, hits.shape), (3, 0, (27, 6)))
+        self.assertEqual({s["eff"] for s in qinj_pixel_stats(hits, events)}, {1.0})
+
     def test_a_run_without_qinj_has_no_files(self):
         run_dir = write_run(self.wafer, 3, 1)
         self.assertIsNone(qinj_files(run_dir))

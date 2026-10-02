@@ -321,27 +321,46 @@ def qinj_files(run_dir):
 
 
 def read_nem_hits(files):
-    """(events, flagged, hits) over the given .nem files, in order: the
-    number of events (EH records), the number of frame
+    """(events, flagged, hits) over the given .nem files read in order as
+    one stream: the number of events (EH records), the number of frame
     trailers (T) whose chip status field is not 0, and one row per hit
     record (D) as an int array with the columns ea, row, col, toa, tot, cal.
     Field positions as the EtrocReceiver translation writes them:
     D <channel> <ea> <row> <col> <toa> <tot> <cal> and
-    T <channel> <chip id> <status> <hits> <crc>."""
+    T <channel> <chip id> <status> <hits> <crc>.
+    The stream can start and end inside an event (the first file of a run
+    is left out, and the run stops mid-event), so the records before the
+    first EH and a last event without its ET are left out."""
     events = flagged = 0
     rows = []
+    cur = None  # the open event: [hit rows, flagged trailers, ET seen]
+
+    def close(event):
+        nonlocal events, flagged
+        events += 1
+        rows.extend(event[0])
+        flagged += event[1]
+
     for path in files:
         with open(path) as f:
             for line in f:
                 t = line.split()
                 if not t:
                     continue
-                if t[0] == "D" and len(t) >= 8:
-                    rows.append(t[2:8])
-                elif t[0] == "EH":
-                    events += 1
+                if t[0] == "EH":
+                    if cur is not None:
+                        close(cur)
+                    cur = [[], 0, False]
+                elif cur is None:
+                    continue
+                elif t[0] == "D" and len(t) >= 8:
+                    cur[0].append(t[2:8])
                 elif t[0] == "T" and len(t) >= 4 and t[3] != "0":
-                    flagged += 1
+                    cur[1] += 1
+                elif t[0] == "ET":
+                    cur[2] = True
+    if cur is not None and cur[2]:
+        close(cur)
     hits = np.array(rows, dtype=np.int64).reshape(-1, 6)
     return events, flagged, hits
 
