@@ -26,6 +26,9 @@ from matplotlib.text import Annotation, Text
 # board index 0..3 -> colour / marker.  Identity is (colour, shape), used in every figure.
 BOARD_COLOR = {0: "#2a78d6", 1: "#eb6834", 2: "#199e70", 3: "#4a3aa7"}
 BOARD_MARKER = {0: "o", 1: "s", 2: "^", 3: "D"}
+# RFSel (the preamp feedback setting) -> colour, where runs of one fluence step differ in RFSel and
+# the RFSel is the series: Okabe-Ito hues, no orange (a fluence colour of the ladders)
+RFSEL_COLOR = {1: "#0072B2", 2: "#009E73", 3: "#CC79A7"}
 
 INK = "#000000"
 INK_MUTED = "#5f5f5c"
