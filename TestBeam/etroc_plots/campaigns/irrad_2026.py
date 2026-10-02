@@ -649,12 +649,33 @@ BLNW_SQLITES = {   # per (campaign, telescope), in time order: the July history 
 # began after the campaign), the July histories write UTC. With these offsets every scan whose
 # baseline map equals a run's DAC map minus its threshold offset lies before that run's start.
 BLNW_SQLITE_UTC_OFFSET_H = {"march": 1.0, "july": 0.0}
+# The analysis pipeline's track files: per run and combo of three boards, one parquet file per
+# pixel triple (frontend/tot_shapes.py describes them). Read only by `python -m
+# etroc_plots.frontend.rebuild` (its tracks part), never by a notebook. Read-only.
+ANALYSIS_ROOT = os.environ.get("ETROC_ANALYSIS_ROOT") or "/eos/user/m/musafdar"
+ANALYSIS_DIRS = {   # format with tel ("h1") and run; the combo folders sit below
+    "march": os.path.join(ANALYSIS_ROOT, "CERN_IRRAD_Mar2026", "analysis", "tracks_{tel}_run{run}"),
+    "july": os.path.join(ANALYSIS_ROOT, "CERN_IRRAD_Jul2026", "analysis", "tracks_{tel}_run{run}"),
+}
+# The RFSel comparisons of the TOT shape, per (campaign, telescope): pairs of runs that differ in
+# RFSel only (one threshold offset per pair, the same bias on the chip drawn). F1: run 47 (RFSel
+# 1) against 18 (RFSel 2) at offset 20, run 52 (RFSel 2) against 86 (RFSel 3) at offset 10. Every
+# run here is in FRONTEND_RUNS or the July display runs.
+RFSEL_TOT_PAIRS = {("july", "f1"): [(47, 18), (52, 86)]}
 # The frontend tables, in the frontend/ folder of INPUTS (made by frontend.rebuild;
 # irrad_2026_inputs.md describes their columns).
 INPUTS_FRONTEND = os.path.join(INPUTS, "frontend")
 BLNW_CSV = os.path.join(INPUTS_FRONTEND, "blnw_by_run.csv")
 TDC_PIXEL_HISTS_CSV = os.path.join(INPUTS_FRONTEND, "tdc_pixel_hists.csv")
 TDC_CAL_MODES_CSV = os.path.join(INPUTS_FRONTEND, "tdc_cal_modes.csv")
+TRIPLES_CSV = os.path.join(INPUTS_FRONTEND, "triples.csv")
+TOT_PIXEL_MEDIANS_CSV = os.path.join(INPUTS_FRONTEND, "tot_pixel_medians.csv")
+TOT_POOLED_SUMMARY_CSV = os.path.join(INPUTS_FRONTEND, "tot_pooled_summary.csv")
+TOT_POOLED_HIST_CSV = os.path.join(INPUTS_FRONTEND, "tot_pooled_hist.csv")
+DTOA_TRIPLES_CSV = os.path.join(INPUTS_FRONTEND, "dtoa_triples.csv")
+DTOA_POOLED_HIST_CSV = os.path.join(INPUTS_FRONTEND, "dtoa_pooled_hist.csv")
+PIXEL_HISTS_CSV = os.path.join(INPUTS_FRONTEND, "pixel_hists.csv")
+RFSEL_PAIR_HIST_CSV = os.path.join(INPUTS_FRONTEND, "rfsel_pair_hist.csv")
 
 # ============================================================== raw inputs, read in place
 # iv_data.check_inputs checks each one exists and is readable (the IV notebook reads them).

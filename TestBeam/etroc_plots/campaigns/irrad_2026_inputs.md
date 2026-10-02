@@ -10,7 +10,7 @@ in place from the March tree:
 
 (`EOS_ROOT` in `irrad_2026.py`; its `week1/`, `week2/` and `laptop_mirror_15e14/` subfolders). The
 tables listed below (binned scans, reduced HV-monitor logs, run lists, small caches and the
-test-beam result tables: 36 files, 100 MB) sit in one folder outside the repository:
+test-beam result tables: 44 files, 117 MB) sit in one folder outside the repository:
 
     /eos/user/m/musafdar/ETROC_plot_inputs/irrad_2026
 
@@ -20,8 +20,9 @@ tables reads more places, which the notebooks never read: the LV power-log copie
 in the same personal area) for `july/lv_spans_jul.csv`; the DAQ's run folders
 (`RUN_METADATA_ROOT`, another personal EOS area) for `tables/run_times.csv` and
 `frontend/blnw_by_run.csv`; the merged hits (`DECODED_ROOT`, the same area) for the two TDC tables
-of `frontend/`; and the autocalibration scan histories (`BLNW_ROOT`, a group area on the LPC EOS)
-for `frontend/blnw_by_run.csv`. Each needs a share from its owner. To work from your own copy,
+of `frontend/`; the reconstructed tracks (`ANALYSIS_ROOT`, the personal area of the tables) for the
+eight track tables of `frontend/`; and the autocalibration scan histories (`BLNW_ROOT`, a group
+area on the LPC EOS) for `frontend/blnw_by_run.csv`. Each needs a share from its owner. To work from your own copy,
 copy the folders and point `ETROC_INPUTS` and `ETROC_IV_EOS_MARCH` at them (all the variables
 are in the table at the end):
 
@@ -59,7 +60,7 @@ Run from `TestBeam/`. The rebuild is the authority for these files.
 | `march/preirrad_cache/` (3 files) | the pre-irradiation stability figure's cache: the slow-control log as 10 s medians, per-run and per-board statistics, the run windows. The rebuild writes the same bytes when nothing has changed, so `md5sum -c` shows whether the published cache was stale | `python -m etroc_plots.iv.preirrad_current --out FIGDIR --cache DIR --rebuild` |
 | `march/fine_iv_F1_m25C_17cm_15e14_*_binned_iv_data.csv`, `march/quick_iv_F1_m25C_17cm_15e14_*_binned_iv_data.csv` (3 files) | the F1 IV scans of the 1.5e15 step, on the same voltage bins as the other March scans (the March tree holds no binned version of them): each slow-control log of that step (a `*_interpolated.csv.gz` file in `laptop_mirror_15e14/F1/` of the March tree; `BINNED_FROM_RAW` in `irrad_2026.py` names each with its window) cut to its scan's window, then each channel to its up-sweep; mean voltage and median current per bin (`FINE_BINS` or `QUICK_BINS` in `iv/legacy.py`). The command prints each table's md5, which matches its line in `irrad_2026_inputs.md5` | `python -m etroc_plots.iv.legacy --out DIR` |
 | `july/lv_spans_jul.csv` | the July LV power log, one row per file: campaign, telescope, file name, first and last record (UTC, to the second) and number of records. The log records only while the LV is on, so every gap between files is an LV cycle (overview notebook, figure 6, draws those longer than 1 h; the LV-on time on the IV notebook's figures 24 and 25 is the end of the last such gap before the run). Read from the log folders `LV_LOG_DIRS` of the campaign module (`<LV_LOG_ROOT>/H1` and `<LV_LOG_ROOT>/F1`), copies of the DAQ's folders `/store/user/lpcmtdstudies/IRRad_CERN_2026Jul/{H1,F1}_telescope/power_history/lv_history/` on the LPC EOS | `python -c "from etroc_plots import lv_log; lv_log.build_lv_spans('FILE')"`, or with `dirs={("july", "h1"): H1_FOLDER, ("july", "f1"): F1_FOLDER}` for other folders |
-| `frontend/` (3 files) | the front-end notebook's tables: the baseline and noise width of every board in every run, and the TDC codes of one pixel per chip and the CAL code of every pixel in the `REST_PAIRS` runs. Columns, sources and run times in "Front-end tables" below | `python -m etroc_plots.frontend.rebuild --out DIR` |
+| `frontend/` (11 files) | the front-end notebook's tables: the baseline and noise width of every board in every run, the TDC codes of one pixel per chip and the CAL code of every pixel in the `REST_PAIRS` runs, and the TOT and TOA difference of the tracks (per triple, per pixel, per board, fixed pixels, the RFSel pairs). Columns, sources and run times in "Front-end tables" below | `python -m etroc_plots.frontend.rebuild --out DIR` |
 
 ## Made outside this package
 
@@ -109,10 +110,10 @@ length in minutes, taken from each run's `run_metadata.yaml` (`run_info.timestam
 
 ## Front-end tables
 
-The front-end notebook (`../notebooks/frontend.ipynb`) reads three tables in `frontend/`. They are
+The front-end notebook (`../notebooks/frontend.ipynb`) reads the tables in `frontend/`. They are
 made by
 
-    python -m etroc_plots.frontend.rebuild --out DIR [--part blnw|tdc] [--runs ...]
+    python -m etroc_plots.frontend.rebuild --out DIR [--part blnw|tdc|tracks] [--runs ...] [--rank rows|bytes]
 
 run from `TestBeam/` (`../frontend/rebuild.py`; copy the files into `frontend/` and update the
 checksum lines to use them). `--runs` takes `pairs` (the runs of `REST_PAIRS`), `frontend` (the
@@ -131,13 +132,33 @@ runs of `FRONTEND_RUNS` and the July display runs at RFSel 2, threshold offset 2
   `DECODED_ROOT`, default `/eos/user/j/jongho`): about 1 s per file on one lxplus core, 5.5 min
   for the four `REST_PAIRS` runs (328 files, 812 million hits), and prints each run's hit counts
   before and after each cut.
+* The tracks part reads the track files of each run (`ANALYSIS_DIRS`, under `ANALYSIS_ROOT`,
+  default `/eos/user/m/musafdar`: `CERN_IRRAD_Mar2026/analysis/tracks_<tel>_run<N>/<combo>/time/`
+  and the same under `CERN_IRRAD_Jul2026`, one parquet file per triple of pixels) and the
+  run-config yamls (`RUN_LIST_YAML`: each board's role, which names the columns and folders). By
+  default it reads the runs of `FRONTEND_RUNS` and the July display runs at RFSel 2, threshold
+  offset 20 (28 runs): the footer of every file, then the columns of every file that is
+  some pixel's triple. It took 54 min on one lxplus core (2026-10-02), about two minutes per
+  run. The TOA difference uses the pipeline's time-walk solver
+  (`condor_at_lxplus/core/twc_solver.py`, `apply_timewalk_correction_arrays`: one polynomial in
+  TOT per board, solved jointly over the triple's three boards), so the rebuild runs from
+  `TestBeam/`. `--rank bytes` picks each pixel's triple by file size, the rule of the CERN IRRAD
+  2026 talk figures (kept for comparisons); the default, `rows`, by its events.
+
+A pixel's triple: the track files of a run hold one triple of pixels each, on boards 0-1-2 or
+1-2-3 (the folder name gives the boards' roles and indices, `extra0-dut1-ref2`). Each pixel of a
+board takes one triple, the one with the most events among the triples of its board's
+combination (boards 0-1-2 for boards 0-2, boards 1-2-3 for board 3; ties to the larger file, then
+the first name), and counts when that triple holds at least 300 events (`tot_shapes.FLOOR`).
+Nothing is pooled across the triples of one pixel.
 
 The published `frontend/blnw_by_run.csv` (2026-10-02) was not made by this rebuild: the scan
 histories could not be read from CERN or the LPC that day. It is the 2026-09-02 build of the same
 join (made outside this repository, from the same histories and run folders), its columns renamed
 to the ones below and its chips named as in `TELESCOPE_CHIPS`, every number unchanged. Rebuilding
 it with the command above replaces it. The two TDC tables were made by the rebuild (`--part tdc`,
-default runs) on 2026-10-02.
+default runs) on 2026-10-02, the eight track tables by the rebuild (`--part tracks`, default runs
+and rank) the same day.
 
 `frontend/blnw_by_run.csv`, 384 rows (97 runs). One row = one board in one run.
 
@@ -179,6 +200,104 @@ code within 3 of the pixel's CAL mode in that loop file.
 | `n_hits_all`, `n_hits_ea0`, `n_hits` | the pixel's hits: all, with `ea == 0`, and also inside the CAL window |
 | `n_files` | the loop files of the run, all read |
 
+`frontend/triples.csv`, 67710 rows. One row = one track file (one triple of pixels) of one
+run.
+
+| column | contents |
+|---|---|
+| `campaign`, `tel`, `run` | as above |
+| `boards`, `combo` | the boards of the triple (`0-1-2` or `1-2-3`) and its folder (roles and indices, `extra0-dut1-ref2`) |
+| `chip_<b>`, `row_<b>`, `col_<b>` | for each board b = 0-3, its chip and pixel in the triple; empty for the board outside it |
+| `n_rows`, `n_bytes` | the events of the triple (rows of the file) and the file size (bytes) |
+| `file` | the file name |
+
+`frontend/tot_pixel_medians.csv`, 28577 rows. One row = one pixel of one board in one run:
+every pixel with a triple in its board's combination.
+
+| column | contents |
+|---|---|
+| `campaign`, `tel`, `run`, `board_idx`, `chip`, `row`, `col` | as above |
+| `n` | the events of the pixel's triple |
+| `tot_median_ns` | the median TOT of the pixel's events in that triple (ns; events without a TOT left out) |
+| `passes_floor` | `n` >= 300: the pixel counts |
+
+`frontend/tot_pooled_summary.csv`, 112 rows. One row = one board in one run.
+
+| column | contents |
+|---|---|
+| `campaign`, `tel`, `run`, `board_idx`, `chip` | as above |
+| `n_pixels`, `n_events` | the counted pixels and all their events |
+| `pixmed_median_ns`, `pixmed_p16_ns`, `pixmed_p84_ns` | the median and the 16th and 84th percentiles of the counted pixels' `tot_median_ns` |
+| `median_ns`, `p16_ns`, `p84_ns` | the same over every event of the counted pixels together |
+| `mode_ns_0.05`, `mode_ns_0.10`, `mode_ns_0.20` | the centre of the fullest bin of those events in 0.05, 0.1 and 0.2 ns bins from 0 |
+| `n_outside_hist` | those events outside 0-20 ns (not in `tot_pooled_hist.csv`) |
+
+`frontend/tot_pooled_hist.csv`, 11985 rows. One row = one non-empty 0.05 ns bin of the TOT of
+every event of one board's counted pixels in one run.
+
+| column | contents |
+|---|---|
+| `campaign`, `tel`, `run`, `board_idx`, `chip` | as above |
+| `bin_lo_ns`, `count` | the lower edge of the bin (0-20 ns) and its events |
+
+`frontend/dtoa_triples.csv`, 26370 rows. One row = one board pair of one triple in one run.
+Pairs 0-1 and 0-2 come from board 0's triple of every counted board-0 pixel, 1-2 from board 1's,
+2-3 from board 2's triple among the triples of boards 1-2-3 (the one with the most events); a
+triple is used when it holds at least 300 events with TOT, TOA and CAL on all three boards. The
+TOA difference is taken after the time-walk correction of the triple (above).
+
+| column | contents |
+|---|---|
+| `campaign`, `tel`, `run` | as above |
+| `pair`, `board_a`, `chip_a`, `board_b`, `chip_b` | the pair (`0-1`, `0-2`, `1-2` or `2-3`), its first and second board |
+| `combo`, `row_<b>`, `col_<b>` | the triple's folder and pixels, empty for the board outside it |
+| `n_events` | the events with every value present |
+| `dt_median_ps` | the median of TOA(a) - TOA(b) after the correction (ps, 3 decimals) |
+| `n_outside` | events more than 2000 ps from that median |
+| `cal_a`, `cal_b` | the median CAL code of each board of the pair in the triple (one TOA code = 3.125 ns / CAL) |
+
+`frontend/dtoa_pooled_hist.csv`, 10859 rows. One row = one non-empty 25 ps bin of one pair in
+one run: every triple of `dtoa_triples.csv`, each centred on its own median.
+
+| column | contents |
+|---|---|
+| `campaign`, `tel`, `run`, `pair`, `board_a`, `chip_a`, `board_b`, `chip_b` | as above |
+| `bin_lo_ps`, `count` | the lower edge of the bin (-2000 to 2000 ps) and its events |
+
+`frontend/pixel_hists.csv`, 4976 rows. One row = one non-empty bin of one histogram of one
+fixed pixel or pixel pair in one run. The fixed pixels are chosen per telescope over the runs of
+`tot_shapes.shape_runs` (one per fluence step: March the runs of `MARCH_DISPLAY_RUNS`, July the
+preferred display run at RFSel 2, offset 20): per board, among the pixels counted in every one of
+those runs, the one whose smallest count over the runs is largest (ties to the smallest row,
+column). Pairs 0-1, 0-2 and 1-2 join those pixels, through the triple with the most events holding
+both in each run; pair 2-3 keeps board 3's pixel and takes the board-2 pixel tracked with it in
+every run whose best such triple has the largest smallest count. The board-1 pixel of the July
+figures is chosen the same way over the July runs alone.
+
+| column | contents |
+|---|---|
+| `campaign`, `tel`, `run` | as above |
+| `pick` | `pixel` (each board's fixed pixel: its TOT), `pixel_pair` (each pair's fixed pixels: their TOA difference), `july_pixel` (the board-1 pixel of the July runs: its TOT and its TOA difference with board 2) |
+| `quantity` | `tot_ns` or `dtoa_ps` |
+| `board_a`, `chip_a`, `row_a`, `col_a` | the board and pixel histogrammed (for `dtoa_ps` the first of the pair) |
+| `board_b`, `chip_b`, `row_b`, `col_b` | the second board and its pixel in the triple (`dtoa_ps` only) |
+| `combo`, `file` | the triple's folder and file |
+| `n_events`, `median`, `n_outside` | the events, their median (TOT in ns; for `dtoa_ps` the median the values were centred on, ps) and the events outside the histogram |
+| `bin_lo`, `count` | the lower edge of a 0.05 ns bin over 0-20 ns or of a 25 ps bin over +-2000 ps (centred), and its events |
+
+`frontend/rfsel_pair_hist.csv`, 466 rows. One row = one non-empty 0.05 ns TOT bin of one board
+in one run of `RFSEL_TOT_PAIRS` (July F1: runs 47 at RFSel 1 and 18 at RFSel 2, threshold offset
+20; runs 52 at RFSel 2 and 86 at RFSel 3, offset 10). The board is the one whose smallest total of counted
+events over the four runs is largest (board 1, LF12); per pair, the pixels of that board counted in
+both runs, every event of each.
+
+| column | contents |
+|---|---|
+| `campaign`, `tel`, `run`, `board_idx`, `chip` | as above |
+| `rfsel`, `offset`, `partner_run` | the run's RFSel and threshold offset (`tables/runs_summary.csv`) and the other run of its pair |
+| `n_pixels`, `n_events`, `median_ns` | the pixels counted in both runs, their events in this run and the median TOT (ns) |
+| `bin_lo_ns`, `count` | the lower edge of the bin (0-20 ns) and its events |
+
 ## Environment variables
 
 Every variable the package and the notebooks read. Set them before the notebook's first import of
@@ -201,4 +320,5 @@ Every variable the package and the notebooks read. Set them before the notebook'
 | `ETROC_RUN_METADATA_ROOT` | `/eos/user/j/jongho` | the DAQ's run folders (`RUN_METADATA_DIRS`), read only by `overview.timeline.build_run_times` and the BL/NW part of `frontend.rebuild` |
 | `ETROC_BLNW_ROOT` | `/eos/uscms/store/group/lpcmtdstudies` | the autocalibration scan histories (`BLNW_SQLITES`), read only by the BL/NW part of `frontend.rebuild` |
 | `ETROC_DECODED_ROOT` | `/eos/user/j/jongho` | the merged hits (`DECODED_DIRS`), read only by the TDC part of `frontend.rebuild` |
+| `ETROC_ANALYSIS_ROOT` | `/eos/user/m/musafdar` | the reconstructed tracks (`ANALYSIS_DIRS`), read only by the tracks part of `frontend.rebuild` |
 | `ETROC_FIGURES` | `figures` (next to the notebook) | where the notebooks write; figures go to `$ETROC_FIGURES/<notebook>/`, such as `$ETROC_FIGURES/iv/` |

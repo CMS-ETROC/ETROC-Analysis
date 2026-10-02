@@ -277,7 +277,7 @@ def hists(h, tel, looks, panels, *, pixels, tag, data, footer, stat_words, scale
             rec = dict(chip=chip, board_idx=b, row=r, col=c, panel=spec["key"], looks=[])
             for lk, lo, cnt in drawn:
                 edges, cin, cout = rebin(lo, cnt, spec["width"], x0, x1, native)
-                dens = cin / (cin.sum() * spec["width"]) if cin.sum() else cin.astype(float)
+                dens = cin / cin.sum() if cin.sum() else cin.astype(float)   # fraction per bin
                 x = np.repeat(edges, 2)[1:-1]
                 y = np.repeat(dens, 2)
                 if lk.get("fill"):

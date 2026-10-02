@@ -4,7 +4,7 @@
 
 Run that first, on lxplus, from the repository root. It sets up LCG_104d, the environment this
 code is tested in (Python 3.9.12, numpy 1.23.5, pandas 1.5.3, matplotlib 3.7.1, scipy 1.10.1,
-mplhep 0.3.12, Pillow 9.5.0, PyYAML 6.0, nbconvert 7.6.0).
+mplhep 0.3.12, Pillow 9.5.0, PyYAML 6.0, pyarrow 11.0.0, nbconvert 7.6.0).
 
 Plotting code for ETROC test-beam and irradiation campaigns: a small helper package and one
 Jupyter notebook per topic. The notebooks hold the choices made per figure, the package holds what
@@ -19,7 +19,7 @@ lists, chips, fluence steps, input locations). No data lives in the repository.
 | `notebooks/merged.ipynb` (and `merged.py`) | the July IRRAD 2026 run merges against their single runs, and the cost of merging, 7 figures |
 | `notebooks/maps.ipynb` (and `maps.py`) | per-pixel time-resolution maps of CERN IRRAD 2026, one run per fluence step, 18 figures |
 | `notebooks/overview.ipynb` (and `overview.py`) | the CERN IRRAD 2026 setup and method as schematics (telescope, beam profile, boards, track selection, the RFSel setting) and the timeline of both campaigns, 6 figures |
-| `notebooks/frontend.ipynb` (and `frontend.py`) | the CERN IRRAD 2026 front end: baseline and noise width of every board against fluence and before / after cooling down, and the CAL, TOA and TOT codes and CAL-code maps at 1.5e15 before / after cooling down, 6 figures |
+| `notebooks/frontend.ipynb` (and `frontend.py`) | the CERN IRRAD 2026 front end: baseline and noise width of every board against fluence and before / after cooling down, the CAL, TOA and TOT codes and CAL-code maps at 1.5e15 before / after cooling down, and the TOT and the time-walk-corrected TOA difference of the tracks against fluence (boards and single pixels), 14 figures |
 | `campaigns/irrad_2026.py` | that campaign: header text, telescopes and chips, fluence ladder, scan catalogue, run settings, input locations |
 | `campaigns/irrad_2026_inputs.md` | every input table (contents, origin), where the inputs live, the environment variables that move them; checksums in `irrad_2026_inputs.md5` |
 | `style.py` | the house look: header, footer, legends, colours, saving figures and values files |
@@ -28,7 +28,7 @@ lists, chips, fluence steps, input locations). No data lives in the repository.
 | `iv/` | IV loaders and drawing helpers: March slow-control logs, July HV-monitor extracts, k-factor and V_gl |
 | `resolution/` | the test-beam result tables: readers, the anointed-combination selection, the combination band, run settings; the pixel-map layouts |
 | `overview/` | the setup and method schematics, and the campaign timeline with its run-time table builder |
-| `frontend/` | the front-end tables (baseline and noise width per board and run, TDC codes and CAL modes per pixel), their rebuild (`python -m etroc_plots.frontend.rebuild`) and drawing |
+| `frontend/` | the front-end tables (baseline and noise width per board and run, TDC codes and CAL modes per pixel, TOT and TOA difference of the tracks), their rebuild (`python -m etroc_plots.frontend.rebuild`; its track part also imports the pipeline's time-walk solver, `condor_at_lxplus/core/twc_solver.py`, so it runs from `TestBeam/`) and drawing |
 | `inputs.py` | the input check every notebook runs first |
 | `lv_log.py` | the July LV power log: its file-spans table builder, the LV-off periods and the LV-on time before a run |
 | `CONVENTIONS.md` | the rules every figure follows |
