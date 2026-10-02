@@ -36,7 +36,7 @@ STAGES = ("pre_ubm", "post_ubm")
 
 
 def build_arg_parser():
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(description=" ".join(__doc__.split("\n\n")[0].split()))
     parser.add_argument('--path', required=True,
                         help='The --path of the wafer run: the mother directory of all results')
     parser.add_argument('--waferStage', required=True, choices=STAGES, dest='wafer_stage',

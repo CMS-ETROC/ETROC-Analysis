@@ -376,16 +376,96 @@ It writes into `--out` (default `<path>/position_summary/`), per lot:
 | `<label>_<stage>_position_pairs` | per quantity, the pairwise r of every two wafers, and each wafer's values in test order |
 | `<label>_<stage>_pixel_patterns` | per pixel quantity, the pattern every chip shares, the map r histograms, the median same-place map r at each place, and the tilt across the die at each place |
 
+## Power per chip
+
+```
+python plot_power.py --path <path> --lot "N62M23 bare=N62M23:08A5,07B2,06B7,05C4" --lot N62H30
+```
+
+shows the power each chip draws from the supplies on every wafer of the
+lots given (`--lot` as for `plot_lots.py`), in each stage the wafer has.
+It reads the `dies.csv` that `plot_wafer.py` wrote into each stage
+folder's `plots/`, so run `plot_wafer.py` on every wafer and stage first;
+a stage without that table is named and left out. A die's power in a run
+phase, at power-on and at high power, is 1.2 V, the supply voltage the
+chip is designed for, times the sum of the phase-median currents of the
+rails `analog`, `digital`, `ws_analog`, `ws_digital` and `vref`, as
+`dies.csv` has them. The same 1.2 V goes for every rail and every test,
+whatever the supplies were set to (analog 1.35-1.36 V, digital 1.25 or
+1.30 V on the runs so far) and whatever the cables and the probe card
+drop. A die whose run did not log every one of these rails in a phase
+has no power in that phase. The eFuse rail is left out: not every
+run logs it, and where one does it reads at most 10 mA on a PASSED die at
+power-on and under 1 mA at high power (all lots, as of October 2026).
+Both figures draw a dashed line at 1 W per chip, the round number the
+power is compared with; the ETROC2 Reference Manual (rev 0.6, Table 21)
+estimates 0.77 W at the low and 0.97 W at the high preamplifier power
+setting, within ±20 %. When no PASSED valid die of the lots has a power,
+it writes the table and stops with exit code 2.
+
+It writes into `--out` (default `<path>/power_summary/`):
+
+| file | what |
+|---|---|
+| `power_dies.csv` | one row per die of every wafer and stage read: lot, wafer, stage, grade, the analog and digital supply voltage at high power, each rail's power at 1.2 V in W (`<rail>_P_on`, `<rail>_P_high`) and their sums (`power_on_W`, `power_high_W`) |
+| `power` | per wafer, boxes of the power of its PASSED valid dies at power-on and at high power, one panel per stage with every wafer at the same place in both; each lot headed by the months its stage was tested and its median analog and digital supply voltage |
+| `power_rails` | per lot and stage, the mean power of each rail at power-on and at high power over its PASSED valid dies, as stacked horizontal bars with the sum at the end |
+
+## Charge injection in time
+
+```
+python plot_qinj.py --path <path> --lot "N62M23 bare=N62M23:08A5,07B2,06B7,05C4" --lot N62H30
+```
+
+shows the TDC of the injected pixels in time units on every wafer of the
+lots given (`--path` and `--lot` as for `plot_power.py`). It reads the
+`qinj.csv` and `dies.csv` that `plot_wafer.py` wrote into each stage
+folder's `plots/` and keeps the injected pixels of the PASSED valid dies,
+the injected pixels being those hit in at least half of the events on at
+least half of the stage's dies. A stage without the tables, without
+charge injection, without a PASSED valid die or without pixel (2, 2)
+among its injected pixels is named and left out. Each die's mean codes of
+a pixel convert with that pixel's bin, 3.125 ns / CAL, as the test-beam
+pipeline converts each hit (`TestBeam/condor_at_lxplus/core/apply_tdc_cuts.py`):
+TOA = 12.5 ns - code x bin, TOT = (2 code - floor(code / 32)) x bin. TOA
+is linear in the code, so converting the mean is exact; for TOT the floor
+of the mean code can differ from the mean over the hits by less than one
+bin, where a pixel's hits straddle a multiple of 32.
+
+The TDCs of pixel columns 0-7 run on the digital supply and those of
+columns 8-15 on the discriminator supply of the analog group (ETROC2
+Reference Manual rev 0.6, Table 20; column 0 is the rightmost in the
+chip's own frame), so the two halves count at different speeds and their
+CAL differs. The TOA code counts from the hit to the next rising edge of
+the TDC reference strobe, which reaches each pixel through an H-tree, so
+a pixel the strobe reaches later reads an earlier TOA in ns, and one the
+charge-injection pulse reaches later a later TOA. The manual's Fig. 28
+gives both delays for every pixel, and the function
+`plot_qinj.htree_toa_ns()` what they add to a pixel's TOA. `dtoa_ns` is a
+pixel's TOA minus that of the reference pixel (2, 2) on the same die, so
+whatever the die shares cancels, and `htree_dtoa_ns` the H-tree
+prediction for it. The prediction covers the H-trees only; whatever else
+differs between pixels, such as the supply their TDC runs on, stays in
+`dtoa_ns`.
+
+It writes into `--out` (default `<path>/qinj_summary/`):
+
+| file | what |
+|---|---|
+| `qinj_pixels_ns.csv` | one row per die and injected pixel of every wafer and stage read: the mean codes, `bin_ps`, `toa_ns`, `tot_ns`, `dtoa_ns`, `htree_dtoa_ns` |
+| `<label>_<stage>_qinj` | per lot and stage, per injected pixel, boxes of CAL, TOT, TOA and `dtoa_ns` over the dies, the H-tree prediction beside `dtoa_ns` |
+
 ## Tests
 
 ```
 python -m unittest discover -s tests
 ```
 
-run from this folder (`WaferProbe/`). Needs `numpy`, `pandas` and `pyarrow`
-for `tests/test_wafer_tables.py`; also `matplotlib` for
-`tests/test_plot_wafer.py`, `tests/test_stage_compare.py`,
-`tests/test_plot_lots.py` and `tests/test_positions.py`, else their tests
-are skipped. The test
+run from this folder (`WaferProbe/`). `tests/test_wafer_tables.py` needs
+`numpy`, `pandas` and `pyarrow`; `tests/test_plot_wafer.py`,
+`tests/test_stage_compare.py`, `tests/test_plot_lots.py` and
+`tests/test_positions.py` need `matplotlib` as well; `tests/test_plot_power.py`
+and `tests/test_plot_qinj.py` need `numpy`, `pandas` and `matplotlib`. Tests
+whose packages are missing are skipped. The test
 files build synthetic run folders (`tests/wafer_results.py`) laid out as the
 station writes them and do not need real wafer data.

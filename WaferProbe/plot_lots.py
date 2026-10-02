@@ -42,7 +42,7 @@ REPO = Path(__file__).resolve().parent
 
 
 def build_arg_parser():
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(description=" ".join(__doc__.split("\n\n")[0].split()))
     parser.add_argument('--path', required=True,
                         help='The --path of the wafer runs: the mother directory of all results')
     parser.add_argument('--lot', action='append', required=True, dest='lots', metavar='LABEL=BATCH:WAFER,...',
@@ -92,6 +92,44 @@ def lot_wafers(path, batch, wafers):
 
 def wafer_label(wafer_dir):
     return re.fullmatch(r"WaferID_(?:\d+|X)_Name_(.+)", wafer_dir.name).group(1)
+
+
+def read_lots(path, specs, read_stages):
+    """The rows read_stages gives for each wafer of the lots specs
+    ([(label, batch, wafers or None)]), headed by lot, batch and wafer, or
+    None, said why, when a wafer asked for is not there, a wafer is in two
+    lots or nothing was read."""
+    tables, taken = [], {}
+    for label, batch, wafers in specs:
+        found = find_wafer_dirs(path, batch_name=batch)
+        if wafers is not None:
+            names = {wafer_label(w): w for w in found}
+            missing = [w for w in wafers if w not in names]
+            if missing:
+                print(f"no wafer folder {', '.join(missing)} of batch {batch} under {path}")
+                return None
+            found = [names[w] for w in wafers]
+        if not found:
+            print(f"{label}: no wafer folder of batch {batch} under {path}")
+            return None
+        print(f"{label}: reading {len(found)} wafers of batch {batch}: {', '.join(wafer_label(w) for w in found)}")
+        for w in found:
+            if w in taken:
+                print(f"{label}: {w.name} is in {taken[w]} already; a wafer can be in one lot once only")
+                return None
+            taken[w] = label
+            stages, left_out = read_stages(w)
+            for stage, reason in left_out:
+                print(f"{label}: {wafer_label(w)} {stage} left out: {reason}")
+            for rows in stages:
+                rows.insert(0, "wafer", wafer_label(w))
+                rows.insert(0, "batch", w.parent.name)
+                rows.insert(0, "lot", label)
+                tables.append(rows)
+    if not tables:
+        print(f"no table of any wafer of the lots under {path}")
+        return None
+    return pd.concat(tables, ignore_index=True)
 
 
 def read_lot(label, wafer_dirs, wafer_map, invalid):

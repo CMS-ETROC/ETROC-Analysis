@@ -35,6 +35,7 @@ import pandas as pd
 from wafer_tables import injected_by_die
 
 STAGE_ORDER = ("pre_ubm", "post_ubm")
+STAGE_TEXT = {"pre_ubm": "before UBM", "post_ubm": "after UBM"}
 MAIN_RAILS = ("analog", "digital")
 PHASES = ("on", "high")
 QINJ_QUANTITIES = ("toa", "tot", "cal")

@@ -39,16 +39,15 @@ from plot_wafer import find_wafer_dirs
 from position_compare import (DIE_QUANTITIES, MAP_QUANTITIES, centred, common_injected, die_values, full_scan,
                               injected_notes, map_pairs, mean_r, measured, months_tested, pairwise_r, place_tilts,
                               residual_maps, same_die_r, shuffled_r, tilts)
-from stage_compare import STAGE_ORDER
+from stage_compare import STAGE_ORDER, STAGE_TEXT
 from station import load_wafer_map
 from wafer_tables import collect, invalid_dies
 
 REPO = Path(__file__).resolve().parent
-STAGE_TEXT = {"pre_ubm": "before UBM", "post_ubm": "after UBM"}
 
 
 def build_arg_parser():
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(description=" ".join(__doc__.split("\n\n")[0].split()))
     parser.add_argument('--path', required=True,
                         help='The --path of the wafer runs: the mother directory of all results')
     parser.add_argument('--stage', required=True, choices=STAGE_ORDER, help='The stage folder of each wafer to read')
