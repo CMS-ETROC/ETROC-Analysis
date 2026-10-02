@@ -90,14 +90,14 @@ REQUIRED = {
         "UNIV_MASTER_CSV",
     ),
     # the settings classes at one fluence step (RFSel, threshold offset), the tables their
-    # figures read, the good-run list and the stop times, read by etroc_plots.resolution.settings
-    # and notebooks/settings.py
+    # figures read (the RFSel TOT pairs too), the good-run list and the stop times, read by
+    # etroc_plots.resolution.settings and notebooks/settings.py
     "settings": (
         "BAND_STEPS", "BLNW_CSV", "BOARD_TABLE", "DISPLAY_RUNS_JUL_CSV", "FLUENCE_CONVENTION",
         "GOOD_RUNS_CAMPAIGN", "GOOD_RUNS_CSV", "GOOD_RUNS_TEL", "INPUTS", "INPUTS_MANIFEST",
-        "RAD_STOP_UTC", "RFSEL_ORDER", "RFSEL_STEP_CLASSES", "RUN_TIMES_CSV", "RUNS_SUMMARY_CSV",
-        "SETTINGS_OFFSETS", "SETTINGS_STEP", "TABLE_CAMPAIGN", "TABLE_TEL", "TELESCOPE_CHIPS",
-        "TELESCOPE_TITLE",
+        "RAD_STOP_UTC", "RFSEL_ORDER", "RFSEL_PAIR_HIST_CSV", "RFSEL_STEP_CLASSES",
+        "RFSEL_TOT_PAIRS", "RUN_TIMES_CSV", "RUNS_SUMMARY_CSV", "SETTINGS_OFFSETS",
+        "SETTINGS_STEP", "TABLE_CAMPAIGN", "TABLE_TEL", "TELESCOPE_CHIPS", "TELESCOPE_TITLE",
     ),
 }
 
