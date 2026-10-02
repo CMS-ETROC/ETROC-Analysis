@@ -4,7 +4,8 @@ Tools for the Olympus cellSens microscope images (`.vsi` + `.ets`) of ETROC wafe
 
 - a reader for the `.ets` tile files (`ets.py`);
 - a pipeline that registers every die of a wafer and compares it with the dies that passed wafer probing both
-  before and after UBM.
+  before and after UBM;
+- bump checks on the gel-pack images of diced chips (`gelpack.py`, see [Gel-pack images](#gel-pack-images-of-diced-chips)).
 
 They were written in September 2026 to look for a visible cause of the new post-UBM probe failures. They were run on
 N62H30_02C7, N62C72_24C5 and N62C72_22D7. At about 4.2 µm per pixel they found no visible defect (bumps, pads, probe
@@ -112,6 +113,61 @@ Rerun it only to change the templates. It needs that wafer's `out/N62H30_02C7_pe
 `sites_pix_die064.csv` of `python $M/sites.py N62H30_02C7 64 pix`, which is how the saved 02C7 pixel sites were made
 before the templates existed. Step 3 writes the same file, so run the `pix` mode right before `templates.py`.
 
+## Gel-pack images of diced chips
+
+The gel-pack scans show diced chips face up, pads at the bottom, 3 x 3 chips per pack (or a single chip).
+- The packs so far all hold chips of wafer N62C72 14A2: `Accepted_N62C72_14_775um` and `_Num2` to `_Num7`,
+  `BadChips_111_N62C72_14` and `Missimg_002_N62C72_14`. The numbers are inspection codes: 111 is a power short or
+  an I2C error, 002 is bad bumps.
+- The `.ets` is in `_<name>_/stack10000/` (`stack1/` for `Missimg_002`), about 13 GB for a pack.
+- Level 0 is about 1.25 µm per pixel. `gelpack.py` assumes that scale: the 1.3 mm bump pitch is 64.2 px at level 4
+  (`PITCH` and the chip size limits at the top of the script).
+
+```bash
+python $M/gelpack.py bumps <frame_t_0.ets>              # level 4, a few minutes per pack
+python $M/gelpack.py domes <frame_t_0.ets> [chip ...]   # level 1, needs bumps; 1-5 minutes per pack via the EOS mount
+```
+
+Outputs go to `./out/gelpack_<name>/`. Chips are numbered from 0 along the rows of the scan, top to bottom and left
+to right, as labelled in `bumps_L4.png`. Bump sites (j, i) count rows from the top and columns from the left, both
+from 0, as the chip lies in the scan, and row 16 is the bump row along the pad row.
+
+1. **`bumps`** finds the chips, fits each chip's 16 x 16 bump grid (with its small rotation) and the bump row along
+   the pad row, and scores every site against the pack's median bump. It writes `chips.csv`, `bumps.csv` and
+   `bumps_L4.png`, where empty sites are circled and chips without solder bumps are boxed in red.
+   - An empty site scores below 0.3. On the blurrier packs single bumps score as low as 0.31, so the cut has almost
+     no margin there: look at a flagged site before calling it empty.
+   - The score alone does not tell a bump from a bare pad. The `highlight` column does: the brightest pixel at the
+     site above the local mean, which only a solder dome gives. A chip whose median highlight is below 0.6 of the
+     pack median is flagged `unbumped`. With fewer than 3 chips in the scan the flag is left blank: compare the
+     highlight with a pack of bumped chips scanned the same way (84 to 96 on the 2026 scans).
+   - `x4, y4` in `bumps.csv` are level-4 pixels of the whole image: the fitted site for rows 0 to 15, the best match
+     for row 16. `bumps_L4.png` is cropped to the scanned area, so its pixels are offset from these.
+2. **`domes`** cuts a patch of every bump at level 1, re-centres it on the chip's median bump, and measures the
+   match (`ncc`) and the colour of the bump top (`b_minus_r`). A top that is redder than the chip median by more
+   than 4 robust sigma is flagged `discoloured`. A site with `ncc` below 0.3 has no bump to judge and is listed as
+   "no bump found" instead. `score4` repeats the `bumps` score; `dx, dy` are the level-1 pixels from the level-4
+   site to the dome, a few pixels on every site plus any real displacement. `sheet_chip<c>.png` shows every bump of
+   the chip in place, row 16 at the bottom: the quickest way to look at a chip. It does not mark the flagged ones.
+
+Results on 14A2 (October 2026):
+- Chip 6 of `BadChips_111` (bottom left in the scan) has no solder bumps: every site is a flat pad (median
+  highlight 45, against 87 to 95 on the other bad chips and 84 to 96 on all 63 accepted ones).
+- `Missimg_002` has 12 discoloured bump tops, in its lower left (rows 12 to 16, columns 0 to 8); on the sheet these
+  tops are brown or rainbow-coloured, some striated. None of the bad chips has a discoloured top, and of the
+  accepted chips checked at level 1 (`_Num7` chip 5) none either. The cut sits in a tail: a few more Missimg tops
+  look off by eye, and a top or two at the cut can come and go with small changes to the method.
+- Apart from chip 6, the bad chips look like the accepted ones at both levels.
+
+Traps:
+- **Stitching.** In `Missimg_002` a block of bumps sits about 175 µm off the grid along a field-of-view seam, so
+  `bumps` reports 11 empty sites there (rows 13 to 15, columns 7 to 11) that hold displaced bumps. `domes` finds
+  them, at the edge of its search window, and two of them, (15, 7) and (15, 8), are among the discoloured tops. Look
+  at the sheet or a crop before believing an empty site.
+- **Scan quality.** The older accepted packs (no suffix and `_Num2` to `_Num5`) are blurrier: bump scores around
+  0.65, against 0.83 for the packs scanned on 2026-09-28. Compare chips within one pack, or with packs scanned the
+  same day.
+
 ## Frames and coordinates
 
 - The image is the wafer seen from the front with the notch at the top. The chips appear rotated by 180 degrees (the
@@ -142,4 +198,7 @@ before the templates existed. Step 3 writes the same file, so run the `pix` mode
 cd WaferProbe/microscope && python -m unittest
 ```
 
-The tests write small synthetic `.ets` files and read them back. They need only numpy.
+- `test_ets.py` writes small synthetic `.ets` files and reads them back. It needs only numpy.
+- `test_gelpack.py` runs the analysis of both gel-pack steps on synthetic images (not the file reading and writing):
+  an empty site, a chip without solder bumps, a single chip, a chip cut by the edge of the scan, the chip order, a
+  discoloured bump top and a site with no bump. It needs numpy, scipy and Pillow, as the tools do.
