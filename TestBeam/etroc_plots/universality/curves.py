@@ -12,11 +12,10 @@ from matplotlib.patches import Patch
 from matplotlib.ticker import MaxNLocator
 
 from .. import style
-from .transfer import HIST_BIN_WIDTH_PS
 
 PS_PER_NS = 1000.0
 BAND_ALPHA = 0.6
-SOURCE_FILL = "#b8b8b4"            # the source run's TOT distribution
+SOURCE_FILL = "#b8b8b4"            # the source run's TOT distribution, unless a curve gives fill
 LEGEND_LOCS = ("upper right", "lower left", "upper left", "lower right")
 LW_SOURCE, LW_OTHER = 3.2, 2.2     # line widths at scale 0.7
 
@@ -104,10 +103,13 @@ def _draw_bottom(ax, panel, scale):
     for c in panel["curves"]:
         counts = np.asarray(c["counts"], dtype=float)
         frac = counts / counts.sum() if counts.sum() > 0 else counts
-        centers = (np.asarray(c["edges"][:-1]) + HIST_BIN_WIDTH_PS / 2.0) / PS_PER_NS
+        edges = np.asarray(c["edges"], dtype=float)
+        centers = 0.5 * (edges[:-1] + edges[1:]) / PS_PER_NS
         top = max(top, float(frac.max()) if len(frac) else 0.0)
         if c["is_source"]:
-            ax.fill_between(centers, 0, frac, step="mid", color=SOURCE_FILL, alpha=0.9,
+            fill = c.get("fill", SOURCE_FILL)
+            ax.fill_between(centers, 0, frac, step="mid", color=fill,
+                            alpha=0.9 if fill == SOURCE_FILL else 0.45,
                             edgecolor=style.INK_MUTED, linewidth=1.0, zorder=2)
         else:
             ax.step(centers, frac, where="mid", color=c["color"], ls=c.get("ls", "-"),
@@ -128,8 +130,9 @@ def twc_curves(panels, *, xlabel, ylabel_top, ylabel_bottom, band_label, line1, 
             caption      the panel's runs and conditions, lines joined by "\\n", written under
                          the column
             curves       [dict(label, color, ls, is_source, x, y, tot_min, tot_max, edges,
-                         counts), ...] (transfer.curve plus the words and the look), TOT in ps;
-                         the source is drawn thicker on top and filled grey below
+                         counts, fill=None), ...] (transfer.curve plus the words and the look),
+                         TOT in ps; a source is drawn thicker on top and filled below, in
+                         `fill` when given (a panel with two sources), else grey
             bands        [(lo, hi, colour[, alpha]), ...] TOT ranges in ps shaded on top (the
                          source's 5-95 % TOT range), labelled band_labels or `band_label`;
                          alpha BAND_ALPHA unless given
