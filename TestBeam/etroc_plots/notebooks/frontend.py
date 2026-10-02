@@ -157,7 +157,9 @@ TELS = list(campaign.TELESCOPE_CHIPS)
 RS = pd.read_csv(campaign.RUNS_SUMMARY_CSV)
 RUN_TIMES = timeline.read_run_times()
 SETTINGS = campaign.FRONTEND_JULY_SETTINGS     # RFSel 2, threshold offset 20
-# March runs record no RFSel; they ran at RFSel 2, so every figure here states RFSel 2.
+# March runs record no RFSel; they ran at the campaign's MARCH_RFSEL, the July setting, so every
+# figure here states one RFSel for both campaigns.
+assert campaign.MARCH_RFSEL == SETTINGS["rfsel"], "March and July ran at different RFSel"
 SETTINGS_TEXT = style.settings_text(rfsel=SETTINGS["rfsel"], offset=SETTINGS["offset"])
 
 
@@ -317,7 +319,7 @@ save(fig, "fe01_blnw_vs_fluence",
           times="run start (tables/run_times.csv) minus RAD_STOP_UTC of the step, hours",
           rfsel="July runs at RFSel %d by the display-run list (the extra run, H1 19, repeats run "
                 "18 at its settings); March runs record no RFSel and ran at RFSel %d"
-                % (SETTINGS["rfsel"], SETTINGS["rfsel"])),
+                % (SETTINGS["rfsel"], campaign.MARCH_RFSEL)),
      inputs=INPUTS_BLNW)
 
 # %% [markdown]
@@ -717,7 +719,7 @@ save(fig, "fe07_tot_median_vs_fluence",
           times="run start (tables/run_times.csv) minus RAD_STOP_UTC of the step, hours",
           rfsel="July runs at RFSel %d by the display-run list (the extra run, H1 19, repeats run "
                 "18 at its settings); March runs record no RFSel and ran at RFSel %d"
-                % (SETTINGS["rfsel"], SETTINGS["rfsel"])),
+                % (SETTINGS["rfsel"], campaign.MARCH_RFSEL)),
      inputs=INPUTS_TRACKS)
 
 # %% [markdown]

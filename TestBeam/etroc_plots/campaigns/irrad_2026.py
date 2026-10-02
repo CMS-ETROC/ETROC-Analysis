@@ -228,6 +228,9 @@ RUNS_AT_FLUENCE = {3e14: [10, 11], 9e14: [14, 15], 1.5e15: [17, 19]}
 # IV figures draw ran at Disc threshold = baseline + MARCH_OFFSET; the notebook checks it there.
 MARCH_YAML = os.path.join(REPO_TESTBEAM, "board_configs_yaml", "CERN_Irrad_2026Mar.yaml")
 MARCH_OFFSET = 20
+# The RFSel of every March run. The March board config has no RFSel key (runs_summary leaves the
+# March RFSel empty); the campaign ran at RFSel 2. Read by every figure that states a March RFSel.
+MARCH_RFSEL = 2
 
 # the week-1 spark test: one 4-channel HV-supply log (the HPK boards IH18/IH19/IH21/IH22 at
 # 3e15 p/cm2, before the setup swap), read in place like the other raw logs
@@ -691,6 +694,30 @@ DTOA_TRIPLES_CSV = os.path.join(INPUTS_FRONTEND, "dtoa_triples.csv")
 DTOA_POOLED_HIST_CSV = os.path.join(INPUTS_FRONTEND, "dtoa_pooled_hist.csv")
 PIXEL_HISTS_CSV = os.path.join(INPUTS_FRONTEND, "pixel_hists.csv")
 RFSEL_PAIR_HIST_CSV = os.path.join(INPUTS_FRONTEND, "rfsel_pair_hist.csv")
+
+# ================================================================ universality (TWC transfer)
+# campaigns.REQUIRED["universality"]: etroc_plots.universality and notebooks/universality.py read
+# these. The TWC-transfer study asked whether a time-walk correction fitted on one run, board or
+# pixel can be applied to another; its result tables, reduced by `python -m
+# etroc_plots.universality.reduce`, sit in the universality/ folder of INPUTS
+# (irrad_2026_inputs.md describes their columns). They cover the DESY 2026 runs too, whose facts
+# are in desy_2026.py.
+INPUTS_UNIVERSALITY = os.path.join(INPUTS, "universality")
+UNIV_CELLS_CSV = os.path.join(INPUTS_UNIVERSALITY, "univ_cells.csv")              # per cell
+UNIV_MASTER_CSV = os.path.join(INPUTS_UNIVERSALITY, "univ_master_cells.csv")      # per level cell
+UNIV_AXIS_R2_CSV = os.path.join(INPUTS_UNIVERSALITY, "univ_axis_r2.csv")          # axes A-E, I-K
+UNIV_AXIS_F_WIDE_CSV = os.path.join(INPUTS_UNIVERSALITY, "univ_axis_F_wide.csv")  # axis F
+UNIV_AXIS_F_LONG_CSV = os.path.join(INPUTS_UNIVERSALITY, "univ_axis_F_long.csv")
+TWC_BANK_BEST_CSV = os.path.join(INPUTS_UNIVERSALITY, "twc_bank_best.csv")        # per pixel fit
+# The study's own outputs, read only by the reduction, never by a notebook. Read-only.
+# TWC_TRANSFER_ROOT holds the coefficient bank (bank/coeffs_<campaign>_<run>.parquet) and the
+# round-1 table of the level cells (figs/transfer_2026-09-04/inputs/master_cells.csv).
+TWC_TRANSFER_ROOT = (os.environ.get("ETROC_TWC_TRANSFER_ROOT")
+                     or "/eos/user/m/musafdar/DESY_May2026/analysis/twc_transfer")
+# TWC_RESULTS_ROOT is the study's own folder: results_r2/ (the axis tables), results_r3/ (axis F
+# and its summary) and condor/ (the job lists that name every cell's runs). It has no default:
+# the reduction stops and asks for it (--results-root or ETROC_TWC_RESULTS_ROOT).
+TWC_RESULTS_ROOT = os.environ.get("ETROC_TWC_RESULTS_ROOT") or None
 
 # ============================================================== raw inputs, read in place
 # iv_data.check_inputs checks each one exists and is readable (the IV notebook reads them).
