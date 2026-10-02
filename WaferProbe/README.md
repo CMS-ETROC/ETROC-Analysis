@@ -1,0 +1,475 @@
+# WaferProbe plotting
+
+`plot_wafer.py` turns the run folders of one tested wafer into three tables
+and a set of figures. It only reads results and never talks to the station,
+the supplies or the chip, so it can run on a copy of the results folder on
+any computer, independent of the wafer-probe station.
+
+The wafer test itself runs from the station repo `ETROC-WaferProbe`, which
+writes the results and grades the dies. `station.py` carries a copy of its
+grading (`src/grading.py`) and of two small readers, so this folder runs on
+its own; when the station's grading changes, `station.py` follows it.
+
+## Getting the results
+
+The station laptop writes results under
+`<path>/BatchID_<id>_Name_<batch>/WaferID_<id>_Name_<wafer>/<stage>/`, with the batch
+and wafer IDs of the station's `configs/wafers.csv` (`X` for a wafer it does
+not list, such as a test wafer). The two folder names are the wafer's
+labels, which the station also stamps on the prober (Velox lot id and wafer
+id) and on its saved wafer map; the plots name the wafer by them too. The
+stage is where the wafer was in its processing when it was probed:
+`pre_ubm` for a bare wafer, `post_ubm` after under-bump metallisation and
+bumping. A wafer probed at both stages has both folders, and every run
+records its stage in `summary.json` (`wafer_stage`). Copy the wafer folder
+here, keeping both label levels, e.g. with `rsync`:
+
+```
+rsync -av <station host>:<path>/BatchID_0_Name_N62M23/WaferID_3_Name_08A5/ \
+    ./BatchID_0_Name_N62M23/WaferID_3_Name_08A5/
+```
+
+Results written before the station took these labels (ETROC-WaferProbe
+before commit 751ef37, 2026-09-23) sat in `<path>/<batch>/<wafer>/`. The
+station's two wafers of that time were renamed once, by hand
+(`FFF2p00/N60R91` to `BatchID_X_Name_FFF2p00/WaferID_X_Name_N60R91`,
+`N62M23/08A5` to `BatchID_0_Name_N62M23/WaferID_3_Name_08A5`); a copy
+taken before then needs the same rename, because `plot_wafer.py` finds a
+wafer folder by its labels only.
+
+Results written before the station recorded the stage (2026-09-25) sat
+directly in the wafer folder. The four N62M23 wafers of that time (08A5,
+07B2, 06B7, 05C4), all bare, were moved once into `pre_ubm/`, and the
+practice wafer FFF2p00 N60R91, probed after UBM and bumping, into
+`post_ubm/`. `"wafer_stage"` was added to their `summary.json` files
+together with `"wafer_stage_added"`, the date it was added, so a record that
+got its stage afterwards says so. A copy taken before then needs the same move.
+
+On 2026-09-29 two sets of runs filed under a wrong label were moved on the
+station, in `wafer_probe` and `wafer_probe_firstlife`. N62M23 06B7 is a bare
+wafer; its runs of 2026-09-28, filed under `post_ubm/`, are now in
+`pre_ubm/`. The practice wafer is N60R91 03G5: its runs under
+`BatchID_X_Name_FFF2p00/WaferID_X_Name_N60R91/` and
+`BatchID_X_Name_N60R91/WaferID_X_Name_01G5/` are now under
+`BatchID_X_Name_N60R91/WaferID_X_Name_03G5/`. Where two folders of a die were
+merged, its runs were renumbered in time order. Every `summary.json` and
+wafer record that changed carries `"relabeled"`: the date and the old values
+of the fields that changed. A copy taken before then is best copied again.
+
+## Environment
+
+Python >= 3.9 with `numpy`, `pandas`, `pyarrow` and `matplotlib`. On lxplus,
+`source TestBeam/condor_at_lxplus/envs/load_python39.sh` (from the
+`ETROC-Analysis` repo root) gives an environment with all four.
+
+## Running it
+
+```
+python plot_wafer.py --path <results dir> --waferStage pre_ubm --batchName N62M23 --waferName 08A5
+python plot_wafer.py --path <results dir> --waferStage pre_ubm --batchID 0 --waferID 3
+```
+
+It finds the wafer folder by the name, the ID or both of each level
+(`--batchName`, `--batchID`; `--waferName`, `--waferID`): given both, both
+must match, and an ID never finds a folder with `X`, so a wafer without IDs
+is found by its names. It refuses to guess when there is not exactly one
+match, and lists the folders that match (or, when none does, every wafer
+folder under `--path`). It reads the runs of the `--waferStage` folder
+only (`pre_ubm` or `post_ubm`, always given): it stops when the wafer has no
+such folder, naming the stages it does have, and when a run in the folder
+recorded another stage; it warns about runs that recorded no stage and
+about die folders lying directly in the wafer folder, which it does not
+read. It then prints the grade counts and writes into the stage folder's
+`plots/` (`--out` for another folder). A die is represented by its newest run folder
+that holds a `summary.json`, passing over runs aborted with Ctrl+C: the run
+whose grade the station map shows. Two exceptions: a run made by hand with
+`master_run_script.py` counts here but never reaches the map, and a pass
+stopped with Ctrl+C during a die's retry leaves the first attempt standing
+here but no grade on the map. That run stands for the die whatever it
+tested: a newest run without the full scan or charge injection leaves the
+die out of the full-scan maps and blank on the QInj maps, even when an
+older run has them. The station therefore keeps a wafer's full-protocol
+runs under one `--path` and lighter runs (a 9-pixel test, an eFuse verify,
+a data-phase scan) under another; give that other `--path` here to plot
+them apart.
+`--before "2026-09-22 15:30"` (DAQ computer clock) takes the newest run that
+started before that time instead, to see the wafer as it stood then. A die of
+the wafer map without a run grades `NOT_TESTED`; a die the station would not
+step to grades `CONTACT_FAILURE`, from a run folder that holds only the
+`summary.json` `wafer_run.py` wrote for it (no test ran), which stands for
+the die like any other run; neither counts among the dies tested. `--tables-only` skips the
+figures (and warns when `--out` already holds some, which it leaves as they
+are), `--no-qinj` skips reading the QInj data. `--waferMap` overrides the
+die-position map, otherwise the bundled `wafer_map.csv` is used.
+
+The bundled map is the station's `configs/wafer_map.csv` with one more
+column, `invalid`: 1 marks a die never to be used. Dies 57 and 58, the two
+dies of column 0, are such dies; the dicing and flip-chip companies know
+not to use them. The station tests them like any other die, and they keep
+their grade in `dies.csv`, but they are left out of the grade counts and
+the yield (`114 of 114 valid dies tested, PASSED 111 (97.4 %); invalid,
+not counted: 57, 58`), and every wafer map and full-scan gallery draws
+them grey with INVALID written across them.
+
+## What it writes
+
+The tables, as csv:
+
+- `dies.csv`, one row per die: grade and map text; for a die graded by a
+  finding before QInj (I2C_PIXELS, EFUSE_FAIL, BL_NW_ZERO) whose QInj stage
+  failed as well, the grade that failure alone gives (`qinj_also_failed`:
+  `NO_LINK_OR_DATA (no data)` when no complete event came,
+  `NO_LINK_OR_DATA (off pattern)` when the events came off the injected
+  pattern, or EFUSE_TRAILER_FAIL on the trailer chip ID alone; the station's
+  map and bin show only the first finding); whether the wafer map
+  marks it invalid (`invalid`), run folder, the wafer stage the run recorded
+  (`wafer_stage`), status and error, whether the run was imported from
+  earlier data by the station's `import_runs.py` (`imported`) and, for the
+  February 2026 import, whether its log shows the switch to high power
+  (`reached_high_power`); the median current and voltage of every
+  rail at power-on, at high power and during QInj (`<rail>_I_on`,
+  `<rail>_I_high`, `<rail>_I_qinj` and `_V_`; the first sweep of each phase is
+  dropped, it can still catch the rails switching: the power-on current at
+  high power, vref ramping at power-on; a run without a power log gets its
+  power-on rail-check reading as `_on`); the rail-check thresholds the run
+  used; the I2C verdicts and failure lists; baseline and noise-width mean and
+  std over the pixels that did not read zero, with the zero readings listed
+  apart; the QInj verdict of the station's check (`qinj_check_*`; over the
+  files after the first, or the last file alone in runs without
+  `qinj_seconds`), the events of all the files read (`qinj_events`; the files
+  are read as one stream, and the records before its first event header and
+  a last event the run's stop cut before its end are left out), the
+  trailers with a nonzero chip status (`qinj_flagged_trailers`), the
+  EA-flagged hit words and the lowest efficiency over the injected pixels; the
+  chuck position at contact minus the station's map position (`dx_um`,
+  `dy_um`); a note on a baseline or noise width that stands out (`bl_nw_note`,
+  see "Baseline and noise-width notes"); and a note on a PASSED die whose
+  analog or digital current, at power-on or at high power, is more than 1.5
+  times the median of the PASSED dies (`current_note`, checked when at least
+  20 dies PASSED; a mark, the grade stays: N62H30 02C7 die 73 passed at
+  571 mA analog at power-on and 687 mA at high power). Power-on logs only two sweeps, so
+  `vref_V_on` is a single reading and can still be settling (1.01-1.11 V on 25
+  dies of N60R91, against 1.00 V at high power).
+- `pixels.csv`, one row per calibrated pixel: baseline and noise width.
+- `qinj.csv`, one row per pixel with hits in the QInj data (the files of
+  `qinj/` after the first, which can hold malformed events from the start of
+  the run; for older runs with a flush run `qinj_run1/`, all of the data run
+  `qinj_run2/`; a `qinj/` run that wrote a single file, as a broken readout
+  can, leaves nothing, and its QInj columns in `dies.csv` stay empty): hits,
+  efficiency (hits per event, over the same events as `qinj_events`), the
+  most common CAL code, and the mean and
+  sample std of CAL, TOA and TOT over the hits with |CAL - that code| < 3.
+  Hits whose EA field is not 0 (the chip's own flag) are left out. The
+  injected pixels are the list the run recorded (`qinj_pixels` in
+  `summary.json`); for runs from before that record, the pixels hit in at
+  least half of the events of at least half of the QInj dies, used only when
+  the run's check expected that many hits per event. A die whose readout
+  broke can add rows for pixels it was never injected at (junk words at
+  (0,0) with EA 0: 6 hits, CAL 0, on die 16 of N60R91); the figures show the
+  injected pixels only.
+
+The figures, as png. A figure whose data the runs did not take (no full scan,
+no QInj) is left out, and an older copy of it is deleted, so the folder never
+mixes two plots:
+
+| figure | shows |
+|--------|-------|
+| `grades` | grade per die, the counts and the yield over the valid dies; `*` = graded on the retry; `+` = its QInj failed too (`qinj_also_failed`, the dies listed in the legend by that grade); ↑ = a current note (`current_note`, the dies listed in the legend); a superscript letter = a baseline or noise-width note, listed under the map |
+| `currents` | analog and digital current per die at power-on and at high power, and the difference; ↑ = a current note, on the maps of the rail and phase it names |
+| `currents_small_rails` | the other rails at high power |
+| `current_hists` | the analog and digital currents as histograms, with the check thresholds the runs used |
+| `baseline_maps` | baseline and noise-width mean and std per die; red frame = some pixels read zero; letters and notes as in `grades` |
+| `baseline_hists` | baseline and noise width of all calibrated pixels, quick-test and full-scan dies apart |
+| `alignment` | chuck position at contact minus the station's map position, per die, with a plane fitted over the wafer |
+| `fullscan_baseline`, `fullscan_noise_width` | the 16 x 16 map of every full-scan die at its place on the wafer |
+| `pixel_issues` | per pixel: dies failing the pixel-ID check, dies reading zero, baseline mean and std over the full-scan dies |
+| `qinj_overview` | per QInj die: events, lowest pixel efficiency, trailers with a nonzero chip status, EA-flagged hits |
+| `qinj_cal`, `qinj_toa`, `qinj_tot` | mean code per die, one wafer map per injected pixel |
+| `qinj_pixels` | CAL, TOA and TOT mean and std per injected pixel, one dot per die |
+
+Wafer maps draw each die at its `wafer_map.csv` place, row 0 at the top as on
+the station display, and print the value in the cell; a die without a value is
+hatched, an invalid die grey with INVALID across it. Colour ranges span the
+2nd to 98th percentile of the PASSED dies (of all dies in the alignment maps
+and the full-scan galleries; fixed for efficiencies and counts), so one broken
+die does not flatten the rest. Every figure title starts with the wafer's
+labels and stage (`BatchID_0_Name_N62M23 / WaferID_3_Name_08A5 / pre_ubm`), on
+a line of their own when the figure is too narrow for the whole first line
+(`pixel_issues` without full-scan dies, say). Under every figure a note names
+the wafer by its labels, which run of each die was used (the newest, or the
+newest before `--before`) and when it was plotted.
+
+The pixel maps (`fullscan_*`, `pixel_issues`) show each die as the wafer maps
+do, seen with the notch up. The chip sits upside down in that view, so pixel
+(0, 0) is at the top left and (15, 15) at the bottom right. In the chip's own frame, as in
+the test-beam plots, (0, 0) is at the bottom right.
+
+### Baseline and noise-width notes
+
+A die can pass every check of the station and still have a baseline or
+noise width unlike the rest: a pixel whose baseline sits hundreds of codes
+from its neighbours, or a whole die noisier than the wafer. The station
+fails a pixel only when it reads exactly zero, so such a die keeps its
+grade; the plots mark it instead. A die, whatever its grade, gets a note
+(`bl_nw_note` in `dies.csv`) when
+
+- a pixel's baseline is more than 100 DAC codes from the median of its
+  die, or its noise width more than 8; the note names the three furthest
+  such pixels and counts the rest;
+- the die's baseline or noise-width mean is more than 5 robust sigma
+  (1.4826 x the median absolute deviation) from the median of the wafer's
+  PASSED dies calibrated over as many pixels (a mean over the 9 pixels of
+  a quick test scatters more than one over the 256 of a full scan, so each
+  kind is compared with its own). This needs at least 20 such PASSED dies
+  whose means spread; a line under the maps names the kind of die it could
+  not check, notes or not.
+
+Zero readings stay out, since the grade already takes them. `grades` and
+`baseline_maps` put a superscript letter (a, b, ..., in die order) on each
+such die and print the notes under the map, the first 8 of them;
+`dies.csv` has them all. A note never changes a grade, a bin or the
+station's map. The limits (`NOTE_*` in `wafer_tables.py`) were set on the
+calibrated dies of the two N62M23 wafers of September 2026 (114 of 08A5,
+115 of 07B2, all full scans): the only die they flag is 07B2 die 15, by
+both checks (pixel (8,8) at baseline 257 against the die's 554; noise-width
+mean 9.36, +7.7 sigma from the wafer's 7.18). On every other die no pixel
+is more than 80 codes from its die's median baseline, or more than 7 from
+its median noise width.
+
+## Comparing the two stages
+
+When the wafer folder holds both stage folders, `plot_wafer.py` also reads
+the other stage (the newest run of each die, whatever `--before` says) and
+writes what changed into the wafer folder's `pre_vs_post/` (`<out>/pre_vs_post`
+with `--out`); `--no-compare` skips it. It prints the dies whose grade
+changed, grouped by before -> after. Only what both stages measured is
+compared:
+
+| file | what |
+|---|---|
+| `changes.csv` | one row per die of the wafer map: its grade in each stage and whether it has an I2C record there, the rail currents in each and their change, and per die the mean baseline and noise-width change, the same-chip r, the median TOA, TOT and CAL change and the lowest pixel efficiency in each stage |
+| `grade_changes` | the grade after UBM per die; a die whose grade changed is framed, with before -> after in the one-letter codes of the legend |
+| `current_changes` | power-on and high-power current change per rail for the dies PASSED in both stages, and after against before; the title gives each stage's median power-on voltage, since the setpoints can differ (digital 1.255 V before, 1.298 V after on the N62M23 wafers) |
+| `baseline_changes` | mean baseline and noise-width change per die over the pixels calibrated in both stages, and the per-pixel changes; a red frame marks a die whose within-die baseline pattern does not match its own before (r < 0.7: another chip?) |
+| `qinj_changes` | median TOA, TOT and CAL change per die over the pixels injected and hit in both stages, and the per-pixel changes; the dies whose lowest efficiency (`qinj_min_eff` of each stage, a pixel without a hit counting 0) fell by more than 1 % are named |
+
+A figure whose data one stage lacks is left out. A quick test (9 pixels)
+against a full scan (256) compares at the 9 common pixels; a stage without
+QInj gives no `qinj_changes`. The same-chip r correlates each pixel's
+baseline minus its die's mean, before against after, over at least 6
+common pixels. The 0.7 threshold comes from the February 8-pixel
+baselines of N62H30 01D4 and 02C7, read by hand from the imported runs'
+`BaselineHistory.sqlite` (the import does not put them in `pixels.csv`, so
+these wafers get no same-chip r today): their dies matched their own
+before-UBM baselines at median r 0.98 and 0.97 and the other wafer's at 0.45.
+
+Currents compare only where both stages have the power phases. The
+station logs them; the February 2026 before_bump import takes them from
+its power log (the station's `import_runs.py` from 38aa9c0 on): power-on
+before the analog current steps up to high power, high power after. A
+February die without that step (a short at a supply's limit) has one
+reading per rail and no current change; the April 2026 N62M23 runs
+imported into `pre_ubm` logged the phases like any station run. The
+supply setpoints differ between the campaigns (February: analog 1.359 V,
+digital 1.254 V; September: 1.363-1.364 V and 1.298 V), which the figure's title
+gives. A die of the February import passed on nothing but its power
+readings and, where taken, 8-pixel baselines (the report's I2C findings
+are the only I2C record the import has), and the grade figure counts the
+dies that PASSED so, with how many of them reached high power: the test
+switched to it after its I2C writes, so those went through, but a die
+graded I2C_PIXELS after UBM may have been one before.
+
+## Comparing the lots
+
+```
+python plot_lots.py --path <path> --lot N62C72 --lot N62H30 --lot N62M23
+python plot_lots.py --path <path> --lot "N62C72 earlier UBM=N62C72:02G4,03F5"
+```
+
+puts together the wafers of each lot that have both stage folders, reading
+them as `plot_wafer.py` does (the newest run of each die). A lot is a set of
+wafers that went through UBM and bumping together: `--lot BATCH` takes every
+wafer of the batch, `--lot LABEL=BATCH:WAFER,WAFER` the ones listed, under
+that label. Wafers of one batch sent for UBM at different times are separate
+lots, each with its own `--lot` and label. Wafers with one stage only are
+named and left out. The label names the files; the figures name each lot
+by its batch and the months its stages were tested ("N62C72, pre-UBM test
+09/2025-10/2025, post-UBM test 02/2026"), and `lots.png` puts the lots in
+the order they were tested (after UBM, then before).
+
+Each die tested in both stages is graded in both with the test both of its
+runs made (`lot_compare.like_with_like`). The quick test calibrates 9 pixels
+(`station.QUICK_PIXELS`; their first 8 before 2026-09-22 and in the February
+2026 import, which has no baselines at all on some wafers), the full scan
+all 256, and either may run QInj and burn or verify the eFuse. A run loses
+its zero pixels outside the pixels the other run calibrated (or carried
+over from another test: the February import's `bl_nw_zero` findings), its QInj stage
+where the other had none (a run that failed or got stuck there counts as
+completed), and its eFuse record where the other neither burned nor
+verified. The high-power short check came in on 2026-09-26: a run without
+it, where the other made it, is checked on its own high-power currents
+against the other run's limits. So a full scan after UBM against a quick
+test before is graded as a quick test. I2C findings compare as recorded,
+and the February import's I2C record is its campaign report's findings
+(see above): a die graded I2C_PIXELS after UBM may have been one before.
+The script prints every die so regraded, the figures name them, and
+`lot_dies.csv` keeps the measured grade (`measured_pre`, `measured_post`).
+What happened to each die is one of: passed both, recovered, new analog
+short (the short names the analog rail), new digital short, new short on
+another or an unknown rail, new I2C NACK, new I2C pixel or register failure
+(I2C_PIXELS), new BL/NW = 0 (on the pixels both runs read), new other
+failure (the legends name its grades), failed both, untested in a stage;
+the legends show the classes some die fell into. The dies at risk are the valid dies PASSED
+before UBM and tested after it; fractions of them carry 68 % Wilson
+intervals.
+
+It writes into `--out` (default `<path>/lot_summary/`):
+
+| file | what |
+|---|---|
+| `lot_dies.csv` | one row per die of every wafer of the lots given: the `changes.csv` columns, the lot, the grade detail, run, scan type and rail voltages of each stage, the measured grade of a regraded die, what happened to it, and whether it sits on the wafer map's edge ring |
+| `<label>_yield` | per wafer, the dies that did not pass both stages, stacked by what happened to them, with PASSED before -> after |
+| `<label>_transitions` | one wafer map per wafer, each die coloured by what happened to it |
+| `<label>_edges` | per die position, on how many wafers it became a new analog short, or failed newly in any way; the new-failure fraction per map row and per map column; the title compares the edge ring with the interior |
+| `<label>_currents` | the current changes of the dies PASSED in both stages per wafer; the analog change minus its wafer's median per die position and per map row; each wafer's rail voltages before and after |
+| `<label>_shorts` | every die graded POWER_SHORT after UBM: voltage and current of each main rail at the check that stopped it, new shorts filled, edge-ring dies square |
+| `lots.png` | with two lots or more: the new failures of each lot by kind, and its new analog shorts per map row and column; the title says how each lot's stages were tested |
+
+## Comparing the places on the wafer
+
+```
+python plot_positions.py --path <path> --stage pre_ubm --lot N62M23
+python plot_positions.py --path <path> --stage pre_ubm --no-qinj --lot "N62C72=N62C72:02G4,03F7,04F2"
+```
+
+asks whether the dies at one place on the wafer behave alike on every wafer
+of a lot, in one stage (`--lot` as for `plot_lots.py`). It reads the stage
+folder of each wafer as `plot_wafer.py` does and keeps the wafers with full
+scans or QInj data there; a lot needs two. Per die it takes the mean
+baseline and noise width of the full scan (pixels reading 0 left out) and
+the mean CAL, TOA and TOT of the pixels every wafer of the lot injected
+(each with at least 10 hits); it names the pixels a wafer injected beyond
+those, and says so when no pixel is common to all. Wafers tested at different times or on
+different setups go in one lot: every measure takes each wafer's own offset
+out (`position_compare.py` explains each):
+
+- the pairwise r of two wafers, the correlation of a die-level value over
+  the places both measured, against the same with each wafer's values
+  moved at random among the places it measured;
+- the map r of two dies' pixel maps, after each die's mean and the pattern
+  every chip shares are taken out, for the same place on two wafers against
+  different places, with the same die measured in the other stage as what
+  one chip measured twice gives;
+- the tilt across each die, the plane fitted to its pixel map, at each
+  place, and the same-place map r with it taken out.
+
+Every wafer is tested in die-number order, row by row from the top of the
+wafer map, so a drift during a pass would repeat by place on every wafer as
+a top-to-bottom trend; `position_pairs` shows each wafer's values in that
+order. When every wafer is loaded the same way round, a place on the wafer
+is also a place on the prober's chuck, and these figures cannot tell the
+two apart.
+
+It writes into `--out` (default `<path>/position_summary/`), per lot:
+
+| file | what |
+|---|---|
+| `<label>_<stage>_positions.csv` | one row per die: its values and each minus its wafer's median |
+| `<label>_<stage>_position_maps` | per quantity, the median over the wafers of each die's value minus its wafer's median, at its place, with the pairwise r |
+| `<label>_<stage>_position_pairs` | per quantity, the pairwise r of every two wafers, and each wafer's values in test order |
+| `<label>_<stage>_pixel_patterns` | per pixel quantity, the pattern every chip shares, the map r histograms, the median same-place map r at each place, and the tilt across the die at each place |
+
+## Power per chip
+
+```
+python plot_power.py --path <path> --lot "N62M23 bare=N62M23:08A5,07B2,06B7,05C4" --lot N62H30
+```
+
+shows the power each chip draws from the supplies on every wafer of the
+lots given (`--lot` as for `plot_lots.py`), in each stage the wafer has.
+It reads the `dies.csv` that `plot_wafer.py` wrote into each stage
+folder's `plots/`, so run `plot_wafer.py` on every wafer and stage first;
+a stage without that table is named and left out. A die's power in a run
+phase, at power-on and at high power, is 1.2 V, the supply voltage the
+chip is designed for, times the sum of the phase-median currents of the
+rails `analog`, `digital`, `ws_analog`, `ws_digital` and `vref`, as
+`dies.csv` has them. The same 1.2 V goes for every rail and every test,
+whatever the supplies were set to (analog 1.35-1.36 V, digital 1.25 or
+1.30 V on the runs so far) and whatever the cables and the probe card
+drop. A die whose run did not log every one of these rails in a phase
+has no power in that phase. The eFuse rail is left out: not every
+run logs it, and where one does it reads at most 10 mA on a PASSED die at
+power-on and under 1 mA at high power (all lots, as of October 2026).
+Power-on runs the preamplifiers at their lower power setting, high
+power at their high one (IBSel). Both figures draw what the ETROC2
+Reference Manual (rev 0.6, Table 21) expects for the two, 0.77 W and
+0.97 W per chip within ±20 %, an estimate from simulation and the
+earlier ETROC0 and ETROC1 chips. When no PASSED valid die of the lots has a power,
+it writes the table and stops with exit code 2.
+
+It writes into `--out` (default `<path>/power_summary/`):
+
+| file | what |
+|---|---|
+| `power_dies.csv` | one row per die of every wafer and stage read: lot, wafer, stage, grade, the analog and digital supply voltage at high power, each rail's power at 1.2 V in W (`<rail>_P_on`, `<rail>_P_high`) and their sums (`power_on_W`, `power_high_W`) |
+| `power` | per wafer, boxes of the power of its PASSED valid dies at power-on and at high power, one panel per stage with every wafer at the same place in both; each lot headed by the months its stage was tested and its median analog and digital supply voltage |
+| `power_rails` | per lot and stage, the mean power of each rail at power-on and at high power over its PASSED valid dies, as stacked horizontal bars with the sum at the end |
+
+## Charge injection in time
+
+```
+python plot_qinj.py --path <path> --lot "N62M23 bare=N62M23:08A5,07B2,06B7,05C4" --lot N62H30
+```
+
+shows the TDC of the injected pixels in time units on every wafer of the
+lots given (`--path` and `--lot` as for `plot_power.py`). It reads the
+`qinj.csv` and `dies.csv` that `plot_wafer.py` wrote into each stage
+folder's `plots/` and keeps the injected pixels of the PASSED valid dies,
+the injected pixels being those hit in at least half of the events on at
+least half of the stage's dies. A stage without the tables, without
+charge injection, without a PASSED valid die or without pixel (2, 2)
+among its injected pixels is named and left out. Each die's mean codes of
+a pixel convert with that pixel's bin, 3.125 ns / CAL, as the test-beam
+pipeline converts each hit (`TestBeam/condor_at_lxplus/core/apply_tdc_cuts.py`):
+TOA = 12.5 ns - code x bin, TOT = (2 code - floor(code / 32)) x bin. TOA
+is linear in the code, so converting the mean is exact; for TOT the floor
+of the mean code can differ from the mean over the hits by less than one
+bin, where a pixel's hits straddle a multiple of 32.
+
+The TDCs of pixel columns 0-7 run on the digital supply and those of
+columns 8-15 on the discriminator supply of the analog group (ETROC2
+Reference Manual rev 0.6, Table 20; column 0 is the rightmost in the
+chip's own frame), so the two halves count at different speeds and their
+CAL differs. The TOA code counts from the hit to the next rising edge of
+the TDC reference strobe, which reaches each pixel through an H-tree, so
+a pixel the strobe reaches later reads an earlier TOA in ns, and one the
+charge-injection pulse reaches later a later TOA. The manual's Fig. 28
+gives both delays for every pixel, and the function
+`plot_qinj.htree_toa_ns()` what they add to a pixel's TOA. `dtoa_ns` is a
+pixel's TOA minus that of the reference pixel (2, 2) on the same die, so
+whatever the die shares cancels, and `htree_dtoa_ns` the H-tree
+prediction for it. The prediction covers the H-trees only; whatever else
+differs between pixels, such as the supply their TDC runs on, stays in
+`dtoa_ns`.
+
+It writes into `--out` (default `<path>/qinj_summary/`):
+
+| file | what |
+|---|---|
+| `qinj_pixels_ns.csv` | one row per die and injected pixel of every wafer and stage read: the mean codes, `bin_ps`, `toa_ns`, `tot_ns`, `dtoa_ns`, `htree_dtoa_ns` |
+| `<label>_<stage>_qinj` | per lot and stage, per injected pixel, boxes of CAL, TOT, TOA and `dtoa_ns` over the dies, the H-tree prediction beside `dtoa_ns` |
+
+## Tests
+
+```
+python -m unittest discover -s tests
+```
+
+run from this folder (`WaferProbe/`). `tests/test_wafer_tables.py` needs
+`numpy`, `pandas` and `pyarrow`; `tests/test_plot_wafer.py`,
+`tests/test_stage_compare.py`, `tests/test_plot_lots.py` and
+`tests/test_positions.py` need `matplotlib` as well; `tests/test_plot_power.py`
+and `tests/test_plot_qinj.py` need `numpy`, `pandas` and `matplotlib`. Tests
+whose packages are missing are skipped. The test
+files build synthetic run folders (`tests/wafer_results.py`) laid out as the
+station writes them and do not need real wafer data.
