@@ -707,6 +707,20 @@ DTOA_POOLED_HIST_CSV = os.path.join(INPUTS_FRONTEND, "dtoa_pooled_hist.csv")
 PIXEL_HISTS_CSV = os.path.join(INPUTS_FRONTEND, "pixel_hists.csv")
 RFSEL_PAIR_HIST_CSV = os.path.join(INPUTS_FRONTEND, "rfsel_pair_hist.csv")
 
+# ================================================================================ settings
+# campaigns.REQUIRED["settings"]: etroc_plots.resolution.settings and notebooks/settings.py read
+# these. At 3.5e15 the July runs stepped the preamp feedback setting RFSel and the discriminator
+# threshold offset. The settings classes (RFSel, offset) and their runs come from the display-run
+# list (resolution.tables.classes_at_step), not from here; a class whose boards sit at different
+# offsets is spelled "8/10" there.
+SETTINGS_STEP = 3.5e15                    # the fluence step of the settings figures
+SETTINGS_OFFSETS = (6, 8, 10, 15, 20)     # the threshold offsets, in axis order
+# The RFSel step at (nearly) one offset, per telescope: (RFSel, offset text) of the two classes
+# compared. H1: run 56 (RFSel 2, boards at 8/8/10/10) against runs 64 and 67 (RFSel 3, boards at
+# 8/6/8/8), so only IH7 keeps its offset; F1: offset 10 on every board in both classes.
+RFSEL_STEP_CLASSES = {"h1": ((2, "8/10"), (3, "6/8")), "f1": ((2, "10"), (3, "10"))}
+RFSEL_ORDER = (1, 2, 3)                   # RFSel categories, in axis and legend order
+
 # ================================================================ universality (TWC transfer)
 # campaigns.REQUIRED["universality"]: etroc_plots.universality and notebooks/universality.py read
 # these. The TWC-transfer study asked whether a time-walk correction fitted on one run, board or

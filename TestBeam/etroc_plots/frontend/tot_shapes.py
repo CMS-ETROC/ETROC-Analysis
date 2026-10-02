@@ -55,7 +55,7 @@ from matplotlib.ticker import MaxNLocator
 
 from ..campaigns import active as campaign
 from .. import style
-from ..etroc_style import BOARD_COLOR
+from ..etroc_style import BOARD_COLOR, RFSEL_COLOR
 from ..resolution import tables
 from . import blnw
 
@@ -79,8 +79,7 @@ TOA_CODE_PS = 3125.0              # one TOA code = 3.125 ns / CAL
 TOT_CODES = np.arange(512)
 TOT_LADDER = 2 * TOT_CODES - np.floor(TOT_CODES / 32)
 # colour = RFSel on the RFSel comparison (one fluence step, so the ladder colour carries nothing
-# there); Okabe-Ito hues, no orange (the 3.5e15 colour of the ladder)
-RFSEL_COLOR = {1: "#0072B2", 2: "#009E73", 3: "#CC79A7"}
+# there): etroc_style.RFSEL_COLOR, Okabe-Ito hues, no orange (the 3.5e15 colour of the ladder)
 ROLE_INITIAL = {"d": "dut", "r": "ref", "e": "extra", "t": "trig"}
 
 _PIX = ["%s_%d" % (k, b) for b in range(NBOARDS) for k in ("chip", "row", "col")]

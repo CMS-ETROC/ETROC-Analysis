@@ -33,6 +33,7 @@ p84_cost_px_ps (the cost per pixel over the pixels common to the merge and its r
 board_cost_official_ps (the same difference on the board values) and n_pixels_common.
 """
 import re
+from collections import namedtuple
 
 import pandas as pd
 from matplotlib.patches import Rectangle
@@ -136,6 +137,44 @@ def display_runs(path, rfsel, offset):
     return out
 
 
+SettingsClass = namedtuple("SettingsClass", "rfsel os runs preferred")
+SettingsClass.__doc__ = """One settings class of a display-run list at one fluence step: RFSel
+(int), the threshold offset as the list spells it (text: "10", or "8/10" when the boards of a run
+sit at different offsets), the runs {telescope: [run, ...]} and the preferred run
+{telescope: run or None}."""
+
+
+def os_offsets(os_text):
+    """The offsets of a display list's `os` text, sorted: "8/10" -> (8, 10), "20" -> (20,)."""
+    return tuple(sorted(int(v) for v in str(os_text).split("/")))
+
+
+def classes_at_step(path, fluence):
+    """The settings classes of a display-run list (as preferred_runs) at one fluence step, every
+    telescope: [SettingsClass(rfsel, os, runs, preferred), ...]. The `os` column is kept as text,
+    so a class whose boards sit at different offsets ("8/10", "6/8") stays one class, where
+    display_runs and preferred_runs, which read it as a number, leave it out. Ordered by the
+    offsets (os_offsets), then RFSel. Two preferred runs in one class raise ValueError."""
+    df = pd.read_csv(path, usecols=["telescope", "fluence", "rfsel", "os", "run", "preferred"],
+                     dtype={"os": str})
+    df = df[(df["fluence"].astype(float) - fluence).abs() <= 1e-6 * abs(fluence)]
+    df = df.assign(tel=df["telescope"].str.strip().str.lower(), os=df["os"].str.strip(),
+                   rfsel=df["rfsel"].astype(int), run=df["run"].astype(int))
+    out = []
+    for (rfsel, os_text), g in df.groupby(["rfsel", "os"]):
+        runs, preferred = {}, {}
+        for tel, h in g.groupby("tel"):
+            runs[tel] = sorted(int(r) for r in h["run"])
+            pref = sorted(int(r) for r in h.loc[pd.to_numeric(h["preferred"],
+                                                               errors="coerce") == 1, "run"])
+            if len(pref) > 1:
+                raise ValueError("%s RFSel %d offset %s: more than one preferred run %s"
+                                 % (tel, rfsel, os_text, pref))
+            preferred[tel] = pref[0] if pref else None
+        out.append(SettingsClass(int(rfsel), os_text, runs, preferred))
+    return sorted(out, key=lambda c: (os_offsets(c.os), c.rfsel))
+
+
 # ---------------------------------------------------------------------------- selections
 def board_rows(bt, telescope, run, variant, floor, campaign=None, board_idx=None, reference=True):
     """The board-table rows of one run (a run number or a merge name), sorted by board; reference
@@ -171,17 +210,19 @@ def band(bt, telescope, run, board_idx, variant, floor, campaign=None):
 
 
 def draw_band(ax, x, band, color, half_width=0.032, capsize=3.0, zorder=1, alpha=0.22,
-              marker="_", markersize=10.0):
+              marker="_", markersize=10.0, markerfacecolor=None):
     """One band at x: a filled rectangle (low alpha) from band_lo_ps to band_hi_ps, behind a thin
     ink pixel-spread bar on the band centre. `marker` marks the centre: a dash, or the chip's
-    marker where several chips' bands stand side by side."""
+    marker where several chips' bands stand side by side; `markerfacecolor` fills it (the edge
+    stays ink), where the band's colour has to read on the marker too."""
     rect = Rectangle((x - half_width, band["band_lo_ps"]), 2.0 * half_width,
                      band["band_hi_ps"] - band["band_lo_ps"], facecolor=color, edgecolor="none",
                      alpha=alpha, zorder=zorder)
     ax.add_patch(rect)
+    face = {} if markerfacecolor is None else dict(markerfacecolor=markerfacecolor)
     ax.errorbar([x], [band["marker_ps"]], yerr=[band["bar_spread_ps"]], color=style.INK,
                 ecolor=style.INK, marker=marker, markersize=markersize, markeredgewidth=1.6,
-                linestyle="none", elinewidth=1.4, capsize=capsize, zorder=zorder + 2)
+                linestyle="none", elinewidth=1.4, capsize=capsize, zorder=zorder + 2, **face)
     return rect
 
 

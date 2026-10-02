@@ -398,8 +398,9 @@ def track_selection(name, tag, line1, line2, footer_text, panels=False):
 
 
 # ======================================================================== RFSel explainer
-# A grey ramp, dark to light as R_f falls: the colours of the fluence ladder stay with fluence.
-RFSEL_COLOR = {0: "#252525", 1: "#525252", 2: "#7f7f7f", 3: "#b0b0b0"}
+# A grey ramp, dark to light as R_f falls, for the schematic pulses only: the colours of the
+# fluence ladder stay with fluence, and measured RFSel series use etroc_style.RFSEL_COLOR.
+RF_GREY = {0: "#252525", 1: "#525252", 2: "#7f7f7f", 3: "#b0b0b0"}
 # Schematic pulses: peak amplitude and decay time per RFSel (arbitrary units). They are not
 # measured and not taken from any source: they only draw the trend, a larger R_f giving more
 # preamp gain and a slower trailing edge, with the same leading edge (it is set by the preamp bias
@@ -492,7 +493,7 @@ def _rf_pulses(ax, standard):
     t = np.linspace(0, 10, 600)
     for r in sorted(rf):
         std = r == standard
-        ax.plot(t, pulse(t, r), color=RFSEL_COLOR[r], linewidth=3.2 if std else 2.0,
+        ax.plot(t, pulse(t, r), color=RF_GREY[r], linewidth=3.2 if std else 2.0,
                 zorder=5 if std else 3,
                 label="RFSel %d (%g k$\\Omega$)%s" % (r, rf[r], ", standard" if std else ""))
     ax.axhline(PULSE_THRESHOLD, color=INK_MUTED, linestyle="--", linewidth=1.4, zorder=1)
