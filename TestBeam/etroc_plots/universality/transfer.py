@@ -28,8 +28,6 @@ HIST_BIN_WIDTH_PS = 25.0       # the bank's TOT histograms: 25 ps bins from hist
 # the order of the level cells: (a) floor, (b) angle, (b') angle on the offset holder, (c) pixel
 # to board, (d) board to board, (e) pooled source, (g) fluence, (h) March to July
 LEVORDER = {"a": 0, "b": 1, "bp": 2, "c": 3, "d": 4, "e": 5, "g": 6, "h": 7}
-# the study's role order; in the DESY May runs a role's place is its board number (1-4)
-ROLE_POSITION = {"extra": 1, "ref": 2, "trig": 3, "dut": 4}
 
 
 # ------------------------------------------------------------------------------------ readers
@@ -40,24 +38,32 @@ def read_cells():
 
 
 def natkey(cell):
-    """'a1', 'a2', ..., 'g11': letters, then the number as a number."""
-    m = re.match(r"([a-z]+)(\d+)", cell)
+    """'a1', 'a2', ..., 'g11', 'E13_...': letters, then the number as a number."""
+    m = re.match(r"([A-Za-z]+)(\d+)", cell)
     return (m.group(1), int(m.group(2))) if m else (cell, 0)
+
+
+def override_verdicts(df):
+    """The study's verdict override on master-cell rows (columns guard_verdict, final,
+    all_verdict, verdict_pair_interp), as a new frame: a cell whose leave-pair-out guard was
+    absent or uninformative and whose final verdict is not a FAIL reads NA-UNGUARDED in
+    all_verdict (a guarded FAIL outranks "unguarded"); the pair-interp verdict FAIL+UNGUARDED
+    (a guarded FAIL beside an unguarded row) reads FAIL."""
+    out = df.copy()
+    unguarded = (out.guard_verdict.astype(str).str.contains("absent|uninformative")
+                 & ~out["final"].astype(str).str.startswith("FAIL"))
+    out["all_verdict"] = np.where(unguarded, "NA-UNGUARDED", out.all_verdict)
+    out["verdict_pair_interp"] = out.verdict_pair_interp.replace({"FAIL+UNGUARDED": "FAIL"})
+    return out
 
 
 def read_master():
     """univ_master_cells.csv, in level order (LEVORDER, then natkey), with the study's verdict
-    override: a cell whose guard was absent or uninformative and whose final verdict is not a
-    FAIL reads NA-UNGUARDED in all_verdict (a guarded FAIL outranks "unguarded"); the pair-interp
-    verdict FAIL+UNGUARDED reads FAIL. interp_pct = 100 n_interp / (n_interp + n_extrap)."""
+    override (override_verdicts). interp_pct = 100 n_interp / (n_interp + n_extrap)."""
     df = pd.read_csv(campaign.UNIV_MASTER_CSV)
     df["_lev"] = df.level.map(LEVORDER)
     df["_nat"] = df.cell.map(natkey)
-    df = df.sort_values(["_lev", "_nat"]).reset_index(drop=True)
-    unguarded = (df.guard_verdict.astype(str).str.contains("absent|uninformative")
-                 & ~df["final"].astype(str).str.startswith("FAIL"))
-    df["all_verdict"] = np.where(unguarded, "NA-UNGUARDED", df.all_verdict)
-    df["verdict_pair_interp"] = df.verdict_pair_interp.replace({"FAIL+UNGUARDED": "FAIL"})
+    df = override_verdicts(df.sort_values(["_lev", "_nat"]).reset_index(drop=True))
     df["interp_pct"] = 100.0 * df.n_interp / (df.n_interp + df.n_extrap).replace(0, np.nan)
     return df.drop(columns=["_lev", "_nat"])
 
@@ -198,26 +204,82 @@ def hist_edges_counts(row):
     return edges, counts
 
 
-def curve(row, src_lo, src_hi):
+def merge_bins(edges, counts, k):
+    """The histogram with every k neighbouring bins summed, from the first edge; a last bin
+    short of k bins gets empty ones added (its edge extends past the data)."""
+    counts = np.asarray(counts, dtype=float)
+    width = float(edges[1] - edges[0])
+    n = -(-len(counts) // k)
+    padded = np.concatenate([counts, np.zeros(n * k - len(counts))])
+    return edges[0] + k * width * np.arange(n + 1), padded.reshape(n, k).sum(axis=1)
+
+
+def curve(row, src_lo, src_hi, merge=1):
     """One pixel's curve over its own TOT range [tot_min, tot_max], mean-removed over the
-    source's [src_lo, src_hi], with its TOT histogram: dict(x, y in ps, mean_removed, tot_min,
-    tot_max, edges, counts, row)."""
+    source's [src_lo, src_hi], with its TOT histogram (`merge` neighbouring 25 ps bins summed,
+    merge_bins): dict(x, y in ps, mean_removed, tot_min, tot_max, edges, counts, counts_table
+    (the table's 25 ps bins), row)."""
     lo, hi = float(row.tot_min), float(row.tot_max)
     x, y = curve_xy(row, lo, hi)
     m = mean_over_range(row, src_lo, src_hi)
-    edges, counts = hist_edges_counts(row)
+    edges, counts_table = hist_edges_counts(row)
+    edges, counts = merge_bins(edges, counts_table, merge)
     return dict(x=x, y=y - m, mean_removed=m, tot_min=lo, tot_max=hi, edges=edges,
-                counts=counts, row=row)
+                counts=counts, counts_table=counts_table, row=row)
 
 
 # ------------------------------------------------------------------- chips and conditions
-def position_label(board_or_role):
-    """A label for a row that carries role words and no board: 'ref-trig' -> 'board 2-3', the
-    places of ROLE_POSITION. Anything else is returned unchanged."""
-    parts = str(board_or_role).split("-")
-    if not all(p in ROLE_POSITION for p in parts):
-        return str(board_or_role)
-    return "board " + "-".join(str(ROLE_POSITION[p]) for p in parts)
+def role_boards(bank, code, run):
+    """{role word: board_id} of one run, from the role column of read_bank_best() (the combo the
+    study's fits of that run used). Raises when a board carries two roles or a role two boards."""
+    sub = bank[(bank.campaign == code) & (bank.run == run)][["board_id", "role"]].drop_duplicates()
+    if sub.empty:
+        raise KeyError("no %s %s in the bank table" % (code, run))
+    if sub.board_id.duplicated().any() or sub.role.duplicated().any():
+        raise ValueError("%s %s: the bank's roles and boards do not pair one to one: %s"
+                         % (code, run, sorted(zip(sub.board_id, sub.role))))
+    return {r: int(b) for b, r in zip(sub.board_id, sub.role)}
+
+
+def pair_chips(rs, bank, code, run, board_or_role, sep="-"):
+    """The chips of a row's role words in one run: 'ref-dut' of DESY May run 26 -> 'IH5-IH2'
+    (role_boards of that run, then board_conditions). A word that is not a role of the run is
+    kept as it is."""
+    roles = role_boards(bank, code, run)
+    return sep.join(board_conditions(rs, code, run, roles[w])["chip"] if w in roles else w
+                    for w in str(board_or_role).split("-"))
+
+
+def run_conditions(rs, code, run):
+    """board_conditions of every board of one run, in board order."""
+    if is_irrad(code):
+        camp, tel, num = irrad_run(code, run)
+        ids = [b["board_idx"] for b in tables.run_settings(rs, campaign.TABLE_CAMPAIGN[camp],
+                                                           campaign.TABLE_TEL[tel], num)]
+    else:
+        ids = [b["board_idx"] for b in desy_2026.run_settings(desy_2026.BANK_CAMPAIGN[code], run)]
+    return [board_conditions(rs, code, run, i) for i in sorted(ids)]
+
+
+def run_steps(rs, code, run):
+    """The fluence steps (style.fluence_key) of the boards of an IRRAD run, sorted; empty for a
+    DESY run and for no run (a pooled source)."""
+    if not is_irrad(code) or not isinstance(run, str):
+        return []
+    return sorted({style.fluence_key(c["fluence"]) for c in run_conditions(rs, code, run)})
+
+
+def cells_at_steps(cells, rs, steps):
+    """{cell: [(code, run, step), ...]} for every cell of `cells` (univ_cells rows) whose source
+    or target is an IRRAD run with a board at one of the fluence `steps`."""
+    out = {}
+    for _, r in cells.iterrows():
+        hits = [(code, run, st) for code, run in ((r.src_campaign, r.src_run),
+                                                 (r.tgt_campaign, r.tgt_run))
+                for st in run_steps(rs, code, run) if st in steps]
+        if hits:
+            out[r.cell] = hits
+    return out
 
 
 def board_conditions(rs, code, run, board_id):

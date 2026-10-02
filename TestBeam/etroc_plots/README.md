@@ -20,7 +20,7 @@ lists, chips, fluence steps, input locations). No data lives in the repository.
 | `notebooks/maps.ipynb` (and `maps.py`) | per-pixel time-resolution maps of CERN IRRAD 2026, one run per fluence step, 18 figures |
 | `notebooks/overview.ipynb` (and `overview.py`) | the CERN IRRAD 2026 setup and method as schematics (telescope, beam profile, boards, track selection, the RFSel setting) and the timeline of both campaigns, 6 figures |
 | `notebooks/frontend.ipynb` (and `frontend.py`) | the CERN IRRAD 2026 front end: baseline and noise width of every board against fluence and before / after cooling down, the CAL, TOA and TOT codes and CAL-code maps at 1.5e15 before / after cooling down, and the TOT and the time-walk-corrected TOA difference of the tracks against fluence (boards and single pixels), and the TOT of one chip at two RFSel settings and at fixed settings over time, 16 figures; about 80 s on one lxplus core |
-| `notebooks/universality.ipynb` (and `universality.py`) | whether a time-walk correction fitted on one run, board or pixel carries over to another: one pixel's correction against TOT across angle (DESY May 2026), bias and fluence (CERN IRRAD March 2026) and from March to July, 1 figure; about 15 s on one lxplus core |
+| `notebooks/universality.ipynb` (and `universality.py`) | whether a time-walk correction fitted on one run, board or pixel carries over to another: one pixel's correction against TOT across angle (DESY May 2026), bias and fluence (CERN IRRAD March 2026) and from March to July; then the pair penalty of transferring: against TOT coverage and lever, per level cell, before and after a linear refit, the August settings steps and three controls; 6 figures; about 50 s on one lxplus core |
 | `campaigns/irrad_2026.py` | that campaign: header text, telescopes and chips, fluence ladder, scan catalogue, run settings, input locations |
 | `campaigns/desy_2026.py` | facts of the DESY May and August 2026 runs that the universality figures draw beside IRRAD: beam, run settings from the run-config yamls, the offset-holder runs |
 | `campaigns/irrad_2026_inputs.md` | every input table (contents, origin), where the inputs live, the environment variables that move them; checksums in `irrad_2026_inputs.md5` |
@@ -31,9 +31,10 @@ lists, chips, fluence steps, input locations). No data lives in the repository.
 | `resolution/` | the test-beam result tables: readers, the anointed-combination selection, the combination band, run settings; the pixel-map layouts |
 | `overview/` | the setup and method schematics, and the campaign timeline with its run-time table builder |
 | `frontend/` | the 12 front-end tables, their rebuild and drawing. The tables: `blnw_by_run` (baseline and noise width per board and run) and `blnw_by_pixel` (per pixel), `tdc_pixel_hists` and `tdc_cal_modes` (TDC codes of one pixel per chip, CAL mode of every pixel), and from the track files `triples`, `tot_pixel_medians`, `tot_pooled_summary`, `tot_pooled_hist`, `dtoa_triples`, `dtoa_pooled_hist`, `pixel_hists` (the fixed pixels' TOT in ns and in TOT codes, and their TOA difference) and `rfsel_pair_hist` (the RFSel pairs and their time-control group) (columns in `campaigns/irrad_2026_inputs.md`). The rebuild: `python -m etroc_plots.frontend.rebuild --out DIR [--part blnw\|tdc\|tracks] [--runs ...] [--rank rows\|bytes]`, run from `TestBeam/` (the track part imports the pipeline's time-walk solver, `condor_at_lxplus/core/twc_solver.py`); on one lxplus core the TDC part took 5.5 min and the track part 87 min for 30 runs (about three minutes per run). `--rank rows` (the default) gives each pixel the triple with the most events, `--rank bytes` the largest file, the rule of the talk figures. The BL/NW part reads the scan histories on the LPC EOS: `--part blnw` with `ETROC_BLNW_ROOT` pointing at copies of them (and `ETROC_RUN_METADATA_ROOT` at copies of the run folders where those are out of reach) rebuilds both BL/NW tables in seconds; the published ones (2026-10-18) agree with the earlier build of `blnw_by_run.csv` in every cell |
-| `universality/` | the TWC-transfer study's tables, their reduction and the TWC curves. The six tables (`univ_cells`, `univ_master_cells`, `univ_axis_r2`, `univ_axis_F_wide`, `univ_axis_F_long`, `twc_bank_best`; columns in `campaigns/irrad_2026_inputs.md`) are made by `python -m etroc_plots.universality.reduce --out DIR --results-root S`, run from `TestBeam/` on lxplus, in about 15 s on one core; `transfer.py` reads them and holds the curve arithmetic, `curves.py` draws the curves |
+| `universality/` | the TWC-transfer study's tables, their reduction and the TWC curves. The six tables (`univ_cells`, `univ_master_cells`, `univ_axis_r2`, `univ_axis_F_wide`, `univ_axis_F_long`, `twc_bank_best`; columns in `campaigns/irrad_2026_inputs.md`) are made by `python -m etroc_plots.universality.reduce --out DIR --results-root S`, run from `TestBeam/` on lxplus, in about 15 s on one core; `transfer.py` reads them (with the study's verdict override) and holds the curve arithmetic, `curves.py` draws the curves, `levels.py` the pair-penalty figures |
 | `inputs.py` | the input check every notebook runs first |
 | `lv_log.py` | the July LV power log: its file-spans table builder, the LV-off periods and the LV-on time before a run |
+| `tests/` | pytest tests of the universality readers: the study's verdict override and the axis-F rows (how to run them: under Running a notebook) |
 | `CONVENTIONS.md` | the rules every figure follows |
 
 ## Data quality: the IRRAD 2026 readout was saturated
@@ -94,6 +95,9 @@ drawn, the input files read, the commit of the code (with `-dirty` when it had u
 and what the layout audits found. The last command above reads those files back and measures every
 PNG; it exits with status 1 when a figure breaks a rule of `CONVENTIONS.md`, and when the folder
 holds no figures at all.
+
+The tests run from `TestBeam/` in LCG_104d: `python -m pytest -p no:cacheprovider etroc_plots/tests`
+(the axis-F test is skipped where the universality tables cannot be read).
 
 ## Editing a notebook
 

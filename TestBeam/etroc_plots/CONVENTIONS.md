@@ -116,6 +116,22 @@ rest are for whoever writes the next figure.
   spans 0-55 V (`YLIM_LINEAR` in `iv/vgl_plot.py`), and a log view sets its own range.
 - Scan times are UTC; the March raw logs were recorded in local time (CET, UTC+1).
 
+## Time-walk transfer figures
+
+- A transfer is scored on pairs of boards: the penalty is the width of a pair with the
+  transferred correction minus its width with the target's own, on the same events, in ps. Axis
+  titles say pair penalty (or pair width), never a board's resolution. Intervals are 90 %
+  (mu +- 1.645 se); each row's own margin is drawn behind it; the verdicts are the study's, after
+  the override `transfer.read_master` applies.
+- A pair is named by the chips of its two boards in the target run; the study's role words stay
+  in the values file.
+- Comparisons that touch an IRRAD run at a fluence step in `UNIV_EXCLUDED_STEPS` (the campaign
+  module; 2e15 and 3.5e15 for IRRAD 2026) are not drawn. Where this leaves something out, the
+  figure or the notebook says what, as a fact about the data (at which steps those comparisons
+  exist), with the counts left out.
+- The TOT under a correction curve is drawn in 50 ps bins (two 25 ps bins of the coefficient
+  bank summed), the bin on the axis label.
+
 ## Values files
 
 Next to every figure, `<stem>_values.json` holds the numbers drawn, the input files, the commit of
