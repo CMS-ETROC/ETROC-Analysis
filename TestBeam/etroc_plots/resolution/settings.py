@@ -10,18 +10,25 @@ step is one of BAND_STEPS).
 
 Figures, the words on them passed in by the notebook:
 
-  res_by_offset   resolution against each board's own threshold offset, one RFSel (st01)
-  res_by_class    resolution against the settings class, classes grouped by offset (st02)
-  rfsel_step      the RFSel step at (nearly) one offset: four quarters on one axis (st03)
+  res_by_offset         resolution against each board's own threshold offset, one RFSel (st01)
+  res_by_class          resolution against the settings class, classes grouped by offset (st02)
+  rfsel_step            the RFSel step at (nearly) one offset: four quarters on one axis (st03)
+  threshold_over_noise  x_B per board, x = chip, the classes side by side in each chip's slot
+                        (st04)
+  res_vs_x              resolution against x_B, one band per board, no x bars (st05)
 
-One drawing primitive serves the three (place and draw_slots): category slots, the runs of a slot
+One drawing primitive serves st01-st03 (place and draw_slots): category slots, the runs of a slot
 side by side in run order, the boards of a run side by side in board order, one band per board;
 colour = RFSel (etroc_style.RFSEL_COLOR), marker = chip. Three position functions place the slots
-(offset_slots, class_slots, quarter_slots).
+(offset_slots, class_slots, quarter_slots); st04 uses place too, with the chip as the slot, the
+class in place of the run and the run in place of the board. st04 is the one settings figure whose
+marker is not the chip: the chip is on its axis, so the marker is the offset class
+(offset_markers).
 
 settings_guard checks, before anything is drawn, the run facts the figures rest on: the display
 list, runs_summary and the autocalibration scan agree on RFSel and on the offsets. x_over_nw is
-the threshold offset over the board's noise width, from the BL/NW table.
+the threshold offset over the board's noise width (x_B), from the BL/NW table; spread_text
+quotes the spread of its linearised pixel-to-pixel bar over a set of boards.
 """
 import numpy as np
 from matplotlib.lines import Line2D
@@ -293,7 +300,9 @@ def _axis(ax, ticks, xlim, ylim, xlabel, scale):
     return s
 
 
-def _legends(ax, tel, pts, legend_title, rfsel_label, scale):
+def _legends(ax, tel, pts, legend_title, rfsel_label, scale, rfsel_ncol=None):
+    """The chip legend upper left (one row) and the RFSel legend upper right, `rfsel_ncol`
+    columns (None: one row)."""
     s = style.sizes(scale)
     chips = [c for c in campaign.TELESCOPE_CHIPS[tel] if any(p["chip"] == c for p in pts)]
     lc = ax.legend(handles=chip_handles(chips, scale), loc="upper left", ncol=len(chips),
@@ -301,7 +310,7 @@ def _legends(ax, tel, pts, legend_title, rfsel_label, scale):
     ax.add_artist(lc)
     rfsels = [r for r in campaign.RFSEL_ORDER if any(p["rfsel"] == r for p in pts)]
     ax.legend(handles=rfsel_handles(rfsels, rfsel_label, scale), loc="upper right",
-              ncol=len(rfsels), title=legend_title, fontsize=s["legend"],
+              ncol=rfsel_ncol or len(rfsels), title=legend_title, fontsize=s["legend"],
               title_fontsize=s["legend_title"], handletextpad=0.2, columnspacing=1.0,
               borderaxespad=0.5)
 
@@ -446,6 +455,122 @@ def rfsel_step(pts, quarters, *, quarter_labels, tick_labels, run_labels, xlabel
                      quarter_centres=centres_q)
 
 
+OFFSET_MARKERS = ("v", "D", "o", "s", "^", "P", "X")   # st04, in the offset classes' order
+
+
+def offset_markers(os_texts):
+    """st04: {os text: marker}, one marker per offset class, in the order of
+    tables.os_offsets ("6/8" before "8/10" before "10" ...); the same text gets the same marker
+    on every panel, so pass the classes of every telescope."""
+    texts = sorted(set(os_texts), key=tables.os_offsets)
+    if len(texts) > len(OFFSET_MARKERS):
+        raise ValueError("%d offset classes, %d markers" % (len(texts), len(OFFSET_MARKERS)))
+    return {t: OFFSET_MARKERS[i] for i, t in enumerate(texts)}
+
+
+def spread_text(bars, fmt, q=(10, 90)):
+    """`fmt` filled with the spread of x_B's linearised bars over a set of boards: fields lo and
+    hi (the q[0] and q[1] percentiles), min, max and n, the values rounded to 0.01."""
+    b = np.asarray(list(bars), dtype=float)
+    lo, hi = np.percentile(b, q)
+    return fmt % dict(lo=round(float(lo), 2), hi=round(float(hi), 2),
+                      min=round(float(b.min()), 2), max=round(float(b.max()), 2), n=len(b))
+
+
+def _row(n, footer, scale, aw=7.6, ah=4.6, gx=1.05):
+    """`n` panels in one row, each aw x ah inches; the bottom margin holds the tick labels, the
+    axis label and the footer."""
+    return blnw._grid(1, n, aw=aw, ah=ah, ml=1.2, mr=0.3, mt=0.62,
+                      mb=0.7 + _footer_in(footer, scale), gx=gx, gy=0.0, scale=scale)
+
+
+def threshold_over_noise(pts, classes, *, markers, class_labels, tel_titles, xlabel, ylabel, tag,
+                         data, footer, ylim, run_gap=1.2, scale=SCALE):
+    """st04: x_B of every board, one panel per telescope of `tel_titles` (left to right), x =
+    chip. In each chip's slot the classes of `classes[tel]` ([(rfsel, os text), ...] in axis
+    order) stand side by side, the runs of a class side by side in run order, `run_gap` cells
+    between classes. Point = x_B with its linearised pixel-to-pixel bar (p["x_b"], p["bar"]);
+    colour = RFSel, marker = markers[os text]; dotted lines between the chips. One legend entry
+    per class, class_labels[(tel, rfsel, os)], in axis order. Returns (figure, layout)."""
+    tels = list(tel_titles)
+    proxies, slot_x = [], {}
+    for tel in tels:
+        chips = campaign.TELESCOPE_CHIPS[tel]
+        slot_x.update({(tel, c): float(i) for i, c in enumerate(chips)})
+        order = {k: i for i, k in enumerate(classes[tel])}
+        for p in pts:
+            if p["tel"] != tel:
+                continue
+            k = order[(p["rfsel"], p["os"])]
+            runs = sorted({q["run"] for q in pts if q["tel"] == tel
+                           and (q["rfsel"], q["os"]) == (p["rfsel"], p["os"])})
+            proxies.append(dict(slot=(tel, p["chip"]), run=k, board_idx=runs.index(p["run"]),
+                                ref=p))
+    cell, centres = place(proxies, slot_x, run_gap=run_gap, min_run=1)
+    for q in proxies:
+        q["ref"]["x"] = q["x"]
+    fig, axes = _row(len(tels), footer, scale)
+    axes = axes[0]
+    s = style.sizes(scale)
+    for ax, tel in zip(axes, tels):
+        chips = campaign.TELESCOPE_CHIPS[tel]
+        for p in [p for p in pts if p["tel"] == tel]:
+            c = RFSEL_COLOR[p["rfsel"]]
+            ax.errorbar([p["x"]], [p["x_b"]], yerr=[p["bar"]], color=c, ecolor=c,
+                        marker=markers[p["os"]], markersize=7.5 * scale, markerfacecolor=c,
+                        markeredgecolor=style.INK, markeredgewidth=0.9, linestyle="none",
+                        elinewidth=1.3, capsize=2.5, zorder=3)
+        for i in range(1, len(chips)):
+            divider(ax, i - 0.5)
+        ax.set_xlim(-0.5, len(chips) - 0.5)
+        ax.set_ylim(*ylim)
+        ax.set_xticks(range(len(chips)))
+        ax.set_xticklabels(chips)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        style.style_axes(ax, scale)
+        ax.tick_params(axis="x", which="minor", bottom=False, top=False)
+        h = [Line2D([], [], color=RFSEL_COLOR[r], marker=markers[o], markersize=7.5 * scale,
+                    markerfacecolor=RFSEL_COLOR[r], markeredgecolor=style.INK,
+                    markeredgewidth=0.9, linestyle="none", label=class_labels[(tel, r, o)])
+             for r, o in classes[tel]]
+        ax.legend(handles=h, loc="upper left", fontsize=s["legend"] * 0.85, handletextpad=0.3,
+                  labelspacing=0.35, borderaxespad=0.5, borderpad=0.4)
+    style.compound_header(axes, tag=tag, data=data, scale=scale,
+                          subjects=[tel_titles[t] for t in tels])
+    style.footer(fig, footer, scale)
+    return fig, dict(cell=cell, class_centres={"%s %s class %d" % (k[0][0], k[0][1], k[1]): x
+                                               for k, x in centres.items()})
+
+
+def res_vs_x(pts, *, tel_titles, xlabel, xlim, ylim, legend_title, tag, data, footer,
+             half_width=0.015, rfsel_label=style.rfsel_text, scale=SCALE):
+    """st05: resolution against x_B (p["x_b"]), one panel per telescope of `tel_titles` (left to
+    right), one band per board (tables.draw_band) at its x_B, no x bar: colour = RFSel, marker =
+    chip; the chip legend upper left (one row), the RFSel legend (`legend_title`, one column)
+    upper right. `xlim` and `ylim` the same on every panel. Returns the figure."""
+    tels = list(tel_titles)
+    fig, axes = _row(len(tels), footer, scale)
+    axes = axes[0]
+    for ax, tel in zip(axes, tels):
+        tp = [p for p in pts if p["tel"] == tel]
+        for p in tp:
+            c = RFSEL_COLOR[p["rfsel"]]
+            tables.draw_band(ax, p["x_b"], p["band"], c, half_width=half_width, capsize=2.5,
+                             marker=style.chip_marker(p["chip"]), markersize=8.5 * scale,
+                             markerfacecolor=c, alpha=0.3)
+        ax.set_xlim(*xlim)
+        ax.set_ylim(*ylim)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(style.YLABEL_RES)
+        style.style_axes(ax, scale)
+        _legends(ax, tel, tp, legend_title, rfsel_label, scale, rfsel_ncol=1)
+    style.compound_header(axes, tag=tag, data=data, scale=scale,
+                          subjects=[tel_titles[t] for t in tels])
+    style.footer(fig, footer, scale)
+    return fig
+
+
 # ------------------------------------------------------------------------- layout audit
 def layout_boxes(fig, dpi=200):
     """The pixel boxes [x0, y0, x1, y1] (PNG coordinates at `dpi`: origin top left) that
@@ -470,13 +595,16 @@ def layout_boxes(fig, dpi=200):
             continue
         frame = box(ax)
         ticks = []
-        for t in ax.get_xticklabels() + ax.get_yticklabels():
-            if not (t.get_visible() and str(t.get_text()).strip()):
-                continue
-            b = box(t)
-            if t in ax.get_yticklabels() and (b[3] < frame[1] or b[1] > frame[3]):
-                continue                    # a y tick outside the view is not drawn
-            ticks.append(dict(text=t.get_text(), box=b))
+        for k, (lim, labels) in enumerate(((ax.get_xlim(), ax.get_xticklabels()),
+                                           (ax.get_ylim(), ax.get_yticklabels()))):
+            lo, hi = sorted(lim)
+            tol = 1e-9 * (hi - lo)
+            for t in labels:
+                if not (t.get_visible() and str(t.get_text()).strip()):
+                    continue
+                if not lo - tol <= t.get_position()[k] <= hi + tol:
+                    continue                # a tick outside the view is not drawn
+                ticks.append(dict(text=t.get_text(), box=box(t)))
         others = [ax.title, ax._left_title, ax._right_title, ax.xaxis.label, ax.yaxis.label,
                   getattr(ax, "_etroc_right_top", None)]
         others += [t for t in ax.texts if t.get_gid() != LABEL_GID]

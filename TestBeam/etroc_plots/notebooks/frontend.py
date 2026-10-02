@@ -1213,7 +1213,8 @@ def board_settings(camp, tel, run, b):
 # the chip: the board whose smallest total of counted events over the runs is largest (ties to
 # the first chip name), as the rebuild chose it
 chips = campaign.TELESCOPE_CHIPS[RF_TEL]
-RF_TOTALS = {chips[b]: {r: sum(counted(RF_CAMP, RF_TEL, r, b).values()) for r in RF_RUNS}
+RF_TOTALS = {chips[b]: {r: sum(tot_shapes.counted_pixels(pix_medians, RF_CAMP, RF_TEL, r,
+                                                         b).values()) for r in RF_RUNS}
              for b in range(NBOARDS[RF_TEL])}
 best = max(sorted(RF_TOTALS), key=lambda c: min(RF_TOTALS[c].values()))
 if best != RF_CHIP:
@@ -1223,66 +1224,20 @@ if len(RF_FLUENCE) != 1:
     raise ValueError("RFSel runs at different fluences: %s" % RF_FLUENCE)
 (RF_FLUENCE,) = RF_FLUENCE
 
+# per pair, the two curves (tot_shapes.rfsel_curves), each checked against its run's pooled TOT
+# of the chip less the pixels not counted in the other run of the pair
 panels15, rec15, hs15, control15, hv15 = [], [], [], [], []
 for pair in RF_PAIRS:
-    curves, npix, offsets = [], set(), set()
-    for run, partner in ((pair[0], pair[1]), (pair[1], pair[0])):
-        g = rfsel_hist[(rfsel_hist["campaign"] == RF_CAMP) & (rfsel_hist["tel"] == RF_TEL)
-                       & (rfsel_hist["run"] == run) & (rfsel_hist["partner_run"] == partner)]
-        row = g.iloc[0]
-        s = board_settings(RF_CAMP, RF_TEL, run, RF_BOARD)
-        if (s["rfsel"], s["offset"]) != (int(row["rfsel"]), int(row["offset"])):
-            raise ValueError("run %d: RFSel / offset %s in the run summary, %s in the table" % (
-                run, (s["rfsel"], s["offset"]), (int(row["rfsel"]), int(row["offset"]))))
-        e, c = tot_shapes.hist_of(g, "bin_lo_ns", tot_shapes.TOT_BIN_NS, 0.0, tot_shapes.TOT_HI_NS)
-        # positive control: the chip's pooled TOT in this run less the pixels not counted in the
-        # partner run is this curve, bin by bin
-        mine, other = counted(RF_CAMP, RF_TEL, run, RF_BOARD), counted(RF_CAMP, RF_TEL, partner,
-                                                                         RF_BOARD)
-        left = sorted(set(mine) - set(other))
-        summ = SUMMARY.loc[(RF_CAMP, RF_TEL, run, RF_BOARD)]
-        _, c_all = tot_shapes.hist_of(TOT_POOLED[(RF_CAMP, RF_TEL, run, RF_BOARD)], "bin_lo_ns",
-                                      tot_shapes.TOT_BIN_NS, 0.0, tot_shapes.TOT_HI_NS)
-        ctl = dict(run=int(run), partner_run=int(partner), board_pixels=int(summ["n_pixels"]),
-                   board_events=int(summ["n_events"]), pixels_left_out=len(left),
-                   events_left_out=sum(mine[p] for p in left),
-                   common_pixels=len(set(mine) & set(other)),
-                   min_bin_difference=int((c_all - c).min()),
-                   difference_events=int((c_all - c).sum()), curve_events=int(c.sum()))
-        if (ctl["min_bin_difference"] < 0 or ctl["common_pixels"] != int(row["n_pixels"])
-                or ctl["difference_events"] != ctl["events_left_out"]
-                or ctl["curve_events"] != int(row["n_events"])
-                or ctl["board_pixels"] - ctl["pixels_left_out"] != int(row["n_pixels"])
-                or ctl["board_events"] - ctl["events_left_out"] != int(row["n_events"])):
-            raise ValueError("run %d: the RFSel curve is not the pooled TOT less the pixels left "
-                             "out: %s, table %d pixels %d events" % (run, ctl, row["n_pixels"],
-                                                                     row["n_events"]))
-        control15.append(ctl)
-        text, hours = blnw.time_after_stop(RUN_TIMES, RF_CAMP, RF_TEL, [run],
-                                           campaign.RAD_STOP_UTC[RF_FLUENCE])
-        e10, c10 = tot_shapes.rebin(e, c, TOT_W)
-        hs15.append((e10, c10))
-        med = float(row["median_ns"])
-        curves.append(dict(rfsel=s["rfsel"], color=tot_shapes.RFSEL_COLOR[s["rfsel"]], edges=e10,
-                           y=c10 / float(row["n_events"]), median=med,
-                           label=u"%s, run %d, %s\nmedian %.2f ns, N = %d"
-                                 % (style.rfsel_text(s["rfsel"]), run, text, med,
-                                    int(row["n_events"]))))
-        rec15.append(dict(pair=list(pair), run=int(run), partner_run=int(partner),
-                          chip=RF_CHIP, board_idx=RF_BOARD, rfsel=s["rfsel"],
-                          rf_kohm=style.RFSEL_RF_KOHM[s["rfsel"]], offset=s["offset"],
-                          hv=s["hv"], hours=round(hours[run], 2), n_pixels=int(row["n_pixels"]),
-                          n_events=int(row["n_events"]), median_ns=round(med, 4)))
-        npix.add(int(row["n_pixels"]))
-        offsets.add(s["offset"])
-        hv15.append(s["hv"])
-    if len(npix) != 1 or len(offsets) != 1:
-        raise ValueError("pair %s: pixels %s, offsets %s" % (pair, npix, offsets))
-    curves.sort(key=lambda cv: cv["rfsel"])
-    panels15.append(dict(subject=style.settings_text(rfsel=[cv["rfsel"] for cv in curves],
-                                                     offset=offsets.pop()),
-                         note="%s, the %d pixels counted in both runs" % (RF_CHIP, npix.pop()),
-                         curves=curves))
+    panel = tot_shapes.rfsel_curves(
+        rfsel_hist, RF_CAMP, RF_TEL, pair, RS, RUN_TIMES, campaign.RAD_STOP_UTC[RF_FLUENCE],
+        label=u"%(rfsel)s, run %(run)d, %(time)s\nmedian %(median).2f ns, N = %(n)d",
+        note=u"%(chip)s, the %(n_pixels)d pixels counted in both runs", width=TOT_W,
+        pooled=dict(pixels=pix_medians, summary=SUMMARY, hists=TOT_POOLED))
+    panels15.append(panel)
+    rec15 += panel["records"]
+    hs15 += panel["hists"]
+    control15 += panel["controls"]
+    hv15 += panel["hv"]
 # the run of the pairs that is also a preferred display run: its board median as fe08-fe09 use it
 ctl_runs = [r for r in RF_RUNS if r in july_pref[RF_TEL]] if RF_CAMP == "july" else []
 POS_CONTROL = [dict(run=int(r), chip=RF_CHIP, n_pixels=int(SUMMARY.loc[(RF_CAMP, RF_TEL, r,
