@@ -134,7 +134,7 @@ def show(stem):
 #   (`july/display_runs_jul.csv` in the inputs folder) at RFSel 2 and threshold offset 20
 #   (`JULY_SETTINGS`), read by `tables.preferred_runs`.
 #
-# Figures 17-18 take their runs from `PAIR_RUNS` (the campaign's `REST_PAIRS`) instead: in March
+# Figures 17-18 take their runs from `PAIR_RUNS` (the campaign's `COOLDOWN_PAIRS`) instead: in March
 # the run of the 1.5e15 step whose leakage current matches the July run's, its lowest-bias run
 # (run 17: H1 400 V, F1 265 V); in July the display run of `RUNS` at that step.
 #
@@ -154,7 +154,7 @@ RUNS = {(c, t): (campaign.MARCH_DISPLAY_RUNS[t] if c == "march" else _july[t])
 print("RUNS (campaign, telescope): runs, lowest fluence first:", RUNS)
 PAIR_FLUENCE = 1.5e15  # figures 17-18: one run per campaign at this fluence
 PAIR_RUNS = {         # telescope -> {campaign: run}, figures 17-18 (March: July's leakage current)
-    t: {"march": m, "july": j} for t, (m, j) in campaign.REST_PAIRS.items()}
+    t: {"march": m, "july": j} for t, (m, j) in campaign.COOLDOWN_PAIRS.items()}
 DEFAULT_RFSEL = {"march": 2}   # campaign -> the RFSel of every run, where runs_summary has none
 CAMPAIGN_TEXT = {"march": "March 2026", "july": "July 2026"}   # the campaigns, in drawing order
 RUNS_TEXT = (u"Runs: March, the highest-bias run at threshold offset 20 of each fluence step; "

@@ -15,8 +15,8 @@ Two tables (columns TDC_HISTS_COLUMNS and TDC_CAL_COLUMNS, described in the camp
 document), made by `python -m etroc_plots.frontend.rebuild --part tdc`:
 
   TDC_PIXEL_HISTS_CSV   the histograms of one pixel per chip: the chip's most populated pixel in
-                        the July run of its REST_PAIRS pair (hits after the cuts), the same pixel
-                        in every other run; one row per non-empty bin
+                        the July run of its COOLDOWN_PAIRS pair (hits after the cuts), the same
+                        pixel in every other run; one row per non-empty bin
   TDC_CAL_MODES_CSV     every pixel of every board of every run: CAL mode and hit counts before
                         the ea cut, after it and after the CAL window
 
@@ -341,7 +341,8 @@ def cal_maps(grids, tel, looks, *, pixels, norm, diff_norm, titles, cbar_labels,
         diff_cmap = plt.get_cmap(diff_cmap).copy()
         diff_cmap.set_bad(color=pixel_maps.GREY_MISSING)
     nb = len(campaign.TELESCOPE_CHIPS[tel])
-    aw, ml, gx, mb = 4.2, 0.75, 0.7, 1.75
+    aw, ml, gx = 4.2, 0.75, 0.7
+    mb = 1.75 + style.footer_extra_in(footer, scale, fits=3)   # room for a longer footer
     fig, axes, W, H = _grid(nb, 3, aw=aw, ah=aw, ml=ml, mr=0.3, mt=0.62, mb=mb, gx=gx, gy=0.75,
                             scale=scale)
     s = style.sizes(scale)
@@ -385,7 +386,7 @@ def cal_maps(grids, tel, looks, *, pixels, norm, diff_norm, titles, cbar_labels,
     # (matplotlib places them by a locator), so they are placed in the final figure.
     style.lower_footer(fig)
     W2, H2 = fig.get_size_inches()
-    y = (0.62 + (H2 - H)) / H2
+    y = (mb - 1.13 + (H2 - H)) / H2        # 1.13 in below the bottom row of maps
     # colour bars under the bottom row: CAL under the two look columns, difference under the third
     for k, (x0, x1, lab) in enumerate(((ml, ml + 2 * aw + gx, cbar_labels[0]),
                                        (ml + 2 * (aw + gx), ml + 2 * (aw + gx) + aw,

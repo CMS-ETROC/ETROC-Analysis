@@ -60,7 +60,7 @@ Run from `TestBeam/`. The rebuild is the authority for these files.
 | `march/preirrad_cache/` (3 files) | the pre-irradiation stability figure's cache: the slow-control log as 10 s medians, per-run and per-board statistics, the run windows. The rebuild writes the same bytes when nothing has changed, so `md5sum -c` shows whether the published cache was stale | `python -m etroc_plots.iv.preirrad_current --out FIGDIR --cache DIR --rebuild` |
 | `march/fine_iv_F1_m25C_17cm_15e14_*_binned_iv_data.csv`, `march/quick_iv_F1_m25C_17cm_15e14_*_binned_iv_data.csv` (3 files) | the F1 IV scans of the 1.5e15 step, on the same voltage bins as the other March scans (the March tree holds no binned version of them): each slow-control log of that step (a `*_interpolated.csv.gz` file in `laptop_mirror_15e14/F1/` of the March tree; `BINNED_FROM_RAW` in `irrad_2026.py` names each with its window) cut to its scan's window, then each channel to its up-sweep; mean voltage and median current per bin (`FINE_BINS` or `QUICK_BINS` in `iv/legacy.py`). The command prints each table's md5, which matches its line in `irrad_2026_inputs.md5` | `python -m etroc_plots.iv.legacy --out DIR` |
 | `july/lv_spans_jul.csv` | the July LV power log, one row per file: campaign, telescope, file name, first and last record (UTC, to the second) and number of records. The log records only while the LV is on, so every gap between files is an LV cycle (overview notebook, figure 6, draws those longer than 1 h; the LV-on time on the IV notebook's figures 24 and 25 is the end of the last such gap before the run). Read from the log folders `LV_LOG_DIRS` of the campaign module (`<LV_LOG_ROOT>/H1` and `<LV_LOG_ROOT>/F1`), copies of the DAQ's folders `/store/user/lpcmtdstudies/IRRad_CERN_2026Jul/{H1,F1}_telescope/power_history/lv_history/` on the LPC EOS | `python -c "from etroc_plots import lv_log; lv_log.build_lv_spans('FILE')"`, or with `dirs={("july", "h1"): H1_FOLDER, ("july", "f1"): F1_FOLDER}` for other folders |
-| `frontend/` (11 files) | the front-end notebook's tables: the baseline and noise width of every board in every run, the TDC codes of one pixel per chip and the CAL code of every pixel in the `REST_PAIRS` runs, and the TOT and TOA difference of the tracks (per triple, per pixel, per board, fixed pixels, the RFSel pairs). Columns, sources and run times in "Front-end tables" below | `python -m etroc_plots.frontend.rebuild --out DIR` |
+| `frontend/` (11 files) | the front-end notebook's tables: the baseline and noise width of every board in every run, the TDC codes of one pixel per chip and the CAL code of every pixel in the `COOLDOWN_PAIRS` runs, and the TOT and TOA difference of the tracks (per triple, per pixel, per board, fixed pixels, the RFSel pairs). Columns, sources and run times in "Front-end tables" below | `python -m etroc_plots.frontend.rebuild --out DIR` |
 
 ## Made outside this package
 
@@ -116,7 +116,7 @@ made by
     python -m etroc_plots.frontend.rebuild --out DIR [--part blnw|tdc|tracks] [--runs ...] [--rank rows|bytes]
 
 run from `TestBeam/` (`../frontend/rebuild.py`; copy the files into `frontend/` and update the
-checksum lines to use them). `--runs` takes `pairs` (the runs of `REST_PAIRS`), `frontend` (the
+checksum lines to use them). `--runs` takes `pairs` (the runs of `COOLDOWN_PAIRS`), `frontend` (the
 runs of `FRONTEND_RUNS` and the July display runs at RFSel 2, threshold offset 20) or
 `campaign:telescope:run` items such as `july:h1:4`.
 
@@ -130,7 +130,7 @@ runs of `FRONTEND_RUNS` and the July display runs at RFSel 2, threshold offset 2
   its thresholds from (`../frontend/blnw.py` gives the rule).
 * The TDC part reads every loop file of the merged hits of each run (`DECODED_DIRS`, under
   `DECODED_ROOT`, default `/eos/user/j/jongho`): about 1 s per file on one lxplus core, 5.5 min
-  for the four `REST_PAIRS` runs (328 files, 812 million hits), and prints each run's hit counts
+  for the four `COOLDOWN_PAIRS` runs (328 files, 812 million hits), and prints each run's hit counts
   before and after each cut.
 * The tracks part reads the track files of each run (`ANALYSIS_DIRS`, under `ANALYSIS_ROOT`,
   default `/eos/user/m/musafdar`: `CERN_IRRAD_Mar2026/analysis/tracks_<tel>_run<N>/<combo>/time/`
@@ -160,6 +160,20 @@ it with the command above replaces it. The two TDC tables were made by the rebui
 default runs) on 2026-10-02, the eight track tables by the rebuild (`--part tracks`, default runs
 and rank) the same day.
 
+| table | rows | made by | md5 (first 8; full in `irrad_2026_inputs.md5`) |
+|---|---|---|---|
+| `blnw_by_run.csv` | 384 | the 2026-09-02 build, renamed (above); rebuilt by `--part blnw` (`blnw.build_blnw_table`) | `abc77c4a` |
+| `tdc_pixel_hists.csv` | 19162 | `--part tdc`: `tdc_codes.gather`, `busiest_pixels`, `hist_rows` | `82d783ec` |
+| `tdc_cal_modes.csv` | 4096 | `--part tdc`: `tdc_codes.gather`, `cal_rows` | `15f8c86c` |
+| `triples.csv` | 67710 | `--part tracks`: `tot_shapes.scan_run` (the footer of every track file) | `f90a9cd6` |
+| `tot_pixel_medians.csv` | 28577 | `--part tracks`: `tot_shapes.run_tables` | `5416d2d7` |
+| `tot_pooled_summary.csv` | 112 | `--part tracks`: `tot_shapes.run_tables` | `85507ed7` |
+| `tot_pooled_hist.csv` | 11985 | `--part tracks`: `tot_shapes.run_tables` | `97552f46` |
+| `dtoa_triples.csv` | 26370 | `--part tracks`: `tot_shapes.run_tables` (time-walk solver of the pipeline) | `9ea7cad7` |
+| `dtoa_pooled_hist.csv` | 10859 | `--part tracks`: `tot_shapes.run_tables` | `3ca18775` |
+| `pixel_hists.csv` | 4976 | `--part tracks`: `tot_shapes.choose`, `pixel_hist_rows` | `4df43b2a` |
+| `rfsel_pair_hist.csv` | 466 | `--part tracks`: `tot_shapes.rfsel_board`, `rfsel_rows` | `35c5808e` |
+
 `frontend/blnw_by_run.csv`, 384 rows (97 runs). One row = one board in one run.
 
 | column | contents |
@@ -178,7 +192,7 @@ and rank) the same day.
 | `nw_mean`, `nw_std`, `n_pixels_nw` | the same over the pixels with a noise width above 0, and their number |
 
 `frontend/tdc_pixel_hists.csv`, 19162 rows. One row = one non-empty bin of one histogram of one
-pixel in one run. The pixel of each chip is its most populated in the July run of `REST_PAIRS`
+pixel in one run. The pixel of each chip is its most populated in the July run of `COOLDOWN_PAIRS`
 (hits after the cuts), the same pixel in the March run; the hits are those with `ea == 0` and a CAL
 code within 3 of the pixel's CAL mode in that loop file.
 
@@ -191,7 +205,7 @@ code within 3 of the pixel's CAL mode in that loop file.
 | `count` | hits in the bin |
 
 `frontend/tdc_cal_modes.csv`, 4096 rows. One row = one pixel of one board in one run of
-`REST_PAIRS`.
+`COOLDOWN_PAIRS`.
 
 | column | contents |
 |---|---|

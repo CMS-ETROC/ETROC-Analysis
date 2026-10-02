@@ -9,8 +9,8 @@ update the checksum list to use them). The parts:
   blnw    blnw_by_run.csv from the scan histories (BLNW_SQLITES) and the run metadata
           (RUN_METADATA_DIRS), every run unless --runs says otherwise
   tdc     tdc_pixel_hists.csv and tdc_cal_modes.csv from the merged hits (DECODED_DIRS), by
-          default the runs of REST_PAIRS; every loop file of a run is read, about 1 s per file on
-          one lxplus core (5.5 min for the four REST_PAIRS runs, 328 files)
+          default the runs of COOLDOWN_PAIRS; every loop file of a run is read, about 1 s per
+          file on one lxplus core (5.5 min for the four COOLDOWN_PAIRS runs, 328 files)
   tracks  triples.csv, tot_pixel_medians.csv, tot_pooled_summary.csv, tot_pooled_hist.csv,
           dtoa_triples.csv, dtoa_pooled_hist.csv, pixel_hists.csv and rfsel_pair_hist.csv from
           the track files (ANALYSIS_DIRS; frontend/tot_shapes.py), by default the runs of
@@ -18,9 +18,9 @@ update the checksum list to use them). The parts:
           pixel_hists.csv are chosen over the runs of tot_shapes.shape_runs() that are in the run
           set, the RFSel histograms are made when every run of RFSEL_TOT_PAIRS is in it
 
---runs takes "pairs" (REST_PAIRS), "frontend" (frontend_runs()) or campaign:telescope:run items
-such as july:h1:4; the TDC part always adds the July run of each telescope's REST_PAIRS pair,
-whose most populated pixels it histograms. --rank picks a pixel's triple by its events (rows,
+--runs takes "pairs" (COOLDOWN_PAIRS), "frontend" (frontend_runs()) or campaign:telescope:run
+items such as july:h1:4; the TDC part always adds the July run of each telescope's COOLDOWN_PAIRS
+pair, whose most populated pixels it histograms. --rank picks a pixel's triple by its events (rows,
 the default) or by its file size (bytes, the rule of the CERN IRRAD 2026 talk figures, for
 comparisons). The progress and every run's counts go to standard output.
 """
@@ -52,7 +52,7 @@ def frontend_runs():
 
 def pair_runs():
     out = {}
-    for tel, (march, july) in campaign.REST_PAIRS.items():
+    for tel, (march, july) in campaign.COOLDOWN_PAIRS.items():
         out[("march", tel)] = [march]
         out[("july", tel)] = [july]
     return out
@@ -85,7 +85,8 @@ def build_blnw(out, runs):
 
 def build_tdc(out, runs):
     runs = dict(runs or pair_runs())
-    for tel, (_, july) in campaign.REST_PAIRS.items():   # the pixel choice needs the pair's July run
+    # the pixel choice needs the pair's July run
+    for tel, (_, july) in campaign.COOLDOWN_PAIRS.items():
         if any(t == tel for _, t in runs):
             runs[("july", tel)] = sorted(set(runs.get(("july", tel), [])) | {july})
     hist_rows, cal_rows = [], []
@@ -93,7 +94,7 @@ def build_tdc(out, runs):
         todo = [(c, r) for (c, t), rs in runs.items() if t == tel for r in rs]
         if not todo:
             continue
-        july = campaign.REST_PAIRS[tel][1]
+        july = campaign.COOLDOWN_PAIRS[tel][1]
         todo.sort(key=lambda cr: (cr != ("july", july), cr))    # the pair's July run first
         pixels = None
         for camp, run in todo:

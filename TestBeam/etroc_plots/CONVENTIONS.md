@@ -39,7 +39,7 @@ rest are for whoever writes the next figure.
 
 - Colour = fluence, one ladder per campaign (`FLUENCE_COLOR` in the campaign module). Within one
   fluence step, later looks at the same chips (after cooling down, for instance) take hues of their
-  own from `iv_plot.TIMING_COLORS`, never a lighter or darker shade of the step's colour. Four
+  own from `iv_plot.TIMING_COLORS`, never a lighter or darker shade of the step's colour. Five
   exceptions: the V_gl fit figures (`iv/vgl_plot.py`: fluence is their x axis, one fit per board),
   the baseline / noise-width figures (`frontend/blnw.py`: the fluence step or the look before and
   after cooling down is their x axis) and the board TOT figures (`tot_shapes.board_vs_fluence` in
@@ -47,6 +47,8 @@ rest are for whoever writes the next figure.
   (`etroc_style.BOARD_COLOR`), and the bias-current timelines drawn one line per chip
   (`iv/preirrad_current.py`, `iv/current_vs_run.py` and the current-limit-hold figures of the IV
   notebook) colour by chip; there the fluence is a shaded band or a label, never a line colour.
+  The RFSel comparison (`tot_shapes.rfsel_pairs`: runs of one fluence step that differ in RFSel)
+  colours by RFSel (`tot_shapes.RFSEL_COLOR`, no orange, which is a fluence colour).
 - Marker and line style = chip, by its slot in the telescope. Legends name chips only; the vendor
   goes in the panel title.
 
@@ -67,6 +69,14 @@ rest are for whoever writes the next figure.
 - Baseline and noise width are drawn with both statistics over a board's pixels: all 256 pixels as
   the scan stored them, and the pixels with a value (`frontend/blnw.py` says which); the figure
   states how many pixels the second leaves out. The bar is the pixel-to-pixel spread.
+- Distributions of TDC codes, TOT and TOA difference are drawn per bin as the fraction of the
+  curve's events, with the bin width on the axis label: one code for codes, 0.1 ns for TOT, 25 ps
+  (about one TOA code) for the TOA difference.
+- A pixel's TOT and TOA difference come from one triple of pixels: among the track files of its
+  board's anointed combination, the one with the most events, counted when it holds at least 300
+  (`tot_shapes.FLOOR`). Nothing is pooled across the triples of a pixel. The TOT depends on which
+  triple is read (the partner pixels fix where the track crosses the pixel), so a figure of TOT
+  says which triple it took.
 
 ## Pixel maps
 
@@ -75,7 +85,10 @@ rest are for whoever writes the next figure.
   pixel (0, 0) at the bottom right.
 - One colour scale for every map of a notebook (0-120 ps for the IRRAD 2026 resolution maps,
   `VMIN` and `VMAX` in `resolution/pixel_maps.py`), so maps compare by colour; a pixel outside it
-  is counted as saturated, a pixel without a value is grey.
+  is counted as saturated, a pixel without a value is grey. A map of a difference (the CAL-code
+  change of the front-end notebook) is the exception: its symmetric range is set per telescope,
+  since one range would flatten the telescope with the smaller change, and the footer says so and
+  gives the range.
 
 ## Schematics
 

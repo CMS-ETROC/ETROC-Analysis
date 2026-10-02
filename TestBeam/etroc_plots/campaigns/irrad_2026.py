@@ -604,19 +604,20 @@ RUN_TIMES_CSV = os.path.join(INPUTS_TABLES, "run_times.csv")
 # 265 V); after four months of cooling down, the July preferred display run at that step. Read by
 # the frontend notebook (BL/NW pair, TDC histograms, CAL maps), by frontend.rebuild (the default
 # runs of its TDC part) and by notebooks/maps.py (figures 17-18).
-REST_PAIRS = {"h1": (17, 4), "f1": (17, 9)}
+COOLDOWN_PAIRS = {"h1": (17, 4), "f1": (17, 9)}
 # The runs whose hits the frontend tables are built from, per campaign and telescope: in March
-# the step runs of MARCH_DISPLAY_RUNS and the March run of REST_PAIRS; in July the July run of
-# REST_PAIRS and the runs of the RFSel comparisons (H1 47 at RFSel 1; F1 47, 52 and 86 at RFSel
+# the step runs of MARCH_DISPLAY_RUNS and the March run of COOLDOWN_PAIRS; in July the July run of
+# COOLDOWN_PAIRS and the runs of the RFSel comparisons (H1 47 at RFSel 1; F1 47, 52 and 86 at RFSel
 # 1, 2 and 3). frontend.rebuild.frontend_runs() adds the July display runs of DISPLAY_RUNS_JUL_CSV
 # at FRONTEND_JULY_SETTINGS (they are in an input table, not here) and takes the result as the
 # run set of `--runs frontend`. The BL/NW part of the rebuild covers every run of the run
 # metadata whatever this says.
 FRONTEND_JULY_SETTINGS = dict(rfsel=2, offset=20)
 FRONTEND_RUNS = {
-    "march": {t: sorted(set(MARCH_DISPLAY_RUNS[t]) | {REST_PAIRS[t][0]}) for t in REST_PAIRS},
-    "july": {"h1": sorted({REST_PAIRS["h1"][1], 47}),
-             "f1": sorted({REST_PAIRS["f1"][1], 47, 52, 86})},
+    "march": {t: sorted(set(MARCH_DISPLAY_RUNS[t]) | {COOLDOWN_PAIRS[t][0]})
+              for t in COOLDOWN_PAIRS},
+    "july": {"h1": sorted({COOLDOWN_PAIRS["h1"][1], 47}),
+             "f1": sorted({COOLDOWN_PAIRS["f1"][1], 47, 52, 86})},
 }
 # Jongho's merged hits, one folder of loop_<N>.feather files per run (columns evt, bcid,
 # l1a_counter, ea, row, col, toa, tot, cal, board). Read only by `python -m

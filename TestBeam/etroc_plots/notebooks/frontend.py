@@ -27,7 +27,10 @@
 #   step.
 # * Figures fe11-fe12: the distribution of the TOA difference of two boards after the time-walk
 #   correction, every pixel pooled and one pixel pair, at every step.
-# * Figures fe13-fe14: the TOT and TOA difference of one pixel in the three July runs, H1 and F1.
+# * Figures fe13-fe14: the TOT and TOA difference of one pixel in the three July runs, H1 and F1,
+#   with the TOA difference at 25 ps, about one TOA code.
+# * Figure fe15: the TOT of one F1 chip at 3.5e15 in two pairs of July runs that differ in the
+#   RFSel setting only.
 #
 # Every figure is saved as PNG (200 dpi) and PDF, with `<name>_values.json` beside it: every
 # number drawn, the input files read and the commit of the code.
@@ -38,8 +41,9 @@
 #    notebook is tested in).
 # 2. The figures read small tables that are not in the repository, from
 #    `/eos/user/m/musafdar/ETROC_plot_inputs/irrad_2026`: the tables of `frontend/`,
-#    `tables/runs_summary.csv`, `tables/run_times.csv` and `july/display_runs_jul.csv`.
-#    `../campaigns/irrad_2026_inputs.md` lists every table with where it came from;
+#    `tables/runs_summary.csv`, `tables/run_times.csv` and `july/display_runs_jul.csv` (the list
+#    below says which figure reads which). `../campaigns/irrad_2026_inputs.md` lists every table
+#    with where it came from;
 #    `python -m etroc_plots.frontend.rebuild` (run from `TestBeam/`) remakes the `frontend/`
 #    tables from the autocalibration scan histories, the run metadata, the merged hits and the
 #    reconstructed tracks (about an hour for the tracks, on one lxplus core). To
@@ -52,8 +56,37 @@
 #
 # Figures go to `$ETROC_FIGURES/frontend/`, by default `figures/frontend/` next to this notebook.
 #
+# The tables read, in `frontend/` unless named otherwise:
+#
+# * `blnw_by_run.csv`: the baseline and noise width of every pixel's last autocalibration scan
+#   before each run (fe01-fe02).
+# * `tdc_pixel_hists.csv`: the CAL, TOA and TOT codes of one pixel per chip in the run pair
+#   (fe03-fe04).
+# * `tdc_cal_modes.csv`: the most frequent CAL code of every pixel in the run pair (fe05-fe06).
+# * `tot_pixel_medians.csv`: the median TOT and event count of every pixel's triple in every run
+#   (fe07; the fixed pixel of fe10; the pixels and the chip of fe15).
+# * `tot_pooled_summary.csv`: per board and run, the median, spread and most frequent TOT and the
+#   counts (fe07-fe09; the control of fe15).
+# * `tot_pooled_hist.csv`: the TOT of every counted pixel of a board together, per run (fe09; the
+#   control of fe15).
+# * `dtoa_triples.csv`: per pixel triple and board pair, the TOA-difference counts and the CAL
+#   medians (fe11-fe14).
+# * `dtoa_pooled_hist.csv`: the TOA difference of every counted triple of a board pair together
+#   (fe11).
+# * `pixel_hists.csv`: the TOT and TOA difference of the one pixel or pixel pair drawn (fe10,
+#   fe12-fe14).
+# * `rfsel_pair_hist.csv`: the TOT of the chosen chip in each run of the RFSel pairs (fe15).
+# * `triples.csv`: the triple chosen for every pixel. No figure draws it; the other track tables
+#   were made from it, and the first code cell checks it with the other tables.
+# * `tables/runs_summary.csv`: the chips, bias, fluence step, RFSel and threshold offset of every
+#   run (every figure).
+# * `tables/run_times.csv`: the start of every run, for the time after irradiation in the
+#   legends.
+# * `july/display_runs_jul.csv`: the July display runs of each step and the preferred one
+#   (fe01, fe07-fe15).
+#
 # The drawing lives in `../frontend/blnw.py` (figures fe01-fe02), `../frontend/tdc_codes.py`
-# (figures fe03-fe06) and `../frontend/tot_shapes.py` (figures fe07-fe14). This notebook holds
+# (figures fe03-fe06) and `../frontend/tot_shapes.py` (figures fe07-fe15). This notebook holds
 # the choices made per figure: the runs, the colour scales and the words on each figure.
 #
 # `frontend.ipynb` and `frontend.py` are the same notebook, kept in step by jupytext. Edit
@@ -119,8 +152,7 @@ TELS = list(campaign.TELESCOPE_CHIPS)
 RS = pd.read_csv(campaign.RUNS_SUMMARY_CSV)
 RUN_TIMES = timeline.read_run_times()
 SETTINGS = campaign.FRONTEND_JULY_SETTINGS     # RFSel 2, threshold offset 20
-# March runs record no RFSel; they ran at RFSel 2 (the user's ruling), so every figure here
-# states RFSel 2.
+# March runs record no RFSel; they ran at RFSel 2, so every figure here states RFSel 2.
 SETTINGS_TEXT = style.settings_text(rfsel=SETTINGS["rfsel"], offset=SETTINGS["offset"])
 
 
@@ -161,9 +193,10 @@ def run_bias(camp, tel, run):
 #   (`MARCH_DISPLAY_RUNS` in the campaign module, the runs of the maps notebook). July: every run
 #   of the display-run list (`july/display_runs_jul.csv`) at RFSel 2 and threshold offset 20,
 #   preferred or not, side by side.
-# * The pair at 1.5e15 (fe02-fe06), `REST_PAIRS` in the campaign module: before cooling down, the
-#   March run of the 1.5e15 step whose leakage current matches the July run's (its lowest bias,
-#   run 17 on both telescopes); after cooling down, the July preferred display run at 1.5e15.
+# * The pair at 1.5e15 (fe02-fe06), `COOLDOWN_PAIRS` in the campaign module: before cooling
+#   down, the March run of the 1.5e15 step whose leakage current matches the July run's (its
+#   lowest bias, run 17 on both telescopes); after cooling down, the July preferred display run
+#   at 1.5e15.
 #
 # The tick under each irradiated step gives the time from the end of that step's irradiation
 # (`RAD_STOP_UTC` in the campaign module, the earliest stop the records allow) to the start of
@@ -178,8 +211,9 @@ LADDER = ([dict(campaign="march", fluence=f, runs={t: [march_steps[t][f]] for t 
            for f in sorted(march_steps[TELS[0]])]
           + [dict(campaign="july", fluence=f, runs={t: july_display[t][f] for t in TELS})
              for f in sorted(july_display[TELS[0]])])
-PAIR = [dict(campaign="march", fluence=1.5e15, runs={t: [campaign.REST_PAIRS[t][0]] for t in TELS}),
-        dict(campaign="july", fluence=1.5e15, runs={t: [campaign.REST_PAIRS[t][1]] for t in TELS})]
+PAIR = [dict(campaign=camp, fluence=1.5e15,
+             runs={t: [campaign.COOLDOWN_PAIRS[t][k]] for t in TELS})
+        for k, camp in enumerate(("march", "july"))]
 
 HOURS = {}      # (campaign, telescope, run) -> hours after the end of the step's irradiation
 
@@ -260,8 +294,8 @@ save(fig, "fe01_blnw_vs_fluence",
                      "pixels with a value (BL 50 < baseline < 1020 DAC, not railed; NW > 0)",
           error_bar="pixel-to-pixel standard deviation, not an uncertainty",
           times="run start (tables/run_times.csv) minus RAD_STOP_UTC of the step, hours",
-          rfsel="July runs at RFSel 2 by the display-run list; March runs record no RFSel and ran "
-                "at RFSel 2"),
+          rfsel="July runs at RFSel %d by the display-run list; March runs record no RFSel and "
+                "ran at RFSel %d" % (SETTINGS["rfsel"], SETTINGS["rfsel"])),
      inputs=INPUTS_BLNW)
 
 # %% [markdown]
@@ -289,7 +323,7 @@ fig = blnw.rest_pair(
                                                                  for st in PAIR))
                                    for t in TELS)))
 save(fig, "fe02_blnw_cooling_down",
-     dict(points=pair_pts, pairs=campaign.REST_PAIRS, tick_labels=pair_ticks,
+     dict(points=pair_pts, pairs=campaign.COOLDOWN_PAIRS, tick_labels=pair_ticks,
           excluded_pixels={q: blnw.excluded_range(pair_pts, q) for q in ("bl", "nw")}),
      dict(fluence=campaign.FLUENCE_CONVENTION,
           statistics="as fe01", error_bar="pixel-to-pixel standard deviation, not an uncertainty",
@@ -336,7 +370,7 @@ def looks(tel):
 
 def pixels_of(tel):
     s = hists[(hists["tel"] == tel) & (hists["campaign"] == "july")
-              & (hists["run"] == campaign.REST_PAIRS[tel][1])]
+              & (hists["run"] == campaign.COOLDOWN_PAIRS[tel][1])]
     return {int(b): (int(g["row"].iloc[0]), int(g["col"].iloc[0]))
             for b, g in s.groupby("board_idx")}
 
@@ -360,8 +394,8 @@ for k, tel in enumerate(TELS):
     save(fig, "fe%02d_tdc_codes_%s" % (3 + k, tel),
          dict(panels=payload, pixels={b: list(v) for b, v in pix.items()},
               runs=[dict(campaign=lk["campaign"], run=lk["run"]) for lk in looks(tel)]),
-         dict(selection="one pixel per chip (most populated in the July run of REST_PAIRS); all "
-                        "loop files; ea == 0; |cal - per-file CAL mode| <= 3",
+         dict(selection="one pixel per chip (most populated in the July run of COOLDOWN_PAIRS); "
+                        "all loop files; ea == 0; |cal - per-file CAL mode| <= 3",
               toa_ns="12.5 - toa * 3.125 / CAL mode (per file)",
               tot_ns="(2 tot - floor(tot / 32)) * 3.125 / CAL mode (per file)",
               bins="CAL native code; TOA 0.3 ns over 0-12.3 ns; TOT 0.2 ns over 0-10 ns; "
@@ -375,11 +409,20 @@ for k, tel in enumerate(TELS):
 #
 # Each pixel's CAL mode in the run (the median over the loop files of its most frequent CAL code
 # in each file), before and after cooling down, and the change (July minus March); the pixel of
-# figures fe03-fe04 is ringed. One CAL colour scale for every CAL map of this notebook and one
-# symmetric scale for every difference, both set below from all the maps drawn (0.5th to 99.5th
-# percentile of the modes, 99th percentile of the absolute differences); a pixel outside a scale
-# takes the end colour and is counted ("sat N" in its title). Grey: no CAL mode. Maps in the chip
-# frame: pixel (0, 0) at the bottom right.
+# figures fe03-fe04 is ringed. One CAL colour scale for every CAL map of this notebook, set below
+# from all the maps drawn (0.5th to 99.5th percentile of the modes), so the CAL maps compare by
+# colour across both telescopes. The differences take one symmetric scale per telescope, from
+# that telescope's 99th percentile of |July - March| (11 codes for F1, 2 for H1): one shared
+# scale would draw every H1 difference in nearly one colour. A pixel outside a scale takes the
+# end colour and is counted ("sat N" in its title). Grey: no CAL mode. Maps in the chip frame:
+# pixel (0, 0) at the bottom right.
+#
+# What the difference maps show: the July CAL modes of LF10 and LF12 sit about 10 codes below
+# March over the whole chip, while LF17 and LF18 moved by about 2 codes and the H1 chips by 0 to
+# 1 (per-chip medians; the cell prints them with the 5th and 95th percentiles, and each footer
+# states them). This is an observation; no cause is drawn from it here. CAL counts the
+# delay-line steps in one 3.125 ns clock period, so it moves with the chip's temperature and
+# supply.
 
 # %%
 grids = {}
@@ -389,42 +432,65 @@ for tel in TELS:
             grids[(tel, st["campaign"], b)] = tdc_codes.mode_grid(
                 cal_modes, st["campaign"], tel, st["runs"][tel][0], b)
 modes = np.concatenate([g[np.isfinite(g)] for g in grids.values()])
-diffs = np.concatenate([(grids[(t, "july", b)] - grids[(t, "march", b)]).ravel()
-                        for t in TELS for b in range(len(campaign.TELESCOPE_CHIPS[t]))])
-diffs = diffs[np.isfinite(diffs)]
 CAL_NORM = Normalize(vmin=float(np.floor(np.percentile(modes, 0.5))),
                      vmax=float(np.ceil(np.percentile(modes, 99.5))))
-DIFF_LIM = max(1.0, float(np.ceil(np.percentile(np.abs(diffs), 99))))
-DIFF_NORM = tdc_codes.symmetric_norm(DIFF_LIM)
-print("CAL scale %g-%g, difference scale +-%g" % (CAL_NORM.vmin, CAL_NORM.vmax, DIFF_LIM))
+DIFF_LIM, CAL_SHIFT = {}, {}
+for t in TELS:
+    d = {chip: grids[(t, "july", b)] - grids[(t, "march", b)]
+         for b, chip in enumerate(campaign.TELESCOPE_CHIPS[t])}
+    alld = np.concatenate([g[np.isfinite(g)] for g in d.values()])
+    DIFF_LIM[t] = max(1.0, float(np.ceil(np.percentile(np.abs(alld), 99))))
+    # per chip: median and 5th / 95th percentile of July - March over its pixels (+ 0.0: no -0)
+    CAL_SHIFT[t] = {chip: [float(v) + 0.0 for v in np.percentile(g[np.isfinite(g)], [50, 5, 95])]
+                    for chip, g in d.items()}
+print("CAL scale %g-%g; difference scale %s" % (
+    CAL_NORM.vmin, CAL_NORM.vmax, ", ".join("%s +-%g" % (t, DIFF_LIM[t]) for t in TELS)))
+print("July minus March per chip, [median, 5th, 95th percentile]:", CAL_SHIFT)
 
-MAP_FOOTER = (u"CAL mode: median over the loop files of the pixel's most frequent CAL code in "
-              u"each file (ea = 0). Difference: July minus March. One CAL scale for every CAL map "
-              u"of these figures, one for every difference; sat N: pixels outside it.\nGrey: no "
-              u"CAL mode. Ringed: the pixel of the CAL, TOA and TOT histograms. Maps in the %s."
-              % pixel_maps.FRAME_TEXT)
+
+def shift_text(tel):
+    return "; ".join(u"%s %+g (%+g to %+g)" % ((c,) + tuple(v)) for c, v in CAL_SHIFT[tel].items())
+
+
+def map_footer(tel):
+    return (u"CAL mode: median over the loop files of the pixel's most frequent CAL code in each "
+            u"file (ea = 0). Difference: July minus March. Grey: no CAL mode.\n"
+            u"One CAL scale for every CAL map of both telescopes; one difference scale per "
+            u"telescope, symmetric, from its 99th percentile of |July - March| (here ±%g).\n"
+            u"\"sat N\" in a title: N pixels outside that map's scale. Ringed: the pixel of the "
+            u"CAL, TOA and TOT histograms. Maps in the %s.\n"
+            u"July minus March per chip, median (5th to 95th percentile of its pixels), codes: "
+            u"%s.\nCAL counts the delay-line steps in one 3.125 ns clock period, so it moves "
+            u"with the chip's temperature and supply; no cause is drawn from these shifts."
+            % (DIFF_LIM[tel], pixel_maps.FRAME_TEXT, shift_text(tel)))
+
+
 for k, tel in enumerate(TELS):
     lk = looks(tel)
     words = ["%s, run %d" % (x["label"], x["run"]) for x in lk] + ["July minus March"]
     fig, payload = tdc_codes.cal_maps(
         {(c, b): g for (t, c, b), g in grids.items() if t == tel}, tel, lk,
-        pixels=pixels_of(tel), norm=CAL_NORM, diff_norm=DIFF_NORM,
+        pixels=pixels_of(tel), norm=CAL_NORM, diff_norm=tdc_codes.symmetric_norm(DIFF_LIM[tel]),
         titles=lambda chip, j: "%s, %s" % (chip, words[j]),
         cbar_labels=("CAL mode [code]", "CAL mode, July minus March [code]"),
         tag=SETTINGS_TEXT,
         data="%s %s" % (style.fluence_label(1.5e15, unit=False), campaign.FLUENCE_UNIT),
-        footer=MAP_FOOTER)
+        footer=map_footer(tel))
     for rec in payload:
         print("%s %s: saturated before %d, after %d, difference %d" % (
             tel, rec["chip"], rec["before"]["saturated"], rec["after"]["saturated"],
             rec["difference"]["saturated"]))
     save(fig, "fe%02d_cal_maps_%s" % (5 + k, tel),
          dict(maps=payload, cal_scale=[CAL_NORM.vmin, CAL_NORM.vmax],
-              difference_scale=[-DIFF_LIM, DIFF_LIM],
+              difference_scale=[-DIFF_LIM[tel], DIFF_LIM[tel]],
+              difference_median=CAL_SHIFT[tel],
               runs=[dict(campaign=x["campaign"], run=x["run"]) for x in lk]),
          dict(cal_mode="median over the loop files of the per-file mode of the CAL code (ea == 0)",
-              scales="CAL: 0.5th-99.5th percentile of every CAL mode of fe05-fe06; difference: "
-                     "99th percentile of every |July - March|, symmetric",
+              scales="CAL: 0.5th-99.5th percentile of every CAL mode of fe05-fe06 (one scale for "
+                     "both); difference: 99th percentile of |July - March| over this telescope's "
+                     "chips, symmetric (one scale per telescope)",
+              difference_median="per chip: median, 5th and 95th percentile over its pixels of "
+                                "July - March, codes",
               frame=pixel_maps.FRAME_TEXT, fluence=campaign.FLUENCE_CONVENTION),
          inputs=INPUTS_TDC)
 
@@ -437,6 +503,17 @@ for k, tel in enumerate(TELS):
 # pixel of a board takes ONE triple, the one with the most events among the triples of its
 # board's combination (boards 0-1-2 for boards 0-2, boards 1-2-3 for board 3), and counts when
 # that triple holds at least 300 events. Nothing is pooled across the triples of one pixel.
+#
+# The triple matters: a pixel's TOT median depends on which of its triples is read. The partner
+# pixels on the other two boards fix where the track, at 60 deg to the chip, crosses the pixel,
+# and corridors grazing the pixel read a lower TOT: in July F1 run 13, board 3 pixel (10, 14),
+# two corridors of 1,675 and 1,669 events give medians of 3.01 and 2.02 ns (the other four
+# corridors of that pixel 2.28-2.97 ns). The board statistics barely move with the rule: ranking
+# each pixel's triples by file size instead (`--rank bytes`, the rule of the CERN IRRAD 2026 talk
+# figures) changes the triple of 554 of 22,472 pixels (2.5 %) and moves the board values of
+# fe07-fe09 by at most 0.0135 ns (median of the pixel medians) and 0.0029 ns (pooled median) over
+# 88 boards, and the most frequent TOT of one board by one 0.1 ns bin (comparison of the two
+# rebuilds, 2026-10-02). fe07 and fe08 state this in their footers.
 #
 # * TOT: the time over threshold of every event of that triple, in ns, as reconstructed.
 # * dTOA: the TOA difference of two boards of one triple after the time-walk correction solved
@@ -468,6 +545,14 @@ PIXEL_HISTS = dict(list(pd.read_csv(campaign.PIXEL_HISTS_CSV)
                                   "board_b"])))
 july_pref = tables.preferred_runs(campaign.DISPLAY_RUNS_JUL_CSV, **SETTINGS)
 NBOARDS = {t: len(campaign.TELESCOPE_CHIPS[t]) for t in TELS}
+# The largest change of a board statistic when each pixel's triple is its largest file instead of
+# its most populated one (the two rebuilds of 2026-10-02 compared over 88 boards; markdown above).
+RANK_SHIFT = dict(pixmed_median_ns=0.01349, median_ns=0.00290, mode_boards_moved=1, boards=88)
+RANK_SHIFT_TEXT = "%.3f ns" % (np.ceil(RANK_SHIFT["pixmed_median_ns"] * 1e3) / 1e3)  # at most
+CORRIDOR_TEXT = (u"A pixel's TOT depends on which of its triples is read: the partner pixels fix "
+                 u"where the 60 deg track crosses it, and corridors grazing the pixel read a lower "
+                 u"TOT (medians up to 1 ns apart for corridors of equal count).")
+SET_WORDS = "RFSel %d, threshold offset %d" % (SETTINGS["rfsel"], SETTINGS["offset"])
 COMBO_WORDS = "boards 0-1-2 for boards 0-2, boards 1-2-3 for board 3"
 MARCH_STEPS = {t: {step_fluence("march", t, r) for r in campaign.MARCH_DISPLAY_RUNS[t]}
                for t in TELS}
@@ -582,24 +667,31 @@ fig = tot_shapes.board_vs_fluence(
     boundary_after=sum(st["campaign"] == "march" for st in LADDER) - 1,
     footer=(u"Point: median over the board's pixels of each pixel's median TOT. Bar: 16-84 %% "
             u"of those pixel medians (the pixel-to-pixel spread, not an uncertainty); %d-%d "
-            u"pixels per board, %d-%d in the other display runs.\n%s\nMarch: one run per step. "
-            u"July: every display run at the step (RFSel 2, offset 20) side by side, the "
-            u"preferred one large and joined. Dotted line: March | July. Tick: time from the end "
-            u"of the step's irradiation to the run start."
-            % (npix07["main"] + npix07["other"] + (TOT_RULE,))))
+            u"pixels per board, %d-%d in the other display runs.\n%s Ranking by file size "
+            u"instead moves these board values by at most %s.\n%s\nMarch: one run per step. "
+            u"July: every display run at the step (%s) side by side, the preferred one large and "
+            u"joined. Dotted line: March | July. Tick: time from the end of the step's "
+            u"irradiation to the run start."
+            % (npix07["main"] + npix07["other"]
+               + (TOT_RULE, RANK_SHIFT_TEXT, CORRIDOR_TEXT, SET_WORDS))))
 save(fig, "fe07_tot_median_vs_fluence",
      dict(points=pts07, steps=LADDER, tick_labels=ticks,
           pixels_per_board={k: list(v) for k, v in npix07.items()},
           preferred_july={t: july_pref[t] for t in TELS},
-          hours_after_stop={"%s %s run %d" % k: v for k, v in sorted(HOURS.items())}),
+          hours_after_stop={"%s %s run %d" % k: v for k, v in sorted(HOURS.items())},
+          rank_shift=RANK_SHIFT),
      dict(fluence=campaign.FLUENCE_CONVENTION,
           statistic="median over the counted pixels of each pixel's median TOT (ns)",
           error_bar="16th-84th percentile of the pixel medians, not an uncertainty",
           pixels="a pixel counts when its triple (the one with the most events in boards 0-1-2, "
                  "board 3: 1-2-3) holds >= %d events" % FLOOR,
+          triple_rule="one triple per pixel, the most populated; a pixel's TOT median depends on "
+                      "the triple (track corridor) read, the board statistic barely: rank_shift "
+                      "is the largest change of a board value when the triple is the largest "
+                      "file instead (two rebuilds of 2026-10-02 compared)",
           times="run start (tables/run_times.csv) minus RAD_STOP_UTC of the step, hours",
-          rfsel="July runs at RFSel 2 by the display-run list; March runs record no RFSel and ran "
-                "at RFSel 2"),
+          rfsel="July runs at RFSel %d by the display-run list; March runs record no RFSel and "
+                "ran at RFSel %d" % (SETTINGS["rfsel"], SETTINGS["rfsel"])),
      inputs=INPUTS_TRACKS)
 
 # %% [markdown]
@@ -634,19 +726,23 @@ fig = tot_shapes.board_vs_fluence(
     tel_titles=TEL_TITLES, tag=SETTINGS_TEXT, data=None, board_dx=0.06,
     boundary_after=sum(st["campaign"] == "march" for st in STEPS_08) - 1,
     footer=(u"Filled, joined: median over the board's pixels of each pixel's median TOT; bar: "
-            u"16-84 %% of those pixel medians (spread, not an uncertainty). Open: the most "
-            u"frequent TOT of every event of the board's counted pixels together, centre of the "
-            u"fullest 0.1 ns bin.\n%s %d-%d pixels per board.\nOne run per step: March, the run "
-            u"of each step; July, the preferred display run (RFSel 2, offset 20). Dotted line: "
-            u"March | July. Tick: time from the end of the step's irradiation to the run start."
-            % ((TOT_RULE,) + npix08)))
+            u"16-84 %% of those pixel medians (spread, not an uncertainty); %d-%d pixels per "
+            u"board.\nOpen: the most frequent TOT of every event of the board's counted pixels "
+            u"together, centre of the fullest 0.1 ns bin.\n%s\nRanking by file size instead "
+            u"moves the medians by at most %s and the most frequent TOT of %d board in %d by one "
+            u"bin.\n%s\nOne run per step: March, the run of each step; July, the preferred "
+            u"display run (%s). Dotted line: March | July. Tick: time from the end of the step's "
+            u"irradiation to the run start."
+            % (npix08 + (TOT_RULE, RANK_SHIFT_TEXT, RANK_SHIFT["mode_boards_moved"],
+                         RANK_SHIFT["boards"], CORRIDOR_TEXT, SET_WORDS))))
 save(fig, "fe08_tot_board_vs_fluence",
-     dict(points=pts08, steps=STEPS_08, tick_labels=ticks08, pixels_per_board=list(npix08)),
+     dict(points=pts08, steps=STEPS_08, tick_labels=ticks08, pixels_per_board=list(npix08),
+          rank_shift=RANK_SHIFT),
      dict(fluence=campaign.FLUENCE_CONVENTION,
           pixmed="median over the counted pixels of each pixel's median TOT (ns); bar 16th-84th "
                  "percentile of the pixel medians",
           mode="centre of the fullest 0.1 ns bin of every event of the counted pixels (ns)",
-          pixels="as fe07", rfsel="as fe07"),
+          pixels="as fe07", triple_rule="as fe07", rfsel="as fe07"),
      inputs=INPUTS_TRACKS)
 
 # %% [markdown]
@@ -662,9 +758,9 @@ save(fig, "fe08_tot_board_vs_fluence",
 # %%
 TOT_W, DT_W = 0.1, tot_shapes.DT_BIN_PS
 SHAPE_RUNS_TEXT = (u"One run per step: March, the run of each step; July, the preferred display "
-                   u"run (RFSel 2, offset 20). Legend: step, time from the end of its irradiation "
-                   u"to the run start (July 1.5e15: from the end of the March step, after cooling "
-                   u"down), bias.")
+                   u"run (%s). Legend: step, time from the end of its irradiation to the run "
+                   u"start (July 1.5e15: from the end of the March step, after cooling down), "
+                   u"bias." % SET_WORDS)
 
 
 def pooled_tot(camp, tel, run, b):
@@ -888,8 +984,11 @@ save(fig, "fe12_dtoa_shape_pixel_vs_fluence",
 #
 # One board-1 pixel per telescope, the same in the three July runs (among the pixels counted in
 # all three, the one whose smallest event count is largest): its TOT and its TOA difference with
-# board 2 from its triple with the most events in each run, in events per bin (0.1 ns and
-# 100 ps). The board-2 pixel is the one in that triple.
+# board 2 from its triple with the most events in each run, in events per bin. The board-2 pixel
+# is the one in that triple. Bins: TOT 0.1 ns; dTOA 25 ps, the bin the table stores and about one
+# TOA code of these two pixels (3.125 ns / CAL, with each board's median CAL in the triple from
+# `dtoa_triples.csv`), as in fe11-fe12. At 100 ps, the bin of the CERN IRRAD 2026 talk, the
+# curve fills four bins.
 
 # %%
 for k, t in enumerate(TELS):
@@ -900,13 +999,24 @@ for k, t in enumerate(TELS):
     mine, counts, ncand = fixed_pixel(t, 1, runs)
     if mine != px:
         raise ValueError("%s: July pixel %s in the table, %s by the rule" % (t, px, mine))
-    columns, rec, hs = [], [], {"tot": [], "dtoa": []}
+    columns, rec, hs, cals = [], [], {"tot": [], "dtoa": []}, []
     for st in july:
         e, c, row = pixel_tot("july_pixel", "july", t, st["run"], 1)
         d = PIXEL_HISTS[("july_pixel", "dtoa_ps", "july", t, st["run"], 1, 2)]
         drow = d.iloc[0]
-        ed, cd = tot_shapes.rebin(*tot_shapes.hist_of(d, "bin_lo", DT_W, -tot_shapes.DT_HALF_PS,
-                                                      tot_shapes.DT_HALF_PS), 100.0)
+        ed, cd = tot_shapes.hist_of(d, "bin_lo", DT_W, -tot_shapes.DT_HALF_PS,
+                                    tot_shapes.DT_HALF_PS)
+        # the same triple in the dTOA table (pair 1-2 of board 1's triple): its CAL medians
+        tr = dtoa[(dtoa["campaign"] == "july") & (dtoa["tel"] == t) & (dtoa["run"] == st["run"])
+                  & (dtoa["pair"] == "1-2") & (dtoa["row_1"] == px[0]) & (dtoa["col_1"] == px[1])]
+        if len(tr) != 1 or (int(tr["row_2"].iloc[0]), int(tr["col_2"].iloc[0]),
+                            int(tr["n_events"].iloc[0])) != (int(drow["row_b"]),
+                                                             int(drow["col_b"]),
+                                                             int(drow["n_events"])):
+            raise ValueError("%s run %d: the July pixel's triple is not the dTOA table's" % (
+                t, st["run"]))
+        cal_ab = [float(tr["cal_a"].iloc[0]), float(tr["cal_b"].iloc[0])]
+        cals += cal_ab
         hs["tot"].append((e, c))
         hs["dtoa"].append((ed, cd))
         columns.append(dict(
@@ -921,30 +1031,210 @@ for k, t in enumerate(TELS):
                         tot_outside=int(row["n_outside"]), pixel_b=[int(drow["row_b"]),
                                                                     int(drow["col_b"])],
                         dt_events=int(drow["n_events"]), dt_median_ps=float(drow["median"]),
-                        dt_outside=int(drow["n_outside"]), file=row["file"]))
+                        dt_outside=int(drow["n_outside"]), cal_medians=cal_ab, file=row["file"]))
+    code_ps = [round(tot_shapes.TOA_CODE_PS / max(cals), 1),
+               round(tot_shapes.TOA_CODE_PS / min(cals), 1)]
     rows = [dict(key="tot", xlabel="TOT, %s pixel (%d, %d) [ns]" % ((chips[1],) + px),
                  ylabel="Events / 0.1 ns", range=tot_shapes.common_range(hs["tot"], TOT_W,
                                                                           floor=0.0)),
             dict(key="dtoa", xlabel="dTOA, %s - %s [ps]" % (chips[1], chips[2]),
-                 ylabel="Events / 100 ps", zero_line=True,
-                 range=tot_shapes.common_range(hs["dtoa"], 100.0, symmetric=True))]
+                 ylabel="Events / 25 ps", zero_line=True,
+                 range=tot_shapes.common_range(hs["dtoa"], DT_W, symmetric=True))]
     fig = tot_shapes.run_columns(
         columns, rows, tag=SETTINGS_TEXT, data=None,
         footer=(u"One %s pixel, the same in the three July runs: among the %d pixels whose "
                 u"triple holds >= %d events in all three, the one whose smallest event count is "
                 u"largest. Per run its triple with the most events (boards 0-1-2); its TOT, and "
                 u"dTOA = TOA(%s) - TOA(%s)\nafter a time-walk correction solved jointly over the "
-                u"triple's three boards, centred on its median. Bins 0.1 ns and 100 ps, events "
-                u"per bin. July preferred display runs (RFSel 2, offset 20); time from the end of "
-                u"the step's irradiation to the run start (1.5e15: from the end of the March "
-                u"step, after cooling down)."
-                % (chips[1], ncand, FLOOR, chips[1], chips[2])))
+                u"triple's three boards, centred on its median. Bins: TOT 0.1 ns; dTOA 25 ps, "
+                u"about one TOA code (3.125 ns / CAL = %.1f-%.1f ps for these two pixels); events "
+                u"per bin.\nJuly preferred display runs (%s); time from the end of the step's "
+                u"irradiation to the run start (1.5e15: from the end of the March step, after "
+                u"cooling down)."
+                % (chips[1], ncand, FLOOR, chips[1], chips[2], code_ps[0], code_ps[1],
+                   SET_WORDS)))
     save(fig, "fe%02d_tot_dtoa_shape_vs_fluence_jul_%s" % (13 + k, t),
          dict(pixel=list(px), board=1, chip=chips[1], candidates=ncand,
-              counts_at_pick=counts, runs=rec),
+              counts_at_pick=counts, runs=rec, code_width_ps=code_ps),
          dict(fluence=campaign.FLUENCE_CONVENTION,
               pixel="board 1, among the pixels >= %d events in all three July runs, the largest "
                     "smallest count" % FLOOR,
-              tot="0.1 ns bins, events", dtoa="as fe11, 100 ps bins, events",
+              tot="0.1 ns bins, events", dtoa="as fe11, 25 ps bins (as stored), events",
+              code_width_ps="3.125 ns / CAL over the median CAL of both boards of the triple in "
+                            "the three runs (dtoa_triples.csv cal_a, cal_b)",
               times="run start minus RAD_STOP_UTC of the step, hours"),
          inputs=INPUTS_TRACKS)
+
+# %% [markdown]
+# ## Figure fe15: the TOT at two RFSel settings
+#
+# What the preamp feedback resistor R_f (RFSel) does to the TOT at a fixed threshold offset,
+# from the pairs of runs that differ in RFSel only (`RFSEL_TOT_PAIRS` in the campaign module:
+# July F1 at 3.5e15, run 47 at RFSel 1 against run 18 at RFSel 2, and run 52 at RFSel 2 against
+# run 86 at RFSel 3). One chip, the one whose smallest total of counted events over the four runs
+# is largest (`rfsel_pair_hist.csv` holds it; this cell checks the choice against the per-pixel
+# table). Per pair, the pixels of that chip counted in both runs, every event of each pixel's
+# triple. The RFSel, threshold offset and bias of each run come from `tables/runs_summary.csv`.
+#
+# Control: each curve must be its run's pooled TOT of the chip (`tot_pooled_hist.csv`, the table
+# of fe08-fe09) less the pixels not counted in the other run of its pair. The cell checks that the
+# curve is nowhere above the pooled TOT, that the difference holds exactly those pixels' events,
+# and that the curve holds the events the table states. One run of
+# the pairs is also the preferred display run of its step (run 18, the 3.5e15 run of fe08-fe09);
+# its median over all its counted pixels, from `tot_pooled_summary.csv`, is stated on the figure.
+#
+# Colour = RFSel here (the fluence is one step). 0.1 ns bins, each curve as the fraction of its
+# events; a short tick on the x axis marks each curve's median.
+
+# %%
+INPUTS_RFSEL = [campaign.RFSEL_PAIR_HIST_CSV, campaign.TOT_POOLED_HIST_CSV,
+                campaign.TOT_POOLED_SUMMARY_CSV, campaign.TOT_PIXEL_MEDIANS_CSV,
+                campaign.RUNS_SUMMARY_CSV, campaign.RUN_TIMES_CSV, campaign.DISPLAY_RUNS_JUL_CSV]
+rfsel_hist = pd.read_csv(campaign.RFSEL_PAIR_HIST_CSV)
+if len(campaign.RFSEL_TOT_PAIRS) != 1:
+    raise ValueError("fe15 draws the RFSel pairs of one telescope; RFSEL_TOT_PAIRS has %d"
+                     % len(campaign.RFSEL_TOT_PAIRS))
+((RF_CAMP, RF_TEL), RF_PAIRS), = campaign.RFSEL_TOT_PAIRS.items()
+RF_RUNS = sorted({r for p in RF_PAIRS for r in p})
+(RF_BOARD,) = rfsel_hist["board_idx"].unique()
+RF_BOARD = int(RF_BOARD)
+RF_CHIP = campaign.TELESCOPE_CHIPS[RF_TEL][RF_BOARD]
+
+
+def counted(camp, tel, run, b):
+    """{(row, col): events of its triple} for the counted pixels of board b in a run."""
+    p = pix_medians[(pix_medians["campaign"] == camp) & (pix_medians["tel"] == tel)
+                    & (pix_medians["run"] == run) & (pix_medians["board_idx"] == b)
+                    & pix_medians["passes_floor"]]
+    return {(int(r), int(c)): int(n) for r, c, n in zip(p["row"], p["col"], p["n"])}
+
+
+def board_settings(camp, tel, run, b):
+    (s,) = [x for x in tables.run_settings(RS, campaign.TABLE_CAMPAIGN[camp],
+                                           campaign.TABLE_TEL[tel], run) if x["board_idx"] == b]
+    return s
+
+
+# the chip: the board whose smallest total of counted events over the runs is largest (ties to
+# the first chip name), as the rebuild chose it
+chips = campaign.TELESCOPE_CHIPS[RF_TEL]
+RF_TOTALS = {chips[b]: {r: sum(counted(RF_CAMP, RF_TEL, r, b).values()) for r in RF_RUNS}
+             for b in range(NBOARDS[RF_TEL])}
+best = max(sorted(RF_TOTALS), key=lambda c: min(RF_TOTALS[c].values()))
+if best != RF_CHIP:
+    raise ValueError("RFSel chip %s in the table, %s by the rule" % (RF_CHIP, best))
+RF_FLUENCE = {step_fluence(RF_CAMP, RF_TEL, r) for r in RF_RUNS}
+if len(RF_FLUENCE) != 1:
+    raise ValueError("RFSel runs at different fluences: %s" % RF_FLUENCE)
+(RF_FLUENCE,) = RF_FLUENCE
+
+panels15, rec15, hs15, control15, hv15 = [], [], [], [], []
+for pair in RF_PAIRS:
+    curves, npix, offsets = [], set(), set()
+    for run, partner in ((pair[0], pair[1]), (pair[1], pair[0])):
+        g = rfsel_hist[(rfsel_hist["campaign"] == RF_CAMP) & (rfsel_hist["tel"] == RF_TEL)
+                       & (rfsel_hist["run"] == run) & (rfsel_hist["partner_run"] == partner)]
+        row = g.iloc[0]
+        s = board_settings(RF_CAMP, RF_TEL, run, RF_BOARD)
+        if (s["rfsel"], s["offset"]) != (int(row["rfsel"]), int(row["offset"])):
+            raise ValueError("run %d: RFSel / offset %s in the run summary, %s in the table" % (
+                run, (s["rfsel"], s["offset"]), (int(row["rfsel"]), int(row["offset"]))))
+        e, c = tot_shapes.hist_of(g, "bin_lo_ns", tot_shapes.TOT_BIN_NS, 0.0, tot_shapes.TOT_HI_NS)
+        # positive control: the chip's pooled TOT in this run less the pixels not counted in the
+        # partner run is this curve, bin by bin
+        mine, other = counted(RF_CAMP, RF_TEL, run, RF_BOARD), counted(RF_CAMP, RF_TEL, partner,
+                                                                         RF_BOARD)
+        left = sorted(set(mine) - set(other))
+        summ = SUMMARY.loc[(RF_CAMP, RF_TEL, run, RF_BOARD)]
+        _, c_all = tot_shapes.hist_of(TOT_POOLED[(RF_CAMP, RF_TEL, run, RF_BOARD)], "bin_lo_ns",
+                                      tot_shapes.TOT_BIN_NS, 0.0, tot_shapes.TOT_HI_NS)
+        ctl = dict(run=int(run), partner_run=int(partner), board_pixels=int(summ["n_pixels"]),
+                   board_events=int(summ["n_events"]), pixels_left_out=len(left),
+                   events_left_out=sum(mine[p] for p in left),
+                   common_pixels=len(set(mine) & set(other)),
+                   min_bin_difference=int((c_all - c).min()),
+                   difference_events=int((c_all - c).sum()), curve_events=int(c.sum()))
+        if (ctl["min_bin_difference"] < 0 or ctl["common_pixels"] != int(row["n_pixels"])
+                or ctl["difference_events"] != ctl["events_left_out"]
+                or ctl["curve_events"] != int(row["n_events"])
+                or ctl["board_pixels"] - ctl["pixels_left_out"] != int(row["n_pixels"])
+                or ctl["board_events"] - ctl["events_left_out"] != int(row["n_events"])):
+            raise ValueError("run %d: the RFSel curve is not the pooled TOT less the pixels left "
+                             "out: %s, table %d pixels %d events" % (run, ctl, row["n_pixels"],
+                                                                     row["n_events"]))
+        control15.append(ctl)
+        text, hours = blnw.time_after_stop(RUN_TIMES, RF_CAMP, RF_TEL, [run],
+                                           campaign.RAD_STOP_UTC[RF_FLUENCE])
+        e10, c10 = tot_shapes.rebin(e, c, TOT_W)
+        hs15.append((e10, c10))
+        med = float(row["median_ns"])
+        curves.append(dict(rfsel=s["rfsel"], color=tot_shapes.RFSEL_COLOR[s["rfsel"]], edges=e10,
+                           y=c10 / float(row["n_events"]), median=med,
+                           label=u"%s, run %d, %s\nmedian %.2f ns, N = %d"
+                                 % (style.rfsel_text(s["rfsel"]), run, text, med,
+                                    int(row["n_events"]))))
+        rec15.append(dict(pair=list(pair), run=int(run), partner_run=int(partner),
+                          chip=RF_CHIP, board_idx=RF_BOARD, rfsel=s["rfsel"],
+                          rf_kohm=style.RFSEL_RF_KOHM[s["rfsel"]], offset=s["offset"],
+                          hv=s["hv"], hours=round(hours[run], 2), n_pixels=int(row["n_pixels"]),
+                          n_events=int(row["n_events"]), median_ns=round(med, 4)))
+        npix.add(int(row["n_pixels"]))
+        offsets.add(s["offset"])
+        hv15.append(s["hv"])
+    if len(npix) != 1 or len(offsets) != 1:
+        raise ValueError("pair %s: pixels %s, offsets %s" % (pair, npix, offsets))
+    curves.sort(key=lambda cv: cv["rfsel"])
+    panels15.append(dict(subject=style.settings_text(rfsel=[cv["rfsel"] for cv in curves],
+                                                     offset=offsets.pop()),
+                         note="%s, the %d pixels counted in both runs" % (RF_CHIP, npix.pop()),
+                         curves=curves))
+# the run of the pairs that is also a preferred display run: its board median as fe08-fe09 use it
+ctl_runs = [r for r in RF_RUNS if r in july_pref[RF_TEL]] if RF_CAMP == "july" else []
+POS_CONTROL = [dict(run=int(r), chip=RF_CHIP, n_pixels=int(SUMMARY.loc[(RF_CAMP, RF_TEL, r,
+                                                                         RF_BOARD)]["n_pixels"]),
+                    n_events=int(SUMMARY.loc[(RF_CAMP, RF_TEL, r, RF_BOARD)]["n_events"]),
+                    median_ns=round(float(SUMMARY.loc[(RF_CAMP, RF_TEL, r, RF_BOARD)]["median_ns"]),
+                                    4)) for r in ctl_runs]
+for x in rec15:
+    print("pair %s: run %d %s RFSel %d offset %d %s: %d pixels, %d events, median %.4f ns" % (
+        x["pair"], x["run"], x["chip"], x["rfsel"], x["offset"], blnw.bias_text([x["hv"]]),
+        x["n_pixels"], x["n_events"], x["median_ns"]))
+print("control (pooled TOT less the pixels left out):", control15)
+print("positive control:", POS_CONTROL)
+print("events above the floor per chip and run:", RF_TOTALS)
+pc_text = "; ".join(u"Run %d is also the %s run of the TOT figures against fluence, where its %d "
+                    u"counted %s pixels give a median of %.4f ns" % (
+                        p["run"], campaign.FLUENCE_TEXT_PLAIN[RF_FLUENCE], p["n_pixels"],
+                        p["chip"], p["median_ns"]) for p in POS_CONTROL)
+fig = tot_shapes.rfsel_pairs(
+    panels15, xlabel="TOT [ns]", ylabel="Fraction of events / 0.1 ns",
+    xrange=tot_shapes.common_range(hs15, TOT_W, floor=0.0), tag=None,
+    data="%s, %s, %s, %s" % (campaign.TELESCOPE_TITLE[RF_TEL], RF_CHIP,
+                             style.fluence_label(RF_FLUENCE), RF_CAMP.capitalize()),
+    footer=(u"%s\nPer pair, the %s pixels counted in both runs, every event of each; %s is the "
+            u"chip whose smallest total of counted events over the four runs is largest. Bias of "
+            u"%s: %s in every run.\n0.1 ns bins, each curve as the fraction of its events; tick "
+            u"on the axis: the median. Legend: RFSel, run, time from the end of the step's "
+            u"irradiation to the run start, median TOT and events.\nControl: in every bin each "
+            u"curve is at most its run's pooled TOT of %s, and the difference holds exactly the "
+            u"events of the pixels not counted in the other run.%s"
+            % (TOT_RULE, RF_CHIP, RF_CHIP, RF_CHIP, blnw.bias_text(hv15), RF_CHIP,
+               ("\n" + pc_text + ".") if pc_text else "")))
+save(fig, "fe15_rfsel_tot_pairs",
+     dict(curves=rec15, chip=RF_CHIP, board_idx=RF_BOARD, telescope=RF_TEL, campaign=RF_CAMP,
+          chip_choice=RF_TOTALS, control=control15, positive_control=POS_CONTROL),
+     dict(fluence=campaign.FLUENCE_CONVENTION,
+          pairs="RFSEL_TOT_PAIRS of the campaign module: runs that differ in RFSel only",
+          settings="RFSel, threshold offset and bias of the chip per run from runs_summary.csv",
+          pixels="per pair, the chip's pixels counted (triple >= %d events) in both runs; every "
+                 "event of each pixel's triple" % FLOOR,
+          chip="the board whose smallest total of counted events over the four runs is largest",
+          bins="0.1 ns (summed from the stored 0.05 ns), fraction of the curve's events",
+          median_ns="median TOT of every event of the curve (from the table, unbinned)",
+          control="per run: the chip's pooled TOT (tot_pooled_hist.csv) less this curve is >= 0 "
+                  "in every 0.05 ns bin and sums to the events of the pixels not counted in the "
+                  "partner run; the curve sums to its n_events",
+          positive_control="the board median of tot_pooled_summary.csv for the run of the pairs "
+                           "that is a preferred display run",
+          times="run start minus RAD_STOP_UTC of the step, hours"),
+     inputs=INPUTS_RFSEL)

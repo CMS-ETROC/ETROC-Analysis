@@ -38,7 +38,8 @@ described in the campaign's inputs document):
   RFSel pairs       rfsel_rows(): per pair of runs of RFSEL_TOT_PAIRS, the pooled TOT of one
                     chip over the pixels above the floor in both runs (RFSEL_PAIR_HIST_CSV)
 
-The drawing (board_vs_fluence, shape_grid, run_columns) takes its words as arguments.
+The drawing (board_vs_fluence, shape_grid, run_columns, rfsel_pairs) takes its words as
+arguments.
 """
 import glob
 import os
@@ -68,6 +69,9 @@ MODE_BINS_NS = (0.05, 0.10, 0.20)
 DT_BIN_PS, DT_HALF_PS = 25.0, 2000.0
 NB_DT = int(round(2 * DT_HALF_PS / DT_BIN_PS))
 TOA_CODE_PS = 3125.0              # one TOA code = 3.125 ns / CAL
+# colour = RFSel on the RFSel comparison (one fluence step, so the ladder colour carries nothing
+# there); Okabe-Ito hues, no orange (the 3.5e15 colour of the ladder)
+RFSEL_COLOR = {1: "#0072B2", 2: "#009E73", 3: "#CC79A7"}
 ROLE_INITIAL = {"d": "dut", "r": "ref", "e": "extra", "t": "trig"}
 
 _PIX = ["%s_%d" % (k, b) for b in range(NBOARDS) for k in ("chip", "row", "col")]
@@ -589,7 +593,8 @@ def board_vs_fluence(points, steps_by_tel, series, *, tick_labels, xlabel, ylabe
     board_dx  x offset between the boards of one run, in step units
     Returns the figure."""
     tels = list(tel_titles)
-    fig, axes = blnw._grid(1, len(tels), aw=7.4, ah=4.6, ml=1.25, mr=0.3, mt=0.62, mb=1.15,
+    fig, axes = blnw._grid(1, len(tels), aw=7.4, ah=4.6, ml=1.25, mr=0.3, mt=0.62,
+                           mb=1.15 + style.footer_extra_in(footer, scale, fits=4),
                            gx=0.85, gy=0.0, scale=scale)
     s = style.sizes(scale)
     vals = [v for p in points for v in (p["value"], p.get("lo"), p.get("hi")) if v is not None]
@@ -744,5 +749,48 @@ def run_columns(columns, rows, *, tag, data, footer, scale=0.6):
                 style.right_lines(ax, [col["subject"]], s["title"])
     style.compound_header(axes[0], tag=tag, data=data, scale=scale,
                           subjects=[c["subject"] for c in columns])
+    style.footer(fig, footer, scale)
+    return fig
+
+
+def rfsel_pairs(panels, *, xlabel, ylabel, xrange, tag, data, footer, scale=0.72):
+    """Pairs of runs that differ in RFSel only, side by side: one panel per pair, one step curve
+    per run and a short tick at each curve's median on the x axis. One x range and one y scale
+    for every panel, so the panels compare.
+
+    panels  [dict(subject, note, curves=[dict(label, color, edges, y, median)]), ...]: y the value
+            per bin; the subject is the panel's right title, the note heads its legend
+    Returns the figure."""
+    # 8.2 in panels: the subject (settings_text of two RFSels) beside the experiment text
+    fig, axes = blnw._grid(1, len(panels), aw=8.2, ah=4.4, ml=1.2, mr=0.3, mt=0.62,
+                           mb=1.0 + style.footer_extra_in(footer, scale, fits=4),
+                           gx=0.75, gy=0.0, scale=scale)
+    s = style.sizes(scale)
+    top = 1.55 * max(float(np.max(c["y"])) for p in panels for c in p["curves"])
+    for j, p in enumerate(panels):
+        ax = axes[0][j]
+        for c in p["curves"]:
+            x = np.repeat(c["edges"], 2)[1:-1]
+            ax.plot(np.concatenate(([x[0]], x, [x[-1]])),
+                    np.concatenate(([0.0], np.repeat(c["y"], 2), [0.0])),
+                    color=c["color"], linewidth=1.5, zorder=3)
+            ax.plot([c["median"], c["median"]], [0.0, 0.07 * top], color=c["color"],
+                    linewidth=2.6, solid_capstyle="butt", zorder=4)
+        ax.set_xlim(*xrange)
+        ax.set_ylim(0.0, top)
+        ax.xaxis.set_major_locator(MaxNLocator(6))
+        ax.yaxis.set_major_locator(MaxNLocator(5))
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel if j == 0 else "")
+        style.style_axes(ax, scale)
+        h = [Line2D([], [], color=c["color"], linewidth=2.2, label=c["label"])
+             for c in p["curves"]]
+        lg = ax.legend(handles=h, loc="upper left", fontsize=s["legend"] * 0.9,
+                       title=p.get("note"), title_fontsize=s["legend"] * 0.9, frameon=True,
+                       framealpha=0.9, borderpad=0.35, labelspacing=0.45, handlelength=1.6,
+                       handletextpad=0.5, borderaxespad=0.4)
+        lg._legend_box.align = "left"
+    style.compound_header(axes[0], tag=tag, data=data, scale=scale,
+                          subjects=[p["subject"] for p in panels])
     style.footer(fig, footer, scale)
     return fig
