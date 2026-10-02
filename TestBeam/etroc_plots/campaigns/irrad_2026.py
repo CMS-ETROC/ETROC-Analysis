@@ -20,7 +20,9 @@ from .._paths import REPO_TESTBEAM
 # campaigns.REQUIRED["style"]: etroc_plots.style reads these for every figure.
 CAMPAIGN = "CERN IRRAD 2026"
 EXP_TEXT = "ETL ETROC IRRAD"     # header left, after "CMS", and the only text there
-HEADER_LINE_1 = CAMPAIGN + ", 24 GeV p+, 60 deg"     # beam line
+BEAM_TEXT = "24 GeV p+"          # the beam
+ANGLE_TEXT = "60 deg"             # the telescopes' angle to the beam
+HEADER_LINE_1 = "%s, %s, %s" % (CAMPAIGN, BEAM_TEXT, ANGLE_TEXT)     # beam line
 HEADER_LINE_2 = "17 cm off axis, T = -25 C"          # position and temperature
 LINE1_PARKED = CAMPAIGN + ", parked, no beam"        # replaces HEADER_LINE_1 on every IV scan
 
@@ -719,6 +721,10 @@ UNIV_AXIS_R2_CSV = os.path.join(INPUTS_UNIVERSALITY, "univ_axis_r2.csv")        
 UNIV_AXIS_F_WIDE_CSV = os.path.join(INPUTS_UNIVERSALITY, "univ_axis_F_wide.csv")  # axis F
 UNIV_AXIS_F_LONG_CSV = os.path.join(INPUTS_UNIVERSALITY, "univ_axis_F_long.csv")
 TWC_BANK_BEST_CSV = os.path.join(INPUTS_UNIVERSALITY, "twc_bank_best.csv")        # per pixel fit
+# The fluence steps the universality figures leave out: no comparison with an IRRAD run at 2e15
+# or 3.5e15 is drawn (user decision of 2026-09-17). The study's cells at these steps are the July
+# threshold-offset and RFSel steps and the cooling-down cells, all at 3.5e15.
+UNIV_EXCLUDED_STEPS = (2e15, 3.5e15)
 # The study's own outputs, read only by the reduction, never by a notebook. Read-only.
 # TWC_TRANSFER_ROOT holds the coefficient bank (bank/coeffs_<campaign>_<run>.parquet) and the
 # round-1 table of the level cells (figs/transfer_2026-09-04/inputs/master_cells.csv).
