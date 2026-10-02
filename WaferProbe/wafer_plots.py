@@ -661,15 +661,20 @@ def fig_qinj_overview(dies, qinj, title):
     if not np.isfinite(_num(dies, "qinj_events")).any():
         return None
     n = len(injected_pixels(qinj))
-    # rounded down, so a die below 100 % never prints 100
-    eff = np.floor(_num(dies, "qinj_min_eff") * 100 + 1e-9)
+    # in % rounded down to 0.01, so a die below 100 % never prints 100.00
+    eff = np.floor(_num(dies, "qinj_min_eff") * 1e4 + 1e-6) / 100
     ok = _passed(dies)
     flagged, ea = _num(dies, "qinj_flagged_trailers"), _num(dies, "qinj_ea_words")
     fig, axes = plt.subplots(2, 2, figsize=(11.6, 10.2), layout="constrained")
-    wafer_map(axes[0, 0], dies, _num(dies, "qinj_events"), title="events read",
-              label="events", ref=ok)
-    wafer_map(axes[0, 1], dies, eff, title="lowest efficiency over the injected pixels, rounded down",
-              label="%", vrange=(0, 100))
+    events = _num(dies, "qinj_events")
+    # a few dies read many times the usual events; capping the colours at twice
+    # the median of the PASSED dies keeps the rest apart (the numbers stay exact)
+    typical = np.nanmedian(np.where(ok, events, np.nan)) if (ok & np.isfinite(events)).any() else np.nan
+    wafer_map(axes[0, 0], dies, events, title="events read" + (", colours capped at twice the median" if
+                                                               np.isfinite(typical) else ""),
+              label="events", ref=ok, vrange=(0, 2 * typical) if np.isfinite(typical) else None)
+    wafer_map(axes[0, 1], dies, eff, title="lowest efficiency over the injected pixels (%), rounded down to 0.01",
+              label="%", vrange=(0, 100), fmt="{:.2f}", fontsize=5.5)
     wafer_map(axes[1, 0], dies, flagged, title="frame trailers with a nonzero chip status",
               label="trailers", cmap="Reds", vrange=(0, max(1.0, float(np.nanmax(flagged)))), integer=True)
     wafer_map(axes[1, 1], dies, ea, title="hit words with a nonzero EA flag", label="words",

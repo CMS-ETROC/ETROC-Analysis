@@ -18,7 +18,23 @@ from wafer_plots import add_note  # noqa: E402
 PHASE_COLOURS = {"on": "#9ecae1", "high": "#08519c"}
 RAIL_COLOURS = {"analog": "#d62728", "digital": "#1f77b4", "ws_analog": "#ff7f0e", "ws_digital": "#2ca02c",
                 "vref": "#9467bd"}
-REFERENCE_W = 1.0  # the dashed line: 1 W per chip, the round number the power is compared with
+# ETROC2 Reference Manual rev 0.6, Table 21: the power per chip it expects with the
+# preamplifiers at their lower setting (our power-on) and their high setting (high
+# power, IBSel), within +-20 % from process variation
+MANUAL_W = {"on": 0.77, "high": 0.97}
+MANUAL_SPREAD = 0.2
+MANUAL_TEXT = ("dash-dot lines and shading: the ETROC2 manual's estimate (rev 0.6, Table 21), "
+               f"{MANUAL_W['on']:g} W at the preamp's lower and {MANUAL_W['high']:g} W at its high setting, "
+               f"+-{MANUAL_SPREAD:.0%}")
+
+
+def _manual_estimates(ax, vertical=False):
+    """The manual's two estimates as lines, their +-20 % as shading."""
+    span, at = (ax.axvspan, ax.axvline) if vertical else (ax.axhspan, ax.axhline)
+    for phase, watts in MANUAL_W.items():
+        span(watts * (1 - MANUAL_SPREAD), watts * (1 + MANUAL_SPREAD), color=PHASE_COLOURS[phase],
+             alpha=0.22 if phase == "on" else 0.10, lw=0, zorder=0)
+        at(watts, color=PHASE_COLOURS[phase], ls="-.", lw=1.0, zorder=1)
 LOT_GAP = 1.0
 WHISKERS = (2, 98)  # percentiles, as the legend says
 
@@ -86,16 +102,17 @@ def fig_power(power):
                     transform=heading, ha="center", va="top", fontsize=8)
         for first, _, _ in spans[1:]:
             ax.axvline(first - (LOT_GAP + 1) / 2, color="#bbbbbb", lw=0.6)
-        ax.axhline(REFERENCE_W, color="#777777", ls="--", lw=0.8)
-        ax.text(1.0, REFERENCE_W, f" {REFERENCE_W:g} W", transform=blended_transform_factory(ax.transAxes, ax.transData),
-                ha="left", va="center", fontsize=8.5, color="#555555")
+        _manual_estimates(ax)
+        for phase, watts in MANUAL_W.items():
+            ax.text(1.0, watts, f" manual\n {watts:g} W", transform=blended_transform_factory(ax.transAxes, ax.transData),
+                    ha="left", va="center", fontsize=8.5, color=PHASE_COLOURS[phase])
         ax.set_title(STAGE_TEXT[stage], fontsize=12, loc="center")
         ax.set_ylabel(f"power at {NOMINAL_V:g} V (W)", fontsize=10)
         ax.tick_params(axis="y", labelsize=9)
         ax.grid(axis="y", color="#e5e5e5", lw=0.5)
         ax.set_axisbelow(True)
         ax.set_xticks(list(xs.values()), [wafer for _, wafer in xs], fontsize=9)
-    top = max(REFERENCE_W, good[[f"power_{p}_W" for p in PHASES]].max().max())
+    top = max(MANUAL_W["high"] * (1 + MANUAL_SPREAD), good[[f"power_{p}_W" for p in PHASES]].max().max())
     low = good[[f"power_{p}_W" for p in PHASES]].min().min()
     axes[0, 0].set_ylim(low - 0.1 * (top - low), top + 0.45 * (top - low))
     fig.suptitle(f"Power per chip, PASSED valid dies: {NOMINAL_V:g} V x the current summed over "
@@ -104,8 +121,8 @@ def fig_power(power):
                         for p, t in PHASES.items()],
                loc="outside lower center", ncol=len(PHASES), fontsize=10, frameon=False,
                title=f"boxes: quartiles and median; whiskers: 2nd to 98th percentile; small numbers: the dies "
-                     "with a high-power reading; under each lot: test months, analog / digital supply voltage as read back; "
-                     f"dashed: {REFERENCE_W:g} W per chip",
+                     "with a high-power reading; under each lot: test months, analog / digital supply voltage as read back\n"
+                     + MANUAL_TEXT,
                title_fontsize=9)
     return fig
 
@@ -135,16 +152,16 @@ def fig_power_rails(power):
     ax.tick_params(axis="y", length=0)
     ax.set_xlabel(f"mean power at {NOMINAL_V:g} V (W)", fontsize=10)
     ax.tick_params(axis="x", labelsize=9)
-    ax.axvline(REFERENCE_W, color="#777777", ls="--", lw=0.8)
+    _manual_estimates(ax, vertical=True)
     totals = [good[[f"{rail}_P_{phase}" for rail in POWER_RAILS]].groupby([good["lot"], good["stage"]]).mean().sum(axis=1)
               for phase in PHASES]
-    ax.set_xlim(0, 1.12 * max(REFERENCE_W, *(t.max() for t in totals)))
+    ax.set_xlim(0, 1.05 * max(MANUAL_W["high"] * (1 + MANUAL_SPREAD), *(t.max() for t in totals)))
     ax.set_ylim(-(3 * len(groups) - 1) - 0.6, 0.6)
     ax.grid(axis="x", color="#e5e5e5", lw=0.5)
     ax.set_axisbelow(True)
     fig.legend(handles=[Patch(facecolor=RAIL_COLOURS[r], label=r) for r in POWER_RAILS],
                loc="outside lower center", ncol=len(POWER_RAILS), fontsize=9, frameon=False,
-               title=f"pale upper bar: power-on; lower bar: high power; dashed: {REFERENCE_W:g} W per chip", title_fontsize=9)
+               title="pale upper bar: power-on; lower bar: high power\n" + MANUAL_TEXT, title_fontsize=9)
     fig.suptitle(f"Power per rail, mean over the PASSED valid dies of each lot and stage\n({NOMINAL_V:g} V x the "
                  "current of the rail)", fontsize=12)
     return fig

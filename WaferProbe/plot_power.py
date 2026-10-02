@@ -15,10 +15,11 @@ them: the same on every rail and every test, whatever the supplies were
 set to and whatever the cables and the probe card drop. A die whose run
 did not log every one of these rails in a phase has no power in that
 phase. The eFuse rail is left out: not every run logs it, and where one
-does it reads at most 10 mA on a PASSED die. The figures draw a dashed
-line at 1 W per chip, the round number the power is compared with (the
-ETROC2 Reference Manual rev 0.6, Table 21, estimates 0.77 W at the low
-and 0.97 W at the high preamplifier power setting, within +-20 %).
+does it reads at most 10 mA on a PASSED die. Power-on runs the
+preamplifiers at their lower power setting, high power at their high
+one (IBSel); the figures draw what the ETROC2 Reference Manual (rev 0.6,
+Table 21) expects for the two, 0.77 W and 0.97 W per chip within +-20 %,
+an estimate from simulation and the earlier ETROC0 and ETROC1 chips.
 
 It writes into --out (default <path>/power_summary/): power_dies.csv, one
 row per die of every wafer and stage read, with each rail's power and the

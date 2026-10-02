@@ -400,10 +400,11 @@ drop. A die whose run did not log every one of these rails in a phase
 has no power in that phase. The eFuse rail is left out: not every
 run logs it, and where one does it reads at most 10 mA on a PASSED die at
 power-on and under 1 mA at high power (all lots, as of October 2026).
-Both figures draw a dashed line at 1 W per chip, the round number the
-power is compared with; the ETROC2 Reference Manual (rev 0.6, Table 21)
-estimates 0.77 W at the low and 0.97 W at the high preamplifier power
-setting, within ±20 %. When no PASSED valid die of the lots has a power,
+Power-on runs the preamplifiers at their lower power setting, high
+power at their high one (IBSel). Both figures draw what the ETROC2
+Reference Manual (rev 0.6, Table 21) expects for the two, 0.77 W and
+0.97 W per chip within ±20 %, an estimate from simulation and the
+earlier ETROC0 and ETROC1 chips. When no PASSED valid die of the lots has a power,
 it writes the table and stops with exit code 2.
 
 It writes into `--out` (default `<path>/power_summary/`):

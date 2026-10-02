@@ -132,12 +132,14 @@ class PlotWaferTest(unittest.TestCase):
         from wafer_plots import fig_qinj_overview
         from wafer_tables import QINJ_COLUMNS
         dies = pd.DataFrame([{"die": 1, "die_row": 0, "die_col": 0, "grade": "PASSED", "qinj_events": 8544,
-                              "qinj_min_eff": 8540 / 8544, "qinj_flagged_trailers": 0, "qinj_ea_words": 0}])
+                              "qinj_min_eff": 8540 / 8544, "qinj_flagged_trailers": 0, "qinj_ea_words": 0},
+                             {"die": 2, "die_row": 0, "die_col": 1, "grade": "PASSED", "qinj_events": 100000,
+                              "qinj_min_eff": 99999 / 100000, "qinj_flagged_trailers": 0, "qinj_ea_words": 0}])
         qinj = pd.DataFrame([{"die": 1, "pix_row": 2, "pix_col": 2, "hits": 8540, "eff": 8540 / 8544}],
                             columns=QINJ_COLUMNS)
         fig = fig_qinj_overview(dies, qinj, "t")
         self.addCleanup(plt.close, fig)
-        self.assertEqual([t.get_text() for t in fig.axes[1].texts], ["99"])
+        self.assertEqual(sorted(t.get_text() for t in fig.axes[1].texts), ["99.95", "99.99"])
 
     def test_only_the_stage_asked_for_is_read_and_it_names_the_wafer(self):
         import pandas as pd
