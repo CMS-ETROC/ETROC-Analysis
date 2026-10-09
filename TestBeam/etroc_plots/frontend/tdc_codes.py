@@ -206,6 +206,15 @@ def rebin(lo, counts, width, x0, x1, native):
     return x0 + np.arange(nb + 1) * width, out, int(counts[~inside].sum())
 
 
+def hits_in_range(lo, counts, width, x0, x1):
+    """The hits in the bins of `width` drawn from x0 to x1 (rebin's bins): the counts of the
+    native bins whose lower edges `lo` fall in [x0, x0 + n width), n the number of drawn bins."""
+    nb = int(round((x1 - x0) / width))
+    tol = 1e-6 * width
+    inside = (lo >= x0 - tol) & (lo < x0 + nb * width - tol)
+    return int(counts[inside].sum())
+
+
 def median_lo(lo, counts, native):
     """Median of a binned distribution: the lower edge of the native bin holding the 50 % point."""
     if counts.sum() <= 0:
@@ -244,15 +253,23 @@ def _grid(nrows, ncols, aw, ah, ml, mr, mt, mb, gx, gy, scale):
     return fig, axes, W, H
 
 
+def box_lines(stat_word, looks, recs, fmt):
+    """The text of a panel's box: `stat_word`, then per look "<label>: <value>, N = <hits in
+    range>" (looks: dict(label); recs: dict(value, hits_in_range); fmt formats the value)."""
+    return "\n".join([stat_word] + ["%s: %s, N = %d" % (lk["label"], fmt % lr["value"],
+                                                         lr["hits_in_range"])
+                                    for lk, lr in zip(looks, recs)])
+
+
 def hists(h, tel, looks, panels, *, pixels, tag, data, footer, stat_words, scale=0.6):
     """One telescope: a row per chip (its pixel `pixels[board]`), a column per quantity
     (`panels`: [dict(key "cal"/"toa"/"tot", width, range or None, xlabel), ...]), each look of
     `looks` ([dict(campaign, run, label, color, fill), ...], before cooling down first) as a
     unit-area histogram. CAL keeps native codes over the populated codes +-8; TOA and TOT are
     summed from the 0.1 ns bins of the table into `width` over a fixed `range`. In each panel the
-    looks' CAL mode or median in a box (`stat_words` = {"cal": "CAL mode", "toa": "median", ...}).
-    Returns (figure, payload): per chip and panel, every look's hits in range, hits outside it and
-    the box value."""
+    looks' CAL mode or median and hits in range N in a box (`stat_words` = {"cal": "CAL mode",
+    "toa": "median", ...}; box_lines). Returns (figure, payload): per chip and panel, every look's
+    hits in range, hits outside it and the box value."""
     nb = len(campaign.TELESCOPE_CHIPS[tel])
     fig, axes, W, H = _grid(nb, len(panels), aw=4.2, ah=2.75, ml=0.95, mr=0.3, mt=0.62, mb=0.85,
                             gx=0.75, gy=0.85, scale=scale)
@@ -277,6 +294,11 @@ def hists(h, tel, looks, panels, *, pixels, tag, data, footer, stat_words, scale
             rec = dict(chip=chip, board_idx=b, row=r, col=c, panel=spec["key"], looks=[])
             for lk, lo, cnt in drawn:
                 edges, cin, cout = rebin(lo, cnt, spec["width"], x0, x1, native)
+                n_in = hits_in_range(lo, cnt, spec["width"], x0, x1)
+                if n_in != int(cin.sum()):
+                    raise ValueError("%s %s run %s board %d %s: %d hits in range, %d in the bins "
+                                     "drawn" % (lk["campaign"], tel, lk["run"], b, spec["key"],
+                                                n_in, int(cin.sum())))
                 dens = cin / cin.sum() if cin.sum() else cin.astype(float)   # fraction per bin
                 x = np.repeat(edges, 2)[1:-1]
                 y = np.repeat(dens, 2)
@@ -291,7 +313,7 @@ def hists(h, tel, looks, panels, *, pixels, tag, data, footer, stat_words, scale
                 else:
                     v = median_lo(lo, cnt, native)
                 rec["looks"].append(dict(campaign=lk["campaign"], run=lk["run"],
-                                         hits_in_range=int(cin.sum()), hits_outside=cout,
+                                         hits_in_range=n_in, hits_outside=cout,
                                          value=v, bin_width=spec["width"], range=[x0, x1]))
             payload.append(rec)
             ax.set_xlim(x0, x1)
@@ -302,11 +324,9 @@ def hists(h, tel, looks, panels, *, pixels, tag, data, footer, stat_words, scale
             ax.set_ylabel("Fraction of hits / %g %s" % (spec["width"], unit), fontsize=s["label"] * 0.8)
             style.style_axes(ax, scale)
             fmt = "%.0f" if spec["key"] == "cal" else "%.2f ns"
-            box = "\n".join("%s: %s" % (lk["label"], fmt % lr["value"])
-                            for lk, lr in zip(looks, rec["looks"]))
-            ax.text(0.03, 0.95, "%s\n%s" % (stat_words[spec["key"]], box), transform=ax.transAxes,
-                    ha="left", va="top", fontsize=s["ann"] * 0.95, color=style.INK,
-                    linespacing=1.3, zorder=8)
+            ax.text(0.03, 0.95, box_lines(stat_words[spec["key"]], looks, rec["looks"], fmt),
+                    transform=ax.transAxes, ha="left", va="top", fontsize=s["ann"] * 0.95,
+                    color=style.INK, linespacing=1.3, zorder=8)
             if b > 0:
                 style.right_lines(ax, ["%s, pixel (%d, %d)" % (chip, r, c)], s["title"])
     subjects = ["%s, pixel (%d, %d)" % (campaign.TELESCOPE_CHIPS[tel][0], *pixels[0])] * len(panels)

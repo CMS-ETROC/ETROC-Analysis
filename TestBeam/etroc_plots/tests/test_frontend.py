@@ -1,5 +1,5 @@
 """Tests of the frontend builders: the TOT code inversion and its bins, the RFSel group rows, the
-runs of the fluence ladder and the run set of the rebuild.
+runs of the fluence ladder, the run set of the rebuild and the hits stated in the code boxes.
 
 Run from TestBeam/:  python -m pytest etroc_plots/tests
 """
@@ -16,7 +16,7 @@ if not os.environ.get("ETROC_CAMPAIGN"):
     os.environ["ETROC_CAMPAIGN"] = "irrad_2026"
 
 from etroc_plots.campaigns import active as campaign            # noqa: E402
-from etroc_plots.frontend import blnw, rebuild, tot_shapes      # noqa: E402
+from etroc_plots.frontend import blnw, rebuild, tdc_codes, tot_shapes   # noqa: E402
 
 
 # ------------------------------------------------------------------------------- TOT codes
@@ -167,3 +167,28 @@ def test_frontend_run_set_holds_the_extras_the_time_control_and_the_display_runs
     for tel, steps in stub[(2, 20)].items():
         assert set(r for rs in steps.values() for r in rs) <= set(runs[("july", tel)])
     assert 77 not in runs[("july", "f1")]
+
+
+# ------------------------------------------------------------------------------- code boxes
+def native_hits():
+    """0.1 ns bins (lower edges, hits) of one look: 23 hits inside 0-12.3 ns, the last in the
+    bin that starts at 12.2 ns, and 49 outside (below 0, from 12.3 ns, far above)."""
+    lo = np.array([-0.1, 0.0, 6.1, 12.2, 12.3, 20.0])
+    counts = np.array([19, 5, 7, 11, 13, 17])
+    return lo, counts
+
+
+def test_hits_in_range_counts_the_drawn_bins_only():
+    lo, counts = native_hits()
+    assert tdc_codes.hits_in_range(lo, counts, 0.3, 0.0, 12.3) == 23
+    edges, inside, outside = tdc_codes.rebin(lo, counts, 0.3, 0.0, 12.3, 0.1)
+    assert inside.sum() == 23 and outside == 49
+    assert tdc_codes.hits_in_range(lo, counts, 0.3, 0.0, 12.0) == 12
+
+
+def test_box_lines_state_each_looks_hits_in_range():
+    lo, counts = native_hits()
+    recs = [dict(value=3.204, hits_in_range=tdc_codes.hits_in_range(lo, counts, 0.3, 0.0, 12.3)),
+            dict(value=2.9, hits_in_range=tdc_codes.hits_in_range(lo, 2 * counts, 0.3, 0.0, 12.3))]
+    text = tdc_codes.box_lines("median", [dict(label="March"), dict(label="July")], recs, "%.2f ns")
+    assert text.split("\n") == ["median", "March: 3.20 ns, N = 23", "July: 2.90 ns, N = 46"]

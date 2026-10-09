@@ -70,8 +70,10 @@ rest are for whoever writes the next figure.
   the scan stored them, and the pixels with a value (`frontend/blnw.py` says which); the figure
   states how many pixels the second leaves out. The bar is the pixel-to-pixel spread.
 - Distributions of TDC codes, TOT and TOA difference are drawn per bin as the fraction of the
-  curve's events, with the bin width on the axis label: one code for codes, 0.1 ns for TOT, 25 ps
-  (about one TOA code) for the TOA difference.
+  curve's events, with the bin width on the axis label: one code for codes (CAL, and the
+  single-pixel TOT of fe10, fe13 and fe14, whose ns axis carries the code ladder of the pixel's
+  CAL mode), 0.3 ns for the TOA and 0.2 ns for the TOT of fe03-fe04, 0.1 ns for the pooled TOT,
+  25 ps (about one TOA code) for the TOA difference.
 - A pixel's TOT and TOA difference come from one triple of pixels: among the track files of its
   board's anointed combination, the one with the most events, counted when it holds at least 300
   (`tot_shapes.FLOOR`). Nothing is pooled across the triples of a pixel. The TOT depends on which
