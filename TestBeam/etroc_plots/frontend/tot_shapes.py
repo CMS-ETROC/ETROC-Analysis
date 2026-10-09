@@ -34,9 +34,11 @@ described in the campaign's inputs document):
                     triples in the combo 1-2-3 (DTOA_TRIPLES_CSV, DTOA_POOLED_HIST_CSV)
   fixed pixels      choose(): one pixel per board kept fixed over the runs of shape_runs(), one
                     pixel pair per board pair, one board-1 pixel over the July runs; their TOT
-                    and dTOA histograms (PIXEL_HISTS_CSV)
-  RFSel pairs       rfsel_rows(): per pair of runs of RFSEL_TOT_PAIRS, the pooled TOT of one
-                    chip over the pixels above the floor in both runs (RFSEL_PAIR_HIST_CSV)
+                    (in ns, and per TOT code by tot_codes()) and dTOA histograms
+                    (PIXEL_HISTS_CSV)
+  RFSel pairs       rfsel_rows(): per pair of runs of RFSEL_TOT_PAIRS and per group of
+                    TOT_TIME_CONTROL, the pooled TOT of one chip over the pixels above the floor
+                    in every run of the pair or group (RFSEL_PAIR_HIST_CSV)
 
 The drawing (board_vs_fluence, shape_grid, run_columns, rfsel_pairs) takes its words as
 arguments.
@@ -69,6 +71,12 @@ MODE_BINS_NS = (0.05, 0.10, 0.20)
 DT_BIN_PS, DT_HALF_PS = 25.0, 2000.0
 NB_DT = int(round(2 * DT_HALF_PS / DT_BIN_PS))
 TOA_CODE_PS = 3125.0              # one TOA code = 3.125 ns / CAL
+# The TOT code ladder of the pipeline's step 10 (TOT is 9 bits): code c is converted to
+# m(c) = 2 c - floor(c / 32) times the bin of its loop file, 3.125 ns / the mean CAL. The same
+# arrays as condor_at_lxplus/utils/fourboard_pairing.py (_TT, _LUT), defined here so the package
+# does not import the pipeline.
+TOT_CODES = np.arange(512)
+TOT_LADDER = 2 * TOT_CODES - np.floor(TOT_CODES / 32)
 # colour = RFSel on the RFSel comparison (one fluence step, so the ladder colour carries nothing
 # there); Okabe-Ito hues, no orange (the 3.5e15 colour of the ladder)
 RFSEL_COLOR = {1: "#0072B2", 2: "#009E73", 3: "#CC79A7"}
@@ -89,9 +97,9 @@ DTOA_HIST_COLUMNS = _KEY + ["pair", "board_a", "chip_a", "board_b", "chip_b", "b
                             "count"]
 PIXEL_HISTS_COLUMNS = (_KEY + ["pick", "quantity", "board_a", "chip_a", "row_a", "col_a",
                                "board_b", "chip_b", "row_b", "col_b", "combo", "file",
-                               "n_events", "median", "n_outside", "bin_lo", "count"])
+                               "n_events", "median", "n_outside", "bin_lo", "count", "cal_mode"])
 RFSEL_COLUMNS = (_KEY + ["board_idx", "chip", "rfsel", "offset", "partner_run", "n_pixels",
-                         "n_events", "median_ns", "bin_lo_ns", "count"])
+                         "n_events", "median_ns", "bin_lo_ns", "count", "group"])
 
 
 # ------------------------------------------------------------------------------- naming
@@ -207,10 +215,58 @@ def _pixel_of(t, board):
 
 
 # ------------------------------------------------------------------------------- reading
-def read_tot(path, role):
-    """TOT of one board of a track file, ps, missing values dropped."""
-    v = pd.read_parquet(path, columns=["tot_" + role])["tot_" + role].to_numpy(dtype=float)
-    return v[~np.isnan(v)]
+def read_tot(path, role, with_cal=False):
+    """TOT of one board of a track file, ps, missing values dropped; with `with_cal`, the arrays
+    (tot, cal, file) of those events: the board's CAL code and the loop-file index of each."""
+    if not with_cal:
+        v = pd.read_parquet(path, columns=["tot_" + role])["tot_" + role].to_numpy(dtype=float)
+        return v[~np.isnan(v)]
+    df = pd.read_parquet(path, columns=["tot_" + role, "cal_" + role, "file"])
+    df = df[df["tot_" + role].notna()]
+    return (df["tot_" + role].to_numpy(dtype=float), df["cal_" + role].to_numpy(dtype=float),
+            df["file"].to_numpy())
+
+
+def tot_codes(tot_ps, file_idx, cal):
+    """The TOT codes of one board's events, the exact inverse of step 10's conversion
+    (core/apply_tdc_cuts.convert_to_time, as utils/fourboard_pairing.raw_codes): per loop file
+    (`file_idx`) the bin is 3.125 ns / the mean of `cal` over that file's events (0.2 ns when the
+    mean is 0), m = TOT / bin, code = the code whose m(code) is m. Raises ValueError naming the
+    loop file when a value is not on the ladder (|m - round(m)| > 1e-6, or no code has that m)."""
+    tot_ps = np.asarray(tot_ps, dtype=float)
+    file_idx = np.asarray(file_idx)
+    mean = pd.Series(np.asarray(cal, dtype=float)).groupby(file_idx).transform("mean").to_numpy()
+    bin_ns = np.full(len(mean), 0.2)
+    nz = mean != 0
+    bin_ns[nz] = 3.125 / mean[nz]
+    m = tot_ps / 1e3 / bin_ns
+    r = np.round(m)
+    on = np.isfinite(m) & (np.abs(m - r) <= 1e-6)
+    code = np.round(np.interp(np.where(on, m, 0.0), TOT_LADDER, TOT_CODES)).astype(np.int64)
+    on &= TOT_LADDER[code] == r
+    if not on.all():
+        i = int(np.argmin(on))
+        raise ValueError("loop file %s: TOT %.4f ps is not on the TOT code ladder (m = %.6f)"
+                         % (file_idx[i], tot_ps[i], m[i]))
+    return code
+
+
+def code_ladder_ns(codes, cal_mode):
+    """TOT in ns of TOT codes at one CAL code: m(code) x 3.125 ns / cal_mode."""
+    return TOT_LADDER[np.asarray(codes, dtype=np.int64)] * 3.125 / float(cal_mode)
+
+
+def code_edges_ns(lo_code, hi_code, cal_mode):
+    """Edges in ns of one bin per TOT code from lo_code to hi_code at one CAL code: the bin of
+    code c runs from m(c - 1) to m(c) on the ladder, times 3.125 ns / cal_mode (below code 0,
+    m(-1) = -1 by the same formula), so a code's bin does not depend on the range. Every bin is
+    2 x 3.125 ns / cal_mode wide except the code at each multiple of 32, half that: the ladder
+    skips one half-code there, and the hits say the skipped half belongs to that code, not to the
+    one below."""
+    lo = int(lo_code)
+    below = TOT_LADDER[lo - 1] if lo > 0 else 2 * (lo - 1) - (lo - 1) // 32
+    m = TOT_LADDER[np.arange(lo, int(hi_code) + 1)]
+    return np.concatenate(([below], m)) * 3.125 / float(cal_mode)
 
 
 def read_track(path, roles):
@@ -440,12 +496,24 @@ def _hist_row(key, pick, quantity, t, a, b, n, med, nout, lo, cnt):
 
 
 def tot_rows(key, pick, t, board):
+    """The TOT rows of one board's pixel in its triple: quantity "tot_ns" (0.05 ns bins) and
+    "tot_code" (one row per TOT code, tot_codes(); cal_mode = the board's most frequent CAL code
+    over the triple's events, ties to the smallest; median = the lower median code)."""
     roles = run_roles(key["campaign"], key["tel"], key["run"])
-    v = read_tot(track_path(t), roles[board]) / 1000.0
+    tot, cal, f = read_tot(track_path(t), roles[board], with_cal=True)
+    v = tot / 1000.0
     c = tot_hist(v)
     med = float(np.median(v)) if len(v) else float("nan")
-    return [_hist_row(key, pick, "tot_ns", t, board, None, int(len(v)), med,
+    rows = [_hist_row(key, pick, "tot_ns", t, board, None, int(len(v)), med,
                       int(len(v) - c.sum()), tot_bin_lo(i), int(c[i])) for i in np.nonzero(c)[0]]
+    if not len(v):
+        return rows
+    codes = tot_codes(tot, f, cal)
+    cc = np.bincount(codes, minlength=len(TOT_CODES))
+    mode = int(np.argmax(np.bincount(cal[np.isfinite(cal)].astype(np.int64))))
+    cmed = int(np.sort(codes)[(len(codes) - 1) // 2])
+    return rows + [dict(_hist_row(key, pick, "tot_code", t, board, None, int(len(v)), cmed, 0,
+                                  int(i), int(cc[i])), cal_mode=mode) for i in np.nonzero(cc)[0]]
 
 
 def dt_rows(key, pick, t, pair):
@@ -494,18 +562,26 @@ def rfsel_board(tri, camp, tel, pairs, rank="rows"):
     return max(order, key=lambda b: min(totals[b].values())), totals
 
 
-def rfsel_rows(tri, rs, camp, tel, pairs, rank="rows", log=None):
-    """The rows of RFSEL_PAIR_HIST_CSV: per pair of runs, for the board of rfsel_board(), the
-    pooled TOT (0.05 ns bins) of the pixels above the floor in both runs, each run read from its
-    own triples; RFSel and threshold offset from the runs summary `rs`."""
-    board, _ = rfsel_board(tri, camp, tel, pairs, rank)
+def rfsel_rows(tri, rs, camp, tel, groups, board, rank="rows", log=None):
+    """The rows of RFSEL_PAIR_HIST_CSV: per group of runs (an RFSel pair, or a longer group such
+    as the time control), for board `board` (rfsel_board() over the RFSel pairs), the pooled TOT
+    (0.05 ns bins) of the pixels above the floor in every run of the group, each run read from
+    its own triples; RFSel and threshold offset from the runs summary `rs`. Every row names its
+    group ("52+86"); partner_run is the other run of a pair, empty in a longer group."""
     chips = campaign.TELESCOPE_CHIPS[tel]
     rows = []
-    for pair in pairs:
+    for group in groups:
         sub = {r: tri[(tri["campaign"] == camp) & (tri["tel"] == tel) & (tri["run"] == r)]
-               for r in pair}
-        common = set.intersection(*(set(pixel_counts(t, board, rank)) for t in sub.values()))
-        for r, partner in ((pair[0], pair[1]), (pair[1], pair[0])):
+               for r in group}
+        above = {r: set(pixel_counts(t, board, rank)) for r, t in sub.items()}
+        common = set.intersection(*above.values())
+        name = "+".join(str(r) for r in group)
+        if log:
+            log("RFSel group %s, board %d (%s): %d pixels above the floor in every run (%s)"
+                % (name, board, chips[board], len(common),
+                   ", ".join("run %d: %d" % (r, len(above[r])) for r in group)))
+        for k, r in enumerate(group):
+            partner = int(group[1 - k]) if len(group) == 2 else None
             roles = run_roles(camp, tel, r)
             bt = best_triples(sub[r], board, rank)
             bt = bt[[_pixel_of(t, board) in common for _, t in bt.iterrows()]]
@@ -516,13 +592,14 @@ def rfsel_rows(tri, rs, camp, tel, pairs, rank="rows", log=None):
                                                  campaign.TABLE_TEL[tel], r)
                   if s["board_idx"] == board][0]
             rows += [dict(campaign=camp, tel=tel, run=int(r), board_idx=board, chip=chips[board],
-                          rfsel=st["rfsel"], offset=st["offset"], partner_run=int(partner),
+                          rfsel=st["rfsel"], offset=st["offset"], partner_run=partner,
                           n_pixels=len(common), n_events=int(len(v)),
-                          median_ns=float(np.median(v)), bin_lo_ns=tot_bin_lo(i), count=int(c[i]))
+                          median_ns=float(np.median(v)), bin_lo_ns=tot_bin_lo(i), count=int(c[i]),
+                          group=name)
                      for i in np.nonzero(c)[0]]
             if log:
-                log("RFSel pair %s: run %d %s, %d pixels, %d events, median %.4f ns"
-                    % (pair, r, chips[board], len(common), len(v), float(np.median(v))))
+                log("RFSel group %s: run %d %s, %d pixels, %d events, median %.4f ns"
+                    % (name, r, chips[board], len(common), len(v), float(np.median(v))))
     return rows
 
 
@@ -576,6 +653,28 @@ def crop(edges, counts, x0, x1):
     return edges[i0:i1 + 1], counts[i0:i1]
 
 
+def group_hists(hist_df, camp, tel, group, width):
+    """The curves of one group of runs of the RFSel table (RFSEL_PAIR_HIST_CSV rows; `group` as
+    stored, "32+52+86"), per run in the group's order: {run: dict(edges, y, median_ns,
+    n_events, n_pixels, rfsel, offset)}, y the fraction of the run's events per bin of `width`
+    (summed from the stored 0.05 ns bins). A run of the group without rows raises ValueError."""
+    d = hist_df[(hist_df["campaign"] == camp) & (hist_df["tel"] == tel)
+                & (hist_df["group"].astype(str) == group)]
+    out = {}
+    for run in (int(r) for r in group.split("+")):
+        g = d[d["run"] == run]
+        if not len(g):
+            raise ValueError("RFSel table: no rows of %s %s run %d in group %s"
+                             % (camp, tel, run, group))
+        first = g.iloc[0]
+        e, c = rebin(*hist_of(g, "bin_lo_ns", TOT_BIN_NS, 0.0, TOT_HI_NS), width)
+        n = int(first["n_events"])
+        out[run] = dict(edges=e, y=c / float(n), median_ns=float(first["median_ns"]), n_events=n,
+                        n_pixels=int(first["n_pixels"]), rfsel=int(first["rfsel"]),
+                        offset=int(first["offset"]))
+    return out
+
+
 # ------------------------------------------------------------------------------- drawing
 BOARD_DX = 0.11          # x offset between the boards of one run, in step units
 
@@ -587,9 +686,10 @@ def board_vs_fluence(points, steps_by_tel, series, *, tick_labels, xlabel, ylabe
 
     points  [dict(tel, step, board_idx, chip, value, lo, hi, kind, dx), ...]: lo/hi the bar ends
             (None: no bar); dx an extra x offset in step units (runs side by side)
-    series  {kind: dict(label, open, line, size)}: the legend words of each kind of point, an
-            open marker, a line joining the points of one board over the steps, marker size
-            factor; drawn in the order given
+    series  {kind: dict(label, open, line, size)}: the legend words of each kind of point (a
+            string, or {tel: string} when the words differ by panel), an open marker, a line
+            joining the points of one board over the steps, marker size factor; drawn in the
+            order given
     board_dx  x offset between the boards of one run, in step units
     Returns the figure."""
     tels = list(tel_titles)
@@ -634,7 +734,7 @@ def board_vs_fluence(points, steps_by_tel, series, *, tick_labels, xlabel, ylabe
                        fontsize=s["legend"] * 0.9, handletextpad=0.2, columnspacing=0.9,
                        borderaxespad=0.4)
         ax.add_artist(lg)
-        ax.legend(handles=series_handles(series, scale), loc="upper right",
+        ax.legend(handles=series_handles(series, scale, tel), loc="upper right",
                   fontsize=s["legend"] * 0.9, handletextpad=0.2, borderaxespad=0.4)
     style.compound_header(axes[0], tag=tag, data=data, scale=scale,
                           subjects=[tel_titles[t] for t in tels])
@@ -642,15 +742,16 @@ def board_vs_fluence(points, steps_by_tel, series, *, tick_labels, xlabel, ylabe
     return fig
 
 
-def series_handles(series, scale=1.0):
+def series_handles(series, scale=1.0, tel=None):
     out = []
     for sp in series.values():
+        label = sp["label"][tel] if isinstance(sp["label"], dict) else sp["label"]
         out.append(Line2D([], [], color=style.INK_MUTED, marker="o",
                           markersize=8.0 * scale * sp.get("size", 1.0),
                           markerfacecolor=style.SURFACE if sp.get("open") else style.INK_MUTED,
                           markeredgecolor=style.INK_MUTED, markeredgewidth=1.6 * scale,
                           linestyle="-" if sp.get("line") else "none", linewidth=1.3 * scale,
-                          label=sp["label"]))
+                          label=label))
     return out
 
 
@@ -759,7 +860,8 @@ def rfsel_pairs(panels, *, xlabel, ylabel, xrange, tag, data, footer, scale=0.72
     for every panel, so the panels compare.
 
     panels  [dict(subject, note, curves=[dict(label, color, edges, y, median)]), ...]: y the value
-            per bin; the subject is the panel's right title, the note heads its legend
+            per bin, an optional linestyle (default "-"); the subject is the panel's right
+            title, the note heads its legend
     Returns the figure."""
     # 8.2 in panels: the subject (settings_text of two RFSels) beside the experiment text
     fig, axes = blnw._grid(1, len(panels), aw=8.2, ah=4.4, ml=1.2, mr=0.3, mt=0.62,
@@ -773,7 +875,7 @@ def rfsel_pairs(panels, *, xlabel, ylabel, xrange, tag, data, footer, scale=0.72
             x = np.repeat(c["edges"], 2)[1:-1]
             ax.plot(np.concatenate(([x[0]], x, [x[-1]])),
                     np.concatenate(([0.0], np.repeat(c["y"], 2), [0.0])),
-                    color=c["color"], linewidth=1.5, zorder=3)
+                    color=c["color"], linewidth=1.5, linestyle=c.get("linestyle", "-"), zorder=3)
             ax.plot([c["median"], c["median"]], [0.0, 0.07 * top], color=c["color"],
                     linewidth=2.6, solid_capstyle="butt", zorder=4)
         ax.set_xlim(*xrange)
@@ -783,8 +885,8 @@ def rfsel_pairs(panels, *, xlabel, ylabel, xrange, tag, data, footer, scale=0.72
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel if j == 0 else "")
         style.style_axes(ax, scale)
-        h = [Line2D([], [], color=c["color"], linewidth=2.2, label=c["label"])
-             for c in p["curves"]]
+        h = [Line2D([], [], color=c["color"], linewidth=2.2, linestyle=c.get("linestyle", "-"),
+                    label=c["label"]) for c in p["curves"]]
         lg = ax.legend(handles=h, loc="upper left", fontsize=s["legend"] * 0.9,
                        title=p.get("note"), title_fontsize=s["legend"] * 0.9, frameon=True,
                        framealpha=0.9, borderpad=0.35, labelspacing=0.45, handlelength=1.6,

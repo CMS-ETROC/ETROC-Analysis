@@ -25,10 +25,10 @@ the pixels with a noise width above 0; `n_pixels_bl` and `n_pixels_nw` count the
 standard deviation over the pixels: the standard deviation is the pixel-to-pixel spread, not an
 uncertainty.
 
-RFSel: the scan's gain mode where the scan records it, else "RFSel<N>" in the run name, else the
-run-config yaml; `rfsel_src` says which, and the March records carry none of the three. The chip
-is the board's chip in TELESCOPE_CHIPS, checked against the run-config yaml; the DAQ's own chip
-names are used only to pair a run's chips with the scan histories.
+RFSel: the RFSel the scan history records where it records one, else "RFSel<N>" in the run name,
+else the run-config yaml; `rfsel_src` says which, and the March records carry none of the three.
+The chip is the board's chip in TELESCOPE_CHIPS, checked against the run-config yaml; the DAQ's
+own chip names are used only to pair a run's chips with the scan histories.
 
 Scan times: the scan clock runs BLNW_SQLITE_UTC_OFFSET_H hours ahead of UTC; every time in the
 table is UTC.
@@ -314,6 +314,20 @@ def time_after_stop(run_times, camp, tel, runs, stop_utc):
 
 
 # ------------------------------------------------------------------------------- points
+def ladder_runs(display_runs, extra_runs):
+    """The runs one telescope's fluence ladder draws, step by step: {step: [run, ...]}, the
+    display runs of each step (`display_runs`, {step: [run, ...]}) followed by that step's extras
+    (`extra_runs`, {step: [run, ...]}, the campaign's LADDER_EXTRA_RUNS), so the display runs
+    keep their places. An extra at a step with no display run raises ValueError."""
+    orphans = sorted(set(extra_runs) - set(display_runs))
+    if orphans:
+        raise ValueError("ladder extras at a step with no display run: %s"
+                         % "; ".join("run %s at %g" % (", ".join(str(r) for r in extra_runs[s]), s)
+                                     for s in orphans))
+    return {step: list(runs) + list(extra_runs.get(step, []))
+            for step, runs in display_runs.items()}
+
+
 def points(table, steps, quantities, stats, span=0.5):
     """Every point a BL/NW figure draws: one per step, telescope, run, board, quantity and
     statistic, as dicts (the values-file payload).

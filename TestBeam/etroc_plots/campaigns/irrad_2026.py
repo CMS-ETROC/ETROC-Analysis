@@ -605,19 +605,38 @@ RUN_TIMES_CSV = os.path.join(INPUTS_TABLES, "run_times.csv")
 # the frontend notebook (BL/NW pair, TDC histograms, CAL maps), by frontend.rebuild (the default
 # runs of its TDC part) and by notebooks/maps.py (figures 17-18).
 COOLDOWN_PAIRS = {"h1": (17, 4), "f1": (17, 9)}
+# The RFSel comparisons of the TOT shape, per (campaign, telescope): pairs of runs that differ in
+# RFSel only (one threshold offset per pair, the same bias on the chip drawn). F1: run 47 (RFSel
+# 1) against 18 (RFSel 2) at offset 20, run 52 (RFSel 2) against 86 (RFSel 3) at offset 10.
+RFSEL_TOT_PAIRS = {("july", "f1"): [(47, 18), (52, 86)]}
+# The time control of the RFSel comparisons, per (campaign, telescope): runs at one threshold
+# offset on the chip of the RFSel pairs, the first two at the same RFSel and the third at the
+# next one, so the fixed-settings drift of the TOT over time (F1 run 32 -> 52, 5.2 d) stands
+# beside the RFSel step (52 -> 86). Drawn by fe16 of the frontend notebook on the chip of
+# RFSEL_TOT_PAIRS.
+TOT_TIME_CONTROL = {("july", "f1"): [(32, 52, 86)]}
+# Runs drawn beside the display runs of their step on the fluence ladders of the frontend
+# notebook (fe01, fe07) only, as the CERN IRRAD 2026 talk drew them, per (campaign, telescope)
+# and fluence step. H1 July run 19 is the repeat of run 18 (same settings, same autocalibration
+# scan, 8 h later). Not display runs; in no other figure.
+LADDER_EXTRA_RUNS = {("july", "h1"): {3.5e15: [19]}}
 # The runs whose hits the frontend tables are built from, per campaign and telescope: in March
 # the step runs of MARCH_DISPLAY_RUNS and the March run of COOLDOWN_PAIRS; in July the July run of
-# COOLDOWN_PAIRS and the runs of the RFSel comparisons (H1 47 at RFSel 1; F1 47, 52 and 86 at RFSel
-# 1, 2 and 3). frontend.rebuild.frontend_runs() adds the July display runs of DISPLAY_RUNS_JUL_CSV
-# at FRONTEND_JULY_SETTINGS (they are in an input table, not here) and takes the result as the
-# run set of `--runs frontend`. The BL/NW part of the rebuild covers every run of the run
-# metadata whatever this says.
+# COOLDOWN_PAIRS, H1 run 47 (RFSel 1), the runs of LADDER_EXTRA_RUNS and the runs of the RFSel
+# comparisons and their time control (RFSEL_TOT_PAIRS, TOT_TIME_CONTROL): H1 4, 19 and 47; F1 9,
+# 18, 32, 47, 52 and 86 (F1 18 is a display run too). frontend.rebuild.frontend_runs() adds the
+# July display runs of DISPLAY_RUNS_JUL_CSV at FRONTEND_JULY_SETTINGS (they are in an input
+# table, not here) and takes the result as the run set of `--runs frontend`. The BL/NW part of
+# the rebuild covers every run of the run metadata whatever this says.
 FRONTEND_JULY_SETTINGS = dict(rfsel=2, offset=20)
 FRONTEND_RUNS = {
     "march": {t: sorted(set(MARCH_DISPLAY_RUNS[t]) | {COOLDOWN_PAIRS[t][0]})
               for t in COOLDOWN_PAIRS},
-    "july": {"h1": sorted({COOLDOWN_PAIRS["h1"][1], 47}),
-             "f1": sorted({COOLDOWN_PAIRS["f1"][1], 47, 52, 86})},
+    "july": {"h1": sorted({COOLDOWN_PAIRS["h1"][1], 47}
+                          | {r for rs in LADDER_EXTRA_RUNS[("july", "h1")].values() for r in rs}),
+             "f1": sorted({COOLDOWN_PAIRS["f1"][1]}
+                          | {r for pair in RFSEL_TOT_PAIRS[("july", "f1")] for r in pair}
+                          | {r for g in TOT_TIME_CONTROL[("july", "f1")] for r in g})},
 }
 # Jongho's merged hits, one folder of loop_<N>.feather files per run (columns evt, bcid,
 # l1a_counter, ea, row, col, toa, tot, cal, board). Read only by `python -m
@@ -658,11 +677,6 @@ ANALYSIS_DIRS = {   # format with tel ("h1") and run; the combo folders sit belo
     "march": os.path.join(ANALYSIS_ROOT, "CERN_IRRAD_Mar2026", "analysis", "tracks_{tel}_run{run}"),
     "july": os.path.join(ANALYSIS_ROOT, "CERN_IRRAD_Jul2026", "analysis", "tracks_{tel}_run{run}"),
 }
-# The RFSel comparisons of the TOT shape, per (campaign, telescope): pairs of runs that differ in
-# RFSel only (one threshold offset per pair, the same bias on the chip drawn). F1: run 47 (RFSel
-# 1) against 18 (RFSel 2) at offset 20, run 52 (RFSel 2) against 86 (RFSel 3) at offset 10. Every
-# run here is in FRONTEND_RUNS or the July display runs.
-RFSEL_TOT_PAIRS = {("july", "f1"): [(47, 18), (52, 86)]}
 # The frontend tables, in the frontend/ folder of INPUTS (made by frontend.rebuild;
 # irrad_2026_inputs.md describes their columns).
 INPUTS_FRONTEND = os.path.join(INPUTS, "frontend")

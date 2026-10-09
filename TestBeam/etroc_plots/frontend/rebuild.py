@@ -16,7 +16,9 @@ update the checksum list to use them). The parts:
           the track files (ANALYSIS_DIRS; frontend/tot_shapes.py), by default the runs of
           frontend_runs(); about two minutes per run on one lxplus core. The fixed pixels of
           pixel_hists.csv are chosen over the runs of tot_shapes.shape_runs() that are in the run
-          set, the RFSel histograms are made when every run of RFSEL_TOT_PAIRS is in it
+          set, the RFSel histograms are made when every run of RFSEL_TOT_PAIRS is in it, and the
+          time-control groups of TOT_TIME_CONTROL, on the board chosen over the RFSel pairs, when
+          their runs are in it too
 
 --runs takes "pairs" (COOLDOWN_PAIRS), "frontend" (frontend_runs()) or campaign:telescope:run
 items such as july:h1:4; the TDC part always adds the July run of each telescope's COOLDOWN_PAIRS
@@ -146,16 +148,25 @@ def build_tracks(out, runs, rank="rows"):
                 ch["pairs"][(2, 3)]["pixels"][2], ch["pairs"][(2, 3)]["n_candidates"],
                 ch["july"]["board"], ch["july"]["pixel"]))
         hist_rows += tot_shapes.pixel_hist_rows(ch, log=_log)
-    rfsel_rows = []
+    rfsel_rows, rfsel_boards = [], {}
     rs = pd.read_csv(campaign.RUNS_SUMMARY_CSV)
     for (camp, tel), pairs in campaign.RFSEL_TOT_PAIRS.items():
         if all(r in runs.get((camp, tel), []) for p in pairs for r in p):
             b, totals = tot_shapes.rfsel_board(tri, camp, tel, pairs, rank)
             _log("RFSel pairs %s %s: board %d (%s), events above the floor per board and run %s"
                  % (camp, tel, b, campaign.TELESCOPE_CHIPS[tel][b], totals))
-            rfsel_rows += tot_shapes.rfsel_rows(tri, rs, camp, tel, pairs, rank, log=_log)
+            rfsel_rows += tot_shapes.rfsel_rows(tri, rs, camp, tel, pairs, b, rank, log=_log)
+            rfsel_boards[(camp, tel)] = b
         else:
             _log("RFSel pairs %s %s: runs not all in the run set, skipped" % (camp, tel))
+    for (camp, tel), groups in campaign.TOT_TIME_CONTROL.items():
+        if ((camp, tel) in rfsel_boards
+                and all(r in runs.get((camp, tel), []) for g in groups for r in g)):
+            rfsel_rows += tot_shapes.rfsel_rows(tri, rs, camp, tel, groups,
+                                                rfsel_boards[(camp, tel)], rank, log=_log)
+        else:
+            _log("time control %s %s: no RFSel pairs or runs not all in the run set, skipped"
+                 % (camp, tel))
     for name, rows, cols in (
             ("triples.csv", tri, tot_shapes.TRIPLES_COLUMNS),
             ("tot_pixel_medians.csv", res.get("pixel", []), tot_shapes.PIXEL_COLUMNS),
@@ -167,7 +178,8 @@ def build_tracks(out, runs, rank="rows"):
             ("rfsel_pair_hist.csv", rfsel_rows, tot_shapes.RFSEL_COLUMNS)):
         df = rows if isinstance(rows, pd.DataFrame) else pd.DataFrame(rows, columns=cols)
         for c in df.columns:
-            if c.startswith(("row_", "col_", "board_")) and df[c].dtype != object:
+            if ((c.startswith(("row_", "col_", "board_")) or c in ("partner_run", "cal_mode"))
+                    and df[c].dtype != object):
                 df[c] = df[c].astype("Int64")
         df[cols].to_csv(os.path.join(out, name), index=False)
         _log("%s: %d rows" % (name, len(df)))
