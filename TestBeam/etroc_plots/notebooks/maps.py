@@ -92,7 +92,7 @@ campaign = campaigns.active
 
 # stops, listing every missing or unreadable table; reports any table that differs from the
 # published copy
-check_inputs(only=("tables/",))
+check_inputs(only=("tables/", "july/display_runs_jul.csv"))
 
 NOTEBOOK = "TestBeam/etroc_plots/notebooks/maps.ipynb"   # recorded as "script" in every values file
 OUT = os.path.join(os.path.abspath(os.environ.get("ETROC_FIGURES") or "figures"), "maps")
@@ -129,9 +129,10 @@ def show(stem):
 # `RUNS` names one run per fluence step, lowest fluence first:
 #
 # * March 2026: at each step, the highest-bias run among those at the standard threshold
-#   offset, 20 (runs_summary);
+#   offset, 20 (runs_summary): `MARCH_DISPLAY_RUNS` in the campaign module;
 # * July 2026: the preferred run of the campaign's display-run list
-#   (`july/display_runs_jul.csv` in the inputs folder) at RFSel 2 and threshold offset 20.
+#   (`july/display_runs_jul.csv` in the inputs folder) at RFSel 2 and threshold offset 20
+#   (`JULY_SETTINGS`), read by `tables.preferred_runs`.
 #
 # Figures 17-18 take their runs from `PAIR_RUNS` instead: in March the run of the 1.5e15 step
 # whose leakage current matches the July run's, its lowest-bias run (run 17: H1 400 V, F1 265 V);
@@ -146,12 +147,11 @@ def show(stem):
 # %%
 VARIANT = "top"        # the most-populated track through each pixel
 FLOOR = "300"          # at least 300 events per track
-RUNS = {               # (campaign, telescope) -> one run per fluence step, lowest fluence first
-    ("march", "h1"): [7, 11, 14, 19],
-    ("march", "f1"): [2, 11, 14, 19],
-    ("july", "h1"): [4, 12, 18],
-    ("july", "f1"): [9, 12, 18],
-}
+JULY_SETTINGS = dict(rfsel=2, offset=20)   # July: the preferred display run at these settings
+_july = tables.preferred_runs(campaign.DISPLAY_RUNS_JUL_CSV, **JULY_SETTINGS)
+RUNS = {(c, t): (campaign.MARCH_DISPLAY_RUNS[t] if c == "march" else _july[t])
+        for c in ("march", "july") for t in campaign.TELESCOPE_CHIPS}
+print("RUNS (campaign, telescope): runs, lowest fluence first:", RUNS)
 PAIR_FLUENCE = 1.5e15  # figures 17-18: one run per campaign at this fluence
 PAIR_RUNS = {          # telescope -> {campaign: run}, figures 17-18 (March: July's leakage current)
     "h1": {"march": 17, "july": 4},
@@ -169,7 +169,8 @@ for _tel, _pair in PAIR_RUNS.items():   # PAIR_RUNS_TEXT: the July run is the di
     if _pair["july"] not in RUNS[("july", _tel)]:
         raise ValueError("PAIR_RUNS[%r]: July run %d is not in RUNS" % (_tel, _pair["july"]))
 
-INPUTS_RES = [campaign.BOARD_TABLE, campaign.PIXEL_TABLE, campaign.RUNS_SUMMARY_CSV]
+INPUTS_RES = [campaign.BOARD_TABLE, campaign.PIXEL_TABLE, campaign.RUNS_SUMMARY_CSV,
+              campaign.DISPLAY_RUNS_JUL_CSV]
 
 bt = tables.read_board_table(campaign.BOARD_TABLE)
 runs_summary = tables.read_runs_summary(campaign.RUNS_SUMMARY_CSV)

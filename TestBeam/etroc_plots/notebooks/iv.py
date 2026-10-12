@@ -1359,8 +1359,8 @@ if PANELS:
 #
 # The cooling-down effect as a number rather than a curve shape: the tabulated current at 480 V
 # of each 3.5e15 quick scan, against hours since the step ended, H1 left / F1 right. Symlog x with
-# a 1 h linear threshold so the right-after scan sits at 0; the step end is the first post-step IV
-# scan, an upper bound, so every hour count is a slight under-estimate (stated in the footer).
+# a 1 h linear threshold; the step end is the earliest stop the records allow (`RAD_STOP_UTC` in
+# the campaign module), which puts the right-after scans at about 0.3 h, inside the linear region.
 # Colour = look, marker = chip, markers only, no connecting line between a chip's looks (one line
 # cannot carry three different look colours). Uses the same three-scan sequence as figures 17 and
 # 18, so the two views can never disagree about which scans the sequence contains.
@@ -1375,7 +1375,7 @@ IV20_LEGEND_SCALE = 0.70
 IV20_LOOKS = IV1718_LOOKS   # the same three looks as figures 17 and 18
 
 IV20_FOOTER = ("quick scans; tabulated current at %d V against hours after the step ended "
-              "(symlog x; the step end is the first scan after it, an upper bound)"
+              "(symlog x; the step end is the earliest stop the records allow)"
               % int(IV20_V_AT))
 
 
@@ -1682,7 +1682,8 @@ for _iv2123_stem, _iv2123_spec in IV2123_VARIANTS.items():
 # this repository, see `../campaigns/irrad_2026_inputs.md`) are drawn in ascending run number,
 # each with its class, flag, fluence, threshold offset and RFSel from that file. The currents come
 # from the July HV-monitor log (`july/timeline_60s.csv.gz`), the HV and LV cycle marks from
-# `july/hv_cycles_jul.csv`. The figures are drawn by the
+# `july/hv_cycles_jul.csv`, the LV-on time after each irradiation step from the LV power log
+# (`july/lv_spans_jul.csv`, see `lv_log.py`). The figures are drawn by the
 # package module `iv/current_vs_run.py` through its `build_one()` function, the same one its
 # command line (`python -m etroc_plots.iv.current_vs_run`) runs per telescope; only the output name
 # differs here. Its panels are per run rather than the H1/F1 panels of the other figures, so with
@@ -2462,9 +2463,9 @@ if PANELS:
 # wherever its own channel has a gap longer than five minutes between consecutive HV-monitor bins,
 # so gaps are never bridged; the footer counts the logging sessions of the monitor as a whole (a
 # session ends only where no channel logged for five minutes). The shaded bands mark the periods
-# at 2e15 and at 3.5e15, from each step's logged radiation-stop timestamp to the next (or, for
-# 3.5e15, to the end of the window); the interval before the first July stop, still at 1.5e15
-# carried over from March, is left unshaded.
+# at 2e15 and at 3.5e15, from each step's radiation stop (the earliest the records allow) to the
+# next (or, for 3.5e15, to the end of the window); the interval before the first July stop, still
+# at 1.5e15 carried over from March, is left unshaded.
 
 # %%
 import matplotlib.dates as mdates                                    # noqa: E402
@@ -2583,8 +2584,8 @@ def _iv42_footer_text(n_sessions, windows):
     parts = ["HV monitor, 60 s medians", "%d H1 + %d F1 sessions (gaps not interpolated)"
             % (n_sessions["h1"], n_sessions["f1"])]
     if windows[2e15][0] is not None or windows[3.5e15][0] is not None:
-        parts.append("shading = period at the labelled fluence between logged radiation-stop "
-                     "stamps, not a measured beam-on window")
+        parts.append("shading = period at the labelled fluence between radiation stops (the "
+                     "earliest the records allow), not a measured beam-on window")
     return "  ·  ".join(parts)
 
 

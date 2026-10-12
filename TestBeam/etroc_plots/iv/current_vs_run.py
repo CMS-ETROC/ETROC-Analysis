@@ -8,11 +8,13 @@ campaigns/<campaign>_inputs.md, says where it comes from).
 
 Inputs, all named in the campaign file:
   JULY_REF_CSV       per-run log: start time (UTC), run length, per-board bias voltage and
-                     logging status (ok / no_hv_log / hv_off_by_design), radiation-stop stamps
+                     logging status (ok / no_hv_log / hv_off_by_design)
   JULY_TIMELINE      the HV slow-control log in 60 s bins (tb, channel, i_uA, tel)
   HV_CYCLES_JUL_CSV  HV / LV cycle, irradiation-step and DAQ-restart marks per run
+  LV_SPANS_JUL_CSV   the files of the LV power log, for the LV-on time after each step
   DISPLAY_RUNS_JUL_CSV  the display runs (ink triangle; preferred ones get "(p)")
-Channel 0-3 = the telescope's chips in board order (the campaign's TELESCOPE_CHIPS).
+Channel 0-3 = the telescope's chips in board order (the campaign's TELESCOPE_CHIPS). The radiation
+stop after each step is the campaign's RAD_STOP_UTC, the earliest stop the records allow.
 
     python -m etroc_plots.iv.current_vs_run --out DIR [--tel h1|f1|both] [--no-panels]
 
@@ -33,7 +35,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
-from .. import style
+from .. import lv_log, style
 from . import iv_plot as ivp
 from ..campaigns import active as campaign
 
@@ -72,14 +74,28 @@ DAQ_RESTART_WORD = "DAQ restart"          # as on the resolution-vs-run figure; 
 # additionally get "(p)" in the run-number label. Legend text as on the resolution-vs-run figure.
 DISPLAY_RUN_LEGEND_TEXT = "display run; (p) = preferred when one run is shown"
 # An extra ink-coloured tick (distinct from the purple irradiation-step tick)
-# beside each irradiation-step mark, quoting the logged radiation-stop stamp + LV-on time.
+# beside each irradiation-step mark, quoting the radiation stop + LV-on time.
 RAD_STOP_COLOR = style.INK
-RAD_STOP_LEGEND_TEXT = "logged radiation stop"
+RAD_STOP_LEGEND_TEXT = "radiation stop (the earliest the records allow)"
 RAD_STOP_SOURCE_TEXT = campaign.RAD_STOP_SOURCE_TEXT
 # No file names on figures: the same sentence in plain words for the drawn footer;
 # RAD_STOP_SOURCE_TEXT keeps them because it is stored as the values file's rad_stop_source
 # provenance field.
 RAD_STOP_SOURCE_TEXT_FIGURE = campaign.RAD_STOP_SOURCE_TEXT_FIGURE
+
+# Below-axes geometry of every panel, in points, turned into axes fraction through the panel's
+# own axes height (as the run title's pad is), so it is the same in the compound figure and in
+# the tiles: the flag ticks (TICK_LW_PT lines) start TICK_TOP_PT below the bottom edge,
+# TICK_PITCH_PT apart, at most N_TICKS_MAX of them (spike, HV cycle, LV cycle or irradiation
+# step, radiation stop); the label stack starts TICK_CLEAR_PT below the lowest tick a run can
+# have, so "run N" sits at the same height whatever the run's tick count.
+TICK_TOP_PT = 2.75
+TICK_PITCH_PT = 2.29
+TICK_LW_PT = 1.0
+N_TICKS_MAX = 4
+TICK_CLEAR_PT = 2.0
+STACK_GAP_PT = (TICK_TOP_PT + (N_TICKS_MAX - 1) * TICK_PITCH_PT + TICK_LW_PT / 2.0
+                + TICK_CLEAR_PT)
 
 
 def fl_text(fl):
@@ -163,9 +179,10 @@ def _restart_flag(value, where):
 def load_hv_cycles():
     """Per (tel, run) -> dict(hv_cycled (bool: ANY board with status "ok" has b*_cycled "True"),
     lv_event (str: none / lv_cycle / irradiation_step / n/a / 'no data'), restart (bool), plus the
-    raw CSV fields (gap_h, b_status / b_gap_min_V / b_cycled per board 0-3, lv_on_utc / lv_off_utc
-    / lv_off_h, prev_run) for the values file. Read from the campaign's HV_CYCLES_JUL_CSV, never
-    recomputed."""
+    raw CSV fields (gap_h, b_status / b_gap_min_V / b_cycled per board 0-3, prev_run) for the
+    values file. Read from the campaign's HV_CYCLES_JUL_CSV, never recomputed. The table's own LV
+    times (lv_on_utc, lv_off_utc, lv_off_h) are not read: they are the first record of the log
+    file in use at the run's start, not the end of the LV-off period (lv_on_utc below)."""
     out = {}
     with open(HV_CYCLES_CSV) as fh:
         for row in csv.DictReader(fh):
@@ -190,8 +207,6 @@ def load_hv_cycles():
                 hv_cycled=any_ok_cycled,
                 restart=_restart_flag(row["restart"], "%s, %s run %d" % (HV_CYCLES_CSV, tel, run)),
                 lv_event=row["lv_event"],
-                lv_on_utc=row["lv_on_utc"], lv_off_utc=row["lv_off_utc"],
-                lv_off_h=(float(row["lv_off_h"]) if row["lv_off_h"] else None),
             )
     return out
 
@@ -249,18 +264,14 @@ def load_display_runs():
     return all_runs, pref_runs
 
 
-def load_rad_stop_utc():
-    """{(tel, run_num): rad_stop_utc string} from JULY_REF_CSV (the file load_currents_meta()
-    reads; the first row per (tel, run) wins, as there). The stamps differ per telescope:
-    H1 run11 2026-07-20 18:37:57, H1 run14 2026-07-25 16:08:57, F1 run10 2026-07-20 18:39:00,
-    F1 run13 2026-07-25 16:09:11."""
-    out = {}
-    with open(CURRENTS_CSV) as fh:
-        for row in csv.DictReader(fh):
-            key = (row["tel"].lower(), int(row["run_num"]))
-            if key not in out and row.get("rad_stop_utc"):
-                out[key] = row["rad_stop_utc"]
-    return out
+def step_before(tel, run):
+    """The fluence of the last irradiation step that ended before run `run` of telescope `tel`
+    started: the campaign's RAD_STOP_UTC entry latest at or before the run's start (from
+    JULY_REF_CSV), or None when no step ended before it."""
+    run_win, _ = load_currents_meta()
+    start = run_win[(tel, run)]["start_utc"].strftime("%Y-%m-%d %H:%M:%S")
+    ended = [(stop, f) for f, stop in campaign.RAD_STOP_UTC.items() if stop <= start]
+    return max(ended)[1] if ended else None
 
 
 def _fmt_utc_stamp(s):
@@ -274,18 +285,29 @@ def _fmt_utc_stamp(s):
     return dt.strftime("%m-%d %H:%M")
 
 
+def lv_on_utc(tel, run):
+    """'YYYY-MM-DD HH:MM:SS' UTC: when the LV came back before run `run` of telescope `tel`, the
+    end of the last LV-off period longer than the campaign's LV_OFF_MIN_H before the run's start
+    (lv_log.lv_on_before; start from JULY_REF_CSV), or None. The HV / LV cycle table's lv_on_utc
+    is the end of the last LV cycle of any length instead, later where the LV cycled again before
+    the run (H1 run 11, F1 run 13)."""
+    run_win, _ = load_currents_meta()
+    t = lv_log.lv_on_before(tel, run_win[(tel, run)]["start_utc"])
+    return t.strftime("%Y-%m-%d %H:%M:%S") if t is not None else None
+
+
 def rad_stop_lv_on_map(hv_cycles):
     """{(tel, run): (rad_stop_fmt, lv_on_fmt)} for exactly the runs hv_cycles_jul.csv marks
-    lv_event=='irradiation_step' (H1 runs 11/14, F1 runs 10/13), requiring both a
-    rad_stop_utc (july_inrun_currents.csv) and an lv_on_utc (hv_cycles_jul.csv, already loaded by
-    load_hv_cycles()) to be present."""
-    rad_stop = load_rad_stop_utc()
+    lv_event=='irradiation_step' (H1 runs 11/14, F1 runs 10/13, the first run after each
+    irradiation step), requiring both a radiation stop (step_before) and an LV-on time
+    (lv_on_utc) to be present."""
     out = {}
     for (tel, run), row in hv_cycles.items():
         if row.get("lv_event") != "irradiation_step":
             continue
-        rs = _fmt_utc_stamp(rad_stop.get((tel, run)))
-        lv = _fmt_utc_stamp(row.get("lv_on_utc"))
+        step = step_before(tel, run)
+        rs = _fmt_utc_stamp(campaign.RAD_STOP_UTC[step]) if step is not None else None
+        lv = _fmt_utc_stamp(lv_on_utc(tel, run))
         if rs and lv:
             out[(tel, run)] = (rs, lv)
     return out
@@ -416,6 +438,15 @@ def _chip_style(tel, chip):
     return dict(color=CHIP_COLOR[idx], linestyle=style.chip_linestyle(chip), linewidth=1.1)
 
 
+def _mark(ax, xs, ys, **kw):
+    """A mark drawn in axes fraction outside the plot (a flag tick, the display-run triangle),
+    tagged so the overlap audit (etroc_style.check_no_clipping) reports it crossing a text or
+    touching another mark."""
+    line, = ax.plot(xs, ys, transform=ax.transAxes, clip_on=False, **kw)
+    line._etroc_mark = True
+    return line
+
+
 def _draw_one_panel(ax, tel, run, pd_, meta_row, board_meta, y_max, x_max, fs, hv_cycles,
                     is_display=False, is_preferred=False, rad_stop_line=None, title_pad=3.0):
     chips = campaign.TELESCOPE_CHIPS[tel]
@@ -469,42 +500,46 @@ def _draw_one_panel(ax, tel, run, pd_, meta_row, board_meta, y_max, x_max, fs, h
     ax.set_title(u"run %d\n%s" % (run, hv_txt), fontsize=fs["title"], color=style.INK,
                y=y_title, verticalalignment="bottom")
 
-    # small filled ink triangle above the panel for every
-    # display_runs_jul.csv run (preferred runs already carry their own "(p)" in the label stack).
-    if is_display:
-        ax.plot([0.5], [1.055], transform=ax.transAxes, marker="^", color=style.INK,
-               markersize=4.0, clip_on=False, linestyle="none", zorder=5)
+    pt = 1.0 / (72.0 * ax_h_in)       # one point in axes fraction, for the sizes below
 
-    # stacked label block below panel (the resolution-vs-run figure's 5 lines); pitch tuned
-    # to the panel's own axes height in inches so it does not depend on the compound-vs-single
-    # aspect ratio (fs["stack_pitch"]/fs["stack_gap"] are set by the caller from the axes bbox).
-    pitch = fs.get("stack_pitch", 0.030)
-    gap = fs.get("stack_gap", 0.022)
+    # small filled ink triangle above the panel for every display_runs_jul.csv run (preferred
+    # runs already carry their own "(p)" in the label stack), fs["triangle"] points above the
+    # axes: between the header and the run title in the compound figure.
+    if is_display:
+        _mark(ax, [0.5], [1.0 + fs["triangle"] * pt], marker="^", color=style.INK,
+              markersize=4.0, linestyle="none", zorder=5)
+
+    # stacked label block below the panel (the resolution-vs-run figure's 5 lines, then up to
+    # three appended ones), STACK_GAP_PT below the axes in both figure kinds, lines
+    # fs["stack_pitch"] points apart.
+    pitch = fs["stack_pitch"] * pt
+    gap = STACK_GAP_PT * pt
     for i, txt in enumerate(lines):
         color = last_color if i == flag_idx else style.INK_MUTED
         ax.text(0.5, -gap - pitch * i, txt, transform=ax.transAxes, ha="center", va="top",
                fontsize=fs["stack"], color=color, clip_on=False)
 
-    # red spike tick: short, thin (~1pt), centred on the panel's own bottom axis, not a bar
-    # across the whole axis. HV-cycle/LV-cycle/irradiation-step ticks reuse the same
-    # short-centred-tick geometry, stacked below it in the resolution-vs-run figure's colours
-    # (orange then teal/purple); no tick for 'DAQ restart' (text only; that figure's legend
-    # has no restart tick either).
-    tick_y = -0.012
+    # flag ticks: TICK_LW_PT lines over the middle 12 % of the panel width, TICK_TOP_PT below the
+    # bottom spine and TICK_PITCH_PT apart: the in-run spike (red) first, then the HV-cycle /
+    # LV-cycle / irradiation-step ticks in the resolution-vs-run figure's colours (orange, then
+    # teal or purple); no tick for 'DAQ restart' (text only; that figure's legend has no restart
+    # tick either). Each is a tagged mark (_mark), so the overlap audit reports a tick that
+    # crosses the label stack or touches its neighbour.
+    tick_y = -TICK_TOP_PT * pt
     if is_spike:
-        ax.plot([0.44, 0.56], [tick_y, tick_y], transform=ax.transAxes, color=SPIKE_COLOR,
-               linewidth=1.0, clip_on=False, solid_capstyle="butt")
-        tick_y -= 0.010
+        _mark(ax, [0.44, 0.56], [tick_y, tick_y], color=SPIKE_COLOR, linewidth=TICK_LW_PT,
+              solid_capstyle="butt")
+        tick_y -= TICK_PITCH_PT * pt
     for color in tick_colors:
-        ax.plot([0.44, 0.56], [tick_y, tick_y], transform=ax.transAxes, color=color,
-               linewidth=1.0, clip_on=False, solid_capstyle="butt")
-        tick_y -= 0.010
+        _mark(ax, [0.44, 0.56], [tick_y, tick_y], color=color, linewidth=TICK_LW_PT,
+              solid_capstyle="butt")
+        tick_y -= TICK_PITCH_PT * pt
     # extra ink-coloured tick (distinct from the purple irradiation-step tick above) for the
-    # logged radiation-stop stamp, on the irradiation-step runs that have one.
+    # radiation stop, on the irradiation-step runs that have one.
     if rad_stop_line:
-        ax.plot([0.44, 0.56], [tick_y, tick_y], transform=ax.transAxes, color=RAD_STOP_COLOR,
-               linewidth=1.0, clip_on=False, solid_capstyle="butt")
-        tick_y -= 0.010
+        _mark(ax, [0.44, 0.56], [tick_y, tick_y], color=RAD_STOP_COLOR, linewidth=TICK_LW_PT,
+              solid_capstyle="butt")
+        tick_y -= TICK_PITCH_PT * pt
 
     ax.tick_params(axis="both", labelsize=fs["tick"], length=2.5)
     ax.set_xticks([0.0, x_max])
@@ -519,8 +554,10 @@ def draw_compound(tel, runs, panel_data, meta, board_meta, y_max, y_mode, x_max,
     W_IN, DPI = 39.4, 200
     H_IN = 6.3
     fig = plt.figure(figsize=(W_IN, H_IN), dpi=DPI)
+    # sizes in points; the triangle sits between the header (its top line ends 28.2 pt above
+    # the axes) and the run titles (from 42 pt), at least 4 pt from each
     fs = dict(header=11.0, title=5.6, stack=4.7, tick=4.6, nolog=7.0, clip=4.2, footer=7.5,
-             legend=7.5, stack_pitch=0.032, stack_gap=0.022)
+             legend=7.5, stack_pitch=7.33, triangle=35.0)
     stem = stem or ("current_vs_run_jul_%s" % tel)
 
     display_runs, pref_runs = load_display_runs()
@@ -570,7 +607,7 @@ def draw_compound(tel, runs, panel_data, meta, board_meta, y_max, y_mode, x_max,
                          label=DISPLAY_RUN_LEGEND_TEXT))
     handles.append(Line2D([], [], color=RAD_STOP_COLOR, linewidth=2.2, label=RAD_STOP_LEGEND_TEXT))
     fig.legend(handles=handles, loc="upper center", ncol=len(handles), frameon=False,
-              fontsize=fs["legend"], bbox_to_anchor=(0.5, 0.205))
+              fontsize=fs["legend"], bbox_to_anchor=(0.5, 0.185))
 
     n_clip = 0
     for run in runs:
@@ -604,13 +641,14 @@ def draw_singles(tel, runs, panel_data, meta, board_meta, y_max, x_max, fs, stem
     os.makedirs(d, exist_ok=True)
     total_problems = 0
     fs1 = dict(fs)
-    fs1.update(title=9.0, stack=8.0, tick=8.0, nolog=13.0, clip=7.5,
-              stack_pitch=0.095, stack_gap=0.065)
+    fs1.update(title=9.0, stack=8.0, tick=8.0, nolog=13.0, clip=7.5, stack_pitch=9.44,
+               triangle=5.5)
     display_runs, pref_runs = load_display_runs()
     rad_stop_map = rad_stop_lv_on_map(hv_cycles)
     for run in runs:
-        fig, ax = plt.subplots(figsize=(3.2, 3.0), dpi=200)
-        fig.subplots_adjust(left=0.20, right=0.97, top=0.80, bottom=0.34)
+        # 0.60 in above the axes, 1.38 in of axes, 1.32 in below: room for an 8-line stack
+        fig, ax = plt.subplots(figsize=(3.2, 3.3), dpi=200)
+        fig.subplots_adjust(left=0.20, right=0.97, top=1.0 - 0.60 / 3.3, bottom=0.40)
         rs_line = None
         if (tel, run) in rad_stop_map:
             rs, lv = rad_stop_map[(tel, run)]
@@ -684,7 +722,6 @@ def build_values_json(tel, runs, panel_data, meta, board_meta, y_max, y_mode, x_
     chips = campaign.TELESCOPE_CHIPS[tel]
     display_runs, pref_runs = load_display_runs()
     rad_stop_map = rad_stop_lv_on_map(hv_cycles)
-    rad_stop_raw = load_rad_stop_utc()
     per_run = {}
     for run in runs:
         pd_ = panel_data[run]
@@ -709,14 +746,14 @@ def build_values_json(tel, runs, panel_data, meta, board_meta, y_max, y_mode, x_
             offsets=m["offsets"], rfsels=m["rfsels"], is_spike=(run in SPIKE_RUNS[tel]),
             run_length_h=pd_["length_h"], no_hv_log=pd_["nolog"], chips=chip_rows,
             is_display_run=is_display, preferred=is_preferred,
-            rad_stop_utc=(rad_stop_raw.get((tel, run)) if (tel, run) in rad_stop_map else None),
+            rad_stop_utc=(campaign.RAD_STOP_UTC[step_before(tel, run)]
+                          if (tel, run) in rad_stop_map else None),
             hv_cycle=dict(
                 prev_run=hv_row.get("prev_run"), gap_h=hv_row.get("gap_h"),
                 b_status=hv_row.get("b_status"), b_gap_min_V=hv_row.get("b_gap_min_V"),
                 b_cycled=hv_row.get("b_cycled"), hv_cycled=hv_row.get("hv_cycled"),
                 lv_event=hv_row.get("lv_event"), restart=hv_row.get("restart"),
-                lv_on_utc=hv_row.get("lv_on_utc"), lv_off_utc=hv_row.get("lv_off_utc"),
-                lv_off_h=hv_row.get("lv_off_h"), mark_text=mark, restart_text=restart_word,
+                mark_text=mark, restart_text=restart_word,
                 tick_colors=tick_colors,
             ),
         )
@@ -744,15 +781,17 @@ def build_values_json(tel, runs, panel_data, meta, board_meta, y_max, y_mode, x_
         display_runs={t: sorted(display_runs.get(t, ())) for t in TELS},
         display_runs_preferred={t: sorted(pref_runs.get(t, ())) for t in TELS},
         rad_stop_legend=RAD_STOP_LEGEND_TEXT, rad_stop_source=RAD_STOP_SOURCE_TEXT,
-        rad_stop_runs={"%s/%d" % (t, r): {"rad_stop_utc": rad_stop_raw.get((t, r)),
-                                         "lv_on_utc": hv_cycles.get((t, r), {}).get("lv_on_utc")}
-                      for (t, r) in rad_stop_map},
+        rad_stop_runs={"%s/%d" % (t, r): {
+            "step": step_before(t, r), "rad_stop_utc": campaign.RAD_STOP_UTC[step_before(t, r)],
+            "rad_stop_bounds_utc": campaign.RAD_STOP_BOUNDS_UTC[step_before(t, r)],
+            "lv_on_utc": lv_on_utc(t, r)} for (t, r) in rad_stop_map},
         per_run=per_run,
         overlap_problems=list(problems),
     )
     return ivp.write_values(OUT, stem or ("current_vs_run_jul_%s" % tel), payload,
                             script="TestBeam/etroc_plots/iv/current_vs_run.py",
-                            inputs=[CURRENTS_CSV, TIMELINE_60S, combo_json_path, HV_CYCLES_CSV],
+                            inputs=[CURRENTS_CSV, TIMELINE_60S, combo_json_path, HV_CYCLES_CSV,
+                                    DISPLAY_RUNS_JUL_CSV, campaign.LV_SPANS_JUL_CSV],
                             conventions=ivp.CURRENTS_CONVENTIONS)
 
 

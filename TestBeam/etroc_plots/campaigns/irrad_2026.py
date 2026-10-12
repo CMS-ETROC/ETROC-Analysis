@@ -92,12 +92,22 @@ MARCH_EOS_WEEK2 = (os.environ.get("ETROC_IV_EOS_MARCH_WEEK2")
 MARCH_EOS_15E14 = (os.environ.get("ETROC_IV_EOS_MARCH_15E14")
                    or os.path.join(EOS_ROOT, "laptop_mirror_15e14"))
 
-# End of each irradiation step, UTC. For the July steps the stamp is the first IV scan after
-# the step, an upper bound on the end of the beam.
-RAD_STOP_UTC = {
-    3e14: "2026-03-16 17:07:00", 9e14: "2026-03-19 17:01:00", 1.5e15: "2026-03-22 22:30:00",
-    2e15: "2026-07-20 18:37:00", 3.5e15: "2026-07-25 16:09:00",
+# End of each irradiation step, UTC, from the shift logbook, the operators' messages and the LV
+# power log (settled 2026-09-25). RAD_STOP_BOUNDS_UTC holds the (earliest, latest) stop the
+# records allow; RAD_STOP_UTC, the stop every figure and table counts from, is the earliest. The
+# stated stops are 3e14 17:11:29, 9e14 17:59:00 and 3.5e15 15:50:26 (bounds one minute either
+# side) and 1.5e15 22:30:00 (bounds the ten minutes before it). 2e15 has only a "beam is
+# stopped" message at about 17:00 UTC: its earliest is that time minus 30 min, its latest the
+# return of the F1 LV at 18:17:43 (the LV comes back only once the telescopes leave the
+# irradiation zone).
+RAD_STOP_BOUNDS_UTC = {
+    3e14: ("2026-03-16 17:10:29", "2026-03-16 17:12:29"),
+    9e14: ("2026-03-19 17:58:00", "2026-03-19 18:00:00"),
+    1.5e15: ("2026-03-22 22:20:00", "2026-03-22 22:30:00"),
+    2e15: ("2026-07-20 16:30:00", "2026-07-20 18:17:43"),
+    3.5e15: ("2026-07-25 15:49:26", "2026-07-25 15:51:26"),
 }
+RAD_STOP_UTC = {f: lo for f, (lo, hi) in RAD_STOP_BOUNDS_UTC.items()}
 
 # ============================================================================== March: IV scans
 # Explicit paths, not a naming rule: week2 stems carry "_interpolated_binned_iv_data.csv", the
@@ -283,6 +293,10 @@ JULY_SCANS = {
 JULY_TIMELINE = os.path.join(INPUTS_JULY, "timeline_60s.csv.gz")
 JULY_REF_CSV = os.path.join(INPUTS_JULY, "july_inrun_currents.csv")
 DISPLAY_RUNS_JUL_CSV = os.path.join(INPUTS_JULY, "display_runs_jul.csv")
+# March has no display-run list: at each fluence step its display run is the highest-bias run
+# at threshold offset 20, lowest fluence first (the maps notebook's March runs; the overview
+# timeline fills them, all as preferred).
+MARCH_DISPLAY_RUNS = {"h1": [7, 11, 14, 19], "f1": [2, 11, 14, 19]}
 JULY_TIMELINE_JSON = os.path.join(INPUTS_JULY, "july_timeline.json")
 JULY_TEL = {"h1": "H1", "f1": "F1"}
 
@@ -430,21 +444,38 @@ COMBO_CHECK_JSON = (os.environ.get("ETROC_COMBO_CHECK_JSON")
 # HV / LV cycle, irradiation-step and DAQ-restart marks per run
 HV_CYCLES_JUL_CSV = (os.environ.get("ETROC_HV_CYCLES_JUL_CSV")
                      or os.path.join(INPUTS_JULY, "hv_cycles_jul.csv"))
+# The files of the July LV power log, one row each with its first and last record, made by
+# lv_log.build_lv_spans from the log folders LV_LOG_DIRS (<LV_LOG_ROOT>/H1 and /F1, read-only
+# copies of the DAQ's {H1,F1}_telescope/power_history/lv_history folders under
+# /store/user/lpcmtdstudies/IRRad_CERN_2026Jul/ on the LPC EOS). The log records only while the
+# LV is on, so every gap between two files is an LV cycle, however short. LV_OFF_MIN_H is the
+# shortest LV-off period the campaign timeline draws (overview figure 6); the IV notebook's
+# figures 24 and 25 mark every LV cycle between two runs.
+LV_SPANS_JUL_CSV = (os.environ.get("ETROC_LV_SPANS_JUL_CSV")
+                    or os.path.join(INPUTS_JULY, "lv_spans_jul.csv"))
+LV_LOG_ROOT = (os.environ.get("ETROC_LV_LOG_ROOT")
+               or "/eos/user/m/musafdar/ETROC_TB_2026_combo_tables/lv_history_jul")
+LV_LOG_DIRS = {("july", "h1"): os.path.join(LV_LOG_ROOT, "H1"),
+               ("july", "f1"): os.path.join(LV_LOG_ROOT, "F1")}
+LV_OFF_MIN_H = 1.0
 # in-run bias-current spike runs (the July in-run current scan)
 CURRENT_SPIKE_RUNS = {"h1": {11, 53, 56, 57, 64, 70}, "f1": {17, 18, 53, 59, 71, 86}}
 FLUENCE_TEXT_PLAIN = {0.0: "pre", 3e14: "3e14", 9e14: "9e14", 1.5e15: "1.5e15", 2e15: "2e15",
                       3.5e15: "3.5e15"}
 
 RAD_STOP_SOURCE_TEXT = (
-    "logged radiation stop: rad_stop_utc of july/july_inrun_currents.csv (per-telescope stamp), "
-    "LV-on time from lv_on_utc of july/hv_cycles_jul.csv, both in the inputs folder; shown on "
-    "the first run after each LV-off window (H1 runs 11/14, F1 runs 10/13)."
+    "radiation stop: the earliest stop the records allow, RAD_STOP_UTC of the campaign module "
+    "(shift logbook, operators' messages, LV power log); LV-on time: when the LV came back after "
+    "the step, the end of the last LV-off period longer than %g h before the run, from "
+    "july/lv_spans_jul.csv in the inputs folder; both shown on the first run after each "
+    "irradiation step (H1 runs 11/14, F1 runs 10/13)." % LV_OFF_MIN_H
 )
 
 RAD_STOP_SOURCE_TEXT_FIGURE = (
-    "logged radiation stop: the per-run current table's rad_stop_utc (per-telescope stamp), "
-    "LV-on time from the per-run HV/LV cycle table (lv_on_utc); shown on the first run after "
-    "each LV-off window (H1 runs 11/14, F1 runs 10/13)."
+    "radiation stop: the earliest stop the records allow (shift logbook, operators' messages, LV "
+    "power log); LV-on time: when the LV came back after the step (the end of the last gap longer "
+    "than %g h in the LV power log); both shown on the first run after each irradiation step (H1 "
+    "runs 11/14, F1 runs 10/13)." % LV_OFF_MIN_H
 )
 
 DAQ_RESTART_SENTENCE = (
@@ -525,6 +556,47 @@ TABLE_TEL = GOOD_RUNS_TEL
 # draws each combo's value instead of the band.
 BAND_STEPS = (3.5e15,)
 
+# ==================================================================== setup and timeline
+# campaigns.REQUIRED["overview"]: etroc_plots.overview and notebooks/overview.py read these.
+# The sensor under each chip, in board order (TELESCOPE_CHIPS): wafer and die. Source: the March
+# 2026 campaign slides.
+TELESCOPE_SENSORS = {"h1": ["W27 #20", "W14 #22", "W14 #23", "W15 #01"],
+                     "f1": ["W5 4-7", "W5 5-7", "W5 3-7", "W5 5-8"]}
+
+# The beam at the chips: a Gaussian beam of FWHM BEAM_FWHM_CM, delivered as three exposures,
+# (centre in cm, share of the protons), which flatten the profile over the chip window of
+# +-BEAM_WINDOW_CM. BEAM_TABLE is the facility's table of the options it considered: (name,
+# exposures, mean and RMS deviation of the unit-area profile over the window). Source: the
+# March 2026 campaign slides, which give the width as "Width/sigma = 1.1 cm". Read as a FWHM
+# (sigma = 1.1 / 2.355 cm), it reproduces every row of the table to within 0.002 in the mean and
+# 0.0003 in the RMS deviation; read as sigma, the centre row's mean would be 0.35, not 0.71. So
+# 1.1 cm is the FWHM. The table's own sampling of the window is not documented.
+BEAM_FWHM_CM = 1.1
+BEAM_WINDOW_CM = 0.5
+BEAM_EXPOSURES = ((0.6, 0.4), (0.0, 0.2), (-0.6, 0.4))
+BEAM_TABLE = (
+    ("Center position", ((0.0, 1),), 0.7139, 0.11554),
+    ("Position +-3 mm", ((0.3, 1), (-0.3, 1)), 0.6206, 0.06292),
+    ("Position +-6 mm", ((0.6, 1), (-0.6, 1)), 0.4044, 0.02372),
+    ("Center and +-3 mm", ((0.3, 1), (0.0, 1), (-0.3, 1)), 0.6517, 0.08044),
+    ("Center and +-6 mm", ((0.6, 1), (0.0, 1), (-0.6, 1)), 0.5076, 0.02303),
+    ("Hybrid", BEAM_EXPOSURES, 0.4663, 0.00529),
+)
+
+# The run-config yaml of each campaign: which runs belong to it (the <tel>_run<N> keys) and
+# each run's bookkeeping fluence (every board's "irrad").
+RUN_LIST_YAML = {"march": MARCH_YAML, "july": JULY_YAML}
+# The DAQ's run folders, one run_metadata.yaml each, read by overview.timeline.build_run_times
+# to make RUN_TIMES_CSV (start and configured length of every run). Read-only.
+RUN_METADATA_ROOT = os.environ.get("ETROC_RUN_METADATA_ROOT") or "/eos/user/j/jongho"
+RUN_METADATA_DIRS = {
+    ("march", "h1"): os.path.join(RUN_METADATA_ROOT, "ETROC_Irrad_2026Mar", "H1", "metedata"),  # sic
+    ("march", "f1"): os.path.join(RUN_METADATA_ROOT, "ETROC_Irrad_2026Mar", "F1"),
+    ("july", "h1"): os.path.join(RUN_METADATA_ROOT, "ETROC_Irrad_2026Jul", "H1", "metadata"),
+    ("july", "f1"): os.path.join(RUN_METADATA_ROOT, "ETROC_Irrad_2026Jul", "F1", "metadata"),
+}
+RUN_TIMES_CSV = os.path.join(INPUTS_TABLES, "run_times.csv")
+
 # ============================================================== raw inputs, read in place
 # iv_data.check_inputs checks each one exists and is readable (the IV notebook reads them).
 def _outside_inputs(paths):
@@ -545,4 +617,4 @@ RAW_INPUTS = _outside_inputs(
     + [spec["path"] for spec in BINNED_FROM_RAW.values()]
     + [MARCH_SPARK_CSV, PREIRRAD_LOG, PREIRRAD_CONDITIONS_CSV, MARCH_YAML, JULY_YAML,
        GOOD_RUNS_CSV,
-       COMBO_CHECK_JSON, HV_CYCLES_JUL_CSV])
+       COMBO_CHECK_JSON, HV_CYCLES_JUL_CSV, LV_SPANS_JUL_CSV])

@@ -189,14 +189,7 @@ def header(ax, *, name=None, tag=None, data=None, scale=1.0):
     return style.header(ax, name=name, tag=tag, line2=line2, scale=scale)
 
 
-def header_axis(fig, ml_frac, y_frac, width_frac):
-    """An invisible axis spanning the header band, to carry style.header above a grid of maps."""
-    hax = fig.add_axes([ml_frac, y_frac, width_frac, 1e-6])
-    hax.set_xticks([])
-    hax.set_yticks([])
-    for sp in hax.spines.values():
-        sp.set_visible(False)
-    return hax
+header_axis = style.header_axis
 
 
 # ---------------------------------------------------------------------------- histogram

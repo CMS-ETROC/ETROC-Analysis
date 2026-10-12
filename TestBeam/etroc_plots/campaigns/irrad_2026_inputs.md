@@ -1,7 +1,7 @@
 # IRRAD 2026 inputs
 
-The notebooks (`../notebooks/iv.ipynb`, `../notebooks/merged.ipynb`) draw the CERN IRRAD 2026
-figures (March and July) from two kinds of input, in two EOS locations. Raw data (the March IV
+The notebooks (`../notebooks/iv.ipynb`, `merged.ipynb`, `maps.ipynb` and `overview.ipynb`) draw
+the CERN IRRAD 2026 figures (March and July) from two kinds of input, in two EOS locations. Raw data (the March IV
 scans, the slow-control logs and the week-1 spark-test log, read by the IV notebook only) are read
 in place from the March tree:
 
@@ -9,12 +9,16 @@ in place from the March tree:
 
 (`EOS_ROOT` in `irrad_2026.py`; its `week1/`, `week2/` and `laptop_mirror_15e14/` subfolders). The
 tables listed below (binned scans, reduced HV-monitor logs, run lists, small caches and the
-test-beam result tables: 31 files, 100 MB) sit in one folder outside the repository:
+test-beam result tables: 33 files, 100 MB) sit in one folder outside the repository:
 
     /eos/user/m/musafdar/ETROC_plot_inputs/irrad_2026
 
 `irrad_2026.py` reads from there by default (its `INPUTS`). Both locations are in a personal EOS
-area, so reading them needs a share from its owner (Murtaza Safdari). To work from your own copy,
+area, so reading them needs a share from its owner (Murtaza Safdari). Rebuilding two of the tables
+reads two more places, which the notebooks never read: the LV power-log copies (`LV_LOG_ROOT`, in
+the same personal area) for `july/lv_spans_jul.csv`, and the DAQ's run folders
+(`RUN_METADATA_ROOT`, another personal EOS area) for `tables/run_times.csv`; each needs a share
+from its owner. To work from your own copy,
 copy the folders and point `ETROC_INPUTS` and `ETROC_IV_EOS_MARCH` at them (all the variables
 are in the table at the end):
 
@@ -51,6 +55,7 @@ Run from `TestBeam/`. The rebuild is the authority for these files.
 | `march/march_inrun_60s.csv` | March in-run leakage current per run and board: 60 s medians inside each run's plateau window, from the six raw IV-monitor logs on EOS | `python -m etroc_plots.iv.iv_timeseries --reduce-all --out FILE` |
 | `march/preirrad_cache/` (3 files) | the pre-irradiation stability figure's cache: the slow-control log as 10 s medians, per-run and per-board statistics, the run windows. The rebuild writes the same bytes when nothing has changed, so `md5sum -c` shows whether the published cache was stale | `python -m etroc_plots.iv.preirrad_current --out FIGDIR --cache DIR --rebuild` |
 | `march/fine_iv_F1_m25C_17cm_15e14_*_binned_iv_data.csv`, `march/quick_iv_F1_m25C_17cm_15e14_*_binned_iv_data.csv` (3 files) | the F1 IV scans of the 1.5e15 step, on the same voltage bins as the other March scans (the March tree holds no binned version of them): each slow-control log of that step (a `*_interpolated.csv.gz` file in `laptop_mirror_15e14/F1/` of the March tree; `BINNED_FROM_RAW` in `irrad_2026.py` names each with its window) cut to its scan's window, then each channel to its up-sweep; mean voltage and median current per bin (`FINE_BINS` or `QUICK_BINS` in `iv/legacy.py`). The command prints each table's md5, which matches its line in `irrad_2026_inputs.md5` | `python -m etroc_plots.iv.legacy --out DIR` |
+| `july/lv_spans_jul.csv` | the July LV power log, one row per file: campaign, telescope, file name, first and last record (UTC, to the second) and number of records. The log records only while the LV is on, so every gap between files is an LV cycle (overview notebook, figure 6, draws those longer than 1 h; the LV-on time on the IV notebook's figures 24 and 25 is the end of the last such gap before the run). Read from the log folders `LV_LOG_DIRS` of the campaign module (`<LV_LOG_ROOT>/H1` and `<LV_LOG_ROOT>/F1`), copies of the DAQ's folders `/store/user/lpcmtdstudies/IRRad_CERN_2026Jul/{H1,F1}_telescope/power_history/lv_history/` on the LPC EOS | `python -c "from etroc_plots import lv_log; lv_log.build_lv_spans('FILE')"`, or with `dirs={("july", "h1"): H1_FOLDER, ("july", "f1"): F1_FOLDER}` for other folders |
 
 ## Made outside this package
 
@@ -60,7 +65,7 @@ The code that made these is not in this repository; the origin column says what 
 |---|---|---|
 | `july/timeline_60s.csv.gz` | the whole July HV-monitor log, both telescopes and all four channels, in 60 s bins (UTC) | the July HV-log extraction of 2026-08-22 (its `timeline_60s.csv`, gzipped). Its source files are named in `july_timeline.json` (`source_host`, `source_dirs`) |
 | `july/july_timeline.json` | that extraction in one object: clock finding, board map, radiation stops, irradiation windows, logging gaps, HV-monitor file index, every IV scan at six reference biases, every per-board run | the same extraction. Edited after the extraction: two keys and one sentence renamed to "cooldown", numbers unchanged |
-| `july/july_inrun_currents.csv` | per run and board: in-run bias current (plateau window, median, first and last hour, 5-95 % range), nominal bias, logging status, radiation-stop time, the IV scans before and after | the same extraction |
+| `july/july_inrun_currents.csv` | per run and board: in-run bias current (plateau window, median, first and last hour, 5-95 % range), nominal bias, logging status, a per-telescope radiation-stop proxy (the first IV scan after the step; not read, the figures take the campaign's `RAD_STOP_UTC`), the IV scans before and after | the same extraction |
 | `july/july_iv_scans.csv` | every July IV scan and board: abs(I) at 150, 400, 450, 480, 530 and 550 V | the same extraction |
 | `july/iv_curves.json` | the full binned IV curve of every July scan | the same extraction |
 | `july/iv_scan_inventory.csv` | the July IV scans: type, label, start and end (UTC), raw and clean point counts, maximum voltage | the same extraction |
@@ -90,6 +95,14 @@ run merging itself (the merged step-13 outputs) was done by the run-merging stud
 | `tables/runs_summary.csv` | one row per run: status, and per board the role, chip, bias, bookkeeping fluence, threshold offset and RFSel | `build_irrad_summary.py`: the board settings from the run-config yamls (`TestBeam/board_configs_yaml/CERN_Irrad_2026Mar.yaml` and `CERN_Irrad_2026Jul.yaml`), the rest from each run's quote |
 | `tables/irrad/PIXEL_TABLES_README.md`, `tables/merged/PIXEL_TABLES_README.md` | the notes each build wrote beside its tables | the same builds |
 
+One more table in `tables/` is not a result of the chain: `tables/run_times.csv`, read by the
+overview notebook's timeline (figure 6). One row per DAQ run folder of both campaigns, 97 rows:
+campaign, telescope, run number, run name, start (UTC, to the second) and the configured run
+length in minutes, taken from each run's `run_metadata.yaml` (`run_info.timestamp` and
+`acquisition_settings.max_run_time_minutes`) in the DAQ's run folders on EOS
+(`RUN_METADATA_DIRS` in the campaign module). Made 2026-09-25 by `build_run_times()` of
+`../overview/timeline.py`; its docstring gives the command.
+
 ## Environment variables
 
 Every variable the package and the notebooks read. Set them before the notebook's first import of
@@ -106,5 +119,8 @@ Every variable the package and the notebooks read. Set them before the notebook'
 | `ETROC_PREIRRAD_CONDITIONS_CSV` | `$ETROC_INPUTS/march/conditions_March2026_H1_HPK.csv` | the H1 run conditions (read only by `preirrad_current --rebuild`) |
 | `ETROC_GOOD_RUNS_CSV` | `$ETROC_INPUTS/july/good_runs.csv` | the good-run list |
 | `ETROC_COMBO_CHECK_JSON` | `$ETROC_INPUTS/july/res_vs_run_combo_check_jul_values.json` | the July run order and settings of the IV notebook's figures 24 and 25 |
-| `ETROC_HV_CYCLES_JUL_CSV` | `$ETROC_INPUTS/july/hv_cycles_jul.csv` | the July HV / LV cycle table of the IV notebook's figures 24 and 25 |
-| `ETROC_FIGURES` | `figures` (next to the notebook) | where the notebooks write; figures go to `$ETROC_FIGURES/iv/` and `$ETROC_FIGURES/merged/` |
+| `ETROC_HV_CYCLES_JUL_CSV` | `$ETROC_INPUTS/july/hv_cycles_jul.csv` | the July HV / LV cycle table of the IV notebook's figures 24 and 25 and the overview notebook's figure 6 (its DAQ restarts) |
+| `ETROC_LV_SPANS_JUL_CSV` | `$ETROC_INPUTS/july/lv_spans_jul.csv` | the LV power log's files: the LV-off periods of the overview notebook's figure 6, the LV-on time of the IV notebook's figures 24 and 25 |
+| `ETROC_LV_LOG_ROOT` | `/eos/user/m/musafdar/ETROC_TB_2026_combo_tables/lv_history_jul` | the LV power log folders (`LV_LOG_DIRS`), read only by `lv_log.build_lv_spans` |
+| `ETROC_RUN_METADATA_ROOT` | `/eos/user/j/jongho` | the DAQ's run folders (`RUN_METADATA_DIRS`), read only by `overview.timeline.build_run_times` |
+| `ETROC_FIGURES` | `figures` (next to the notebook) | where the notebooks write; figures go to `$ETROC_FIGURES/<notebook>/`, such as `$ETROC_FIGURES/iv/` |
