@@ -298,6 +298,12 @@ def footer(fig, text, scale=1.0, x=0.01, y=0.008):
     return t
 
 
+def footer_extra_in(text, scale=1.0, fits=4):
+    """Inches to add to a bottom margin laid out for `fits` footer() lines when `text` has more
+    (line height 1.2 x the footer font)."""
+    return max(0, text.count("\n") + 1 - fits) * 1.2 * sizes(scale)["ann"] / 72.0
+
+
 def lower_footer(fig, gap=None):
     """Grow the figure by `gap` inches at the bottom and move every axes and figure-level text
     (except the footer) up by that amount, so the plot is pixel-identical and the footer sits

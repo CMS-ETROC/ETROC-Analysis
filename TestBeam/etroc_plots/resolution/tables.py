@@ -121,6 +121,19 @@ def preferred_runs(path, rfsel, offset):
     return out
 
 
+def display_runs(path, rfsel, offset):
+    """{telescope: {fluence: [run, ...]}} of a display-run list (as preferred_runs): every run
+    listed at RFSel `rfsel` and threshold offset `offset`, preferred or not, per fluence step."""
+    df = pd.read_csv(path, usecols=["telescope", "fluence", "rfsel", "os", "run"])
+    num = {c: pd.to_numeric(df[c], errors="coerce") for c in ("rfsel", "os")}
+    df = df[(num["rfsel"] == rfsel) & (num["os"] == offset)]
+    out = {}
+    for (tel, f), g in df.groupby([df["telescope"].str.strip().str.lower(),
+                                   df["fluence"].astype(float)]):
+        out.setdefault(tel, {})[f] = sorted({int(r) for r in g["run"]})
+    return out
+
+
 # ---------------------------------------------------------------------------- selections
 def board_rows(bt, telescope, run, variant, floor, campaign=None, board_idx=None, anointed=True):
     """The board-table rows of one run (a run number or a merge name), sorted by board; anointed

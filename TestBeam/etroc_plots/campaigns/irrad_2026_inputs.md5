@@ -1,3 +1,14 @@
+abc77c4aade941e02bf2937109ba9042  frontend/blnw_by_run.csv
+c1a4a6057159c20b9496d38503d31d22  frontend/dtoa_pooled_hist.csv
+f92e4a674a5cb208069bf746b1e9172d  frontend/dtoa_triples.csv
+2557f250f31c4dde6ae48d9e01e2580a  frontend/pixel_hists.csv
+ab3ce7ab57f2280f8a47f2844c0c67da  frontend/rfsel_pair_hist.csv
+15f8c86cc25e508bbb9585ee0ee69c26  frontend/tdc_cal_modes.csv
+82d783eca87cec049e441a962e5a3077  frontend/tdc_pixel_hists.csv
+a2c585da09ed0b084e525fb95157634a  frontend/tot_pixel_medians.csv
+417980ec3cd831c6f63614425f37cef8  frontend/tot_pooled_hist.csv
+4bdb145146f1f2aa44b47a4fb5176151  frontend/tot_pooled_summary.csv
+677a2777faf710f9382ac217f6bee048  frontend/triples.csv
 546bffe3e73b28d5d09f29f6201d6ac5  july/display_runs_jul.csv
 1126560b2c7a86443fa0d872d8dbd7ac  july/fine_legacy_20260716/F1_202607160017_fineIV_interpolate.csv
 7172d9fe9252c5853439ed67973b6488  july/fine_legacy_20260716/H1_202607160020_fineIV_interpolated_corrected.csv
