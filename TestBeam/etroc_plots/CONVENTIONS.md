@@ -39,10 +39,10 @@ rest are for whoever writes the next figure.
 
 - Colour = fluence, one ladder per campaign (`FLUENCE_COLOR` in the campaign module). Within one
   fluence step, later measurements of the same chips (after cooling down, for instance) take hues of
-  their own from `iv_plot.TIMING_COLORS`, never a lighter or darker shade of the step's colour.
-  Eight exceptions: the V_gl fit figures (`iv/vgl_plot.py`: fluence is their x axis, one fit per
-  board), the baseline / noise-width figures (`frontend/blnw.py`: the fluence step, the measurement
-  before and after cooling down or the RFSel category is their x axis), the board TOT figures
+  their own from `iv_plot.TIMING_COLORS`, never a lighter or darker shade of the step's colour. Nine
+  exceptions: the V_gl fit figures (`iv/vgl_plot.py`: fluence is their x axis, one fit per board),
+  the baseline / noise-width figures (`frontend/blnw.py`: the fluence step, the measurement before
+  and after cooling down or the RFSel category is their x axis), the board TOT figures
   (`tot_shapes.board_vs_fluence` in `frontend/tot_shapes.py`: the fluence step is their x axis), the
   one-step resolution figures (`resolution/curves.py`: one fluence step of one campaign, a series
   per chip, the step named in the header; see Resolution figures) and the fluence ladder
@@ -52,7 +52,8 @@ rest are for whoever writes the next figure.
   notebook) colour by chip; there the fluence is a shaded band or a label, never a line colour.
   The RFSel comparison (`tot_shapes.rfsel_pairs`: runs of one fluence step that differ in RFSel)
   colours by RFSel (`etroc_style.RFSEL_COLOR`, no orange, which is a fluence colour), and so do the
-  settings figures (below). The schematic pulses of the RFSel explainer use a grey ramp of their
+  settings figures (below). The combination split (`resolution/combo_split.py`) colours by
+  combination (`combo_split.COMBO_COLOR`, by its three boards): its steps are on the axis. The schematic pulses of the RFSel explainer use a grey ramp of their
   own (`cartoons.RF_GREY`): they are not measured series.
 - Marker and line style = chip, by its slot in the telescope. Legends name chips only; the vendor
   goes in the panel title. The fluence ladder is the exception for line style: marker = chip, line
@@ -99,6 +100,9 @@ rest are for whoever writes the next figure.
   which merges it took and why it refused the others. Every run drawn is good on the good-run list,
   or the notebook stops. A run off the display-run list is drawn only where the notebook says why,
   with an open marker, and the footer names it.
+- A figure may override the merge rule where its footer says so: it draws single runs, and the
+  footer names the merges the rule would have drawn in their place (`curves.merge_override`).
+  The resolution notebook's re03 and re07 do.
 - A time axis draws single runs: a merge spans the times of its runs and has no one x. The footer
   says so.
 - One clock per time axis, with its bounds. Hours after the end of a step's irradiation count from
@@ -117,10 +121,16 @@ rest are for whoever writes the next figure.
 - Under each run on a time axis: its number, bold for the display runs where the population is
   wider than the list; where a figure quotes them, each chip's in-run bias current (`JULY_REF_CSV`:
   the median over the run's HV plateau).
-- A bias summary over several July steps (`curves.res_vs_bias_summary`) draws one run per
-  condition of each display class (`curves.one_per_condition`: runs whose boards all sit at the
-  same bias, threshold offset and RFSel form a group; the group keeps the preferred run, else its
-  later run), then the merge rule; the footer names the display runs not drawn and why.
+- A bias summary over several July steps (`curves.res_vs_bias_summary`) draws every display run of
+  every step as a single run (`curves.display_singles`), overriding the merge rule (the footer says
+  so and names the merges left out); runs at one bias stack at one x. `curves.one_per_condition`
+  (one run per bias pattern of a class: the preferred run, else the later run) is there for a
+  figure that wants one run per condition.
+- A point built from fewer than `curves.LOW_PIXELS` pixels (128, half the chip) is a small open
+  marker on every resolution figure with a pixel count per point; the legend says "under 128
+  pixels" and the footer gives the counts. On the combination split the small marker keeps the
+  fill rule of that figure (filled = anointed). The pixel-yield figure, whose axis is the pixel
+  count, keeps its own markers.
 - The fluence ladder (`resolution/ladder.py`) draws one run per campaign and step
   (`ladder.step_winners`): March, the highest-bias run at the standard operating point of each step
   (`MARCH_DISPLAY_RUNS`, checked against the tables; a disagreement stops the notebook); July, the
@@ -140,6 +150,12 @@ rest are for whoever writes the next figure.
   (floor "none": dashed, no markers). A floor-"none" row missing from the table is a gap in the
   dashed line, never 0 (`ladder.floor_none_pixels`). Display runs at a lower bias than the ladder's
   run at a step are small open markers, named in the footer.
+- The combination split (`resolution/combo_split.py`) draws each board's value in every 3-board
+  combination containing it, run by run: the references (the preferred display runs at RFSel 2,
+  offset 20 of the earlier steps), then every display run of the step, single runs only (a merge
+  pools runs), grouped by settings class under the axis with the class and the step written below
+  the run numbers. Colour = combination, filled = the anointed combination, open = the others,
+  marker = chip, bar = the pixel spread in that combination; no band.
 
 ## Settings figures
 
