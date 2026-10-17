@@ -44,6 +44,11 @@
 #   1.5e15, 2e15 and 3.5e15; March.
 # * Figure re15: re06's hours panel at the standard operating point alone: 3.5e15 against the
 #   hours after the end of the irradiation step.
+# * Figures re16, re17 and re18: the combination checks: each board's resolution in its
+#   anointed combination, in the combination without its HV partner, and the pair-corrected
+#   midpoint of the two, against the bias (re16 July, re17 March) and against the run (re18,
+#   every July run, with the HV and LV cycles, irradiation steps and shared autocalibration
+#   scans between runs).
 #
 # Every point is one board in one run: its value in its anointed 3-board combination (boards
 # 0-1-2 for boards 0, 1 and 2; boards 1-2-3 for board 3), the most-populated track per pixel,
@@ -91,12 +96,19 @@
 # * `july/good_runs.csv`: the good-run list, single runs and merges; every run drawn has to be
 #   good.
 # * `tables/run_times.csv`: the start of every run, for the hours on the time axes.
-# * `july/july_inrun_currents.csv`: each chip's bias current during each July run (re05).
+# * `july/july_inrun_currents.csv`: each chip's bias current during each July run (re05), and
+#   the start, length and per-board bias status of each run (re18).
+# * `july/timeline_60s.csv.gz`: the July bias log, one sample per 60 s and channel, with its set
+#   value (re18: the HV cycles between runs).
+# * `july/hv_cycles_jul.csv`: per July run the LV cycles and irradiation steps since the run
+#   before (re18; its HV cycles are recomputed from the bias log and checked against it).
+# * `frontend/blnw_by_run.csv`: per run and chip the autocalibration scan before it (`scan_utc`,
+#   re18).
 #
 # The drawing lives in `../resolution/curves.py` (bias and time axes),
 # `../resolution/ladder.py` (the fluence ladder and the pixel yield),
-# `../resolution/numbers_table.py` (the table) and `../resolution/combo_split.py` (re11), the
-# tables and bands in
+# `../resolution/numbers_table.py` (the table), `../resolution/combo_split.py` (re11) and
+# `../resolution/combo_check.py` (re16 to re18), the tables and bands in
 # `../resolution/tables.py`. This notebook holds the choices made per figure: the runs, the
 # words and the axis ranges. The table of re09 is written as `re09_numbers_table.csv` and `.md`
 # beside its figure.
@@ -117,6 +129,7 @@ import sys
 import matplotlib
 matplotlib.use("Agg")   # draw off-screen; show() displays the PNG exactly as saved
 import matplotlib.pyplot as plt
+import pandas as pd
 from IPython.display import Image, display
 
 # The folder that holds the package (TestBeam/) is two folders up. Jupyter starts the kernel in
@@ -136,7 +149,8 @@ from etroc_plots.inputs import check_inputs                   # noqa: E402
 from etroc_plots.frontend import blnw                         # noqa: E402
 from etroc_plots.overview import timeline                     # noqa: E402
 from etroc_plots.resolution import curves, settings, tables   # noqa: E402
-from etroc_plots.resolution import combo_split, ladder, numbers_table   # noqa: E402
+from etroc_plots.resolution import combo_check, combo_split, ladder, numbers_table   # noqa: E402
+from etroc_plots.iv import current_vs_run                     # noqa: E402
 
 if campaigns.NAME != CAMPAIGN:
     raise RuntimeError("the package is running campaign %r (ETROC_CAMPAIGN) but CAMPAIGN = %r: "
@@ -148,14 +162,17 @@ campaign = campaigns.active
 # published copy.
 check_inputs(only=("tables/irrad/board_table_irrad.csv", "tables/merged/board_table_merged.csv",
                    "tables/runs_summary.csv", "tables/run_times.csv", "july/display_runs_jul.csv",
-                   "july/good_runs.csv", "july/july_inrun_currents.csv"))
+                   "july/good_runs.csv", "july/july_inrun_currents.csv",
+                   "july/timeline_60s.csv.gz", "july/hv_cycles_jul.csv",
+                   "frontend/blnw_by_run.csv"))
 
 NOTEBOOK = "TestBeam/etroc_plots/notebooks/resolution.ipynb"   # "script" in every values file
 OUT = os.path.join(os.path.abspath(os.environ.get("ETROC_FIGURES") or "figures"), "resolution")
 os.makedirs(OUT, exist_ok=True)
 INPUTS = [campaign.BOARD_TABLE, campaign.BOARD_TABLE_MERGED, campaign.RUNS_SUMMARY_CSV,
           campaign.DISPLAY_RUNS_JUL_CSV, campaign.GOOD_RUNS_CSV, campaign.RUN_TIMES_CSV,
-          campaign.JULY_REF_CSV]
+          campaign.JULY_REF_CSV, campaign.JULY_TIMELINE, campaign.HV_CYCLES_JUL_CSV,
+          campaign.BLNW_CSV]
 
 VARIANT, FLOOR = "top", "300"          # the track variant and event floor of every point
 TELS = list(campaign.TELESCOPE_CHIPS)
@@ -1057,6 +1074,10 @@ save(fig, "re10_pixel_yield_vs_fluence",
 # is not on the display list there). The references are the preferred runs alone, H1 4 and 12 as
 # on the maps notebook, so H1 3+4 and 11+12 are not drawn.
 #
+# The combination checks re16 to re18 (appendix) read the same combination rows and draw, for
+# every good run at the standard point, the anointed combination beside the one without the
+# board's HV partner and their pair-corrected midpoint.
+#
 # The colour is the combination (by its three boards; no fluence hue: the steps are on the
 # axis), filled for the board's anointed combination and open for the other two, the marker the
 # chip, the bar the pixel-to-pixel spread of the board's map in that combination. No band: the
@@ -1288,3 +1309,313 @@ save(fig, "re15_res_vs_hours_after_3p5e15",
                  band=tables.BAND_FOOTER,
                  times="run start (tables/run_times.csv) minus RAD_STOP_UTC[3.5e15] (the "
                        "earliest allowed stop), hours, as on re06"))
+
+# %% [markdown]
+# ## Figures re16, re17 and re18: the combination checks
+#
+# Each board's resolution from three choices of 3-board combination, all read from the
+# single-run board table's combination rows (`../resolution/combo_check.py`):
+#
+# * top row, the anointed combination (boards 0-1-2 for boards 0-2, 1-2-3 for board 3): the
+#   values of re07 and re06;
+# * middle row, the combination without the board's HV partner (boards 0 and 1, and 2 and 3,
+#   are HV pairs): board 0 from boards 0-2-3, board 1 from 1-2-3, board 2 from 0-1-2, board 3
+#   from 0-1-3;
+# * bottom row, the pair-corrected midpoint w_mid^2 = (w_present^2 + w_absent^2)/2, w_present
+#   the RMS of the board's values in the two combinations holding both the board and its
+#   partner, w_absent the middle row; the bar by the same rule on the pixel spreads, the pixel
+#   count the fewest of the three combinations.
+#
+# A combination is named by its boards, not by the role words of the table, which change from
+# run to run. A run-board whose combination is not in the table gets no point on that row, and
+# the footer lists it: on H1 runs 6 to 9 board 3 (IH13) took no data, so only boards 0-1-2 form
+# a combination there. No band on any row: these figures compare the combinations themselves.
+#
+# re16 (July) and re17 (March) draw every good run at the standard operating point (RFSel 2,
+# threshold offset 20) at every step against the bias, single runs, no run left out for sharing
+# a bias with another: March is re07's population, July every good run at the standard point,
+# not only the display runs. re18 draws every July run of the board table, at any settings and
+# good or not, against the run number: filled for a good run at the standard point, light for a
+# good run at other settings, open for a run the good-run list marks not good. It overrides the
+# rule that every run drawn is good, and says so, because it looks at every run.
+#
+# Between consecutive runs (in time) re18 marks: an HV cycle, where a powered board's bias fell
+# below 20 % of its set value in at least one 60 s sample of the bias log between the end of the
+# run before and the start of this one (the start and length of each run from
+# `july_inrun_currents.csv`, the samples from `timeline_60s.csv.gz`; recomputed here and checked
+# board by board against the HV/LV-cycle table, the cell stops on any difference); an LV cycle
+# or an irradiation step, from that table's `lv_event`; and, under the bottom row, the runs whose
+# chips all share the autocalibration scan of the run before. The talk read that scan id from a
+# per-run id list that is not published; the `scan_utc` column of `blnw_by_run.csv` identifies
+# the same scan (the start of the autocalibration each run used; every July row matches its
+# scan exactly or to within 3 pixels, the cell stops otherwise) and gives the same groups.
+
+# %%
+ROW_TITLES = {"anointed": u"anointed combination",
+              "partner_excluded": u"combination without the HV partner",
+              "midpoint": u"pair-corrected midpoint"}
+ROW_WORD = {"anointed": u"top", "partner_excluded": u"middle", "midpoint": u"bottom"}
+COMBO = combo_check.combination_rows(BT, VARIANT, FLOOR)
+STEPS_MAR = (0.0, 3e14, 9e14, 1.5e15)
+
+
+NOT_STANDARD, NOT_GOOD = u"not at RFSel 2, offset 20", u"not good on the good-run list"
+
+
+def check_population(camp, steps):
+    """Every good run of `camp` at the standard operating point at the steps `steps`, single runs:
+    {tel: points}, {tel: {run: NOT_STANDARD or NOT_GOOD}}."""
+    pts, dropped = {t: [] for t in TELS}, {t: {} for t in TELS}
+    for t in TELS:
+        for f in steps:
+            runs = [r for r in curves.table_runs(BT, t, camp, VARIANT, FLOOR)
+                    if r in curves.runs_at_step(RS, t, camp, f)]
+            std = curves.standard(curves.points(BT, BM, RS, t, runs, camp, VARIANT, FLOOR))
+            for r in runs:
+                if not any(q["run"] == r for q in std):
+                    dropped[t][r] = NOT_STANDARD
+            bad = curves.not_good(sorted({q["run"] for q in std}), GOOD[(camp, t)])
+            dropped[t].update({int(r): NOT_GOOD for r in bad})
+            pts[t] += [q for q in std if str(q["run"]) not in bad]
+    return pts, dropped
+
+
+def check_rows(pts):
+    """{row: {tel: points}} and {row: [missing (tel, run, board)]} of the points `pts`."""
+    rows, missing = {}, {}
+    for r in combo_check.ROWS:
+        rows[r], missing[r] = {}, []
+        for t in TELS:
+            rows[r][t], m = combo_check.row_points(pts[t], COMBO[r][0])
+            missing[r] += m
+    return rows, missing
+
+
+def missing_text(missing):
+    """"middle row: H1 runs 6, 7 boards 0, 1; bottom row: ..." or "none"."""
+    parts = []
+    for r, label in (("partner_excluded", u"middle row"), ("midpoint", u"bottom row")):
+        by = {}
+        for t, run, b in missing[r]:
+            by.setdefault((t, b), []).append(run)
+        groups = {}
+        for (t, b), runs in sorted(by.items()):
+            groups.setdefault((t, tuple(sorted(runs))), []).append(b)
+        if groups:
+            parts.append(u"%s %s" % (label, u"; ".join(
+                u"%s run%s %s board%s %s" % (t.upper(), u"s" if len(runs) > 1 else u"",
+                                            u", ".join(map(str, runs)),
+                                            u"s" if len(bs) > 1 else u"", u", ".join(map(str, bs)))
+                for (t, runs), bs in groups.items())))
+    if missing["anointed"]:
+        raise RuntimeError("anointed rows missing: %s" % missing["anointed"])
+    return u"; ".join(parts) if parts else u"none"
+
+
+def check_ylim(rows, ylim, stem, above=False):
+    """Stops on a point whose bar leaves `ylim`; with `above`, a point reaching past the top is
+    allowed (re18 draws it as an off-scale arrow) and listed: [(tel, run, chip, row, value)]."""
+    over = [(p["tel"], p["run"], p["chip"], r, round(p["value_ps"], 1)) for r in rows
+            for t in TELS for p in rows[r][t] if p["value_ps"] + p["bar_ps"] > ylim[1]]
+    out = [(p["tel"], p["run"], p["chip"], r, round(p["value_ps"], 1)) for r in rows
+           for t in TELS for p in rows[r][t] if p["value_ps"] - p["bar_ps"] < ylim[0]]
+    if out or (over and not above):
+        raise RuntimeError("%s: points outside %s: %s" % (stem, ylim, out + over))
+    return over
+
+
+def runs_text(runs_by_tel):
+    """"H1 6, 7; F1 15" from {tel: [run, ...]}."""
+    return u"; ".join(u"%s %s" % (t.upper(), u", ".join(map(str, sorted(runs_by_tel[t]))))
+                      for t in TELS if runs_by_tel.get(t))
+
+
+def rows_footer(what, rows, missing, dropped):
+    every = [p for r in rows for t in TELS for p in rows[r][t]]
+    n_runs = {t: len({p["run"] for p in rows["anointed"][t]}) for t in TELS}
+    lines = [
+        u"Selection: %s, tracks with at least %s events. Widths = FWHM/2.355 of the "
+        u"TOA-difference core, as the result tables carry them; bar = the pixel-to-pixel spread."
+        % (tables.VARIANT_TEXT[VARIANT], FLOOR),
+        u"Top: the anointed combination (boards 0-1-2 for boards 0-2, 1-2-3 for board 3). Middle: "
+        u"the combination without the board's HV partner (pairs 0-1, 2-3).",
+        u"Bottom: $w_\mathrm{mid}^2 = (w_\mathrm{present}^2 + w_\mathrm{absent}^2)/2$, "
+        u"$w_\mathrm{present}$ = RMS of the two combinations holding the board and its partner, "
+        u"$w_\mathrm{absent}$ = the middle row.",
+        u"Bottom bar by the same rule on the pixel spreads, pixels the fewest of the three. No "
+        u"band: the rows compare the combinations.",
+        what % (n_runs["h1"], n_runs["f1"]),
+        u"No point (combination not in the table): %s." % missing_text(missing)]
+    if dropped is not None:
+        lines.append(u"Not drawn: %s." % (u"; ".join(
+            u"%s: %s" % (why, runs_text({t: [r for r, w in dropped[t].items() if w == why]
+                                         for t in TELS}))
+            for why in (NOT_STANDARD, NOT_GOOD)
+            if any(w == why for t in TELS for w in dropped[t].values())) or u"none"))
+    low = [p for p in every if curves.low_pixels(p)]
+    if low:
+        lines.append(u"Small markers, under %d pixels (half the chip): %d of %d points." % (
+            curves.LOW_PIXELS, len(low), len(every)))
+    lines.append(u"%d points. %s" % (len(every), FLUENCE_TEXT))
+    return u"\n".join(lines)
+
+
+def rows_payload(n, footer, rows, missing, dropped, camp, **extra):
+    return payload(n, footer, missing={r: [list(m) for m in missing[r]] for r in missing},
+                   not_good_reasons={t: {k: v[1] for k, v in GOOD[(camp, t)].items()
+                                         if not v[0]} for t in TELS},
+                   not_drawn=None if dropped is None else {
+                       t: {str(r): w for r, w in dropped[t].items()} for t in TELS},
+                   midpoint_rule="w_mid^2 = (w_present^2 + w_absent^2)/2; bar by the same rule "
+                                 "on the pixel spreads; n_pixels = min of the three",
+                   partners={str(k): v for k, v in combo_check.PARTNERS.items()}, **extra)
+
+
+ROWS_CONVENTIONS = dict(
+    colour="fluence step (FLUENCE_COLOR), a later look at a step in the later-look hue",
+    rows="anointed combination; the combination without the HV partner (PARTNERS); the "
+         "pair-corrected midpoint (combo_check.midpoint)",
+    band="none: the rows compare the combinations")
+
+for stem, camp, steps, data, ylim in (
+        ("re16_res_vs_bias_combo_check_jul", "july", STEPS_JUL, u"July, every step",
+         (20.0, 90.0)),           # ps: H1 runs 56 and 70 of the middle row reach past 80
+        ("re17_res_vs_bias_combo_check_mar", "march", STEPS_MAR, u"March, every step", YLIM)):
+    pts, dropped = check_population(camp, steps)
+    rows, missing = check_rows(pts)
+    check_ylim(rows, ylim, stem)
+    footer = rows_footer(u"Every good run at RFSel 2, threshold offset 20, at every step, single "
+                         u"runs: %d H1 and %d F1 runs." + (u" March as on re07." if camp == "march"
+                                                           else u""), rows, missing, dropped)
+    fig, n = combo_check.bias_check(rows, tel_titles=TEL_TITLES, row_titles=ROW_TITLES,
+                                    xlabel=style.XLABEL_BIAS, ylim=ylim, tag=TAG, data=data,
+                                    footer=footer)
+    save(fig, stem, rows_payload(n, footer, rows, missing, dropped, camp,
+                                 runs={t: sorted({p["run"] for p in rows["anointed"][t]})
+                                       for t in TELS}),
+         conventions(population="every good run at the standard point at every step, single "
+                                "runs", **ROWS_CONVENTIONS))
+
+
+# %%
+YLIM18 = (20.0, 120.0)
+RUN_WIN, BOARD_META = current_vs_run.load_currents_meta()
+TIMELINE = current_vs_run.load_timeline()
+HV_TABLE = current_vs_run.load_hv_cycles()
+BLNW_IDS = pd.read_csv(campaign.BLNW_CSV, usecols=["campaign", "tel", "run", "chip", "scan_utc",
+                                                   "match"])
+P18, SLOTS18, EVENTS18, AUTOCAL18, HV18, NOT_GOOD18 = {}, {}, {}, {}, {}, {}
+for t in TELS:
+    runs = curves.table_runs(BT, t, "july", VARIANT, FLOOR)
+    SLOTS18[t] = combo_check.run_slots(runs)
+    NOT_GOOD18[t] = {int(r): why for r, why in curves.not_good(runs, GOOD[("july", t)]).items()}
+    P18[t] = curves.points(BT, BM, RS, t, runs, "july", VARIANT, FLOOR)
+    std = {(p["run"], p["board_idx"]) for p in curves.standard(P18[t])}
+    for p in P18[t]:
+        p["kind"] = (u"not good" if p["run"] in NOT_GOOD18[t]
+                     else u"standard" if (p["run"], p["board_idx"]) in std else u"other")
+    lost = [r for r in runs if (t, r) not in RUN_WIN]
+    if lost:
+        raise RuntimeError("%s runs without a start and length in july_inrun_currents: %s"
+                           % (t, lost))
+    win = {r: (RUN_WIN[(t, r)]["start_utc"],
+               RUN_WIN[(t, r)]["start_utc"] + pd.Timedelta(minutes=RUN_WIN[(t, r)]["max_min"]))
+           for r in runs}
+    status = {(r, b): m["status"] for (tt, r, b), m in BOARD_META.items() if tt == t}
+    HV18[t] = combo_check.hv_cycles(win, TIMELINE[TIMELINE["tel"] == t.upper()], status,
+                                    boards=range(len(campaign.TELESCOPE_CHIPS[t])))
+    EVENTS18[t] = {}
+    for r in runs:
+        kk = [u"hv"] if any(v is True for v in HV18[t][r]["boards"].values()) else []
+        lv = HV_TABLE[(t, r)]["lv_event"]
+        kk += {u"lv_cycle": [u"lv"], u"irradiation_step": [u"irradiation"]}.get(lv, [])
+        if kk:
+            EVENTS18[t][r] = kk
+    ids = BLNW_IDS[(BLNW_IDS["campaign"] == "july") & (BLNW_IDS["tel"] == t)]
+    loose = ids[~ids["match"].isin(["exact", "near_exact"])]
+    if len(loose):
+        raise RuntimeError("%s: scans joined loosely (match not exact or near_exact): %s"
+                           % (t, loose[["run", "chip", "match"]].values.tolist()))
+    AUTOCAL18[t] = combo_check.autocal_groups(
+        {int(r): dict(zip(g["chip"], g["scan_utc"])) for r, g in ids.groupby("run")}, runs,
+        list(campaign.TELESCOPE_CHIPS[t]))
+
+# the HV cycles recomputed here against the HV/LV-cycle table, board by board
+HV_CHECK = dict(agree=0, differ=[])
+for t in TELS:
+    for r, rec in HV18[t].items():
+        theirs = HV_TABLE[(t, r)]["b_cycled"]
+        for b, mine in rec["boards"].items():
+            if (mine if isinstance(mine, bool) else None) == theirs[b]:
+                HV_CHECK["agree"] += 1
+            else:
+                HV_CHECK["differ"].append((t, r, b, mine, theirs[b]))
+if HV_CHECK["differ"]:
+    raise RuntimeError("HV cycles differ from the HV/LV-cycle table: %s" % HV_CHECK["differ"])
+print("HV cycles: %d board decisions, all as the HV/LV-cycle table" % HV_CHECK["agree"])
+
+ROWS18, MISSING18 = check_rows(P18)
+OVER18 = check_ylim(ROWS18, YLIM18, "re18", above=True)
+
+
+def events_text(t):
+    out = []
+    for k, word in ((u"hv", u"HV cycle"), (u"lv", u"LV cycle"),
+                    (u"irradiation", u"irradiation step")):
+        runs = [r for r, kk in sorted(EVENTS18[t].items()) if k in kk]
+        if runs:
+            out.append(u"%s before %s" % (word, u", ".join(map(str, runs))))
+    return u"%s: %s" % (t.upper(), u"; ".join(out) or u"none")
+
+
+def kinds_text(kind):
+    return runs_text({t: sorted({p["run"] for p in P18[t] if p["kind"] == kind}) for t in TELS})
+
+
+def autocal_text(t):
+    groups, partial, no_id = AUTOCAL18[t]
+    parts = [u"runs %s" % u"+".join(map(str, g)) for g in groups]
+    parts += [u"partial: run %d (%s)" % (r, u", ".join(c)) for r, c in sorted(partial.items())]
+    parts += [u"no scan on record: %s" % u", ".join(map(str, no_id))] if no_id else []
+    return u"%s %s" % (t.upper(), u"; ".join(parts) or u"none")
+
+
+footer18 = rows_footer(
+    u"Every July run of the board table, any settings, good or not (this figure overrides the "
+    u"every-run-good rule: it looks at every run): %d H1 and %d F1 runs.", ROWS18, MISSING18,
+    None).split(u"\n")
+footer18 = u"\n".join(footer18[:-1] + [
+    u"Filled = good, RFSel 2, offset 20; light = good, other settings (%s); open = not good on "
+    u"the good-run list (%s)." % (kinds_text(u"other"), kinds_text(u"not good")),
+    u"Off scale, an arrow at the top with its value: %s." % (u"; ".join(
+        u"%s run %d %s (%s row) %.0f ps" % (t.upper(), r, c, ROW_WORD[w], v)
+        for t, r, c, w, v in OVER18) or u"none")] + footer18[-1:] + [
+    u"Between runs (in time): HV cycle = a powered board's bias below 20 %% of its set value in at "
+    u"least one 60 s sample after the run before; LV cycle and irradiation step from the HV/LV-"
+    u"cycle table. %s." % u". ".join(events_text(t) for t in TELS),
+    u"Under the bottom row: runs whose chips all share the autocalibration scan (BL/NW scan "
+    u"start) of the run before: %s." % u"; ".join(autocal_text(t) for t in TELS)])
+fig, n18 = combo_check.run_check(
+    ROWS18, SLOTS18, EVENTS18, AUTOCAL18, tel_titles=TEL_TITLES, row_titles=ROW_TITLES,
+    ylim=YLIM18, tag=style.settings_text(rfsel=(1, 2, 3), offset=None),
+    data=u"July, every run", footer=footer18)
+save(fig, "re18_res_vs_run_combo_check_jul",
+     rows_payload(n18, footer18, ROWS18, MISSING18, None, "july", off_scale=OVER18,
+                  not_good={t: {str(r): w for r, w in NOT_GOOD18[t].items()} for t in TELS},
+                  hv_cycles={t: {str(r): dict(prev_run=rec["prev_run"], boards={
+                      str(b): v for b, v in rec["boards"].items()}) for r, rec in HV18[t].items()}
+                      for t in TELS},
+                  hv_check=dict(agree=HV_CHECK["agree"], differ=len(HV_CHECK["differ"])),
+                  lv_events={t: {str(r): HV_TABLE[(t, r)]["lv_event"] for r in SLOTS18[t]}
+                             for t in TELS},
+                  autocal={t: dict(groups=AUTOCAL18[t][0],
+                                   partial={str(r): c for r, c in AUTOCAL18[t][1].items()},
+                                   no_id=AUTOCAL18[t][2]) for t in TELS},
+                  autocal_id="scan_utc of frontend/blnw_by_run.csv per chip and run"),
+     conventions(population="every July run of the single-run board table, any settings, good "
+                            "or not; filled = good at the standard point, light = good at other "
+                            "settings, open = not good",
+                 x="run slots in run-number order; boards at combo_check.BOARD_DX in a slot",
+                 hv_cycle="a powered board's v below 0.2 x vset in at least one 60 s sample "
+                          "between the previous run's end (in time) and the run's start",
+                 **ROWS_CONVENTIONS))

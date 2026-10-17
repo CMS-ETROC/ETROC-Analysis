@@ -4,10 +4,13 @@ standard operating point, the stop clock with its bounds, the hours since the fi
 step, the colour rule, the low-pixel threshold; the fluence ladder's picks (step_winners), the
 one-run-per-condition selector, the floor-"none" pixel lookup and the numbers table; the
 combination split's runs, points and layout, with and without merges; the bias summary drawn in
-part (re12 to re14) with the whole figure's colours.
+part (re12 to re14) with the whole figure's colours; the combination checks (re16 to re18): the
+partner-excluded combination, the pair-corrected midpoint, a missing combination reported, the HV
+cycle between runs and the shared autocalibration scan.
 
 Run from TestBeam/:  python -m pytest etroc_plots/tests
 """
+import math
 import os
 import sys
 
@@ -22,7 +25,8 @@ if not os.environ.get("ETROC_CAMPAIGN"):
 from etroc_plots.campaigns import active as campaign            # noqa: E402
 from etroc_plots.etroc_style import BOARD_COLOR                  # noqa: E402
 from etroc_plots.iv.iv_plot import TIMING_COLORS                 # noqa: E402
-from etroc_plots.resolution import combo_split, curves, ladder, numbers_table, tables  # noqa: E402
+from etroc_plots.resolution import (combo_check, combo_split, curves, ladder,  # noqa: E402
+                                    numbers_table, tables)
 
 JUL, MAR = campaign.TABLE_CAMPAIGN["july"], campaign.TABLE_CAMPAIGN["march"]
 CHIPS = campaign.TELESCOPE_CHIPS["h1"]
@@ -430,3 +434,112 @@ def test_bias_summary_in_part_keeps_the_whole_figures_colours():
     assert {q["color"] for q in part["points"]} == {TIMING_COLORS[0]}
     assert [q["color"] for q in part["points"]] == [q["color"] for q in whole["points"]
                                                     if q["camp"] == "july"]
+
+
+COMBOS = {(0, 1, 2): "extra0-dut1-ref2", (0, 1, 3): "ref0-dut1-trig3",
+          (0, 2, 3): "ref0-dut2-trig3", (1, 2, 3): "dut1-ref2-trig3"}
+
+
+def combination_table(run=18, drop=()):
+    """Every 3-board combination of H1 run `run` but those in `drop`: each board's row in each
+    combination, value_ps = 40 + 10 x the board left out + the board index, pixel_spread_ps = 2 +
+    the board left out, n_pixels = 200 + 10 x the board left out + the board index; anointed on
+    boards 0-1-2 for boards 0 to 2 and 1-2-3 for board 3."""
+    rows = []
+    for boards, combo in COMBOS.items():
+        if boards in drop:
+            continue
+        out = ({0, 1, 2, 3} - set(boards)).pop()
+        for b in boards:
+            rows.append(dict(campaign=JUL, telescope="h1", run=str(run), combo=combo, board_idx=b,
+                             board_chip="PT_" + CHIPS[b], variant="top", floor="300",
+                             value_ps=40.0 + 10 * out + b, pixel_spread_ps=2.0 + out,
+                             n_pixels=200 + 10 * out + b,
+                             anointed=boards == ((0, 1, 2) if b < 3 else (1, 2, 3))))
+    return pd.DataFrame(rows)
+
+
+def test_partner_excluded_takes_the_combination_without_the_hv_partner():
+    t = combination_table()
+    out, missing = combo_check.partner_excluded(t)
+    assert missing == [] and out["board_idx"].tolist() == [0, 1, 2, 3]
+    # partners 0-1 and 2-3: board 0 from 0-2-3, 1 from 1-2-3, 2 from 0-1-2, 3 from 0-1-3
+    assert [combo_split.combo_boards(c) for c in out["combo"]] == [(0, 2, 3), (1, 2, 3),
+                                                                   (0, 1, 2), (0, 1, 3)]
+    assert out["value_ps"].tolist() == [50.0, 41.0, 72.0, 63.0]
+    assert out["chip"].tolist() == ["PT_" + c for c in CHIPS]
+    anointed, none = combo_check.anointed_rows(t)
+    assert none == [] and anointed["value_ps"].tolist() == [70.0, 71.0, 72.0, 43.0]
+
+
+def test_midpoint_is_the_rms_of_the_present_mean_and_the_absent_value():
+    out, missing = combo_check.midpoint(combination_table())
+    assert missing == []
+    r = out.set_index("board_idx")
+    # board 0: present 0-1-2 (70 ps, spread 5) and 0-1-3 (60, 4), absent 0-2-3 (50, 3)
+    w_present = math.sqrt((70.0 ** 2 + 60.0 ** 2) / 2)
+    assert r.loc[0, "w_present"] == pytest.approx(w_present) and r.loc[0, "w_absent"] == 50.0
+    assert r.loc[0, "value_ps"] == pytest.approx(math.sqrt((w_present ** 2 + 50.0 ** 2) / 2))
+    sp_present = math.sqrt((5.0 ** 2 + 4.0 ** 2) / 2)
+    assert r.loc[0, "bar_ps"] == pytest.approx(math.sqrt((sp_present ** 2 + 3.0 ** 2) / 2))
+    assert r.loc[0, "n_pixels"] == 210                  # the fewest of the three
+    # board 3: present 0-2-3 (53) and 1-2-3 (43), absent 0-1-3 (63)
+    assert r.loc[3, "value_ps"] == pytest.approx(
+        math.sqrt(((53.0 ** 2 + 43.0 ** 2) / 2 + 63.0 ** 2) / 2))
+    assert [combo_split.combo_boards(c) for c in r.loc[3, "combos_present"]] == [(0, 2, 3),
+                                                                               (1, 2, 3)]
+
+
+def test_a_missing_combination_is_reported_not_guessed():
+    t = combination_table(drop=[(0, 2, 3)])
+    out, missing = combo_check.partner_excluded(t)
+    assert out["board_idx"].tolist() == [1, 2, 3]
+    assert missing == [dict(campaign=JUL, telescope="h1", run="18", board_idx=0,
+                            row="partner_excluded", combination="boards 0-2-3")]
+    mid, lacking = combo_check.midpoint(t)
+    assert mid["board_idx"].tolist() == [1]
+    assert [(m["board_idx"], m["combination"]) for m in lacking] == [
+        (0, "boards 0-2-3"), (2, "boards 0-2-3"), (3, "boards 0-2-3")]
+    # a run with combination 0-1-2 only (board 3 took no data)
+    one, gone = combo_check.partner_excluded(combination_table(drop=[(0, 1, 3), (0, 2, 3),
+                                                                     (1, 2, 3)]))
+    assert one["board_idx"].tolist() == [2]
+    assert [(m["board_idx"], m["combination"]) for m in gone] == [(0, "boards 0-2-3"),
+                                                                  (1, "boards 1-2-3")]
+    # the figure drops the point the row lacks and names it
+    pts = [dict(camp="july", tel="h1", run=18, board_idx=b, chip=CHIPS[b], value_ps=1.0,
+                bar_ps=1.0, n_pixels=1, band=(0.0, 2.0)) for b in range(4)]
+    drawn, lost = combo_check.row_points(pts, out)
+    assert [p["board_idx"] for p in drawn] == [1, 2, 3] and lost == [("h1", 18, 0)]
+    assert [p["value_ps"] for p in drawn] == [41.0, 72.0, 63.0]
+    assert {p["band"] for p in drawn} == {None}
+
+
+def test_hv_cycle_between_runs_by_board():
+    t0 = pd.Timestamp("2026-07-10 10:00", tz="UTC")
+
+    def m(k):
+        return t0 + pd.Timedelta(minutes=k)
+    windows = {5: (m(0), m(30)), 6: (m(60), m(90)), 7: (m(120), m(150))}
+    rows = []
+    # board 0 at 50 V of 300 V (under 20 %) between runs 5 and 6, at 10 V in run 6 itself (the
+    # end of run 6 is not in the next gap); board 1 set to 0 V; board 2 without samples
+    for k, v in ((40, 50.0), (60, 300.0), (90, 10.0), (100, 300.0), (120, 280.0)):
+        rows += [dict(tb=m(k), channel=0, v=v, vset=300.0), dict(tb=m(k), channel=1, v=0.0,
+                                                               vset=0.0)]
+    status = {(r, b): "on" for r in windows for b in range(3)}
+    status.update({(r, 3): "hv_off_by_design" for r in windows})
+    del status[(7, 1)]
+    hv = combo_check.hv_cycles(windows, pd.DataFrame(rows), status)
+    assert hv[5] == dict(prev_run=None, boards={0: "n/a", 1: "n/a", 2: "n/a", 3: "n/a"})
+    assert hv[6] == dict(prev_run=5, boards={0: True, 1: False, 2: "no data", 3: "off"})
+    assert hv[7] == dict(prev_run=6, boards={0: False, 1: "off", 2: "no data", 3: "off"})
+
+
+def test_autocal_groups_need_every_chip_on_the_same_scan():
+    a, b = CHIPS[0], CHIPS[1]
+    ids = {3: {a: "s1", b: "s1"}, 4: {a: "s1", b: "s1"}, 5: {a: "s2", b: "s1"}, 6: {},
+           7: {a: "s3", b: "s3"}, 8: {a: "s3", b: "s3"}, 9: {a: "s3", b: "s3"}}
+    groups, partial, no_id = combo_check.autocal_groups(ids, [3, 4, 5, 6, 7, 8, 9], [a, b])
+    assert groups == [[3, 4], [7, 8, 9]]
+    assert partial == {5: [b]} and no_id == [6]
