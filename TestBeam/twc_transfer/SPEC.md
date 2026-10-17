@@ -1,10 +1,11 @@
 # twc_transfer: specification of the library
 
 What the package computes and the rules it keeps. Sections 0, 1, 2, 4 and 5 define the library
-in this directory. Section 3 (the transfer operations and the two pixel-to-board protocols), the
-commands and the output tables belong to the command-line tools and are specified with them;
-section 3 below holds only the terms of it that the library code uses. The code cites sections
-as "SPEC 1", "SPEC 5.1" and so on.
+in this directory; sections 6 and 7 the commands that write the index, the bank and the Tier-0
+screen, and the tables they write. Section 3 (the transfer operations and the two
+pixel-to-board protocols) belongs to the cell command and is specified with it; section 3 below
+holds only the terms of it that the library code uses. The code cites sections as "SPEC 1",
+"SPEC 5.1" and so on.
 
 ## 0. Layout and invariants
 
@@ -26,9 +27,9 @@ A step-10 track file (`time/track_*.parquet`) has the columns `tot_<role>`, `toa
 `file`, `cal_<role>`, `HasNeighbor_<role>`, `trackNeighbor`, and no event id. A four-board run
 has four leave-one-out combos; on March H1 each holds about 1090 to 1210 triples per run.
 
-Nothing in the library writes a file. A caller that writes uses `campaigns.write_root()`
-(the folder `ETROC_TWC_OUT`, which has no default and may be neither the read root nor a data
-root) and `naming.ensure_dirs(root)`.
+Nothing in the library writes a file. A caller that writes, the command line of section 6
+included, uses `campaigns.write_root()` (the folder `ETROC_TWC_OUT`, which has no default and
+may be neither the read root nor a data root) and `naming.ensure_dirs(root)`.
 
 ## 1. Data model
 
@@ -67,7 +68,8 @@ roles can be reassigned between runs. The role travels as metadata.
 
 ## 2. The coefficient bank
 
-Fit once, evaluate many: `bank.bank_rows_for_triple` returns one row per (campaign, run,
+Fit once, evaluate many: the `bank` command (section 6) writes one parquet per run, and
+`bank.bank_rows_for_triple` returns its rows for one triple, one row per (campaign, run,
 angle_deg, telescope, combo, src_triple, board_id, role, fold, guard, placebo), the key
 `bank.BANK_META`. `fold` is `full` plus, for `folds="parity"`, `0` and `1`; for `"block"`,
 `blockA` and `blockB`; for `"both"`, all four. A fold of fewer than 50 events is skipped.
@@ -319,3 +321,69 @@ intersection-union test and needs no correction.
    bank row and `xfer_calfix` measures how much of an apparent loss is calibration.
 
 Pre-registered floors: n_eval >= 600, n_fit >= 1000, headline n >= 1500, `N_CAP = 6000`.
+
+## 6. Commands
+
+`python -m twc_transfer <subcommand>`, run from `TestBeam/` (`cli.py`). `__main__.py` first
+pins every thread pool to one thread and, when `PYTHONHASHSEED` is not 0, restarts the
+interpreter once with `PYTHONHASHSEED=0`, saying so on stderr. Argument names, defaults and
+types are those of the study's own command line, so the commands of its job lists parse
+unchanged.
+
+    index  --campaign C --run R [--combo X[,Y]] [--root DIR] [--ntrip 100000]
+           -> bank/index_<C>_<R>.parquet
+    bank   --campaign C --run R [--combo X[,Y]] [--root DIR] [--ntrip 40] [--nmin 600]
+           [--folds parity|full|block|both] [--guards full[,lpo]] [--placebo] [--cap 6000]
+           [--neighbor none] [--neighbor-logic OR] [--angle A] [--telescope T] [--hv V]
+           [--temp T] [--chunk k/N] [--append]
+           -> bank/coeffs_<C>_<R>.parquet          (alias: fit)
+    tier0  --bank FILE [--tag all] [--max-src 0]
+           -> tier0/transfer_<tag>.parquet
+    jobs   --list LIST [--job ID ...] --dry-run
+    cell   the arguments of one transfer cell (alias: transfer); parsed, not run, by this
+           version
+
+- `--combo` absent means every combo of the run that has a `time/` folder. `--ntrip` takes the
+  largest track files of each combo (file size as the proxy for event count); `bank` skips a
+  triple with fewer than `--nmin` events after the cut, and `--chunk k/N` keeps every N-th of
+  those files from the k-th on.
+- The study's banks were written with `fit --campaign C --run R --ntrip 40 --folds both
+  --placebo`, the remaining options at their defaults.
+- **The write root.** `index`, `bank` and `tier0` need `ETROC_TWC_OUT` and write under it (the
+  arrows above are relative to it); `--out` names another output file. They refuse to start
+  when it is unset, when it is the read root `ETROC_TWC_TRANSFER_ROOT`, and when it is the
+  step-10 root of a campaign, so no run writes into the study's tree or among the track files.
+  Only these subcommands create the output folders.
+- **Inputs.** `tier0 --bank` is read from the read root when the path is relative.
+- **Job lists** (`jobs.py`). The seven lists the study ran are in `jobs/`, in the order of
+  `campaigns.JOB_LISTS`, which also records the output root each wrote into (the seeded rerun,
+  `cells_rerun.tsv`, wrote into its own tree). A row has seven tab-separated fields, `job_id
+  cell_id level group est_min mem_mb command`; the header row is optional, `#` lines are
+  skipped, and the chunk jobs of a long cell share its `cell_id`. In the commands,
+  `${ETROC_TWC_ROOT_<CAMPAIGN>}` stands for a campaign's step-10 root and `${TT_OUT}` for the
+  study's tree: under an input flag (`--bank`, `--src-bank`, `--root`, `--src-root`, `--cells`,
+  `--tier0`) it becomes the read root, under `--out` the write root, and anywhere else it is
+  refused, as is a write root equal to the read root. Expanded with the default roots and
+  `${TT_OUT}` left in place, the lists reproduce the study's commands byte for byte.
+  `jobs --dry-run` prints every command expanded and parses it with the parser above; a cell
+  command must name its row's `cell_id` in `--cell`.
+
+## 7. Output tables
+
+- `bank/index_<C>_<R>.parquet`: one row per track file of the combos read: `campaign`, `run`,
+  `combo`, `path`, `name` (the file name without `.parquet`), `nevt` (the file's row count,
+  before any cut), `triple` (`naming.triple_key`), `bytes`; sorted by `nevt`, largest first.
+- `bank/coeffs_<C>_<R>.parquet`: the bank rows of section 2, `bank.BANK_COLUMNS`. `git_sha` is
+  empty and `ts` is the time the row was computed.
+- `tier0/transfer_<tag>.parquet` (`tier0.bank_screen`): one row per (target triple, source
+  triple, kind, name). Targets and sources are the bank's `guard = full`, `placebo = 0`,
+  `fold = full` rows; every other triple of the same combo is a source of a target, the target
+  itself excluded, and a source must carry all of the target's roles (`--max-src N` keeps the
+  first N source triples of a combo by track name). Columns: `run`, `combo`, `tgt`, `src_run`,
+  `src` (track names), `kind` (`board` or `pair`), `name` (a role, or `a-b`), `dvar` (the
+  signed Tier-0 change in RMS^2, ps^2, with the residual moments), `P = sqrt(max(dvar, 0))`,
+  `P_signed`, `P_null` (the same statistic between the target's own fold-0 and fold-1 fits),
+  `P_exc = sqrt(max(P^2 - P_null^2, 0))`, `own_var` (board rows: the variance of the
+  coefficient change over the target's TOT), and the overlap metrics `cov_C`, `hist_O`,
+  `lever_X`, `lever_X_all`, `extrap` of `bank.overlap_from_bank` (a pair takes the smaller
+  coverage and overlap and the larger lever of its two boards).

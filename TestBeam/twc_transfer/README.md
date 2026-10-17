@@ -43,6 +43,8 @@ screen and the statistics. `SPEC.md` beside this file defines all of it.
 | `arms` | `self_coeff_maps`, `transferred_map`, `xfer_lin_map`, `xfer_lin_lpo_map`, the arm names |
 | `tier0` | `tier0_delta`, the analytic change of RMS^2 per pair and board |
 | `stats` | `kcal_from_cells`, `random_effects`, `tost`, `margin_for`, `source_random_effect`, `holm`, `p_nonequiv` |
+| `cli`, `__main__` | the command line, `python -m twc_transfer` (below) |
+| `jobs` | the job lists: reader, root expansion, `--dry-run`; the study's seven lists are in `jobs/` |
 
 The package re-exports nothing; import the modules. `etroc_plots` never imports it.
 
@@ -66,11 +68,53 @@ res = {a: widths.evaluate_arm(tri, m, src_keys=maps.src_keys.get(a), arm=a)
 `res[arm]["sigma"][role]` the board sigma; every arm is evaluated on the same events. Nothing
 here writes a file. A caller that writes passes `ensure_dirs(campaigns.write_root())`.
 
+## Command line
+
+From `TestBeam/`, with a folder of your own as the write root:
+
+    export ETROC_TWC_OUT=/path/to/your/output
+    python -m twc_transfer index --campaign mar --run h1_run1 --combo extra0-ref1-dut2
+    python -m twc_transfer fit --campaign mar --run f1_run12 --ntrip 40 --folds both --placebo
+    python -m twc_transfer tier0 --bank $ETROC_TWC_OUT/bank/coeffs_mar_f1_run12.parquet --tag f1_run12
+    python -m twc_transfer jobs --list cells.tsv --dry-run
+
+`index` lists a run's track files with their event counts (`bank/index_<campaign>_<run>.parquet`),
+`fit` (or `bank`) writes the coefficient bank of a run (`bank/coeffs_<campaign>_<run>.parquet`;
+the line above is how the study built its banks), and `tier0` screens one bank file
+(`tier0/transfer_<tag>.parquet`); a relative `--bank` is read from the read root, so
+`--bank bank/coeffs_desy_run13.parquet` screens the study's own bank of that run. `jobs
+--dry-run` prints every command of a job list with its roots filled in and checks that it
+parses. `SPEC.md` sections 6 and 7 list every option and every output column.
+
+What refuses to run, and why:
+
+- A writing subcommand (`index`, `bank`/`fit`, `tier0`) without `ETROC_TWC_OUT`: there is no
+  default output folder, so nothing lands in the study's own tree by accident.
+- `ETROC_TWC_OUT` equal to the read root (`ETROC_TWC_TRANSFER_ROOT`) or to a campaign's
+  step-10 root: outputs would mix with the inputs.
+- In a job list, `${TT_OUT}` under a flag that is neither an input nor `--out`, an unknown
+  placeholder, or a write root equal to the read root.
+- `cell`: its arguments parse (so job lists can be checked), but this version does not run it.
+
+`python -m twc_transfer` pins the thread pools to one thread and, if `PYTHONHASHSEED` is not
+0, restarts itself once with `PYTHONHASHSEED=0` and says so: some of the study's draws are
+seeded from Python's `hash()` of a string, which is salted per process otherwise.
+
+## Job lists
+
+`jobs/` holds the seven job lists the study's cells ran from, in the order of
+`campaigns.JOB_LISTS` (a later list that names a cell again redefines it), each with the
+output root it wrote into. They are the study's tables with their comment lines dropped and
+the campaign roots replaced by `${ETROC_TWC_ROOT_<CAMPAIGN>}`; `${TT_OUT}` stays as it was.
+Expanded with the default roots they give back the study's commands byte for byte (a test
+checks the digests). 247 rows: 236 cell jobs (6 of them smoke tests) and 11 Tier-0 jobs.
+
 ## Tests
 
     cd TestBeam && python -m pytest twc_transfer/tests -q
 
-Synthetic data only: the tests read no file, touch nothing under `/eos` and need no network.
+Synthetic data only: the tests read no data file (only the package's own job lists), touch
+nothing under `/eos` and need no network.
 
 ## Parity with the study's toolkit
 
@@ -105,5 +149,5 @@ fit's restart jitter rather than by the float difference. To reproduce a publish
 point `ETROC_TWC_CORE` at a core of the hashes above; `_core.core_versions()` reports what was
 loaded.
 
-This commit holds the library. The command-line tools (bank, Tier-0 screen, cells,
-aggregation, quote) are added by later commits.
+The command line has the index, the bank and the Tier-0 screen; the cell and aggregation
+commands are not part of this version.
