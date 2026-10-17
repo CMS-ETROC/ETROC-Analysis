@@ -8,10 +8,13 @@ run from TestBeam/ where the study's outputs can be read (lxplus: EOS and AFS), 
 them). The study asked whether a time-walk correction (TWC) fitted on one source (a run, a board,
 a pixel) can be applied to another target without losing time resolution; each comparison it ran
 is a "cell". S is the study's folder (also ETROC_TWC_RESULTS_ROOT; no default), which must hold
-condor/ (the seven job lists below), results_r2/axis_{A,B,C,D,E,I,J,K}.csv and results_r3/
-(axis_F.csv, axis_F_long.csv, summary_F.md). R (default TWC_TRANSFER_ROOT) holds the coefficient
-bank, bank/coeffs_<campaign>_<run>.parquet, and the round-1 table of the level cells,
-figs/transfer_2026-09-04/inputs/master_cells.csv. The parts:
+condor/ (the seven job lists below), the axis tables campaign.UNIV_AXIS_SOURCES names
+(results_r2/axis_{A,B,C,D,E,I,J,K}.csv and results_r3/guardfix/axis_{E,J,K}_gf.csv) and
+results_r3/ (axis_F.csv, axis_F_long.csv, summary_F.md). R (default TWC_TRANSFER_ROOT) holds the
+coefficient bank, bank/coeffs_<campaign>_<run>.parquet, the round-1 table of the level cells,
+figs/transfer_2026-09-04/inputs/master_cells.csv, and the aggregation tables the axis tables were
+built from, tables/agg_<agg_tag>/agg_by_cell.csv (campaign.UNIV_AGG_DIRS names the folders that
+hold a tag under another name). The parts:
 
   cells   univ_cells.csv, one row per cell, from the job lists that ran them, in the order
           cells.tsv, cells_stage1.tsv, cells_stage2.tsv, cells_stage2_held.tsv, cells_stage3.tsv,
@@ -20,12 +23,23 @@ figs/transfer_2026-09-04/inputs/master_cells.csv. The parts:
           cells, from the cell table of results_r3/summary_F.md; dbias_v, for the level-h cells,
           from runs_summary.csv. Checks that every cell of the other tables is in it. Seconds.
   master  univ_master_cells.csv, the level-cell table, copied byte for byte. Seconds.
-  axes    univ_axis_r2.csv (the eight results_r2 axis tables, one header, rows in axis order, each
-          line copied unchanged), univ_axis_F_wide.csv and univ_axis_F_long.csv (copies of
-          results_r3/axis_F.csv and axis_F_long.csv). Seconds.
+  axes    univ_axis_r2.csv (the eight axes, one header, rows in axis order; per axis the files
+          of UNIV_AXIS_SOURCES, a later file replacing every row of the cells it holds: the
+          guard-fix rerun's rows of 11 cells of axes E, J and K), univ_axis_F_long.csv and
+          univ_axis_F_wide.csv (from results_r3/axis_F_long.csv and axis_F.csv): each line
+          copied unchanged (the columns a later file adds dropped), with the study's
+          self_transfer flag appended (the wide table, whose row holds several arms side by side,
+          gets one per arm, <arm>_self_transfer). Seconds.
   bank    twc_bank_best.csv from the 63 bank files (102 MB): per (campaign, run, board_id, row,
           col) the fit with the most events (BEST_FILTER, then the first row of highest n_fit, the
           study's own tie-break). 12 s on one lxplus core (2026-10-02), 10.5 MB out.
+
+self_transfer is 1 on a row whose source triple is its target triple (the same run, combination
+and pixels): the study aggregates such rows as their own group, leaves them out of its per-cell
+summaries, and its axis tables carry them with no column that marks them. The flag is recovered
+by the study's own join: each row matches exactly one row of its aggregation table on (cell, arm,
+kind, name, family, agg_tag, n_pix), with the same mu and se, or the reduction stops naming the
+rows that do not.
 
 Each part prints its row counts. The bank's hv, temp and angle_deg columns are empty in every
 file (checked); the table leaves them out, and the figures take a run's conditions from the
@@ -34,6 +48,7 @@ campaign modules.
 import argparse
 import csv
 import glob
+import io
 import os
 import re
 import shlex
@@ -49,7 +64,6 @@ from ..campaigns import active as campaign
 TSVS = ("cells.tsv", "cells_stage1.tsv", "cells_stage2.tsv", "cells_stage2_held.tsv",
         "cells_stage3.tsv", "cells_rerun.tsv", "cells_guardfix_rerun.tsv")
 TSV_FIELDS = ("job_id", "cell_id", "level", "group", "est_min", "mem_mb", "command")
-AXES_R2 = ("A", "B", "C", "D", "E", "I", "J", "K")
 CELLS_COLUMNS = ["cell", "level_or_axis", "src_campaign", "src_run", "tgt_campaign", "tgt_run",
                  "base_cell", "dbias_v"]
 # the bank's campaign codes: "desy" = DESY May 2026, "aug" = DESY Aug 2026, "mar" / "jul" = CERN
@@ -64,6 +78,12 @@ BANK_COLUMNS = ["campaign", "run", "telescope", "board_id", "role", "row", "col"
                 "cal_mean", "hist_lo", "hist"]
 BANK_EMPTY = ("hv", "temp", "angle_deg")       # empty in every bank file (checked)
 MASTER_REL = os.path.join("figs", "transfer_2026-09-04", "inputs", "master_cells.csv")
+# the study's join of an axis row to its aggregation row, in the axis tables' words (the
+# aggregation table says name for board_or_role and extrap_family for family)
+JOIN_KEYS = ["cell", "arm", "kind", "board_or_role", "family", "agg_tag", "n_pix"]
+AGG_COLUMNS = ["cell", "arm", "kind", "name", "extrap_family", "n_pix", "self_transfer", "mu",
+               "se"]
+WIDE_ARMS = ("xfer", "xfer_lin", "xfer_lin_lpo", "xfer_clip", "xfer_rescale")   # axis_F.csv
 
 
 def _log(text):
@@ -73,17 +93,19 @@ def _log(text):
 def _results_paths(root):
     """The files of the results folder the reduction reads; stops naming every one missing."""
     paths = {"tsv:" + n: os.path.join(root, "condor", n) for n in TSVS}
-    paths.update({"axis:" + a: os.path.join(root, "results_r2", "axis_%s.csv" % a)
-                  for a in AXES_R2})
     paths.update({"F_wide": os.path.join(root, "results_r3", "axis_F.csv"),
                   "F_long": os.path.join(root, "results_r3", "axis_F_long.csv"),
                   "summary_F": os.path.join(root, "results_r3", "summary_F.md")})
-    missing = [p for p in paths.values() if not os.path.isfile(p)]
+    files = list(paths.values())
+    for a, rels in campaign.UNIV_AXIS_SOURCES.items():
+        paths["axis:" + a] = [os.path.join(root, *rel.split("/")) for rel in rels]
+        files += paths["axis:" + a]
+    missing = [p for p in files if not os.path.isfile(p)]
     if missing:
         raise SystemExit("--results-root %s lacks %d of the files the reduction reads (it must "
-                         "hold condor/ with the seven job lists, results_r2/ with the eight axis "
-                         "tables, results_r3/ with axis_F.csv, axis_F_long.csv and summary_F.md):"
-                         "\n  %s" % (root, len(missing), "\n  ".join(missing)))
+                         "hold condor/ with the seven job lists, the axis tables of "
+                         "UNIV_AXIS_SOURCES, results_r3/ with axis_F.csv, axis_F_long.csv and "
+                         "summary_F.md):\n  %s" % (root, len(missing), "\n  ".join(missing)))
     return paths
 
 
@@ -194,7 +216,8 @@ def build_cells(out, paths, twc_root):
     df = pd.DataFrame(rows, columns=CELLS_COLUMNS)
     # every cell the result tables name is one row here
     named = {"master": pd.read_csv(os.path.join(twc_root, MASTER_REL)).cell}
-    named.update({"axis_" + a: pd.read_csv(paths["axis:" + a]).cell for a in AXES_R2})
+    named.update({"axis_" + a: axis_table(paths["axis:" + a])[2].cell
+                  for a in campaign.UNIV_AXIS_SOURCES})
     named.update({"axis_F_wide": pd.read_csv(paths["F_wide"]).cell,
                   "axis_F_long": pd.read_csv(paths["F_long"]).cell})
     unresolved = {k: sorted(set(v) - set(df.cell)) for k, v in named.items()}
@@ -221,29 +244,182 @@ def build_master(out, twc_root):
     _log("univ_master_cells.csv: %d rows (copy of %s)" % (_data_rows(dst), src))
 
 
-def build_axes(out, paths):
-    header, lines, counts = None, [], {}
-    for a in AXES_R2:
-        p = paths["axis:" + a]
-        text = open(p, newline="").read().splitlines()
-        if header is None:
-            header = text[0]
-        elif text[0] != header:
-            raise SystemExit("%s has another header than axis_A.csv" % p)
-        if not header.startswith("axis,"):
-            raise SystemExit("%s: the axis tables are expected to start with an axis column" % p)
-        if _data_rows(p) != len(text) - 1:
-            raise SystemExit("%s: a field spans lines; copy it with a CSV writer instead" % p)
-        lines += text[1:]
-        counts[a] = len(text) - 1
-    dst = os.path.join(out, "univ_axis_r2.csv")
+def table_lines(path):
+    """(header, data lines, frame) of one axis table: its lines as written, and the same rows
+    parsed, the floats read back exactly as written. Stops when a field spans lines or a line is
+    blank (the lines and the rows would not pair up)."""
+    text = open(path, newline="").read().splitlines()
+    df = pd.read_csv(path, float_precision="round_trip")
+    if _data_rows(path) != len(text) - 1 or len(df) != len(text) - 1:
+        raise SystemExit("%s: a field spans lines or a line is blank; copy it with a CSV writer "
+                         "instead" % path)
+    return text[0], text[1:], df
+
+
+def axis_table(files):
+    """(header, data lines, frame, cells replaced) of one axis: the table of files[0], each later
+    file replacing every row of the cells it holds, at the place of that cell's first row (a cell
+    the earlier files lack goes at the end). A later file has the first file's columns first; the
+    columns it adds are dropped, each line cut after the first file's last column. The frame is
+    the composed lines parsed, the floats read back exactly as written."""
+    header, lines, _ = table_lines(files[0])
+    n = len(next(csv.reader([header])))
+    replaced = {}
+    for path in files[1:]:
+        head, body, _ = table_lines(path)
+        if not head.startswith(header + ","):
+            raise SystemExit("%s: its columns do not start with those of %s" % (path, files[0]))
+        new = {}
+        for line in body:
+            fields = next(csv.reader([line]))
+            cut = _csv_line(fields[:n])
+            if not line.startswith(cut + ","):
+                raise SystemExit("%s: a line does not start with its first %d fields as a CSV "
+                                 "writer writes them: %s" % (path, n, line))
+            new.setdefault(fields[1], []).append(cut)
+        cells = [next(csv.reader([line]))[1] for line in lines]
+        composed, done = [], set()
+        for cell, line in zip(cells, lines):
+            if cell not in new:
+                composed.append(line)
+            elif cell not in done:
+                composed += new[cell]
+                done.add(cell)
+        composed += [line for cell in new if cell not in done for line in new[cell]]
+        replaced.update({c: (cells.count(c), len(new[c])) for c in new})
+        lines = composed
+    if not header.startswith("axis,cell,"):
+        raise SystemExit("%s: the axis tables are expected to start with the columns axis, cell"
+                         % files[0])
+    df = pd.read_csv(io.StringIO("\n".join([header] + lines) + "\n"),
+                     float_precision="round_trip")
+    if len(df) != len(lines):
+        raise SystemExit("%s: the composed lines do not parse to one row each" % files[0])
+    return header, lines, df, replaced
+
+
+def _csv_line(fields):
+    buf = io.StringIO()
+    csv.writer(buf, lineterminator="").writerow(fields)
+    return buf.getvalue()
+
+
+def agg_rows(twc_root, tags):
+    """The aggregation rows behind the axis tables' `tags` (their agg_tag values): agg_by_cell.csv
+    of each tag's folder under twc_root/tables (campaign.UNIV_AGG_DIRS, else agg_<tag>), in the
+    axis tables' words (board_or_role, family), with agg_tag. They are read with pandas' default
+    float parser, as the study's axis builder read them, so mu and se equal the axis tables'
+    numbers exactly."""
+    frames, missing = [], []
+    for tag in sorted(set(tags)):
+        p = os.path.join(twc_root, "tables", campaign.UNIV_AGG_DIRS.get(tag, "agg_" + tag),
+                         "agg_by_cell.csv")
+        if not os.path.isfile(p):
+            missing.append(p)
+            continue
+        d = pd.read_csv(p, usecols=AGG_COLUMNS).rename(
+            columns={"name": "board_or_role", "extrap_family": "family"})
+        d["agg_tag"] = tag
+        frames.append(d)
+    if missing:
+        raise SystemExit("%d aggregation tables are missing:\n  %s"
+                         % (len(missing), "\n  ".join(missing)))
+    out = pd.concat(frames, ignore_index=True)
+    out["n_pix"] = out["n_pix"].astype(int)
+    return out
+
+
+def self_transfer_flags(rows, agg, what):
+    """The self_transfer flag (0 or 1) of each row of `rows` (columns JOIN_KEYS, mu_ps and se_ps),
+    in order: that of the one row of `agg` (agg_rows) with the same JOIN_KEYS, whose mu and se
+    equal the row's (nan equals nan). Stops naming every row of `what` that matches no
+    aggregation row, more than one, or one with other numbers."""
+    r = rows[JOIN_KEYS + ["mu_ps", "se_ps"]].reset_index(drop=True)
+    r["n_pix"] = r["n_pix"].astype(int)
+    r["_row"] = r.index
+    m = r.merge(agg, on=JOIN_KEYS, how="left", indicator=True)
+    m["_hit"] = m["_merge"] == "both"
+    m["_same"] = (m["_hit"]
+                  & ((m.mu_ps == m.mu) | (m.mu_ps.isna() & m.mu.isna()))
+                  & ((m.se_ps == m.se) | (m.se_ps.isna() & m.se.isna())))
+    per = m.groupby("_row")[["_hit", "_same"]].sum()
+    bad = per[(per["_hit"] != 1) | (per["_same"] != 1)]
+    if len(bad):
+        raise SystemExit("%s: %d rows do not join exactly one aggregation row with the same mu and "
+                         "se on (%s):\n  %s" % (what, len(bad), ", ".join(JOIN_KEYS), "\n  ".join(
+                             "%s: %d rows on the key, %d with the same mu and se" % (
+                                 "/".join(str(r.loc[i, k]) for k in JOIN_KEYS),
+                                 per.loc[i, "_hit"], per.loc[i, "_same"]) for i in bad.index)))
+    flags = m[m["_hit"]].set_index("_row")["self_transfer"].sort_index()
+    if not flags.isin([0, 1]).all():
+        raise SystemExit("%s: self_transfer values other than 0 and 1: %s"
+                         % (what, sorted(flags.unique())))
+    return flags.astype(int).tolist()
+
+
+def _write_with_columns(dst, header, lines, columns):
+    """`lines` under `header` as given, each with the values of `columns` ({name: values}, one
+    value per line) appended."""
+    names = list(columns)
     with open(dst, "w", newline="") as fh:
-        fh.write("\n".join([header] + lines) + "\n")
-    _log("univ_axis_r2.csv: %d rows (per axis %s)" % (_data_rows(dst), counts))
-    for key, name in (("F_wide", "univ_axis_F_wide.csv"), ("F_long", "univ_axis_F_long.csv")):
-        dst = os.path.join(out, name)
-        shutil.copyfile(paths[key], dst)
-        _log("%s: %d rows (copy of %s)" % (name, _data_rows(dst), paths[key]))
+        fh.write(",".join([header] + names) + "\n")
+        for i, line in enumerate(lines):
+            fh.write(",".join([line] + [str(columns[n][i]) for n in names]) + "\n")
+
+
+def build_axes(out, paths, twc_root):
+    header, lines, frames, counts = None, [], [], {}
+    for a, files in ((a, paths["axis:" + a]) for a in campaign.UNIV_AXIS_SOURCES):
+        head, body, df, replaced = axis_table(files)
+        if header is None:
+            header = head
+        elif head != header:
+            raise SystemExit("%s has other columns than the first axis table" % files[0])
+        if set(df.axis) != {a}:
+            raise SystemExit("axis %s: its tables hold rows of axes %s" % (a, sorted(set(df.axis))))
+        lines += body
+        frames.append(df)
+        counts[a] = len(body)
+        if replaced:
+            _log("axis %s: %d of %d cells from %s (rows before -> after: %s)"
+                 % (a, len(replaced), df.cell.nunique(), ", ".join(files[1:]),
+                    ", ".join("%s %d->%d" % (c, *replaced[c]) for c in sorted(replaced))))
+    r2 = pd.concat(frames, ignore_index=True)
+    long_head, long_lines, flong = table_lines(paths["F_long"])
+    wide_head, wide_lines, fwide = table_lines(paths["F_wide"])
+    agg = agg_rows(twc_root, set(r2.agg_tag) | set(flong.agg_tag) | set(fwide.agg_tag))
+
+    st = self_transfer_flags(r2, agg, "univ_axis_r2")
+    _write_with_columns(os.path.join(out, "univ_axis_r2.csv"), header, lines,
+                        {"self_transfer": st})
+    r2["self_transfer"] = st
+    _log("univ_axis_r2.csv: %d rows (per axis %s), every row joined to one aggregation row; "
+         "self_transfer 1 on %d (per axis %s)"
+         % (len(r2), counts, sum(st), r2.groupby("axis", sort=False).self_transfer.sum().to_dict()))
+
+    st = self_transfer_flags(flong, agg, "univ_axis_F_long")
+    _write_with_columns(os.path.join(out, "univ_axis_F_long.csv"), long_head, long_lines,
+                        {"self_transfer": st})
+    _log("univ_axis_F_long.csv: %d rows (from %s), self_transfer 1 on %d"
+         % (len(flong), paths["F_long"], sum(st)))
+
+    per_arm = {}
+    for arm in WIDE_ARMS:
+        has = (fwide["%s_present" % arm] == True).values          # noqa: E712
+        sub = fwide[has]
+        rows = pd.DataFrame(dict(cell=sub.cell, arm=arm, kind=sub.kind,
+                                 board_or_role=sub.board_or_role, family=sub.family,
+                                 agg_tag=sub.agg_tag, n_pix=sub["%s_n_pix" % arm],
+                                 mu_ps=sub["%s_mu_ps" % arm], se_ps=sub["%s_se_ps" % arm]))
+        flags = iter(self_transfer_flags(rows, agg, "univ_axis_F_wide arm %s" % arm))
+        per_arm["%s_self_transfer" % arm] = [next(flags) if h else "" for h in has]
+    _write_with_columns(os.path.join(out, "univ_axis_F_wide.csv"), wide_head, wide_lines, per_arm)
+    flagged = [i for i in range(len(fwide)) if any(v == 1 for v in
+                                                    (per_arm[c][i] for c in per_arm))]
+    mixed = [i for i in flagged if any(v == 0 for v in (per_arm[c][i] for c in per_arm))]
+    _log("univ_axis_F_wide.csv: %d rows (from %s), a self-transfer arm on %d of them (%d of "
+         "these also hold an arm that is not)" % (len(fwide), paths["F_wide"], len(flagged),
+                                                  len(mixed)))
 
 
 # --------------------------------------------------------------------------------------- bank
@@ -299,7 +475,7 @@ def main(argv=None):
                     help="the study's folder (condor/, results_r2/, results_r3/); default "
                          "ETROC_TWC_RESULTS_ROOT")
     ap.add_argument("--twc-root", default=campaign.TWC_TRANSFER_ROOT,
-                    help="the folder of bank/ and figs/ (default TWC_TRANSFER_ROOT)")
+                    help="the folder of bank/, figs/ and tables/ (default TWC_TRANSFER_ROOT)")
     ap.add_argument("--part", action="append", choices=PARTS,
                     help="the tables to build (repeatable; default every part)")
     a = ap.parse_args(argv)
@@ -308,8 +484,9 @@ def main(argv=None):
     if {"cells", "axes"} & set(parts):
         if not a.results_root:
             ap.error("--results-root (or ETROC_TWC_RESULTS_ROOT) is required: the study's folder, "
-                     "holding condor/ with the seven job lists, results_r2/ with the axis tables "
-                     "and results_r3/ with axis_F.csv, axis_F_long.csv and summary_F.md")
+                     "holding condor/ with the seven job lists, the axis tables of "
+                     "UNIV_AXIS_SOURCES and results_r3/ with axis_F.csv, axis_F_long.csv and "
+                     "summary_F.md")
         paths = _results_paths(a.results_root)
     os.makedirs(a.out, exist_ok=True)
     for part in parts:
@@ -320,7 +497,7 @@ def main(argv=None):
         elif part == "master":
             build_master(a.out, a.twc_root)
         elif part == "axes":
-            build_axes(a.out, paths)
+            build_axes(a.out, paths, a.twc_root)
         else:
             build_bank(a.out, a.twc_root)
         _log("part %s done in %.0f s" % (part, time.time() - t0))
