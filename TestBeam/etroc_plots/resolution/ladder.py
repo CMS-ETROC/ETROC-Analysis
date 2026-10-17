@@ -205,7 +205,8 @@ def look_handles(pts, labels=None, scale=SCALE):
 def ladder(ax, pts, x_of, half_width=0.045, scale=SCALE):
     """Draw `pts` (one telescope) on the fluence ladder: x = x_of(p) (look_x), colour = board,
     marker = chip, a band where a point has one (half `half_width` wide, in X_UNIT), the thick
-    black edge on merged runs; one line per (board, look) in the look's line style."""
+    black edge on merged runs, a small open marker under curves.LOW_PIXELS pixels; one line per
+    (board, look) in the look's line style."""
     curves._draw(ax, pts, x_of, _board_color, lambda p: False,
                  lambda p: (p["board_idx"], p["camp"]), half_width, scale,
                  linestyle_of=lambda p: LOOK_LINESTYLE[p["camp"]])
@@ -280,15 +281,19 @@ def best_res_vs_fluence(pts_by_tel, *, tel_titles, ylim, tag, data, footer, xlab
         curves._legend(ax, ch, legend_locs.get((tel, "chips"), "upper left"), scale,
                        ncol=len(ch))
         curves._legend(ax, look_handles(tp, scale=scale)
-                       + curves.kind_handles(merged=any(p["merged"] for p in tp), scale=scale),
+                       + curves.kind_handles(merged=any(p["merged"] for p in tp),
+                                             low=any(curves.low_pixels(p) for p in tp),
+                                             scale=scale),
                        legend_locs.get((tel, "looks"), "lower right"), scale)
         numbers += _ladder_numbers(tp, x_of)
     style.compound_header(axes, tag=tag, data=data, scale=scale,
                           subjects=[tel_titles[t] for t in tels])
     style.footer(fig, footer, scale)
-    return fig, dict(points=numbers, color_rule="board", line_style="look",
-                     dodge=DODGE, dodged_steps=shared, x_unit=X_UNIT, ylim_ps=list(ylim),
-                     xlim={t: list(ax.get_xlim()) for t, ax in zip(tels, axes)})
+    return fig, curves._with_low(dict(points=numbers, color_rule="board", line_style="look",
+                                      dodge=DODGE, dodged_steps=shared, x_unit=X_UNIT,
+                                      ylim_ps=list(ylim),
+                                      xlim={t: list(ax.get_xlim()) for t, ax in zip(tels, axes)}),
+                                 every)
 
 
 def pixel_yield_vs_fluence(pts_by_tel, any_counts, extras_by_tel, *, tel_titles, ylim, tag,

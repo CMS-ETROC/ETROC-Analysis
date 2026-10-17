@@ -50,8 +50,8 @@ Edit these to change what the figures show.
 
 | file | contents |
 |---|---|
-| `july/display_runs_jul.csv` | the July runs drawn at the 1.5e15, 2e15 and 3.5e15 steps. One row per run: telescope, fluence, rfsel, os (threshold offset), run, preferred (1 marks the run used where a figure needs one run per telescope, fluence, RFSel and offset), combo (anointed = the fixed board combination, band = the min-max over all combinations), bias_note, note |
-| `july/good_runs.csv` | a good/bad verdict with a one-line reason for every run (campaign, telescope, run, good, reason); the IV figures read its `IRRAD_Mar2026` and `IRRAD_Jul2026` rows |
+| `july/display_runs_jul.csv` | the July runs drawn at the 1.5e15, 2e15 and 3.5e15 steps. One row per run: telescope, fluence, rfsel, os (threshold offset), run, preferred (1 marks the run used where a figure needs one run per telescope, fluence, RFSel and offset), combo (anointed = the fixed board combination, band = the min-max over all combinations), bias_note, note. The resolution notebook takes its July points from it, and the runs of its combination split (re11) |
+| `july/good_runs.csv` | a good/bad verdict with a one-line reason for every run (campaign, telescope, run, good, reason); the IV figures read its `IRRAD_Mar2026` and `IRRAD_Jul2026` rows, the resolution notebook (re11 included) checks every run it draws against them |
 
 ## Rebuilt by this package
 
@@ -93,7 +93,9 @@ The code that made these is not in this repository; the origin column says what 
 ## Test-beam result tables
 
 The time-resolution results of the test-beam chain (`TestBeam/condor_at_lxplus`), as flat tables
-in `tables/`; the merged-runs notebook reads them. `../resolution/tables.py` describes their
+in `tables/`; the merged-runs and resolution notebooks read them (the resolution notebook's
+combination split, re11, reads every combination of `board_table_irrad.csv`, not only the
+anointed one). `../resolution/tables.py` describes their
 columns, and each folder carries a `PIXEL_TABLES_README.md` from its build. The code that made
 them is not in this repository yet: the build scripts are named in the origin column, and the
 run merging itself (the merged step-13 outputs) was done by the run-merging study's scripts

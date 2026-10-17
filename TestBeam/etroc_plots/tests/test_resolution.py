@@ -1,7 +1,9 @@
-"""Tests of the resolution helpers: the merge rule, the good-run list with merges, the points of
-single and merged runs, the standard operating point, the stop clock with its bounds, the hours
-since the first run at a step, the colour rule; the fluence ladder's picks (step_winners), the
-one-run-per-condition selector, the floor-"none" pixel lookup and the numbers table.
+"""Tests of the resolution helpers: the merge rule and its per-figure override, the good-run list
+with merges, every display run as single runs, the points of single and merged runs, the
+standard operating point, the stop clock with its bounds, the hours since the first run at a
+step, the colour rule, the low-pixel threshold; the fluence ladder's picks (step_winners), the
+one-run-per-condition selector, the floor-"none" pixel lookup and the numbers table; the
+combination split's runs, points and layout.
 
 Run from TestBeam/:  python -m pytest etroc_plots/tests
 """
@@ -19,7 +21,7 @@ if not os.environ.get("ETROC_CAMPAIGN"):
 from etroc_plots.campaigns import active as campaign            # noqa: E402
 from etroc_plots.etroc_style import BOARD_COLOR                  # noqa: E402
 from etroc_plots.iv.iv_plot import TIMING_COLORS                 # noqa: E402
-from etroc_plots.resolution import curves, ladder, numbers_table, tables   # noqa: E402
+from etroc_plots.resolution import combo_split, curves, ladder, numbers_table, tables  # noqa: E402
 
 JUL, MAR = campaign.TABLE_CAMPAIGN["july"], campaign.TABLE_CAMPAIGN["march"]
 CHIPS = campaign.TELESCOPE_CHIPS["h1"]
@@ -271,3 +273,102 @@ def test_floor_none_pixels_missing_row_is_none():
                  ("h1", "july", "18", 2): 257, ("h1", "july", "18", 3): None}
     with pytest.raises(ValueError):
         ladder.floor_none_pixels(pd.concat([bt, bt]), bt.iloc[:0], pts)
+
+
+# ------------------------------------------------------------------- population overrides
+def test_merge_override_draws_single_runs_and_names_the_merges(good_csv):
+    good = curves.good_list("july", "h1", path=good_csv)
+    merges = [(3, 4), (14, 15), (18, 19)]
+    # 1.5e15, preferred run 4: the rule would draw 3+4, the override keeps 4 and names 3+4
+    drawn, over = curves.merge_override([4], merges, [3, 4], good)
+    assert drawn == [4] and over == {(3, 4): [4]}
+    # both display runs: both stay single, the merge named with the runs it would replace
+    drawn, over = curves.merge_override([3, 4], merges, [3, 4], good)
+    assert drawn == [3, 4] and over == {(3, 4): [3, 4]}
+    # no merge the rule would take: nothing to name
+    assert curves.merge_override([18], merges, [18], good) == ([18], {})
+
+
+def test_display_singles_every_run_of_every_step():
+    classes = {2e15: ({"h1": [12, 11], "f1": [10, 11, 12]}, {"h1": 12, "f1": 12}),
+               1.5e15: ({"h1": [4, 3], "f1": [7, 8, 9]}, {"h1": 4, "f1": 9}),
+               3.5e15: ({"h1": [18], "f1": [18, 14, 13]}, {"h1": 18, "f1": 18})}
+    # by step, then by run; runs at one bias (F1 13, 14) and the runs of a merge (H1 3, 4) all kept
+    assert curves.display_singles(classes, "h1") == [3, 4, 11, 12, 18]
+    assert curves.display_singles(classes, "f1") == [7, 8, 9, 10, 11, 12, 13, 14, 18]
+    assert curves.display_singles(classes, "x1") == []
+
+
+# ------------------------------------------------------------------------------ low pixels
+def test_low_pixels_below_128_only():
+    assert curves.LOW_PIXELS == 128
+    pts = [dict(tel="h1", label="11", board_idx=i, chip=c, n_pixels=n)
+           for i, (c, n) in enumerate(zip(CHIPS, (127, 128, 45, 256)))]
+    assert [curves.low_pixels(p) for p in pts] == [True, False, True, False]
+    assert [q["n_pixels"] for q in curves.low_pixel_points(pts)] == [127, 45]
+    assert curves._with_low({}, pts)["low_pixels"]["points"] == curves.low_pixel_points(pts)
+    assert "low_pixels" not in curves._with_low({}, pts[1::2])
+
+
+# ------------------------------------------------------------------------ combination split
+@pytest.fixture
+def split_display(tmp_path):
+    """H1 and F1 rows of a display-run list: the references at 1.5e15 and 2e15 and the runs at
+    3.5e15 in five classes; H1 run 19 is not listed."""
+    rows = ["telescope,fluence,rfsel,os,run,preferred,combo,bias_note,note"]
+    for tel, f, rfsel, os_text, run, pref in (
+            ("H1", "1.5e15", 2, "20", 3, 0), ("H1", "1.5e15", 2, "20", 4, 1),
+            ("H1", "2e15", 2, "20", 11, 0), ("H1", "2e15", 2, "20", 12, 1),
+            ("H1", "3.5e15", 2, "20", 18, 1), ("H1", "3.5e15", 2, "10", 33, 1),
+            ("H1", "3.5e15", 2, "8/10", 56, 1), ("H1", "3.5e15", 3, "6/8", 67, 0),
+            ("H1", "3.5e15", 3, "6/8", 64, 1), ("H1", "3.5e15", 1, "20", 48, 1),
+            ("H1", "3.5e15", 1, "20", 47, 0),
+            ("F1", "1.5e15", 2, "20", 9, 1), ("F1", "2e15", 2, "20", 12, 1),
+            ("F1", "3.5e15", 1, "20", 47, 1), ("F1", "3.5e15", 1, "20", 46, 0),
+            ("F1", "3.5e15", 2, "20", 18, 1), ("F1", "3.5e15", 2, "20", 13, 0),
+            ("F1", "3.5e15", 2, "20", 14, 0)):
+        rows.append("%s,%s,%d,%s,%d,%d,band,," % (tel, f, rfsel, os_text, run, pref))
+    p = tmp_path / "display.csv"
+    p.write_text("\n".join(rows) + "\n")
+    return str(p)
+
+
+def test_split_runs_references_then_every_run_by_class(split_display, tmp_path):
+    split = combo_split.split_runs(split_display, (1.5e15, 2e15), 3.5e15)
+    h1, f1 = split["h1"], split["f1"]
+    # references: the preferred runs only; then the classes in offset order, runs by number
+    assert [e["run"] for e in h1] == [4, 12, 64, 67, 56, 33, 47, 48, 18]
+    assert [e["ref"] for e in h1] == [True, True] + [False] * 7
+    assert [(e["rfsel"], e["os"]) for e in h1[2:5]] == [(3, "6/8"), (3, "6/8"), (2, "8/10")]
+    assert 19 not in [e["run"] for e in h1]
+    # F1 46 and 47: two single runs, never their merge; 13 and 14 both kept
+    assert [e["run"] for e in f1] == [9, 12, 46, 47, 13, 14, 18]
+    assert [e["preferred"] for e in f1 if e["step"] == 3.5e15] == [False, True, False, False,
+                                                                     True]
+    # a reference step without a preferred run on a telescope stops the figure
+    p = tmp_path / "nopref.csv"
+    p.write_text(open(split_display).read().replace("H1,2e15,2,20,12,1", "H1,2e15,2,20,12,0"))
+    with pytest.raises(ValueError):
+        combo_split.split_runs(str(p), (1.5e15, 2e15), 3.5e15)
+
+
+def test_combo_points_every_combination_and_layout():
+    bt = board_table([18], n0=126)
+    bt["combo"] = bt["anointed"].map({True: "extra0-dut1-ref2", False: "dut1-ref2-trig3"})
+    rs = runs_summary([(JUL, 18, "3.5e15", 550.0, 20, 2)])
+    e = dict(run=18, step=3.5e15, rfsel=2, os="20", ref=False, preferred=True)
+    pts = combo_split.combo_points(bt, rs, "h1", [e])
+    assert len(pts) == 8 and [p["board_idx"] for p in pts] == [0, 0, 1, 1, 2, 2, 3, 3]
+    assert {p["boards"] for p in pts} == {(0, 1, 2), (1, 2, 3)}
+    assert [p["anointed"] for p in pts if p["board_idx"] == 0] == [False, True]
+    assert [p["value_ps"] for p in pts if p["board_idx"] == 1] == [46.0, 41.0]
+    assert [curves.low_pixels(p) for p in pts if p["anointed"]] == [True, True, False, False]
+    with pytest.raises(ValueError):          # a board without an anointed combination
+        combo_split.combo_points(bt[~(bt["anointed"] & (bt["board_idx"] == 2))], rs, "h1", [e])
+    # x: a lone run gets GROUP_MIN slots, three runs of one class one slot each
+    ents = [dict(e, run=4, step=1.5e15, ref=True), dict(e, run=13), dict(e, run=14), dict(e)]
+    lay = combo_split.layout(ents)
+    g = combo_split.GROUP_MIN
+    assert lay["width"] == pytest.approx(g + 3)
+    assert (lay["x"][4], lay["x"][13]) == pytest.approx((g / 2, g + 0.5))
+    assert [len(runs) for _, _, _, runs in lay["groups"]] == [1, 3]
