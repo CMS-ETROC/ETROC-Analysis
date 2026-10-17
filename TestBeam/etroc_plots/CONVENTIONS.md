@@ -39,16 +39,18 @@ rest are for whoever writes the next figure.
 
 - Colour = fluence, one ladder per campaign (`FLUENCE_COLOR` in the campaign module). Within one
   fluence step, later looks at the same chips (after cooling down, for instance) take hues of their
-  own from `iv_plot.TIMING_COLORS`, never a lighter or darker shade of the step's colour. Five
+  own from `iv_plot.TIMING_COLORS`, never a lighter or darker shade of the step's colour. Six
   exceptions: the V_gl fit figures (`iv/vgl_plot.py`: fluence is their x axis, one fit per board),
-  the baseline / noise-width figures (`frontend/blnw.py`: the fluence step or the look before and
-  after cooling down is their x axis) and the board TOT figures (`tot_shapes.board_vs_fluence` in
+  the baseline / noise-width figures (`frontend/blnw.py`: the fluence step, the look before and
+  after cooling down or the RFSel category is their x axis) and the board TOT figures (`tot_shapes.board_vs_fluence` in
   `frontend/tot_shapes.py`: the fluence step is their x axis) colour by board
   (`etroc_style.BOARD_COLOR`), and the bias-current timelines drawn one line per chip
   (`iv/preirrad_current.py`, `iv/current_vs_run.py` and the current-limit-hold figures of the IV
   notebook) colour by chip; there the fluence is a shaded band or a label, never a line colour.
   The RFSel comparison (`tot_shapes.rfsel_pairs`: runs of one fluence step that differ in RFSel)
-  colours by RFSel (`tot_shapes.RFSEL_COLOR`, no orange, which is a fluence colour).
+  colours by RFSel (`etroc_style.RFSEL_COLOR`, no orange, which is a fluence colour), and so do the
+  settings figures (below). The schematic pulses of the RFSel explainer use a grey ramp of their
+  own (`cartoons.RF_GREY`): they are not measured series.
 - Marker and line style = chip, by its slot in the telescope. Legends name chips only; the vendor
   goes in the panel title.
 
@@ -79,6 +81,56 @@ rest are for whoever writes the next figure.
   (`tot_shapes.FLOOR`). Nothing is pooled across the triples of a pixel. The TOT depends on which
   triple is read (the partner pixels fix where the track crosses the pixel), so a figure of TOT
   says which triple it took.
+
+## Settings figures
+
+- The settings figures (`resolution/settings.py`, the settings notebook) draw the time resolution
+  at one fluence step against the front-end settings its runs stepped: the preamp feedback setting
+  RFSel and the threshold offset. Colour = RFSel (`etroc_style.RFSEL_COLOR`), marker = chip; the
+  fluence step is in the header.
+- A run sits in the slot of its settings class (RFSel, offset) from the display-run list, each
+  board in the cell of its own offset (`runs_summary.csv`) where the axis is the offset: a run
+  whose boards sit at two offsets (class "8/10") stands in both cells. The runs of a slot stand
+  side by side in run order, the boards of a run in board order. Under each run: its number, bold
+  for the preferred run of its class, and the time from the end of the step's irradiation to the
+  run start; the bias goes in the footer. The runs of one class differ in both, and the figures
+  and the notebook say so.
+- Nothing is drawn unless `settings.settings_guard` passes: the display list, `runs_summary.csv`
+  and the autocalibration scan before the run agree on every board's RFSel and on the offsets.
+- A class whose runs on a telescope include every run of an accepted merge (the merged runs'
+  board table: `runs_merged`, `accepted`) draws the merge in place of those runs on the
+  resolution-against-class and x_B figures (st02, st04, st05): one band per board from the merged
+  table by the rule of the single runs, labelled with its runs joined by "+"
+  (`tables.classes_at_step`, `settings.class_points`). Its runs each had their own
+  autocalibration scan, so its x_B and bar are the means of its runs' (`settings.merge_x_over_nw`).
+  The figures of one scan per run (st06) keep the runs.
+- The threshold over the noise of board B in a run is x_B = offset / nw_mean: its threshold offset
+  over the mean noise width of its live pixels from the autocalibration scan before the run, both
+  in DAC codes (`settings.x_over_nw`, from `blnw_by_run.csv`). Its bar, offset * nw_std /
+  nw_mean^2, is the pixel-to-pixel spread of the noise width carried to x_B to first order: a
+  spread, not an uncertainty.
+- Threshold over the noise (`settings.threshold_over_noise`): x_B of every board with its bar,
+  x = chip, the settings classes side by side in each chip's slot. Colour = RFSel as everywhere,
+  but the marker is the offset class (`settings.offset_markers`, in offset order), not the chip:
+  the chip is already the x axis, and the marker then tells the offset apart where two classes
+  share an RFSel. The only settings figure whose marker is not the chip.
+- Resolution against x_B (`settings.res_vs_x`): the band of every board at its x_B, without an x
+  bar (a bar would be the noise-width spread, not an error on x_B). The footer quotes that spread
+  instead (`settings.spread_text`: its 10-90 % range over the boards and its extremes).
+- Baseline and noise width against RFSel (st06): `frontend.blnw.ladder_vs_fluence` with the RFSel
+  categories on the x axis in place of the fluence steps, colour = board as in the front-end
+  figures; both statistics (all 256 pixels, and the live pixels) are drawn, the live one named
+  with the range of pixels it leaves out. The runs of a category stand side by side at one pitch
+  for every category (`blnw.points(pitch=...)`).
+- What RFSel changes (st07, `overview.cartoons.rfsel_measured`): the block diagram, one measured
+  RFSel pair (`frontend.tot_shapes.rfsel_curves`, the pixels counted in both runs) and the design
+  lines with their sources; the measured lines under them are computed in the notebook (median TOT
+  shift per pair, the chip's resolution in the runs, the time after the irradiation and the bias
+  of both runs). A design line without a source in the design description is left out and listed
+  in the values file.
+- The setting is named "preamp feedback setting RFSel r (R_f = k kOhm)" (`style.rfsel_text`
+  writes the RFSel part); what it changes is the preamp gain. Never "gain mode", "high gain" or
+  "low gain".
 
 ## Pixel maps
 

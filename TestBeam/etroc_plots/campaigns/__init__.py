@@ -11,7 +11,8 @@ campaign. REQUIRED lists the names each part of the package reads: every figure 
 "style" names, the IV helpers and the IV notebook also the "iv" names, the resolution helpers and
 their notebooks the "resolution" names, the overview helpers and notebook the "overview" names,
 the frontend helpers and notebook the "frontend" names, the universality helpers and notebook
-the "universality" names. desy_2026.py is not a campaign of this kind: it holds the DESY 2026
+the "universality" names, the settings helpers and notebook the "settings" names. desy_2026.py
+is not a campaign of this kind: it holds the DESY 2026
 facts the universality figures state, is imported by name, and ETROC_CAMPAIGN never selects it.
 Importing a part stops with the list of names the campaign module is missing.
 """
@@ -85,6 +86,17 @@ REQUIRED = {
         "TABLE_CAMPAIGN", "TABLE_TEL", "TWC_BANK_BEST_CSV", "TWC_RESULTS_ROOT",
         "TWC_TRANSFER_ROOT", "UNIV_AXIS_F_LONG_CSV", "UNIV_AXIS_F_WIDE_CSV", "UNIV_AXIS_R2_CSV",
         "UNIV_CELLS_CSV", "UNIV_EXCLUDED_STEPS", "UNIV_MASTER_CSV",
+    ),
+    # the settings classes at one fluence step (RFSel, threshold offset), the tables their
+    # figures read (the RFSel TOT pairs too), the good-run list and the stop times, read by
+    # etroc_plots.resolution.settings and notebooks/settings.py
+    "settings": (
+        "BAND_STEPS", "BLNW_CSV", "BOARD_TABLE", "BOARD_TABLE_MERGED", "DISPLAY_RUNS_JUL_CSV",
+        "FLUENCE_CONVENTION", "GOOD_RUNS_CAMPAIGN", "GOOD_RUNS_CSV", "GOOD_RUNS_TEL", "INPUTS",
+        "INPUTS_MANIFEST", "RAD_STOP_UTC", "RFSEL_ORDER", "RFSEL_PAIR_HIST_CSV",
+        "RFSEL_STEP_CLASSES", "RFSEL_TOT_PAIRS", "RUN_TIMES_CSV", "RUNS_SUMMARY_CSV",
+        "SETTINGS_OFFSETS", "SETTINGS_STEP", "TABLE_CAMPAIGN", "TABLE_TEL", "TELESCOPE_CHIPS",
+        "TELESCOPE_TITLE",
     ),
 }
 

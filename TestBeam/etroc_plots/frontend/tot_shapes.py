@@ -40,8 +40,12 @@ described in the campaign's inputs document):
                     TOT_TIME_CONTROL, the pooled TOT of one chip over the pixels above the floor
                     in every run of the pair or group (RFSEL_PAIR_HIST_CSV)
 
-The drawing (board_vs_fluence, shape_grid, run_columns, rfsel_pairs) takes its words as
-arguments.
+The RFSel pairs are read back by rfsel_curves (one panel: the two curves of a pair, checked against
+the runs summary and, when given the pooled tables, against each run's pooled TOT) and
+median_shift (the two stored medians and their difference).
+
+The drawing (board_vs_fluence, shape_grid, run_columns, rfsel_pairs and its per-axes
+draw_rfsel_pair) takes its words as arguments.
 """
 import glob
 import os
@@ -54,7 +58,7 @@ from matplotlib.ticker import MaxNLocator
 
 from ..campaigns import active as campaign
 from .. import style
-from ..etroc_style import BOARD_COLOR
+from ..etroc_style import BOARD_COLOR, RFSEL_COLOR
 from ..resolution import tables
 from . import blnw
 
@@ -78,8 +82,7 @@ TOA_CODE_PS = 3125.0              # one TOA code = 3.125 ns / CAL
 TOT_CODES = np.arange(512)
 TOT_LADDER = 2 * TOT_CODES - np.floor(TOT_CODES / 32)
 # colour = RFSel on the RFSel comparison (one fluence step, so the ladder colour carries nothing
-# there); Okabe-Ito hues, no orange (the 3.5e15 colour of the ladder)
-RFSEL_COLOR = {1: "#0072B2", 2: "#009E73", 3: "#CC79A7"}
+# there): etroc_style.RFSEL_COLOR, Okabe-Ito hues, no orange (the 3.5e15 colour of the ladder)
 ROLE_INITIAL = {"d": "dut", "r": "ref", "e": "extra", "t": "trig"}
 
 _PIX = ["%s_%d" % (k, b) for b in range(NBOARDS) for k in ("chip", "row", "col")]
@@ -603,6 +606,131 @@ def rfsel_rows(tri, rs, camp, tel, groups, board, rank="rows", log=None):
     return rows
 
 
+def counted_pixels(pixels, camp, tel, run, board):
+    """{(row, col): events of its triple} for the pixels of `board` counted in one run: the rows
+    of TOT_PIXEL_MEDIANS_CSV (`pixels`) that pass the floor."""
+    p = pixels[(pixels["campaign"] == camp) & (pixels["tel"] == tel) & (pixels["run"] == run)
+               & (pixels["board_idx"] == board) & pixels["passes_floor"]]
+    return {(int(r), int(c)): int(n) for r, c, n in zip(p["row"], p["col"], p["n"])}
+
+
+def _pair_rows(hist_df, camp, tel, run, partner):
+    g = hist_df[(hist_df["campaign"] == camp) & (hist_df["tel"] == tel)
+                & (hist_df["run"] == run) & (hist_df["partner_run"] == partner)]
+    if not len(g):
+        raise ValueError("RFSel pair table: no rows for %s %s run %d with partner %d"
+                         % (camp, tel, run, partner))
+    return g
+
+
+def median_shift(hist_df, camp, tel, pair):
+    """The median TOT of the pair's chip in each run of `pair` (the stored, unbinned medians of
+    RFSEL_PAIR_HIST_CSV, `hist_df`) and the shift from the first run to the second. Returns
+    dict(runs, chip, board_idx, rfsel, offset, n_pixels, n_events, median_ns, shift_ns): rfsel,
+    offset, n_events and median_ns as [first run, second run]; n_pixels the pixels counted in
+    both runs."""
+    rows = [_pair_rows(hist_df, camp, tel, r, p).iloc[0]
+            for r, p in ((pair[0], pair[1]), (pair[1], pair[0]))]
+    npix = {int(r["n_pixels"]) for r in rows}
+    boards = {int(r["board_idx"]) for r in rows}
+    if len(npix) != 1 or len(boards) != 1:
+        raise ValueError("RFSel pair %s: pixels %s, boards %s" % (pair, npix, boards))
+    med = [float(r["median_ns"]) for r in rows]
+    return dict(runs=[int(pair[0]), int(pair[1])], chip=str(rows[0]["chip"]),
+                board_idx=boards.pop(), rfsel=[int(r["rfsel"]) for r in rows],
+                offset=[int(r["offset"]) for r in rows], n_pixels=npix.pop(),
+                n_events=[int(r["n_events"]) for r in rows], median_ns=med,
+                shift_ns=med[1] - med[0])
+
+
+def rfsel_curves(hist_df, campaign_key, tel, pair, rs, run_times, stop_utc, *, label, note,
+                 width=0.1, pooled=None):
+    """One panel of rfsel_pairs / draw_rfsel_pair from RFSEL_PAIR_HIST_CSV (`hist_df`): the TOT
+    of the pair's chip in each run of `pair` over the pixels counted in both runs, rebinned to
+    `width` ns, as the fraction of the curve's events, with its stored (unbinned) median.
+
+    rs, run_times, stop_utc  the runs summary (the chip's RFSel and threshold offset per run must
+                equal the table's; the bias goes to the records), the run start times and the
+                end of the step's irradiation (frontend.blnw.time_after_stop)
+    label       format string per curve, fields rfsel (style.rfsel_text), run, time (after the
+                stop), median (ns) and n (events)
+    note        format string heading the legend, fields chip and n_pixels
+    pooled      None, or dict(pixels, summary, hists): TOT_PIXEL_MEDIANS_CSV, TOT_POOLED_SUMMARY_CSV
+                indexed by (campaign, tel, run, board_idx), and {(campaign, tel, run, board_idx):
+                rows of TOT_POOLED_HIST_CSV}. When given, each curve must be its run's pooled TOT
+                of the chip less the pixels not counted in the partner run, bin by bin (raises
+                otherwise); the numbers of that check go to "controls"
+    Returns dict(subject, note, curves, records, controls, hists, hv): curves (label, color,
+    edges, y, median, rfsel) sorted by RFSel; records (one per run: the values-file row),
+    controls, hists (the rebinned (edges, counts)) and hv (the chip's bias) in the order of
+    `pair`."""
+    curves, records, controls, hists, hv = [], [], [], [], []
+    npix, offsets, boards = set(), set(), set()
+    for run, partner in ((pair[0], pair[1]), (pair[1], pair[0])):
+        g = _pair_rows(hist_df, campaign_key, tel, run, partner)
+        row = g.iloc[0]
+        board = int(row["board_idx"])
+        boards.add(board)
+        chip = campaign.TELESCOPE_CHIPS[tel][board]
+        (s,) = [x for x in tables.run_settings(rs, campaign.TABLE_CAMPAIGN[campaign_key],
+                                               campaign.TABLE_TEL[tel], run)
+                if x["board_idx"] == board]
+        if (s["rfsel"], s["offset"]) != (int(row["rfsel"]), int(row["offset"])):
+            raise ValueError("run %d: RFSel / offset %s in the run summary, %s in the table" % (
+                run, (s["rfsel"], s["offset"]), (int(row["rfsel"]), int(row["offset"]))))
+        e, c = hist_of(g, "bin_lo_ns", TOT_BIN_NS, 0.0, TOT_HI_NS)
+        if pooled is not None:
+            # the chip's pooled TOT in this run less the pixels not counted in the partner run
+            # is this curve, bin by bin
+            mine = counted_pixels(pooled["pixels"], campaign_key, tel, run, board)
+            other = counted_pixels(pooled["pixels"], campaign_key, tel, partner, board)
+            left = sorted(set(mine) - set(other))
+            summ = pooled["summary"].loc[(campaign_key, tel, run, board)]
+            _, c_all = hist_of(pooled["hists"][(campaign_key, tel, run, board)], "bin_lo_ns",
+                               TOT_BIN_NS, 0.0, TOT_HI_NS)
+            ctl = dict(run=int(run), partner_run=int(partner),
+                       board_pixels=int(summ["n_pixels"]), board_events=int(summ["n_events"]),
+                       pixels_left_out=len(left), events_left_out=sum(mine[p] for p in left),
+                       common_pixels=len(set(mine) & set(other)),
+                       min_bin_difference=int((c_all - c).min()),
+                       difference_events=int((c_all - c).sum()), curve_events=int(c.sum()))
+            if (ctl["min_bin_difference"] < 0 or ctl["common_pixels"] != int(row["n_pixels"])
+                    or ctl["difference_events"] != ctl["events_left_out"]
+                    or ctl["curve_events"] != int(row["n_events"])
+                    or ctl["board_pixels"] - ctl["pixels_left_out"] != int(row["n_pixels"])
+                    or ctl["board_events"] - ctl["events_left_out"] != int(row["n_events"])):
+                raise ValueError("run %d: the RFSel curve is not the pooled TOT less the pixels "
+                                 "left out: %s, table %d pixels %d events"
+                                 % (run, ctl, row["n_pixels"], row["n_events"]))
+            controls.append(ctl)
+        text, hours = blnw.time_after_stop(run_times, campaign_key, tel, [run], stop_utc)
+        ew, cw = rebin(e, c, width)
+        hists.append((ew, cw))
+        med = float(row["median_ns"])
+        curves.append(dict(rfsel=s["rfsel"], color=RFSEL_COLOR[s["rfsel"]], edges=ew,
+                           y=cw / float(row["n_events"]), median=med,
+                           label=label % dict(rfsel=style.rfsel_text(s["rfsel"]), run=run,
+                                              time=text, median=med, n=int(row["n_events"]))))
+        records.append(dict(pair=list(pair), run=int(run), partner_run=int(partner), chip=chip,
+                            board_idx=board, rfsel=s["rfsel"],
+                            rf_kohm=style.RFSEL_RF_KOHM[s["rfsel"]], offset=s["offset"],
+                            hv=s["hv"], hours=round(hours[run], 2),
+                            n_pixels=int(row["n_pixels"]), n_events=int(row["n_events"]),
+                            median_ns=round(med, 4)))
+        npix.add(int(row["n_pixels"]))
+        offsets.add(s["offset"])
+        hv.append(s["hv"])
+    if len(npix) != 1 or len(offsets) != 1 or len(boards) != 1:
+        raise ValueError("pair %s: pixels %s, offsets %s, boards %s" % (pair, npix, offsets,
+                                                                        boards))
+    curves.sort(key=lambda cv: cv["rfsel"])
+    chip = campaign.TELESCOPE_CHIPS[tel][boards.pop()]
+    return dict(subject=style.settings_text(rfsel=[cv["rfsel"] for cv in curves],
+                                            offset=offsets.pop()),
+                note=note % dict(chip=chip, n_pixels=npix.pop()), curves=curves,
+                records=records, controls=controls, hists=hists, hv=hv)
+
+
 # ------------------------------------------------------------------------------- readers
 def hist_of(df, lo_col, store_w, lo, hi):
     """(edges, counts) of one stored histogram (rows with `lo_col`, count) rebinned to the grid
@@ -854,44 +982,52 @@ def run_columns(columns, rows, *, tag, data, footer, scale=0.6):
     return fig
 
 
-def rfsel_pairs(panels, *, xlabel, ylabel, xrange, tag, data, footer, scale=0.72):
-    """Pairs of runs that differ in RFSel only, side by side: one panel per pair, one step curve
-    per run and a short tick at each curve's median on the x axis. One x range and one y scale
-    for every panel, so the panels compare.
+def draw_rfsel_pair(ax, panel, *, xrange, top, xlabel, ylabel, scale=0.72, prune=None):
+    """One panel of rfsel_curves on `ax`: one step curve per run, closed to 0 at both ends, and
+    a short tick at each curve's median on the x axis (7 % of `top`, the y maximum); the legend
+    (one line per curve, headed by the panel's note) in the upper left. `prune` goes to the x
+    tick locator ("lower" drops the first tick, clear of the y tick labels)."""
+    s = style.sizes(scale)
+    for c in panel["curves"]:
+        x = np.repeat(c["edges"], 2)[1:-1]
+        ax.plot(np.concatenate(([x[0]], x, [x[-1]])),
+                np.concatenate(([0.0], np.repeat(c["y"], 2), [0.0])),
+                color=c["color"], linewidth=1.5, linestyle=c.get("linestyle", "-"), zorder=3)
+        ax.plot([c["median"], c["median"]], [0.0, 0.07 * top], color=c["color"],
+                linewidth=2.6, solid_capstyle="butt", zorder=4)
+    ax.set_xlim(*xrange)
+    ax.set_ylim(0.0, top)
+    ax.xaxis.set_major_locator(MaxNLocator(6, prune=prune))
+    ax.yaxis.set_major_locator(MaxNLocator(5))
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    style.style_axes(ax, scale)
+    h = [Line2D([], [], color=c["color"], linewidth=2.2, linestyle=c.get("linestyle", "-"),
+                label=c["label"]) for c in panel["curves"]]
+    lg = ax.legend(handles=h, loc="upper left", fontsize=s["legend"] * 0.9,
+                   title=panel.get("note"), title_fontsize=s["legend"] * 0.9, frameon=True,
+                   framealpha=0.9, borderpad=0.35, labelspacing=0.45, handlelength=1.6,
+                   handletextpad=0.5, borderaxespad=0.4)
+    lg._legend_box.align = "left"
+    return lg
 
-    panels  [dict(subject, note, curves=[dict(label, color, edges, y, median)]), ...]: y the value
-            per bin, an optional linestyle (default "-"); the subject is the panel's right
-            title, the note heads its legend
+
+def rfsel_pairs(panels, *, xlabel, ylabel, xrange, tag, data, footer, scale=0.72):
+    """Pairs of runs that differ in RFSel only, side by side: one panel per pair
+    (draw_rfsel_pair). One x range and one y scale for every panel, so the panels compare.
+
+    panels  [dict(subject, note, curves=[dict(label, color, edges, y, median)]), ...]
+            (rfsel_curves): y the value per bin, an optional linestyle (default "-"); the subject
+            is the panel's right title, the note heads its legend
     Returns the figure."""
     # 8.2 in panels: the subject (settings_text of two RFSels) beside the experiment text
     fig, axes = blnw._grid(1, len(panels), aw=8.2, ah=4.4, ml=1.2, mr=0.3, mt=0.62,
                            mb=1.0 + style.footer_extra_in(footer, scale, fits=4),
                            gx=0.75, gy=0.0, scale=scale)
-    s = style.sizes(scale)
     top = 1.55 * max(float(np.max(c["y"])) for p in panels for c in p["curves"])
     for j, p in enumerate(panels):
-        ax = axes[0][j]
-        for c in p["curves"]:
-            x = np.repeat(c["edges"], 2)[1:-1]
-            ax.plot(np.concatenate(([x[0]], x, [x[-1]])),
-                    np.concatenate(([0.0], np.repeat(c["y"], 2), [0.0])),
-                    color=c["color"], linewidth=1.5, linestyle=c.get("linestyle", "-"), zorder=3)
-            ax.plot([c["median"], c["median"]], [0.0, 0.07 * top], color=c["color"],
-                    linewidth=2.6, solid_capstyle="butt", zorder=4)
-        ax.set_xlim(*xrange)
-        ax.set_ylim(0.0, top)
-        ax.xaxis.set_major_locator(MaxNLocator(6))
-        ax.yaxis.set_major_locator(MaxNLocator(5))
-        ax.set_xlabel(xlabel)
-        ax.set_ylabel(ylabel if j == 0 else "")
-        style.style_axes(ax, scale)
-        h = [Line2D([], [], color=c["color"], linewidth=2.2, linestyle=c.get("linestyle", "-"),
-                    label=c["label"]) for c in p["curves"]]
-        lg = ax.legend(handles=h, loc="upper left", fontsize=s["legend"] * 0.9,
-                       title=p.get("note"), title_fontsize=s["legend"] * 0.9, frameon=True,
-                       framealpha=0.9, borderpad=0.35, labelspacing=0.45, handlelength=1.6,
-                       handletextpad=0.5, borderaxespad=0.4)
-        lg._legend_box.align = "left"
+        draw_rfsel_pair(axes[0][j], p, xrange=xrange, top=top, xlabel=xlabel,
+                        ylabel=ylabel if j == 0 else "", scale=scale)
     style.compound_header(axes[0], tag=tag, data=data, scale=scale,
                           subjects=[p["subject"] for p in panels])
     style.footer(fig, footer, scale)
