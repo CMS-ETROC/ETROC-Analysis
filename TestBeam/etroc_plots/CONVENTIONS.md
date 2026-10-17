@@ -154,8 +154,33 @@ rest are for whoever writes the next figure.
   combination containing it, run by run: the references (the preferred display runs at RFSel 2,
   offset 20 of the earlier steps), then every display run of the step, an accepted merge whose
   runs are all in one settings class in place of those runs (as on the settings figures), grouped
-  by settings class under the axis with the class and the step written below the run numbers. Colour = combination, filled = the anointed combination, open = the others,
-  marker = chip, bar = the pixel spread in that combination; no band.
+  by settings class under the axis with the class and the step written below the run numbers.
+  Colour = combination, filled = the anointed combination, open = the others, marker = chip, bar =
+  the pixel spread in that combination; no band.
+- An appendix figure follows the rules of the figure it derives from and its footer names that
+  figure: the resolution notebook's re12 to re14 are re07's points restricted to some steps or one
+  campaign, on re07's colours, and re15 is re06's hours panel at offset 20 (its points, its clock,
+  its under-128 rule).
+- The combination checks (`resolution/combo_check.py`: re16 and re17 against the bias, re18
+  against the run) draw each board in three rows, every value read from the single-run board
+  table's combination rows: top, the anointed combination; middle, the combination without the
+  board's HV partner (partners 0-1 and 2-3: board 0 from boards 0-2-3, 1 from 1-2-3, 2 from 0-1-2,
+  3 from 0-1-3); bottom, the pair-corrected midpoint w_mid^2 = (w_present^2 + w_absent^2)/2,
+  w_present the RMS of the board's values in the two combinations holding the board and its
+  partner, w_absent the middle row's, the bar by the same rule on the pixel spreads, the pixel
+  count the fewest of the three. A combination is named by its boards, never by the role words. A
+  run-board whose combination is missing from the table has no point on that row and the footer
+  names it; nothing is filled in. Single runs, no band (the rows compare the combinations), colour
+  = look, marker = chip, the under-128 small marker. re16 and re17 draw every good run at the
+  standard operating point at each step. re18 draws every July run of the board table and
+  overrides the every-run-good rule (its footer says so): filled = good at RFSel 2, offset 20,
+  light = good at other settings, open = not good on the good-run list, and the small marker keeps
+  its kind's fill, as on the combination split. Between runs (in time) it marks an HV cycle (a
+  powered board's bias under 20 % of its set value in at least one 60 s sample after the end of
+  the run before), an LV cycle and an irradiation step (the HV/LV-cycle table), and under the
+  bottom row the runs whose chips all share one autocalibration scan (`scan_utc` of
+  `blnw_by_run`). A point above the axis range is an arrow at the top with its value; the footer
+  lists it.
 
 ## Settings figures
 

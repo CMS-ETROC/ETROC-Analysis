@@ -86,14 +86,14 @@ The code that made these is not in this repository; the origin column says what 
 
 | file | contents | origin |
 |---|---|---|
-| `july/timeline_60s.csv.gz` | the whole July HV-monitor log, both telescopes and all four channels, in 60 s bins (UTC) | the July HV-log extraction of 2026-08-22 (its `timeline_60s.csv`, gzipped). Its source files are named in `july_timeline.json` (`source_host`, `source_dirs`) |
+| `july/timeline_60s.csv.gz` | the whole July HV-monitor log, both telescopes and all four channels, in 60 s bins (UTC). The resolution notebook's re18 reads each sample's bias and set value for the HV cycles between runs | the July HV-log extraction of 2026-08-22 (its `timeline_60s.csv`, gzipped). Its source files are named in `july_timeline.json` (`source_host`, `source_dirs`) |
 | `july/july_timeline.json` | that extraction in one object: clock finding, board map, radiation stops, irradiation windows, logging gaps, HV-monitor file index, every IV scan at six reference biases, every per-board run | the same extraction. Edited after the extraction: two keys and one sentence renamed to "cooldown", numbers unchanged |
-| `july/july_inrun_currents.csv` | per run and board: in-run bias current (plateau window, median, first and last hour, 5-95 % range), nominal bias, logging status, a per-telescope radiation-stop proxy (the first IV scan after the step; not read, the figures take the campaign's `RAD_STOP_UTC`), the IV scans before and after | the same extraction |
+| `july/july_inrun_currents.csv` | per run and board: in-run bias current (plateau window, median, first and last hour, 5-95 % range), nominal bias, logging status, a per-telescope radiation-stop proxy (the first IV scan after the step; not read, the figures take the campaign's `RAD_STOP_UTC`), the IV scans before and after. The resolution notebook's re18 reads each run's start and length (`start_utc`, `max_min`) and each board's logging status | the same extraction |
 | `july/july_iv_scans.csv` | every July IV scan and board: abs(I) at 150, 400, 450, 480, 530 and 550 V | the same extraction |
 | `july/iv_curves.json` | the full binned IV curve of every July scan | the same extraction |
 | `july/iv_scan_inventory.csv` | the July IV scans: type, label, start and end (UTC), raw and clean point counts, maximum voltage | the same extraction |
 | `july/logging_gaps.csv` | gaps in the July HV-monitor log, with the bias before and after each | the same extraction |
-| `july/hv_cycles_jul.csv` | per run: HV and LV cycles since the previous run, irradiation steps, DAQ restarts | the July per-run time-resolution analysis (not in this repository) |
+| `july/hv_cycles_jul.csv` | per run: HV and LV cycles since the previous run, irradiation steps, DAQ restarts. The resolution notebook's re18 draws its LV cycles and irradiation steps (`lv_event`) and checks the HV cycles it recomputes against the per-board columns | the July per-run time-resolution analysis (not in this repository) |
 | `july/res_vs_run_combo_check_jul_values.json` | the resolution-vs-run figure's values file: run order and per-run class, flag, fluence, threshold offset and RFSel | the same analysis, 2026-09-21 |
 | `july/fine_legacy_20260716/` (2 files) | the iseg slow-control logs holding the 2026-07-16 fine IV scans, H1 and F1 | copies, with the telescope added to the name (and the H1 file's suffix changed to `_corrected`), of `202607160020_fineIV_interpolated_claudefixed.csv` (H1) and `202607160017_fineIV_interpolate.csv` (F1) in `/eos/uscms/store/user/lpcmtdstudies/IRRad_CERN_2026Jul/{H1,F1}_telescope/power_history/hv_history/`. The H1 file is a corrected interpolation stored there beside the original; what was corrected is not recorded with it |
 | `march/irrad_f1_inrun_currents_2026mar.csv` | F1 in-run leakage current per run: median, MAD, first and last hour, drift, window | the H1 in-run recipe run on the F1 slow-control logs, 2026-09-02 |
@@ -109,8 +109,8 @@ The code that made these is not in this repository; the origin column says what 
 
 The time-resolution results of the test-beam chain (`TestBeam/condor_at_lxplus`), as flat tables
 in `tables/`; the merged-runs and resolution notebooks read them (the resolution notebook's
-combination split, re11, reads every combination of `board_table_irrad.csv`, not only the
-anointed one). `../resolution/tables.py` describes their
+combination split, re11, and its combination checks, re16 to re18, read every combination of
+`board_table_irrad.csv`, not only the anointed one). `../resolution/tables.py` describes their
 columns, and each folder carries a `PIXEL_TABLES_README.md` from its build. The code that made
 them is not in this repository yet: the build scripts are named in the origin column, and the
 run merging itself (the merged step-13 outputs) was done by the run-merging study's scripts
@@ -205,7 +205,9 @@ and rank) on 2026-10-09.
 | `pixel_hists.csv` | 8939 | `--part tracks`: `tot_shapes.choose`, `pixel_hist_rows` (`tot_codes`) | `2557f250` |
 | `rfsel_pair_hist.csv` | 812 | `--part tracks`: `tot_shapes.rfsel_board`, `rfsel_rows` | `ab3ce7ab` |
 
-`frontend/blnw_by_run.csv`, 384 rows (97 runs). One row = one board in one run.
+`frontend/blnw_by_run.csv`, 384 rows (97 runs). One row = one board in one run. The resolution
+notebook's re18 reads its `campaign`, `tel`, `run`, `chip`, `scan_utc` and `match` columns: the
+runs whose chips share one autocalibration scan.
 
 | column | contents |
 |---|---|
@@ -599,7 +601,7 @@ Every variable the package and the notebooks read. Set them before the notebook'
 | `ETROC_PREIRRAD_CONDITIONS_CSV` | `$ETROC_INPUTS/march/conditions_March2026_H1_HPK.csv` | the H1 run conditions (read only by `preirrad_current --rebuild`) |
 | `ETROC_GOOD_RUNS_CSV` | `$ETROC_INPUTS/july/good_runs.csv` | the good-run list |
 | `ETROC_COMBO_CHECK_JSON` | `$ETROC_INPUTS/july/res_vs_run_combo_check_jul_values.json` | the July run order and settings of the IV notebook's figures 24 and 25 |
-| `ETROC_HV_CYCLES_JUL_CSV` | `$ETROC_INPUTS/july/hv_cycles_jul.csv` | the July HV / LV cycle table of the IV notebook's figures 24 and 25 and the overview notebook's figure 6 (its DAQ restarts) |
+| `ETROC_HV_CYCLES_JUL_CSV` | `$ETROC_INPUTS/july/hv_cycles_jul.csv` | the July HV / LV cycle table of the IV notebook's figures 24 and 25, the overview notebook's figure 6 (its DAQ restarts) and the resolution notebook's re18 (its LV cycles and irradiation steps) |
 | `ETROC_LV_SPANS_JUL_CSV` | `$ETROC_INPUTS/july/lv_spans_jul.csv` | the LV power log's files: the LV-off periods of the overview notebook's figure 6, the LV-on time of the IV notebook's figures 24 and 25 |
 | `ETROC_LV_LOG_ROOT` | `/eos/user/m/musafdar/ETROC_TB_2026_combo_tables/lv_history_jul` | the LV power log folders (`LV_LOG_DIRS`), read only by `lv_log.build_lv_spans` |
 | `ETROC_RUN_METADATA_ROOT` | `/eos/user/j/jongho` | the DAQ's run folders (`RUN_METADATA_DIRS`), read only by `overview.timeline.build_run_times` and the BL/NW part of `frontend.rebuild` |
