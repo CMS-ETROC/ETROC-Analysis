@@ -34,7 +34,7 @@ lists, chips, fluence steps, input locations). No data lives in the repository.
 | `universality/` | the TWC-transfer study's tables, their reduction and the TWC curves. The six tables (`univ_cells`, `univ_master_cells`, `univ_axis_r2`, `univ_axis_F_wide`, `univ_axis_F_long`, `twc_bank_best`; columns in `campaigns/irrad_2026_inputs.md`) are made by `python -m etroc_plots.universality.reduce --out DIR --results-root S`, run from `TestBeam/` on lxplus, in about 15 s on one core; `transfer.py` reads them (with the study's verdict override) and holds the curve arithmetic, `curves.py` draws the curves, `levels.py` the pair-penalty figures |
 | `inputs.py` | the input check every notebook runs first |
 | `lv_log.py` | the July LV power log: its file-spans table builder, the LV-off periods and the LV-on time before a run |
-| `tests/` | pytest tests of the universality readers: the study's verdict override and the axis-F rows (how to run them: under Running a notebook) |
+| `tests/` | pytest tests of the universality readers: the study's verdict override, the axis tables the reduction composes, the self-transfer flag and the rows left out by it, and the axis-F rows (how to run them: under Running a notebook) |
 | `CONVENTIONS.md` | the rules every figure follows |
 
 ## Data quality: the IRRAD 2026 readout was saturated
@@ -101,7 +101,8 @@ PNG; it exits with status 1 when a figure breaks a rule of `CONVENTIONS.md`, and
 holds no figures at all.
 
 The tests run from `TestBeam/` in LCG_104d: `python -m pytest -p no:cacheprovider etroc_plots/tests`
-(the axis-F test is skipped where the universality tables cannot be read).
+(the tests that read the published tables, axis F and the guard-fix rows, are skipped where the
+universality tables cannot be read).
 
 ## Editing a notebook
 

@@ -99,8 +99,8 @@ The code that made these is not in this repository; the origin column says what 
 | `vgl/vgl_points.csv` | V_gl (gain-layer depletion voltage) per chip and fluence | the campaign IV notebooks (`ExtractIVCurves.ipynb`), k-factor peak of the fine low-V scans; the file's header records the cross-check |
 | `universality/univ_cells.csv` | every cell of the TWC-transfer study (one comparison of a source and a target): its level or axis, its source and target runs | the study's job lists (its toolkit is not in this repository; specification dated 2026-09-09), reduced by `python -m etroc_plots.universality.reduce`. Columns and command in "Universality tables" below |
 | `universality/univ_master_cells.csv` | the study's verdict table of the level cells | the inputs of the study's round-1 report of 2026-09-04 (its `master_cells.csv`), copied byte for byte by the same command |
-| `universality/univ_axis_r2.csv` | the follow-up axes A-E and I-K, every arm of every cell | the study's eight axis tables, concatenated by the same command |
-| `universality/univ_axis_F_wide.csv`, `universality/univ_axis_F_long.csv` | axis F, the source correction with its linear term refitted on the target: the arms side by side, and in the shape of the other axes | the study's two axis-F tables, copied by the same command |
+| `universality/univ_axis_r2.csv` | the follow-up axes A-E and I-K, every arm of every cell | the study's eight round-2 axis tables, the guard-fix rerun's rows replacing those of its 11 cells of axes E, J and K, with the self-transfer flag from the study's aggregation tables, by the same command |
+| `universality/univ_axis_F_wide.csv`, `universality/univ_axis_F_long.csv` | axis F, the source correction with its linear term refitted on the target: the arms side by side, and in the shape of the other axes | the study's two axis-F tables, copied with the self-transfer flag by the same command |
 | `universality/twc_bank_best.csv` | one time-walk correction per pixel and run, DESY May and August and IRRAD March and July 2026: the quadratic's coefficients, and the TOT range and histogram behind it | the study's coefficient bank (63 files, 102 MB), reduced to the best fit per pixel by the same command |
 
 ## Test-beam result tables
@@ -384,20 +384,24 @@ are not in this repository. The six tables are made by
 run from `TestBeam/` on lxplus (`../universality/reduce.py`; copy the files into `universality/`
 and update the checksum lines to use them). R is `TWC_TRANSFER_ROOT` (default
 `/eos/user/m/musafdar/DESY_May2026/analysis/twc_transfer`): the coefficient bank,
-`bank/coeffs_<campaign>_<run>.parquet`, and the round-1 report's inputs,
-`figs/transfer_2026-09-04/inputs/master_cells.csv`. S is the study's own folder
+`bank/coeffs_<campaign>_<run>.parquet`, the round-1 report's inputs,
+`figs/transfer_2026-09-04/inputs/master_cells.csv`, and the aggregation tables the axis tables
+were built from, `tables/agg_<agg_tag>/agg_by_cell.csv`. S is the study's own folder
 (`TWC_RESULTS_ROOT`, no default; the command stops without it): `condor/` (the seven job lists),
-`results_r2/axis_{A,B,C,D,E,I,J,K}.csv` and `results_r3/` (`axis_F.csv`, `axis_F_long.csv`,
+the axis tables `UNIV_AXIS_SOURCES` names (`results_r2/axis_{A,B,C,D,E,I,J,K}.csv` and
+`results_r3/guardfix/axis_{E,J,K}_gf.csv`) and `results_r3/` (`axis_F.csv`, `axis_F_long.csv`,
 `summary_F.md`). On one lxplus core the cells, master and axes parts take 3 s together and the
-bank part 12 s. Published 2026-10-02:
+bank part 12 s. Published 2026-10-02 (cells, master, bank) and 2026-10-18 (the three axis tables,
+with the guard-fix rows of axes E, J and K and the `self_transfer` flag; their 2026-10-02 versions
+are kept as `universality/superseded/<file>_2026-10-02.csv`):
 
 | file | rows | columns | md5 |
 |---|---|---|---|
 | `univ_cells.csv` | 131 | 8 | `2fcde80b93bff79a4d9eb54292546318` |
 | `univ_master_cells.csv` | 43 | 105 | `62cfc93f96be1dcbab6cad770da772fa` |
-| `univ_axis_r2.csv` | 5890 | 24 | `6e064643ee1522656c4d7f59dc87dece` |
-| `univ_axis_F_wide.csv` | 167 | 46 | `44c661a62fdbf95b05dd7d67cd86cb74` |
-| `univ_axis_F_long.csv` | 2863 | 24 | `8cead873b7cc767f21b356cbd74bd136` |
+| `univ_axis_r2.csv` | 6011 | 25 | `15c688966ce406593454391e9d6120ff` |
+| `univ_axis_F_wide.csv` | 167 | 51 | `911efb7d856178f24e60a87b5203a755` |
+| `univ_axis_F_long.csv` | 2863 | 25 | `51302099b643b24014141af7d860a059` |
 | `twc_bank_best.csv` | 18414 | 20 | `001872b9be344ec9d9aa252bf1b9a011` |
 
 The study's words, used in every table:
@@ -433,7 +437,9 @@ The study's words, used in every table:
 `universality/univ_cells.csv`, 131 rows. One row = one cell, from the job lists that ran it, read
 in the order `cells.tsv`, `cells_stage1.tsv`, `cells_stage2.tsv`, `cells_stage2_held.tsv`,
 `cells_stage3.tsv`, `cells_rerun.tsv`, `cells_guardfix_rerun.tsv` (a later list that names a cell
-again redefines it: the latest rerun wins). Every cell the other tables name is a row here.
+again redefines it; the two reruns name each of their cells with the runs it already had). Every
+cell the other tables name is a row here. Which run of a rerun cell its axis rows come from is set
+by the axis files, below, not by this order.
 
 | column | contents |
 |---|---|
@@ -476,9 +482,25 @@ Widths and differences in ps.
 | `n_same_triple`, `n_same_triple_interp`, `all_mu_excl`, `all_se_excl`, `int_mu_excl`, `int_se_excl` | the rows whose source triple is the target triple (all, `interp`), and the inverse-variance mean difference and its error without them (all triples, `interp`) |
 | `all_mu_spec`, `all_se_spec`, `int_mu_spec`, `int_se_spec` | the same means with each row's error as the specification first wrote it (half the difference of the two halves' differences, times k), all triples and `interp` |
 
-`universality/univ_axis_r2.csv`, 5890 rows (axis A 800, B 620, C 660, D 1089, E 1383, I 393, J 369,
-K 576), and `universality/univ_axis_F_long.csv`, 2863 rows, have the same 24 columns. One row =
-one cell, arm, kind, pair or board, family and error factor, every arm included.
+`universality/univ_axis_r2.csv`, 6011 rows (axis A 800, B 620, C 660, D 1089, E 1395, I 393, J 370,
+K 684), and `universality/univ_axis_F_long.csv`, 2863 rows, have the same 25 columns: the study's
+24 and `self_transfer`. One row = one cell, arm, kind, pair or board, family, error factor and
+`self_transfer`, every arm included. Per axis the reduction reads the files of
+`UNIV_AXIS_SOURCES` (`irrad_2026.py`) in order, a later file replacing every row of the cells it
+holds at the place of the cell's first row; the guard-fix files' two extra columns (`lpo_shape`,
+`lpo_pairs`) are dropped. Each line is otherwise the study's line unchanged. The code behind each
+axis (the toolkit's `tt.py`, sha256 first 16 hex digits, as the job lists' DAG headers record it):
+
+| axis | cells | file | `tt.py` |
+|---|---|---|---|
+| A, B, C, K | condor stage 2 | `results_r2/axis_X.csv` | `057934883be9ad88` |
+| D, E, I, J | condor stage 1 | `results_r2/axis_X.csv` | `057934883be9ad88` |
+| E, J, K | E2, E4, E5, E10, J1-J4, K1-K3: the guard-fix rerun of 2026-09-10 (`--lpo-fallback own`), replacing their stage-1 and stage-2 rows | `results_r3/guardfix/axis_X_gf.csv` | `e83f71c18ed40c56` |
+| F | condor stage 3 | `results_r3/axis_F.csv`, `results_r3/axis_F_long.csv` | `698f72f97efb5a01` |
+
+The seeded rerun of 2026-09-08 (`cells_rerun.tsv`, `tt.py` `698f72f97efb5a01`) wrote no axis
+table: of its cells, A4, A6, B6, C7, E12, E13 and I2 keep their round-2 rows and J1-J4 and K3
+take the guard-fix rows.
 
 | column | contents |
 |---|---|
@@ -492,6 +514,7 @@ one cell, arm, kind, pair or board, family and error factor, every arm included.
 | `placebo_minus_notwc1b_ps` | `placebo` minus `notwc_1b`: on a cell that transfers one board, the control that says whether the cell is readable |
 | `cov_C`, `lever_X`, `lever_X_all` | the mean coverage, and the lever over the target events outside the source's range and over all of them |
 | `f_inflate`, `f_variant_is_primary`, `agg_tag` | the error factor; True at the campaign's measured factor (the DESY May cells are also given at 1.0, the August cells at 0.8153 and 1.0); the aggregation |
+| `self_transfer` | 1 when the row's source triple is its target triple (the same run, combination and pixels), else 0. The study aggregates these rows as a group of their own and leaves them out of its per-cell summaries; its axis tables carry them unmarked. The reduction takes the flag from the row's aggregation table, `tables/agg_<agg_tag>/agg_by_cell.csv` (for A1-A7, `agg_A_r2_desy_f0p8153` and `agg_A_r2_desy_f1p0`: `UNIV_AGG_DIRS`), joined on cell, arm, kind, pair or board, family, `agg_tag` and `n_pix`, and stops unless each row joins exactly one row with the same `mu` and `se`. 110 rows of `univ_axis_r2.csv` (axis A 104, I 6) and 276 of `univ_axis_F_long.csv` carry 1; the notebook draws none of them |
 
 `universality/univ_axis_F_wide.csv`, 167 rows. One row = one axis-F cell, kind, pair or board and
 family at the primary error factor, with the arms side by side.
@@ -502,6 +525,12 @@ family at the primary error factor, with the arms side by side.
 | `<arm>_n_pix`, `<arm>_mu_ps`, `<arm>_se_ps`, `<arm>_tau`, `<arm>_tost`, `<arm>_guard_verdict`, `<arm>_present` | for each of `xfer`, `xfer_lin`, `xfer_lin_lpo`, `xfer_clip` and `xfer_rescale`, the columns of the long table and whether the arm has the row (35 columns) |
 | `cov_C`, `lever_X`, `lever_X_all`, `spec_primary_row` | of the `xfer` row |
 | `delta_xferlin_minus_xfer_mu_ps` | `xfer_lin_mu_ps` minus `xfer_mu_ps` |
+| `<arm>_self_transfer` | for each of the five arms, the `self_transfer` flag of the long-table row the arm holds (as in the long table); empty when the arm has no row (5 columns, appended by the reduction) |
+
+The study's builder keeps one long-table row per arm and key. On 12 rows (F2 and F3) the `xfer`,
+`xfer_lin`, `xfer_clip` and `xfer_rescale` arms hold the self-transfer row (1-5 pixels) beside a
+`xfer_lin_lpo` arm that is not; the same arms' rows over the other pixels (3-70) are in the long
+table only.
 
 `universality/twc_bank_best.csv`, 18414 rows from the 63 bank files (DESY May 17 files and 3878
 rows; August 10 and 2286; March H1 13 and 4620, F1 15 and 5448; July H1 4 and 884, F1 4 and

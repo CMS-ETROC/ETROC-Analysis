@@ -726,14 +726,40 @@ TWC_BANK_BEST_CSV = os.path.join(INPUTS_UNIVERSALITY, "twc_bank_best.csv")      
 # threshold-offset and RFSel steps and the cooling-down cells, all at 3.5e15.
 UNIV_EXCLUDED_STEPS = (2e15, 3.5e15)
 # The study's own outputs, read only by the reduction, never by a notebook. Read-only.
-# TWC_TRANSFER_ROOT holds the coefficient bank (bank/coeffs_<campaign>_<run>.parquet) and the
-# round-1 table of the level cells (figs/transfer_2026-09-04/inputs/master_cells.csv).
+# TWC_TRANSFER_ROOT holds the coefficient bank (bank/coeffs_<campaign>_<run>.parquet), the
+# round-1 table of the level cells (figs/transfer_2026-09-04/inputs/master_cells.csv) and the
+# aggregation tables the axis tables were built from (tables/agg_<agg_tag>/agg_by_cell.csv).
 TWC_TRANSFER_ROOT = (os.environ.get("ETROC_TWC_TRANSFER_ROOT")
                      or "/eos/user/m/musafdar/DESY_May2026/analysis/twc_transfer")
 # TWC_RESULTS_ROOT is the study's own folder: results_r2/ (the axis tables), results_r3/ (axis F
-# and its summary) and condor/ (the job lists that name every cell's runs). It has no default:
+# and its summary; guardfix/, the rerun's axis tables) and condor/ (the job lists that name every
+# cell's runs). It has no default:
 # the reduction stops and asks for it (--results-root or ETROC_TWC_RESULTS_ROOT).
 TWC_RESULTS_ROOT = os.environ.get("ETROC_TWC_RESULTS_ROOT") or None
+# The tables behind univ_axis_r2, per axis: files under TWC_RESULTS_ROOT, each later file
+# replacing every row of the cells it holds. First the round-2 table (results_r2/, toolkit tt.py
+# 057934883be9ad88, condor stages 1 and 2); for E, J and K then the guard-fix rerun of 2026-09-10
+# (results_r3/guardfix/, tt.py e83f71c18ed40c56 with --lpo-fallback own), which redid 11 cells:
+# E2, E4, E5, E10, J1-J4 and K1-K3. Its files carry two more columns (lpo_shape, lpo_pairs),
+# which the reduction drops. The seeded rerun of 2026-09-08 (cells_rerun.tsv, 12 cells) has no
+# axis table: of its cells, J1-J4 and K3 take the guard-fix rows, the others (A4, A6, B6, C7,
+# E12, E13, I2) keep their round-2 rows.
+UNIV_AXIS_SOURCES = {
+    "A": ("results_r2/axis_A.csv",),
+    "B": ("results_r2/axis_B.csv",),
+    "C": ("results_r2/axis_C.csv",),
+    "D": ("results_r2/axis_D.csv",),
+    "E": ("results_r2/axis_E.csv", "results_r3/guardfix/axis_E_gf.csv"),
+    "I": ("results_r2/axis_I.csv",),
+    "J": ("results_r2/axis_J.csv", "results_r3/guardfix/axis_J_gf.csv"),
+    "K": ("results_r2/axis_K.csv", "results_r3/guardfix/axis_K_gf.csv"),
+}
+# The aggregation folders under TWC_TRANSFER_ROOT/tables that hold an axis table's rows under
+# another name than agg_<agg_tag>: stage 3 of the study reused the group name A_desy, so
+# tables/agg_A_desy_* now hold cells A8 and A9 only; the A1-A7 cells of axis A were aggregated
+# again on 2026-09-09 into agg_A_r2_desy_*, which hold the rows of results_r2/axis_A.csv. Read
+# only by the reduction's self_transfer join.
+UNIV_AGG_DIRS = {"A_desy_f0p8153": "agg_A_r2_desy_f0p8153", "A_desy_f1p0": "agg_A_r2_desy_f1p0"}
 
 # ============================================================== raw inputs, read in place
 # iv_data.check_inputs checks each one exists and is readable (the IV notebook reads them).

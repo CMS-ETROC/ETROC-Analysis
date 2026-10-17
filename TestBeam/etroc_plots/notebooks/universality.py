@@ -31,7 +31,7 @@
 # * Figure un03: the penalty of each of the 43 level cells, interpolating family and all target
 #   triples, with the study's verdicts and each cell's margin.
 # * Figure un04: the penalty before and after refitting the linear term of the correction on
-#   the target, per pair row of the eleven re-scored cells.
+#   the target, per pair row of the re-scored cells.
 # * Figure un05: the threshold-offset and RFSel steps of August, against a floor at the same
 #   settings.
 # * Figure un06: three controls: the floor on one day, a board correction pooled over pixels
@@ -71,8 +71,8 @@
 # * `universality/univ_cells.csv`: every comparison (cell) with its source and target run
 #   (un02-un06). `univ_master_cells.csv`: per level cell the inverse-variance means, margins and
 #   verdicts (un03, un06). `univ_axis_r2.csv`: the pair rows of the comparison axes with their
-#   coverage and lever (un02, un05). `univ_axis_F_wide.csv` and `univ_axis_F_long.csv`: axis F,
-#   the linear refit, and its margins (un04).
+#   coverage, lever and self-transfer flag (un02, un05). `univ_axis_F_wide.csv` and
+#   `univ_axis_F_long.csv`: axis F, the linear refit, and its margins (un04).
 # * `tables/runs_summary.csv`: the chips, bias, fluence step, RFSel and threshold offset of
 #   every IRRAD run (un01-un06).
 # * `july/good_runs.csv`: the good-run list; every IRRAD run drawn must be on it as good.
@@ -84,7 +84,8 @@
 # pixel choice and the curves) and `../universality/levels.py` (the rows and bars un02-un06
 # draw), the drawing in `../universality/curves.py` and `levels.py`. This notebook holds the
 # choices made per figure: the runs, the colours and the words on each figure.
-# `../tests/test_universality.py` tests the verdict override and the axis-F rows.
+# `../tests/test_universality.py` tests the verdict override, the self-transfer flag (its join in
+# the reduction and the rows left out here) and the axis-F rows.
 #
 # `universality.ipynb` and `universality.py` are the same notebook, kept in step by jupytext.
 # Edit either one, then run `python3 -m jupytext --sync universality.ipynb` and
@@ -502,6 +503,13 @@ save(fig, "un01_twc_curves", un01,
 # cells E1-E12) and the cooling-down cells (axis J), all at 3.5e15; the cell below counts what
 # that leaves out of each figure. Every IRRAD run of a cell drawn is checked against the good-run
 # list; the DESY runs are not on that list, so the check does not apply to them.
+#
+# **No self transfer is drawn.** A row whose source triple is its target triple (the same run,
+# combination and pixels) is a self transfer: the study keeps such rows as their own group and
+# leaves them out of its per-cell summaries (the level-cell table); its axis tables carry them,
+# marked by the column `self_transfer` (one per arm in the wide axis-F table), which the
+# reduction recovers from the study's aggregation tables. The axis figures leave them out too;
+# the cell below counts them.
 
 # %%
 UNIV_INPUTS = [campaign.UNIV_CELLS_CSV, campaign.UNIV_MASTER_CSV, campaign.UNIV_AXIS_R2_CSV,
@@ -510,8 +518,15 @@ UNIV_INPUTS = [campaign.UNIV_CELLS_CSV, campaign.UNIV_MASTER_CSV, campaign.UNIV_
                desy_2026.MAY_YAML, desy_2026.AUG_YAML]
 CELLS = transfer.read_cells()
 MASTER = transfer.read_master()
-AXIS_R2 = transfer.read_axis_r2()
-AXIS_F = transfer.read_axis_f()
+AXIS_R2_ALL = transfer.read_axis_r2()
+AXIS_F_ALL = transfer.read_axis_f()
+AXIS_R2 = transfer.without_self_transfer(AXIS_R2_ALL)
+AXIS_F = transfer.without_self_transfer(AXIS_F_ALL)
+SELF_R2 = AXIS_R2_ALL.drop(AXIS_R2.index)       # the self-transfer rows, for the counts
+SELF_F = AXIS_F_ALL.drop(AXIS_F.index)
+print("self-transfer rows left out: comparison axes %d of %d %s, axis F (wide) %d of %d"
+      % (len(SELF_R2), len(AXIS_R2_ALL), SELF_R2.groupby("axis").size().to_dict(), len(SELF_F),
+         len(AXIS_F_ALL)))
 CELL = CELLS.set_index("cell")
 
 LEFT_OUT = transfer.cells_at_steps(CELLS, RS, campaign.UNIV_EXCLUDED_STEPS)
@@ -592,6 +607,10 @@ VERDICT_WORDS = {"PASS": "equivalent within the margin (TOST)",
 SETTINGS_RULE = ("IRRAD: runs_summary.csv per board, the March RFSel from MARCH_RFSEL; DESY: the "
                  "board-config yaml through desy_2026.run_settings, the August RFSel from "
                  "DEFAULT_RFSEL where the yaml has none, no RFSel recorded in May")
+SELF_TRANSFER_RULE = ("left out: rows flagged self_transfer 1 (in the wide axis-F table, any arm "
+                      "flagged), whose source triple is the target triple; the flag is the "
+                      "study's, recovered by the reduction from its aggregation tables; the "
+                      "study's per-cell summaries leave these rows out too")
 
 # %% [markdown]
 # ## Figure un02: penalty against coverage and lever
@@ -603,11 +622,10 @@ SETTINGS_RULE = ("IRRAD: runs_summary.csv per board, the March RFSel from MARCH_
 # interpolating rows of the same axes, as a reference. The axis E and J rows of the IRRAD runs at
 # 3.5e15 are left out of both; the band is computed without them.
 #
-# Six extrapolating rows of axis A (cells A4, A5 and A6, two pairs each, one pixel each) are a
-# second primary row of a pair whose full row is also drawn. The study's caveat: its per-cell
-# summary excludes the source-equals-target (self-transfer) duplicates and the axis dumps do not,
-# and the axis tables carry no column that marks them. They are drawn as the table has them and
-# listed under rows_flagged in the values file.
+# Six extrapolating rows of axis A (cells A4, A5 and A6, two pairs each, one pixel each) are self
+# transfers: their source triple is the target triple. Each is a second row of a pair whose row
+# over the other pixels is drawn. They are left out, and listed under self_transfer_left_out in
+# the values file.
 
 # %%
 AXIS_WORDS = {"A": "A: one run, pixel or board to a whole board",
@@ -633,14 +651,16 @@ print("interp median %.4f ps, 16-84 %%: %.4f to %.4f (all rows: %.4f, %.4f to %.
     band["median"], band["lo"], band["hi"], band_all["median"], band_all["lo"], band_all["hi"]))
 un02_cells = sorted(set(extrap.cell) | set(interp.cell), key=transfer.natkey)
 PAIR_KEY = ["cell", "kind", "board_or_role", "family"]
-FLAG_KEYS = PAIR_KEY + ["n_pix", "mu_ps"]
+SELF_KEYS = ["axis"] + PAIR_KEY + ["n_pix", "mu_ps"]
+self_extrap, self_interp = levels.coverage_lever_rows(SELF_R2)
+self_extrap = self_extrap[~self_extrap.cell.isin(LEFT_OUT)]
+self_interp = self_interp[~self_interp.cell.isin(LEFT_OUT)]
+assert len(self_interp) == 0 and len(self_extrap) == 6 and set(self_extrap.cell) == {
+    "A4_P4_run26_0deg", "A5_P4_run33_30deg", "A6_P4_run44_60deg"}, self_extrap[SELF_KEYS]
+print("un02 self-transfer rows left out:\n%s" % self_extrap[SELF_KEYS].to_string())
 un02_drawn = pd.concat([extrap, interp])
-un02_dup = un02_drawn[un02_drawn.duplicated(PAIR_KEY, keep=False)]
-UN02_FLAGGED = un02_dup[un02_dup.n_pix < un02_dup.groupby(PAIR_KEY).n_pix.transform("max")]
-assert len(UN02_FLAGGED) == 6 and set(UN02_FLAGGED.cell) == {
-    "A4_P4_run26_0deg", "A5_P4_run33_30deg", "A6_P4_run44_60deg"}, UN02_FLAGGED[FLAG_KEYS]
-print("un02 rows flagged (second primary row of a pair key):\n%s"
-      % UN02_FLAGGED[FLAG_KEYS].to_string())
+assert not un02_drawn.duplicated(PAIR_KEY).any(), \
+    un02_drawn[un02_drawn.duplicated(PAIR_KEY, keep=False)][SELF_KEYS]
 assert_none_left_out(un02_cells, "un02")
 un02_irrad = good_run_check(un02_cells, "un02")
 un02_runs = cell_runs(un02_cells)
@@ -659,10 +679,11 @@ fig, axes, drawn, covered = levels.un02_coverage_lever(
             "Lever: the rms change of the correction when the target's TOT is clipped to that "
             "range, over the target events outside it.\n"
             "No IRRAD run at %s is drawn: %d extrapolating and %d interpolating rows "
-            "of axes E and J (July, 3.5e15) are left out.\n%s"
+            "of axes E and J (July, 3.5e15) are left out; so are %d extrapolating rows of axis "
+            "%s whose source triple is the target triple (self transfer).\n%s"
             % (len(extrap), band["n_values"], STEPS_TEXT.replace(" and ", " or "),
-               len(un02_out["extrap"]), len(un02_out["interp"]),
-               settings_footer(un02_runs))))
+               len(un02_out["extrap"]), len(un02_out["interp"]), len(self_extrap),
+               " and ".join(sorted(self_extrap.axis.unique())), settings_footer(un02_runs))))
 ROW_KEYS = ["axis", "cell", "board_or_role", "family", "n_pix", "cov_C", "lever_X", "mu_ps",
             "se_ps"]
 save(fig, "un02_coverage_lever",
@@ -670,10 +691,8 @@ save(fig, "un02_coverage_lever",
           axes=sorted(extrap.axis.unique()), interp_median_ps=band["median"],
           interp_16_84_ps=[band["lo"], band["hi"]], interp_band=band,
           rows=extrap[ROW_KEYS].to_dict("records"),
-          rows_flagged=UN02_FLAGGED[FLAG_KEYS].to_dict("records"),
-          rows_flagged_rule=("drawn: a second primary row on the same (cell, kind, board_or_role, "
-                             "family) with fewer pixels; the study's per-cell summary excludes "
-                             "self-transfer duplicates, the axis dumps do not"),
+          self_transfer_left_out=self_extrap[SELF_KEYS].to_dict("records"),
+          self_transfer_rule=SELF_TRANSFER_RULE,
           left_out=dict(rule="cells with an IRRAD source or target run at %s" % STEPS_TEXT,
                         extrap_rows=int(len(un02_out["extrap"])),
                         interp_rows=int(len(un02_out["interp"])),
@@ -780,15 +799,23 @@ save(fig, "un03_penalty_per_cell",
 # (red); filled markers are interpolating rows, open ones extrapolating. A pair is named by the
 # chips of its two boards in the target run (the study's combination of that run, as the
 # coefficient table records it). Four extrapolating board-to-board rows (one pair at 0 deg, all
-# three at 30 deg) have five pixels and a penalty of exactly 0.0 before the refit. The study's
-# caveat: its per-cell summary excludes the source-equals-target (self-transfer) duplicates and
-# the axis dumps do not, and these rows have that pattern. They are drawn as the table has them
-# and listed under rows_flagged in the values file.
+# three at 30 deg; five pixels each, a penalty of exactly 0.0 before the refit) are self
+# transfers, their source triple being the target triple, and are left out (listed under
+# self_transfer_left_out in the values file). The wide axis-F table holds one row per pair, here
+# the self-transfer one, so these four pairs are not drawn, and cell F3 (board to board at 30 deg)
+# has no row left; their rows over the other pixels are in the long table only.
 
 # %%
 F_ROWS = levels.refit_rows(AXIS_F)
-assert len(F_ROWS) == 49 and (F_ROWS.family == "interp").sum() == 16, F_ROWS.family.value_counts()
+assert len(F_ROWS) == 45 and (F_ROWS.family == "interp").sum() == 16, F_ROWS.family.value_counts()
+F_SELF = levels.refit_rows(SELF_F)
+F_SELF_KEYS = PAIR_KEY + ["xfer_n_pix", "xfer_mu_ps", "xfer_lin_n_pix", "xfer_lin_mu_ps"]
+assert len(F_SELF) == 4 and (F_SELF.xfer_mu_ps == 0.0).all(), F_SELF[F_SELF_KEYS]
+assert not (F_ROWS.xfer_mu_ps == 0.0).any(), F_ROWS[F_ROWS.xfer_mu_ps == 0.0][F_SELF_KEYS]
+print("un04 self-transfer rows left out:\n%s" % F_SELF[F_SELF_KEYS].to_string())
 f_cells = sorted(set(F_ROWS.cell), key=transfer.natkey)
+f_none = sorted(set(AXIS_F_ALL.cell) - set(f_cells), key=transfer.natkey)   # nothing left to draw
+assert set(f_none) <= set(F_SELF.cell), f_none
 assert_none_left_out(f_cells, "un04")
 un04_irrad = good_run_check(f_cells, "un04")
 un04_runs = cell_runs(f_cells)
@@ -796,10 +823,6 @@ F_ROWS["chips"] = [transfer.pair_chips(RS, BANK, CELL.loc[c, "tgt_campaign"],
                                        CELL.loc[c, "tgt_run"], b)
                    for c, b in zip(F_ROWS.cell, F_ROWS.board_or_role)]
 F_ROWS["label"] = ["%s: %s" % (LABEL[b], ch) for b, ch in zip(F_ROWS.base_cell, F_ROWS.chips)]
-zero_rows = F_ROWS[F_ROWS.xfer_mu_ps == 0.0][PAIR_KEY + ["xfer_n_pix", "xfer_mu_ps"]].rename(
-    columns={"xfer_n_pix": "n_pix", "xfer_mu_ps": "mu_ps"})
-assert len(zero_rows) == 4, zero_rows
-print("un04 rows flagged (penalty exactly 0.0 before the refit):\n%s" % zero_rows.to_string())
 fig, axes, drawn, covered = levels.un04_linear_refit(
     F_ROWS, row_labels=list(F_ROWS.label),
     family_titles={"interp": "Target TOT within the source's",
@@ -808,13 +831,17 @@ fig, axes, drawn, covered = levels.un04_linear_refit(
     legend_words=dict(xfer="source correction as is", xfer_lin="linear term refitted on target",
                       open="open: target TOT beyond the source's", margin="margin, max(1 ps, 2 %)"),
     line1=facility_line(c for c, _ in un04_runs), subject="Before and after a linear TOT refit",
-    footer=("Per pair row of the eleven re-scored cells: the penalty with the source's correction "
-            "as is and with its quadratic term kept and its linear term refitted on the target "
-            "(fold-matched), 90 %% intervals; grey bar: the row's margin. %d rows: %d "
+    footer=("Per pair row of %d of the %d re-scored cells: the penalty with the source's "
+            "correction as is and with its quadratic term kept and its linear term refitted on "
+            "the target (fold-matched), 90 %% intervals; grey bar: the row's margin. %d rows: %d "
             "interpolating, %d extrapolating. A pair is named by the chips of its two boards in "
-            "the target run.\n%s"
-            % (len(F_ROWS), (F_ROWS.family == "interp").sum(), (F_ROWS.family == "extrap").sum(),
-               settings_footer(un04_runs))))
+            "the target run.\nLeft out: %d extrapolating board-to-board rows whose source "
+            "triple is the target triple (self transfer; penalty exactly 0.0 before the "
+            "refit)%s.\n%s"
+            % (len(f_cells), AXIS_F_ALL.cell.nunique(), len(F_ROWS),
+               (F_ROWS.family == "interp").sum(), (F_ROWS.family == "extrap").sum(), len(F_SELF),
+               (", among them every row of %s" % " and ".join(c.split("_")[0] for c in f_none)
+                if f_none else ""), settings_footer(un04_runs))))
 F_KEYS = ["fnum", "cell", "base_cell", "kind", "board_or_role", "chips", "family", "xfer_n_pix",
           "xfer_mu_ps", "xfer_se_ps", "xfer_tost", "xfer_lin_n_pix", "xfer_lin_mu_ps",
           "xfer_lin_se_ps", "xfer_lin_tost", "xfer_lin_lpo_tost", "delta_xferlin_minus_xfer_mu_ps",
@@ -824,15 +851,14 @@ save(fig, "un04_linear_refit",
           n_extrap=int((F_ROWS.family == "extrap").sum()),
           base_cells={f: b for f, b in zip(F_ROWS.fnum, F_ROWS.base_cell)},
           rows=[dict(r, label=l) for r, l in zip(F_ROWS[F_KEYS].to_dict("records"), F_ROWS.label)],
-          rows_flagged=zero_rows.to_dict("records"),
-          rows_flagged_rule=("drawn: xfer_mu_ps exactly 0.0; the study's per-cell summary excludes "
-                             "self-transfer duplicates, the axis dumps do not"),
+          self_transfer_left_out=F_SELF[F_SELF_KEYS].to_dict("records"),
+          self_transfer_rule=SELF_TRANSFER_RULE, cells_with_no_row_left=f_none,
           irrad_runs_checked=["%s %s" % k for k in un04_irrad], good_run_drops=[], drawn=drawn,
           legend_overlap_problems=(["the legend covers %d points" % covered] if covered else [])),
      dict(levels.CONVENTIONS, figure="per axis-F pair row with both arms: xfer_mu_ps +- Z90 "
                                      "xfer_se_ps and xfer_lin_mu_ps +- Z90 xfer_lin_se_ps; "
                                      "margin_ps joined from the long table's xfer row on cell, "
-                                     "kind, board_or_role, family and n_pix",
+                                     "kind, board_or_role, family, n_pix and self_transfer",
           pairs="chips of the two boards of board_or_role in the target run: the role -> board "
                 "map of the coefficient table's role column (transfer.role_boards), the chip "
                 "from runs_summary.csv (IRRAD) or the board-config yaml (DESY)",

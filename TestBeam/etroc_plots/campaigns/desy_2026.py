@@ -53,8 +53,9 @@ AUG_YAML = os.path.join(_YAML_DIR, "DESY_TB_2026Aug_corrected.yaml")
 YAML = {"may": MAY_YAML, "aug": AUG_YAML}
 
 # The RFSel of a run whose yaml has no RFSel key. Source: each campaign's DAQ run configuration.
-# August records gain_mode (RFSel) 2 on every chip of runs 2-19 and 3 on runs 20-23 (which the
-# yaml carries as RFSel 3); May records no gain mode, so None: a figure omits the RFSel there.
+# RFSel is the preamp feedback setting (R_f), which sets the preamp gain. August records RFSel 2
+# on every chip of runs 2-19 and 3 on runs 20-23 (which the yaml carries as RFSel 3); May
+# records no RFSel, so None: a figure omits the RFSel there.
 DEFAULT_RFSEL = {"may": None, "aug": 2}
 # The preamp power mode, from the same DAQ configuration: August records "high" on every run and
 # chip; May records none (None: a figure omits it).

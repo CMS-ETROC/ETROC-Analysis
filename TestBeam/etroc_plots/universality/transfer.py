@@ -69,22 +69,30 @@ def read_master():
 
 
 def read_axis_r2():
-    """univ_axis_r2.csv: one row per axis, cell, arm, kind, board_or_role and family."""
+    """univ_axis_r2.csv: one row per axis, cell, arm, kind, board_or_role, family, f_inflate and
+    self_transfer (without_self_transfer drops the rows whose source triple is the target
+    triple)."""
     return pd.read_csv(campaign.UNIV_AXIS_R2_CSV)
 
 
 def read_axis_f():
     """univ_axis_F_wide.csv (one row per cell, kind, board_or_role and family, the arms side by
-    side) with margin_ps from the long table's xfer row of the same cell, kind, board_or_role,
-    family and pixel count (xfer_n_pix = n_pix; the long table holds two xfer rows for two cells
-    that differ only in n_pix), and base_cell from univ_cells."""
+    side, each with its <arm>_self_transfer flag) with margin_ps from the long table's xfer row of
+    the same cell, kind, board_or_role, family, pixel count and flag (xfer_n_pix = n_pix,
+    xfer_self_transfer = self_transfer: the long table holds a second xfer row on some pairs, the
+    self-transfer one), and base_cell from univ_cells."""
     wide = pd.read_csv(campaign.UNIV_AXIS_F_WIDE_CSV)
     long = pd.read_csv(campaign.UNIV_AXIS_F_LONG_CSV)
+    for table in (wide, long):
+        self_transfer_columns(table)       # raises on a table reduced before the flag
     keys = ["cell", "kind", "board_or_role", "family"]
-    marg = (long[long.arm == "xfer"][keys + ["n_pix", "margin_ps"]].drop_duplicates()
-            .rename(columns={"n_pix": "xfer_n_pix"}))
-    marg["xfer_n_pix"] = marg["xfer_n_pix"].astype(float)
-    wide = wide.merge(marg, on=keys + ["xfer_n_pix"], how="left", validate="many_to_one")
+    marg = (long[long.arm == "xfer"][keys + ["n_pix", "self_transfer", "margin_ps"]]
+            .drop_duplicates()
+            .rename(columns={"n_pix": "xfer_n_pix", "self_transfer": "xfer_self_transfer"}))
+    marg[["xfer_n_pix", "xfer_self_transfer"]] = marg[["xfer_n_pix", "xfer_self_transfer"]].astype(
+        float)
+    wide = wide.merge(marg, on=keys + ["xfer_n_pix", "xfer_self_transfer"], how="left",
+                      validate="many_to_one")
     base = read_cells().set_index("cell")["base_cell"]
     wide["base_cell"] = wide.cell.map(base)
     return wide
@@ -113,6 +121,29 @@ def family_rows(df, family):
     if family not in ("interp", "extrap"):
         raise ValueError("family %r: interp or extrap" % family)
     return df[df.family == family]
+
+
+def self_transfer_columns(df):
+    """The self-transfer flags of an axis table: self_transfer, or in the wide axis-F table one
+    per arm, <arm>_self_transfer. Raises when there is none (a table reduced before the flag)."""
+    cols = [c for c in df.columns if c == "self_transfer" or c.endswith("_self_transfer")]
+    if not cols:
+        raise KeyError("the table has no self_transfer column: reduce it again with python -m "
+                       "etroc_plots.universality.reduce")
+    return cols
+
+
+def without_self_transfer(df):
+    """`df` without the rows whose source triple is the target triple (flag 1 in any of its
+    self_transfer_columns; an arm a wide row does not hold has no flag). The study leaves these
+    rows out of its per-cell summaries; its axis tables carry them, flagged by the reduction."""
+    cols = self_transfer_columns(df)
+    flags = df[cols]
+    odd = ~(flags.isin([0, 1]) | flags.isna()).all(axis=1)
+    if odd.any():
+        raise ValueError("self_transfer values other than 0, 1 and empty: %s"
+                         % sorted(set(flags[odd].stack())))
+    return df[~(flags == 1).any(axis=1)]
 
 
 def is_irrad(code):
