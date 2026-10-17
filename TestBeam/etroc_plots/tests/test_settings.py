@@ -1,7 +1,8 @@
 """Tests of the settings helpers: the settings classes of a display-run list and the accepted
-merges they draw in place of their runs, the settings guard, the threshold over the noise (of a
-merge too), the slot positions, the offset markers, the x_B spread text, the layout audit, the
-BL/NW point offsets and the RFSel pair readers (frontend.tot_shapes).
+merges they draw in place of their runs, the settings guard, the threshold over the noise from
+the per-pixel noise widths (a merge's pooled scans too) and the offset its scan records, the slot
+positions, the offset markers, the layout audit, the BL/NW point offsets and the RFSel pair
+readers (frontend.tot_shapes).
 
 Run from TestBeam/:  python -m pytest etroc_plots/tests
 """
@@ -98,16 +99,72 @@ def test_classes_at_step_hold_an_accepted_merge_in_place_of_its_runs(display):
         assert tables.class_entries(by[k], "h1") == plain[k].runs["h1"]
 
 
-def test_merge_x_over_nw_is_the_mean_of_its_runs():
+def pixel_table(scans):
+    """A per-pixel BL/NW table (frontend.blnw.BLNW_PIXEL_COLUMNS) of H1 IH7: scans = [(run,
+    scan_utc, [nw, ...], [live, ...]), ...], one row per value."""
+    rows = [dict(campaign="july", tel="h1", run=run, board_idx=0, chip="IH7", row=i // 16,
+                 col=i % 16, bl=500.0, nw=v, live=live[i], scan_utc=utc)
+            for run, utc, nws, live in scans for i, v in enumerate(nws)]
+    return pd.DataFrame(rows, columns=blnw.BLNW_PIXEL_COLUMNS)
+
+
+def xb_points(runs, offset=10.0):
+    return pd.DataFrame([dict(tel="h1", runs=tuple(runs), chip="IH7", offset=offset)])
+
+
+def test_pixel_x_over_nw_median_and_percentiles_over_the_noise_width_population():
+    # a missing and a zero noise width are left out; a pixel off the baseline rule (live False)
+    # with a noise width counts, as in n_pixels_nw
+    nws = [4.0, 4.0, 5.0, 6.0, 8.0, 0.0, np.nan]
+    live = [True, True, False, True, True, True, False]
+    out = settings.pixel_x_over_nw(pixel_table([(56, "2026-07-29 10:00:00", nws, live)]),
+                                   xb_points([56])).iloc[0]
+    assert (out["nw_median"], out["x"], out["n_pixels"]) == (5.0, 2.0, 5)
+    # offset / nw sorted: 1.25, 1.667, 2, 2.5, 2.5; numpy's linear interpolation
+    assert out["lo"] == pytest.approx(1.25 + 0.64 * (10.0 / 6.0 - 1.25))
+    assert out["hi"] == pytest.approx(2.5)
+    assert (out["n_scans"], out["shared_scan"], out["n_pixels_scan"]) == (1, False, [5])
+    assert (out["tel"], out["chip"], out["runs"], out["offset"]) == ("h1", "IH7", (56,), 10.0)
+
+
+def test_pixel_x_over_nw_pools_the_scans_of_a_merge_before_the_median():
+    pix = pixel_table([(64, "2026-07-30 04:00:00", [4.0, 4.0, 4.0], [True] * 3),
+                       (67, "2026-07-30 17:00:00", [8.0, 8.0], [True] * 2)])
+    out = settings.pixel_x_over_nw(pix, xb_points([64, 67], offset=8.0)).iloc[0]
+    assert (out["nw_median"], out["x"], out["n_pixels"]) == (4.0, 2.0, 5)   # not (2 + 1) / 2
+    # offset / nw sorted: 1, 1, 2, 2, 2
+    assert out["lo"] == pytest.approx(1.0) and out["hi"] == pytest.approx(2.0)
+    assert (out["n_scans"], out["shared_scan"], out["n_pixels_scan"]) == (2, False, [3, 2])
+
+
+def test_pixel_x_over_nw_counts_a_scan_two_runs_share_once():
+    one = (18, "2026-07-25 08:00:00", [4.0, 5.0, 9.0], [True] * 3)
+    pix = pixel_table([one, (19,) + one[1:]])          # run 19 reused run 18's scan
+    both = settings.pixel_x_over_nw(pix, xb_points([18, 19])).iloc[0]
+    alone = settings.pixel_x_over_nw(pix, xb_points([18])).iloc[0]
+    assert (both["n_pixels"], both["n_scans"], both["shared_scan"]) == (3, 1, True)
+    assert [both[k] for k in ("x", "lo", "hi")] == [alone[k] for k in ("x", "lo", "hi")]
+
+
+def test_pixel_x_over_nw_stops_on_a_missing_or_doubled_scan():
+    pix = pixel_table([(56, "2026-07-29 10:00:00", [4.0, 5.0], [True] * 2),
+                       (56, "2026-07-29 11:00:00", [4.0, 5.0], [True] * 2)])
+    with pytest.raises(ValueError, match="run 56 IH7: 2 scans"):
+        settings.pixel_x_over_nw(pix, xb_points([56]))
+    with pytest.raises(ValueError, match="run 57 IH7: 0 scans"):
+        settings.pixel_x_over_nw(pix[pix["scan_utc"] < "2026-07-29 11"], xb_points([56, 57]))
+    zero = pixel_table([(56, "2026-07-29 10:00:00", [0.0, np.nan], [True] * 2)])
+    with pytest.raises(ValueError, match="no pixel with a noise width above 0"):
+        settings.pixel_x_over_nw(zero, xb_points([56]))
+
+
+def test_scan_offset_is_the_runs_common_offset():
     bl = blnw_table()
-    bl.loc[(bl["run"] == 67) & (bl["chip"] == "IH7"), ["nw_mean", "nw_std"]] = [5.0, 2.0]
-    out = settings.merge_x_over_nw(bl, "july", "h1", (64, 67), "IH7")
-    assert out["x"] == pytest.approx((8.0 / 4.0 + 8.0 / 5.0) / 2.0)
-    assert out["bar"] == pytest.approx((8.0 / 16.0 + 8.0 * 2.0 / 25.0) / 2.0)
-    assert (out["offset"], out["n_live"]) == (8.0, 255)
-    assert [p["run"] for p in out["per_run"]] == [64, 67]
+    assert settings.scan_offset(bl, "july", "h1", [64, 67], "IH7") == 8.0
     with pytest.raises(ValueError, match="offsets"):
-        settings.merge_x_over_nw(bl, "july", "h1", (56, 64), "IH11")      # IH11 at 8, then 6
+        settings.scan_offset(bl, "july", "h1", (56, 64), "IH11")           # IH11 at 8, then 6
+    with pytest.raises(ValueError, match="0 BL/NW rows"):
+        settings.scan_offset(bl, "july", "h1", [99], "IH7")
 
 
 def test_place_puts_a_merge_at_its_first_run():
@@ -148,16 +205,6 @@ def test_guard_c_runs_summary_rfsel_differs_from_the_scan(display):
         settings.settings_guard(runs_summary(), display, bl, fluence=STEP)
 
 
-def test_x_over_nw_arithmetic():
-    bl = blnw_table()
-    out = settings.x_over_nw(bl, "july", "h1", 56, "IH12")
-    assert out == dict(x=10.0 / 4.0, bar=10.0 * 1.0 / 16.0, offset=10.0, nw_mean=4.0,
-                       nw_std=1.0, n_live=255)
-    bl.loc[(bl["run"] == 56) & (bl["chip"] == "IH12"), "nw_mean"] = 0.0
-    with pytest.raises(ValueError, match="no noise width"):
-        settings.x_over_nw(bl, "july", "h1", 56, "IH12")
-
-
 def test_class_slots_group_by_offset_with_a_wider_gap():
     classes = [(3, "6/8"), (2, "8/10"), (2, "10"), (3, "10"), (1, "20"), (2, "20")]
     assert settings.class_slots(classes, group_gap=0.5) == {
@@ -194,12 +241,6 @@ def test_offset_markers_follow_the_offsets_not_the_text():
     assert m == {"6/8": "v", "8/10": "D", "10": "o", "15": "s", "20": "^"}
     with pytest.raises(ValueError, match="8 offset classes"):
         settings.offset_markers([str(v) for v in range(1, 9)])
-
-
-def test_spread_text_quotes_the_central_range_and_the_extremes():
-    bars = [0.1 * i for i in range(11)][::-1]       # 1.0 ... 0.0, any order
-    out = settings.spread_text(bars, "%(lo).2f-%(hi).2f on 80 %%, %(min).2f-%(max).2f of %(n)d")
-    assert out == "0.10-0.90 on 80 %, 0.00-1.00 of 11"
 
 
 def test_layout_boxes_skip_ticks_outside_the_view():

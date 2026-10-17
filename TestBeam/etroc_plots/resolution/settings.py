@@ -8,8 +8,8 @@ display-run list (resolution.tables.classes_at_step). Its offset is the list's t
 runs_summary (tables.run_settings). Every board of every run is drawn as a band (tables.band; the
 step is one of BAND_STEPS). Given the merged runs' board table, class_points draws a class's
 accepted merge (tables.classes_at_step) in place of its runs: one band per board from the merged
-table, the point's run the merge's name and its runs in p["runs"]; merge_x_over_nw gives the
-merge's x_B.
+table, the point's run the merge's name and its runs in p["runs"]; pixel_x_over_nw gives the
+merge's x_B over the pooled pixels of its runs' scans.
 
 Figures, the words on them passed in by the notebook:
 
@@ -18,7 +18,8 @@ Figures, the words on them passed in by the notebook:
   rfsel_step            the RFSel step at (nearly) one offset: four quarters on one axis (st03)
   threshold_over_noise  x_B per board, x = chip, the classes side by side in each chip's slot
                         (st04)
-  res_vs_x              resolution against x_B, one band per board, no x bars (st05)
+  res_vs_x              resolution against x_B, one band per board, x bar = the 16-84 % range of
+                        offset / noise width over the board's pixels (st05)
 
 One drawing primitive serves st01-st03 (place and draw_slots): category slots, the runs of a slot
 side by side in run order, the boards of a run side by side in board order, one band per board;
@@ -29,11 +30,14 @@ marker is not the chip: the chip is on its axis, so the marker is the offset cla
 (offset_markers).
 
 settings_guard checks, before anything is drawn, the run facts the figures rest on: the display
-list, runs_summary and the autocalibration scan agree on RFSel and on the offsets. x_over_nw is
-the threshold offset over the board's noise width (x_B), from the BL/NW table; spread_text
-quotes the spread of its linearised pixel-to-pixel bar over a set of boards.
+list, runs_summary and the autocalibration scan agree on RFSel and on the offsets.
+pixel_x_over_nw is the threshold offset over the noise width (x_B): the offset over the median
+noise width of the board's pixels, with the 16th and 84th percentiles of offset / noise width over
+the same pixels, from the per-pixel BL/NW table; scan_offset reads the offset the scan's BL/NW row
+records.
 """
 import numpy as np
+import pandas as pd
 from matplotlib.lines import Line2D
 
 from ..campaigns import active as campaign, check_required
@@ -112,40 +116,72 @@ def run_order(p):
     return p["runs"][0] if "runs" in p else p["run"]
 
 
-def x_over_nw(blnw_table, campaign_key, tel, run, chip):
-    """The threshold over the noise of one board in one run, from the BL/NW table
-    (frontend.blnw.read_blnw): x = offset / nw_mean, the threshold offset (DAC) over the board's
-    mean autocalibration noise width (DAC) over its live pixels (noise width above 0, n_live of
-    them); bar = offset * nw_std / nw_mean**2, the pixel-to-pixel spread of the noise width
-    carried to x to first order (a spread, not an uncertainty). Returns dict(x, bar, offset,
-    nw_mean, nw_std, n_live)."""
+def scan_offset(blnw_table, campaign_key, tel, runs, chip):
+    """The threshold offset (DAC) the BL/NW table (frontend.blnw.read_blnw) records for one chip
+    in `runs` (one run, or the runs of a merge): their common offset. Raises ValueError when a
+    run has not exactly one row of the chip or the runs' offsets differ."""
     t = blnw_table
-    r = t[(t["campaign"] == campaign_key) & (t["tel"] == tel) & (t["run"] == int(run))
-          & (t["chip"] == chip)]
-    if len(r) != 1:
-        raise ValueError("%d BL/NW rows for %s %s run %s %s" % (len(r), campaign_key, tel, run,
-                                                                 chip))
-    r = r.iloc[0]
-    off, mean, std = float(r["offset"]), float(r["nw_mean"]), float(r["nw_std"])
-    if not (np.isfinite(mean) and mean > 0):
-        raise ValueError("%s %s run %s %s: no noise width (nw_mean %r)" % (campaign_key, tel, run,
-                                                                           chip, mean))
-    return dict(x=off / mean, bar=off * std / mean ** 2, offset=off, nw_mean=mean, nw_std=std,
-                n_live=int(r["n_pixels_nw"]))
+    offs = []
+    for run in runs:
+        r = t[(t["campaign"] == campaign_key) & (t["tel"] == tel) & (t["run"] == int(run))
+              & (t["chip"] == chip)]
+        if len(r) != 1:
+            raise ValueError("%d BL/NW rows for %s %s run %s %s" % (len(r), campaign_key, tel,
+                                                                     run, chip))
+        offs.append(float(r["offset"].iloc[0]))
+    if len(set(offs)) != 1:
+        raise ValueError("%s %s runs %s %s: offsets %s in the BL/NW table"
+                         % (campaign_key, tel, list(runs), chip, offs))
+    return offs[0]
 
 
-def merge_x_over_nw(blnw_table, campaign_key, tel, runs, chip):
-    """x_B of one board in the merge of `runs`, each run with its own autocalibration scan: x and
-    bar the means of the runs' x_over_nw, offset their common offset, nw_mean and nw_std the
-    means, n_live the fewest; per_run keeps each run's x_over_nw (with its run). Raises
-    ValueError when the runs' offsets differ."""
-    per = [dict(x_over_nw(blnw_table, campaign_key, tel, r, chip), run=int(r)) for r in runs]
-    if len({p["offset"] for p in per}) != 1:
-        raise ValueError("%s %s runs %s: offsets %s in the BL/NW table"
-                         % (campaign_key, tel, list(runs), [p["offset"] for p in per]))
-    mean = {k: float(np.mean([p[k] for p in per])) for k in ("x", "bar", "nw_mean", "nw_std")}
-    return dict(mean, offset=per[0]["offset"], n_live=min(p["n_live"] for p in per),
-                per_run=per)
+XB_COLUMNS = ["x", "lo", "hi", "nw_median", "n_pixels", "n_pixels_scan", "n_scans", "shared_scan"]
+
+
+def pixel_x_over_nw(pixels, points, campaign_key=CAMP, q=(16, 84)):
+    """The threshold over the noise, x_B, of every point from the per-pixel BL/NW table `pixels`
+    (frontend.blnw.read_blnw_pixels). `points` is a frame, one row per point, with the columns
+    tel, runs (a tuple of run numbers: one run, or the runs of a merge), chip and offset (DAC).
+
+    A point's pixels are the pixels of its runs' autocalibration scans with a noise width above
+    0, the population of n_pixels_nw in the BL/NW table (the per-pixel `live` flag, the baseline
+    rule, is not used). A merge pools the pixels of its runs' scans before the statistics; a scan
+    its runs share (one scan_utc) enters once. Returns a copy of `points` with XB_COLUMNS: x =
+    offset / the median noise width of the pool; lo and hi = the q[0] and q[1] percentiles of
+    offset / noise width over the pool's pixels (numpy's linear interpolation, as
+    frontend.blnw.board_stats), a pixel-to-pixel spread, not an uncertainty; nw_median; n_pixels
+    (the pool) and n_pixels_scan (per scan, in run order); n_scans; shared_scan (two runs shared
+    a scan). Raises ValueError for a run with no pixel rows of the chip, or with rows of more
+    than one scan, and for a point with no pixel."""
+    pix = pixels[pixels["campaign"] == campaign_key]
+    out = []
+    for _, r in points.iterrows():
+        runs = tuple(int(v) for v in r["runs"])
+        sel = pix[(pix["tel"] == r["tel"]) & (pix["chip"] == r["chip"]) & pix["run"].isin(runs)]
+        scans = {}
+        for run in runs:
+            rows = sel[sel["run"] == run]
+            utc = rows["scan_utc"].unique()
+            if len(utc) != 1:
+                raise ValueError("%s %s run %d %s: %d scans in the per-pixel table"
+                                 % (campaign_key, r["tel"], run, r["chip"], len(utc)))
+            scans.setdefault(utc[0], rows)
+        per = []
+        for rows in scans.values():
+            nw = rows["nw"].to_numpy(dtype=float)
+            per.append(nw[np.isfinite(nw) & (nw > 0)])
+        nw = np.concatenate(per)
+        if not nw.size:
+            raise ValueError("%s %s runs %s %s: no pixel with a noise width above 0"
+                             % (campaign_key, r["tel"], list(runs), r["chip"]))
+        off = float(r["offset"])
+        lo, hi = np.percentile(off / nw, q)
+        med = float(np.median(nw))
+        out.append(dict(x=off / med, lo=float(lo), hi=float(hi), nw_median=med,
+                        n_pixels=int(nw.size), n_pixels_scan=[int(v.size) for v in per],
+                        n_scans=len(scans), shared_scan=len(scans) < len(runs)))
+    return pd.concat([points.reset_index(drop=True), pd.DataFrame(out, columns=XB_COLUMNS)],
+                     axis=1)
 
 
 def settings_guard(rs, display, blnw_table, fluence=None):
@@ -510,15 +546,6 @@ def offset_markers(os_texts):
     return {t: OFFSET_MARKERS[i] for i, t in enumerate(texts)}
 
 
-def spread_text(bars, fmt, q=(10, 90)):
-    """`fmt` filled with the spread of x_B's linearised bars over a set of boards: fields lo and
-    hi (the q[0] and q[1] percentiles), min, max and n, the values rounded to 0.01."""
-    b = np.asarray(list(bars), dtype=float)
-    lo, hi = np.percentile(b, q)
-    return fmt % dict(lo=round(float(lo), 2), hi=round(float(hi), 2),
-                      min=round(float(b.min()), 2), max=round(float(b.max()), 2), n=len(b))
-
-
 def _row(n, footer, scale, aw=7.6, ah=4.6, gx=1.05):
     """`n` panels in one row, each aw x ah inches; the bottom margin holds the tick labels, the
     axis label and the footer."""
@@ -531,9 +558,11 @@ def threshold_over_noise(pts, classes, *, markers, class_labels, tel_titles, xla
     """st04: x_B of every board, one panel per telescope of `tel_titles` (left to right), x =
     chip. In each chip's slot the classes of `classes[tel]` ([(rfsel, os text), ...] in axis
     order) stand side by side, the runs of a class side by side in run order, `run_gap` cells
-    between classes. Point = x_B with its linearised pixel-to-pixel bar (p["x_b"], p["bar"]);
-    colour = RFSel, marker = markers[os text]; dotted lines between the chips. One legend entry
-    per class, class_labels[(tel, rfsel, os)], in axis order. Returns (figure, layout)."""
+    between classes. Point = x_B (p["x_b"]) with its bar from p["xb_lo"] to p["xb_hi"] (the
+    16th to 84th percentile of offset / noise width over the board's pixels, pixel_x_over_nw:
+    asymmetric, one side can be empty); colour = RFSel, marker = markers[os text]; dotted lines
+    between the chips. One legend entry per class, class_labels[(tel, rfsel, os)], in axis
+    order. Returns (figure, layout)."""
     tels = list(tel_titles)
     proxies, slot_x = [], {}
     for tel in tels:
@@ -558,7 +587,8 @@ def threshold_over_noise(pts, classes, *, markers, class_labels, tel_titles, xla
         chips = campaign.TELESCOPE_CHIPS[tel]
         for p in [p for p in pts if p["tel"] == tel]:
             c = RFSEL_COLOR[p["rfsel"]]
-            ax.errorbar([p["x"]], [p["x_b"]], yerr=[p["bar"]], color=c, ecolor=c,
+            ax.errorbar([p["x"]], [p["x_b"]],
+                        yerr=[[p["x_b"] - p["xb_lo"]], [p["xb_hi"] - p["x_b"]]], color=c, ecolor=c,
                         marker=markers[p["os"]], markersize=7.5 * scale, markerfacecolor=c,
                         markeredgecolor=style.INK, markeredgewidth=0.9, linestyle="none",
                         elinewidth=1.3, capsize=2.5, zorder=3)
@@ -588,9 +618,11 @@ def threshold_over_noise(pts, classes, *, markers, class_labels, tel_titles, xla
 def res_vs_x(pts, *, tel_titles, xlabel, xlim, ylim, legend_title, tag, data, footer,
              half_width=0.015, rfsel_label=style.rfsel_text, scale=SCALE):
     """st05: resolution against x_B (p["x_b"]), one panel per telescope of `tel_titles` (left to
-    right), one band per board (tables.draw_band) at its x_B, no x bar: colour = RFSel, marker =
-    chip; the chip legend upper left (one row), the RFSel legend (`legend_title`, one column)
-    upper right. `xlim` and `ylim` the same on every panel. Returns the figure."""
+    right), one band per board (tables.draw_band) at its x_B with an x bar from p["xb_lo"] to
+    p["xb_hi"] (the 16th to 84th percentile of offset / noise width over the board's pixels,
+    pixel_x_over_nw) in the RFSel colour on the band centre: colour = RFSel, marker = chip; the
+    chip legend upper left (one row), the RFSel legend (`legend_title`, one column) upper right.
+    `xlim` and `ylim` the same on every panel. Returns the figure."""
     tels = list(tel_titles)
     fig, axes = _row(len(tels), footer, scale)
     axes = axes[0]
@@ -598,6 +630,10 @@ def res_vs_x(pts, *, tel_titles, xlabel, xlim, ylim, legend_title, tag, data, fo
         tp = [p for p in pts if p["tel"] == tel]
         for p in tp:
             c = RFSEL_COLOR[p["rfsel"]]
+            ax.errorbar([p["x_b"]], [p["band"]["marker_ps"]],
+                        xerr=[[p["x_b"] - p["xb_lo"]], [p["xb_hi"] - p["x_b"]]], color=c,
+                        ecolor=c, linestyle="none", marker="none", elinewidth=1.3, capsize=2.5,
+                        zorder=2)
             tables.draw_band(ax, p["x_b"], p["band"], c, half_width=half_width, capsize=2.5,
                              marker=style.chip_marker(p["chip"]), markersize=8.5 * scale,
                              markerfacecolor=c, alpha=0.3)
