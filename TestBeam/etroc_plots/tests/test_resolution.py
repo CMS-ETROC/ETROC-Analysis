@@ -1,6 +1,7 @@
-"""Tests of the resolution curves helpers: the merge rule, the good-run list with merges, the
-points of single and merged runs, the standard operating point, the stop clock with its bounds,
-the hours since the first run at a step and the colour rule.
+"""Tests of the resolution helpers: the merge rule, the good-run list with merges, the points of
+single and merged runs, the standard operating point, the stop clock with its bounds, the hours
+since the first run at a step, the colour rule; the fluence ladder's picks (step_winners), the
+one-run-per-condition selector, the floor-"none" pixel lookup and the numbers table.
 
 Run from TestBeam/:  python -m pytest etroc_plots/tests
 """
@@ -18,33 +19,35 @@ if not os.environ.get("ETROC_CAMPAIGN"):
 from etroc_plots.campaigns import active as campaign            # noqa: E402
 from etroc_plots.etroc_style import BOARD_COLOR                  # noqa: E402
 from etroc_plots.iv.iv_plot import TIMING_COLORS                 # noqa: E402
-from etroc_plots.resolution import curves, tables               # noqa: E402
+from etroc_plots.resolution import curves, ladder, numbers_table, tables   # noqa: E402
 
 JUL, MAR = campaign.TABLE_CAMPAIGN["july"], campaign.TABLE_CAMPAIGN["march"]
 CHIPS = campaign.TELESCOPE_CHIPS["h1"]
 
 
-def board_table(runs, camp=JUL):
+def board_table(runs, camp=JUL, variant="top", floor="300", base=40.0, n0=250):
     """Anointed rows for every board of each run (a run number or a merge name), value_ps =
-    40 + board index, plus one non-anointed row per board."""
+    `base` + board index, plus one non-anointed row per board (5 ps higher)."""
     rows = []
     for run in runs:
         for i, chip in enumerate(CHIPS):
             for anointed, combo in ((True, "a"), (False, "b")):
                 rows.append(dict(campaign=camp, telescope="h1", run=str(run), combo=combo,
-                                 board_idx=i, board_chip="PT_" + chip, variant="top",
-                                 floor="300", value_ps=40.0 + i + (0 if anointed else 5),
-                                 pixel_spread_ps=3.0, n_pixels=250 + i, anointed=anointed))
+                                 board_idx=i, board_chip="PT_" + chip, variant=variant,
+                                 floor=floor, value_ps=base + i + (0 if anointed else 5),
+                                 pixel_spread_ps=3.0, n_pixels=n0 + i, anointed=anointed))
     return pd.DataFrame(rows)
 
 
 def runs_summary(rows):
-    """rows: (campaign, run, fluence text, hv, offset, rfsel or None) for H1."""
+    """rows: (campaign, run, fluence text, hv, offset, rfsel or None) for H1; hv is one bias for
+    every board or one per board."""
     out = []
     for camp, run, irrad, hv, offset, rfsel in rows:
         r = dict(campaign=camp, telescope=campaign.TABLE_TEL["h1"], run=run)
         for i, chip in enumerate(CHIPS):
-            r.update({"board%d_chip" % i: "PT_" + chip, "board%d_hv" % i: hv,
+            r.update({"board%d_chip" % i: "PT_" + chip,
+                      "board%d_hv" % i: hv[i] if isinstance(hv, (list, tuple)) else hv,
                       "board%d_irrad" % i: irrad, "board%d_offset" % i: offset,
                       "board%d_rfsel" % i: float("nan") if rfsel is None else float(rfsel)})
         out.append(r)
@@ -163,3 +166,108 @@ def test_colour_rule():
     assert colors[("july", 1.5e15)] == TIMING_COLORS[0]
     _, color_of = curves._color_of(one, None)
     assert [color_of(p) for p in one] == [BOARD_COLOR[i] for i in range(4)]
+
+
+# ------------------------------------------------------------------------ the fluence ladder
+F1_LOW, F1_HIGH = (390.0, 390.0, 370.0, 390.0), (480.0, 480.0, 450.0, 480.0)
+
+
+def ladder_inputs():
+    """A small campaign: March pre-irradiation runs 1 (170 V), 2 (190 V) and 5 (190 V at offset
+    10), 3e14 run 10; July 1.5e15 runs 3, 4 (the merge 3+4 exists) and 3.5e15 run 18 (the merge
+    18+19 exists, not good); top and central rows at floor 300."""
+    singles = [(MAR, r) for r in (1, 2, 5, 10)] + [(JUL, r) for r in (3, 4, 18)]
+    merges = [tables.merge_name("h1", m) for m in ((3, 4), (18, 19))]
+    bt = pd.concat([board_table([r], camp=c, variant=v, base=b)
+                    for c, r in singles for v, b in (("top", 40.0), ("central", 30.0))])
+    bm = pd.concat([board_table(merges, variant=v, base=b)
+                    for v, b in (("top", 50.0), ("central", 35.0))])
+    rs = runs_summary([(MAR, 1, "pre-irrad", 170.0, 20, None),
+                       (MAR, 2, "pre-irrad", 190.0, 20, None),
+                       (MAR, 5, "pre-irrad", 190.0, 10, None),
+                       (MAR, 10, "0.3e15", 280.0, 20, None),
+                       (JUL, 3, "1.5e15", 540.0, 20, 2), (JUL, 4, "1.5e15", 540.0, 20, 2),
+                       (JUL, 18, "3.5e15", (530.0, 550.0, 550.0, 550.0), 20, 2),
+                       (JUL, 19, "3.5e15", (530.0, 550.0, 550.0, 550.0), 20, 2)])
+    classes = {1.5e15: ({"h1": [3, 4]}, {"h1": 4}), 3.5e15: ({"h1": [18]}, {"h1": 18})}
+    return bt, bm, rs, classes
+
+
+def test_step_winners_march_highest_bias_july_preferred_or_merge(good_csv):
+    bt, bm, rs, classes = ladder_inputs()
+    good = curves.good_list("july", "h1", path=good_csv)
+    merges = curves.table_merges(bm, "h1", "july")
+    pts, picks = ladder.step_winners(bt, bm, rs, "h1", classes, good, merges, march_runs=[2, 10])
+    by = {(p["camp"], p["step"]): p["label"] for p in pts}
+    # March: run 2 is the highest-bias standard run (run 5 at 190 V sits at offset 10)
+    assert by == {("march", 0.0): "2", ("march", 3e14): "10", ("july", 1.5e15): "3+4",
+                  ("july", 3.5e15): "18"}
+    assert len(pts) == 4 * 4
+    j15 = [p for p in pts if p["label"] == "3+4"]
+    assert all(p["merged"] and p["preferred"] for p in j15) and j15[0]["value_ps"] == 50.0
+    assert all(p["band"] is not None for p in pts if p["step"] == 3.5e15)
+    assert all(p["preferred"] is None for p in pts if p["camp"] == "march")
+    july = {k["step"]: k for k in picks if k["camp"] == "july"}
+    assert july[1.5e15]["taken"] == {"3+4": [4]}
+    assert "not good" in july[3.5e15]["refused"]["18+19"]
+    # a listed March run that is not the highest-bias standard run of its step is refused
+    with pytest.raises(ValueError, match="not the highest-bias"):
+        ladder.step_winners(bt, bm, rs, "h1", classes, good, merges, march_runs=[1, 10])
+    assert ladder.highest_bias_run(rs, "h1", [1, 2], "march") == 2
+    with pytest.raises(ValueError):
+        ladder.highest_bias_run(rs, "h1", [2, 5], "march")      # two runs at 190 V
+
+
+def test_numbers_table_rows_and_restored_merge_cells(good_csv, tmp_path):
+    bt, bm, rs, classes = ladder_inputs()
+    good = curves.good_list("july", "h1", path=good_csv)
+    pts, _ = ladder.step_winners(bt, bm, rs, "h1", classes, good,
+                                 curves.table_merges(bm, "h1", "july"), march_runs=[2, 10])
+    central = numbers_table.central_values(bt, bm, pts, "300")
+    df = numbers_table.numbers_table(pts, central)
+    assert list(df.columns) == numbers_table.COLUMNS and len(df) == 16
+    merged = df[df["run"] == "3+4"]
+    assert len(merged) == 4 and set(merged["merged"]) == {"yes"}
+    assert set(merged["preferred run"]) == {"yes"}
+    assert list(merged["central value [ps]"]) == [35.0, 36.0, 37.0, 38.0]
+    assert set(df.loc[df["campaign"] == "March", "preferred run"]) == {""}
+    band = df[df["bookkeeping fluence [p/cm2]"] == 3.5e15]
+    # band rows: top and central at the band centre (anointed 40 + i, other combo 45 + i)
+    assert list(band["top value [ps]"]) == [42.5, 43.5, 44.5, 45.5]
+    assert list(band["central value [ps]"]) == [32.5, 33.5, 34.5, 35.5]
+    assert list(band["anointed value [ps]"]) == [40.0, 41.0, 42.0, 43.0]
+    assert list(band["central anointed value [ps]"]) == [30.0, 31.0, 32.0, 33.0]
+    assert df.loc[df["bookkeeping fluence [p/cm2]"] != 3.5e15, "band low [ps]"].isna().all()
+    paths = numbers_table.write_table(df, str(tmp_path), "t")
+    assert [os.path.basename(p) for p in paths] == ["t.csv", "t.md"]
+    assert len(open(paths[1]).read().splitlines()) == 2 + 16
+    assert len(pd.read_csv(paths[0])) == 16
+
+
+def test_one_per_condition_preferred_or_later_then_merge(good_csv):
+    rs = runs_summary([(JUL, 3, "1.5e15", 540.0, 20, 2), (JUL, 4, "1.5e15", 540.0, 20, 2),
+                       (JUL, 13, "3.5e15", F1_LOW, 20, 2), (JUL, 14, "3.5e15", F1_LOW, 20, 2),
+                       (JUL, 18, "3.5e15", F1_HIGH, 20, 2)])
+    good = curves.good_list("july", "h1", path=good_csv)
+    # two runs at one bias, the preferred one among them: it stays, then its merge replaces it
+    kept, dropped = curves.one_per_condition(rs, "h1", [3, 4], preferred=4)
+    assert kept == [4] and dropped == {3: "same bias on every board as run 4, the preferred run"}
+    drawn, taken, _ = curves.merge_rule(kept, [(3, 4)], [3, 4], good)
+    assert drawn == [(3, 4)] and taken == {(3, 4): [4]}
+    # 13 and 14 share every board's bias, the preferred run 18 does not: 14, the later run
+    kept, dropped = curves.one_per_condition(rs, "h1", [13, 14, 18], preferred=18)
+    assert kept == [14, 18]
+    assert dropped == {13: "same bias on every board as run 14, the later run"}
+    assert curves.one_per_condition(rs, "h1", [14, 13], preferred=None)[0] == [14]
+
+
+def test_floor_none_pixels_missing_row_is_none():
+    bt = pd.concat([board_table([18], floor="300"), board_table([18], floor="none", n0=255)])
+    bt = bt[~((bt["floor"] == "none") & (bt["board_idx"] == 3))]       # board 3: no row
+    pts = [dict(tel="h1", camp="july", run=18, label="18", board_idx=i, merged=False)
+           for i in range(4)]
+    n = ladder.floor_none_pixels(bt, bt.iloc[:0], pts)
+    assert n == {("h1", "july", "18", 0): 255, ("h1", "july", "18", 1): 256,
+                 ("h1", "july", "18", 2): 257, ("h1", "july", "18", 3): None}
+    with pytest.raises(ValueError):
+        ladder.floor_none_pixels(pd.concat([bt, bt]), bt.iloc[:0], pts)
