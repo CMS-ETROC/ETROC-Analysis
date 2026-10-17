@@ -1,6 +1,7 @@
-"""Tests of the settings helpers: the settings classes of a display-run list, the settings guard,
-the threshold over the noise, the slot positions, the offset markers, the x_B spread text, the
-layout audit, the BL/NW point offsets and the RFSel pair readers (frontend.tot_shapes).
+"""Tests of the settings helpers: the settings classes of a display-run list and the accepted
+merges they draw in place of their runs, the settings guard, the threshold over the noise (of a
+merge too), the slot positions, the offset markers, the x_B spread text, the layout audit, the
+BL/NW point offsets and the RFSel pair readers (frontend.tot_shapes).
 
 Run from TestBeam/:  python -m pytest etroc_plots/tests
 """
@@ -67,6 +68,53 @@ def test_classes_at_step_keeps_two_offset_classes_as_text(display):
     assert by["6/8"].runs == {"h1": [64, 67]} and by["6/8"].preferred == {"h1": 64}
     assert by["8/10"].runs == {"h1": [56]}
     assert tables.os_offsets("8/10") == (8, 10)
+
+
+def test_accepted_merges_read_runs_merged_and_the_verdict():
+    camp = campaign.TABLE_CAMPAIGN["july"]
+    rows = [dict(campaign=camp, telescope="h1", run="h1_grp_run64_67", runs_merged="64+67",
+                 accepted=True)] * 2
+    rows += [dict(campaign=camp, telescope="h1", run="h1_grp_run33_52", runs_merged="33+52",
+                  accepted=False),
+             dict(campaign="Aug", telescope="offset", run="grp_run5_6", runs_merged="5+6",
+                  accepted=True)]
+    assert tables.accepted_merges(pd.DataFrame(rows), camp) == {"h1": [(64, 67)]}
+    rows[0] = dict(rows[0], runs_merged="64+68")
+    with pytest.raises(ValueError, match="h1_grp_run64_67"):
+        tables.accepted_merges(pd.DataFrame(rows), camp)
+
+
+def test_classes_at_step_hold_an_accepted_merge_in_place_of_its_runs(display):
+    plain = {(c.rfsel, c.os): c for c in tables.classes_at_step(display, STEP)}
+    # (33, 99): run 99 is not a run of the class, so that merge is not the class's
+    by = {(c.rfsel, c.os): c for c in tables.classes_at_step(
+        display, STEP, merges={"h1": [(64, 67), (33, 99)]})}
+    merged = by[(3, "6/8")]
+    assert merged.merges == {"h1": [(64, 67)]}
+    assert tables.class_entries(merged, "h1") == [(64, 67)]
+    assert merged.runs == {"h1": [64, 67]} and merged.preferred == {"h1": 64}
+    for k in [(2, "8/10"), (2, "10")]:
+        assert by[k].merges == {} and by[k][:4] == plain[k][:4]
+        assert tables.class_entries(by[k], "h1") == plain[k].runs["h1"]
+
+
+def test_merge_x_over_nw_is_the_mean_of_its_runs():
+    bl = blnw_table()
+    bl.loc[(bl["run"] == 67) & (bl["chip"] == "IH7"), ["nw_mean", "nw_std"]] = [5.0, 2.0]
+    out = settings.merge_x_over_nw(bl, "july", "h1", (64, 67), "IH7")
+    assert out["x"] == pytest.approx((8.0 / 4.0 + 8.0 / 5.0) / 2.0)
+    assert out["bar"] == pytest.approx((8.0 / 16.0 + 8.0 * 2.0 / 25.0) / 2.0)
+    assert (out["offset"], out["n_live"]) == (8.0, 255)
+    assert [p["run"] for p in out["per_run"]] == [64, 67]
+    with pytest.raises(ValueError, match="offsets"):
+        settings.merge_x_over_nw(bl, "july", "h1", (56, 64), "IH11")      # IH11 at 8, then 6
+
+
+def test_place_puts_a_merge_at_its_first_run():
+    pts = [dict(slot="s", run=r, board_idx=0) for r in (48, 13)]
+    pts.append(dict(slot="s", run="f1_grp_run46_47", runs=[46, 47], board_idx=0))
+    _, run_x = settings.place(pts, {"s": 0.0}, min_run=1)
+    assert sorted(run_x, key=run_x.get) == [("s", 13), ("s", "f1_grp_run46_47"), ("s", 48)]
 
 
 def test_guard_passes_on_agreeing_tables(display):

@@ -13,7 +13,9 @@ board table   one row per campaign, telescope, run, combo, board (board_idx, boa
               on the combo that stands for the board (boards 0-1-2 for boards 0, 1 and 2;
               boards 1-2-3 for board 3). Merged tables add degenerate_share: the share of the
               combo's tracks the quote drops as degenerate (a solved width below 0.35 or above
-              0.95 of the smallest pair width it came from; condor_at_lxplus/README.md).
+              0.95 of the smallest pair width it came from; condor_at_lxplus/README.md),
+              runs_merged (the merge's runs, "46+47") and accepted (the run-merging study's
+              verdict on the merge; accepted_merges reads both).
 pixel table   one row per pixel (row, col) of each of those: value_ps, err_ps, nevt_sum (the
               events behind the pixel).
 
@@ -66,6 +68,28 @@ def conventions(variant, floor):
 def merge_name(telescope, runs):
     """The `run` of a merge in the merged tables: ("h1", (3, 4)) -> "h1_grp_run3_4"."""
     return "%s_grp_run%s" % (telescope, "_".join(str(r) for r in runs))
+
+
+def accepted_merges(bt, campaign=None):
+    """{telescope: [runs, ...]} of a merged board table (BOARD_TABLE_MERGED): every merge whose
+    rows are `accepted`, its runs as a tuple read from `runs_merged` ("46+47" -> (46, 47)),
+    sorted; the rows of `campaign` only when given. Raises ValueError for a merge whose rows
+    disagree on runs_merged or accepted, or whose name is not merge_name(telescope, runs)."""
+    t = bt if campaign is None else bt[bt["campaign"] == campaign]
+    out = {}
+    for (tel, name), g in t.groupby(["telescope", "run"]):
+        texts = set(g["runs_merged"].astype(str).str.strip())
+        verdict = set(g["accepted"].astype(str).str.strip().str.lower())
+        if len(texts) != 1 or len(verdict) != 1 or not verdict <= {"true", "false"}:
+            raise ValueError("merge %s %s: runs_merged %s, accepted %s across its rows"
+                             % (tel, name, sorted(texts), sorted(verdict)))
+        runs = tuple(int(r) for r in texts.pop().split("+"))
+        if merge_name(tel, runs) != str(name):
+            raise ValueError("merge %s %s: runs_merged gives %s" % (tel, name,
+                                                                    merge_name(tel, runs)))
+        if verdict.pop() == "true":
+            out.setdefault(tel, []).append(runs)
+    return {tel: sorted(v) for tel, v in out.items()}
 
 
 def combo_chips(combo, telescope):
@@ -135,11 +159,12 @@ def display_runs(path, rfsel, offset):
     return out
 
 
-SettingsClass = namedtuple("SettingsClass", "rfsel os runs preferred")
+SettingsClass = namedtuple("SettingsClass", "rfsel os runs preferred merges")
 SettingsClass.__doc__ = """One settings class of a display-run list at one fluence step: RFSel
 (int), the threshold offset as the list spells it (text: "10", or "8/10" when the boards of a run
-sit at different offsets), the runs {telescope: [run, ...]} and the preferred run
-{telescope: run or None}."""
+sit at different offsets), the runs {telescope: [run, ...]}, the preferred run
+{telescope: run or None} and the merges {telescope: [runs, ...]}: the accepted merges whose runs
+are all runs of the class, drawn in place of those runs (class_entries)."""
 
 
 def os_offsets(os_text):
@@ -147,12 +172,17 @@ def os_offsets(os_text):
     return tuple(sorted(int(v) for v in str(os_text).split("/")))
 
 
-def classes_at_step(path, fluence):
+def classes_at_step(path, fluence, merges=None):
     """The settings classes of a display-run list (as preferred_runs) at one fluence step, every
-    telescope: [SettingsClass(rfsel, os, runs, preferred), ...]. The `os` column is kept as text,
-    so a class whose boards sit at different offsets ("8/10", "6/8") stays one class, where
-    display_runs and preferred_runs, which read it as a number, leave it out. Ordered by the
-    offsets (os_offsets), then RFSel. Two preferred runs in one class raise ValueError."""
+    telescope: [SettingsClass(rfsel, os, runs, preferred, merges), ...]. The `os` column is kept
+    as text, so a class whose boards sit at different offsets ("8/10", "6/8") stays one class,
+    where display_runs and preferred_runs, which read it as a number, leave it out. Ordered by the
+    offsets (os_offsets), then RFSel. Two preferred runs in one class raise ValueError.
+
+    `merges` ({telescope: [runs, ...]}, accepted_merges): a class whose runs on a telescope
+    include every run of a merge holds that merge in its `merges`, and draws it in place of those
+    runs (class_entries); a merge with a run outside the class is not the class's. `runs` keeps
+    every display run either way. Two merges of one class sharing a run raise ValueError."""
     df = pd.read_csv(path, usecols=["telescope", "fluence", "rfsel", "os", "run", "preferred"],
                      dtype={"os": str})
     df = df[(df["fluence"].astype(float) - fluence).abs() <= 1e-6 * abs(fluence)]
@@ -169,8 +199,26 @@ def classes_at_step(path, fluence):
                 raise ValueError("%s RFSel %d offset %s: more than one preferred run %s"
                                  % (tel, rfsel, os_text, pref))
             preferred[tel] = pref[0] if pref else None
-        out.append(SettingsClass(int(rfsel), os_text, runs, preferred))
+        held = {}
+        for tel, rr in runs.items():
+            mm = [tuple(m) for m in (merges or {}).get(tel, []) if set(m) <= set(rr)]
+            shared = [r for r in rr if sum(r in m for m in mm) > 1]
+            if shared:
+                raise ValueError("%s RFSel %d offset %s: runs %s in more than one merge %s"
+                                 % (tel, rfsel, os_text, shared, mm))
+            if mm:
+                held[tel] = sorted(mm)
+        out.append(SettingsClass(int(rfsel), os_text, runs, preferred, held))
     return sorted(out, key=lambda c: (os_offsets(c.os), c.rfsel))
+
+
+def class_entries(c, telescope):
+    """What a settings class draws on one telescope, in run order: each run (int) in none of the
+    class's merges, and each merge (its runs, a tuple) at the place of its first run."""
+    mm = c.merges.get(telescope, [])
+    merged = {r for m in mm for r in m}
+    out = [r for r in c.runs.get(telescope, []) if r not in merged] + list(mm)
+    return sorted(out, key=lambda e: e[0] if isinstance(e, tuple) else e)
 
 
 # ---------------------------------------------------------------------------- selections

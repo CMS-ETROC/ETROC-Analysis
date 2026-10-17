@@ -97,6 +97,13 @@ rest are for whoever writes the next figure.
   and the notebook say so.
 - Nothing is drawn unless `settings.settings_guard` passes: the display list, `runs_summary.csv`
   and the autocalibration scan before the run agree on every board's RFSel and on the offsets.
+- A class whose runs on a telescope include every run of an accepted merge (the merged runs'
+  board table: `runs_merged`, `accepted`) draws the merge in place of those runs on the
+  resolution-against-class and x_B figures (st02, st04, st05): one band per board from the merged
+  table by the rule of the single runs, labelled with its runs joined by "+"
+  (`tables.classes_at_step`, `settings.class_points`). Its runs each had their own
+  autocalibration scan, so its x_B and bar are the means of its runs' (`settings.merge_x_over_nw`).
+  The figures of one scan per run (st06) keep the runs.
 - The threshold over the noise of board B in a run is x_B = offset / nw_mean: its threshold offset
   over the mean noise width of its live pixels from the autocalibration scan before the run, both
   in DAC codes (`settings.x_over_nw`, from `blnw_by_run.csv`). Its bar, offset * nw_std /
