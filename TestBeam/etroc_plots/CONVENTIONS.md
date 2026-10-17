@@ -152,9 +152,9 @@ rest are for whoever writes the next figure.
   run at a step are small open markers, named in the footer.
 - The combination split (`resolution/combo_split.py`) draws each board's value in every 3-board
   combination containing it, run by run: the references (the preferred display runs at RFSel 2,
-  offset 20 of the earlier steps), then every display run of the step, single runs only (a merge
-  pools runs), grouped by settings class under the axis with the class and the step written below
-  the run numbers. Colour = combination, filled = the anointed combination, open = the others,
+  offset 20 of the earlier steps), then every display run of the step, an accepted merge whose
+  runs are all in one settings class in place of those runs (as on the settings figures), grouped
+  by settings class under the axis with the class and the step written below the run numbers. Colour = combination, filled = the anointed combination, open = the others,
   marker = chip, bar = the pixel spread in that combination; no band.
 
 ## Settings figures

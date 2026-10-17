@@ -4,22 +4,23 @@
 Runs (split_runs), per telescope: the reference runs, the preferred display run at RFSel 2 and
 threshold offset 20 of each reference step (1.5e15 and 2e15 for IRRAD 2026), then every display
 run of the step (3.5e15), class by class in the order of tables.classes_at_step, by run number
-within a class. Every run is a single run: the figure compares the combinations of one run, and
-a merge pools runs. So F1 runs 46 and 47 stay apart here, where the settings figures draw their
-accepted merge.
+within a class. Given the accepted merges (tables.accepted_merges), a merge whose runs are all
+in one class of the step stands in for them, as on the settings figures (IRRAD 2026: F1 46+47);
+a reference is the preferred run alone, so no merge replaces it.
 
 Points (combo_points): one per (run, board, combination containing the board), from the
-single-run board table at one track variant and event floor, every combination and not only the
-anointed one: value_ps, bar_ps (the pixel-to-pixel spread of the board's map in that
-combination), n_pixels, anointed; the board's chip and bias from runs_summary.
+single-run board table (a merge: the merged board table) at one track variant and event floor,
+every combination and not only the anointed one: value_ps, bar_ps (the pixel-to-pixel spread of
+the board's map in that combination), n_pixels, anointed; the board's chip and bias from
+runs_summary.
 
 The figure (combo_split): one row per telescope, one panel per board. In a panel the runs stand
 side by side, grouped by step and settings class (a dotted line between classes, a solid one
 between steps), the combinations of a run side by side at COMBO_DX apart. Colour =
 combination, by its three boards (COMBO_COLOR); filled = the board's anointed combination, open
 = the others; marker = chip, as everywhere. No band: the figure compares the combinations
-themselves (CONVENTIONS). Under each panel: each run's number and this board's bias, then the
-class, then the step. A point under curves.LOW_PIXELS pixels is a small marker, filled or open
+themselves (CONVENTIONS). Under each panel: each run's number (a merge as "46+47") and this
+board's bias, then the class, then the step. A point under curves.LOW_PIXELS pixels is a small marker, filled or open
 by the same rule.
 """
 import re
@@ -53,13 +54,16 @@ def combo_text(boards):
     return u"boards %s" % u"-".join(str(b) for b in boards)
 
 
-def split_runs(path, ref_steps, step, rfsel=STEP_RFSEL, offset=STEP_OFFSET):
+def split_runs(path, ref_steps, step, rfsel=STEP_RFSEL, offset=STEP_OFFSET, merges=None):
     """The runs of the split, per telescope, in x order: {telescope: [dict(run, step, rfsel, os,
     ref, preferred), ...]}. First the reference runs, one per step of `ref_steps`: the preferred
     run of the display-run list `path` in the class at RFSel `rfsel`, offset `offset`; then every
     run listed at `step`, class by class (tables.classes_at_step order), by run number within a
-    class, each as a single run (no merge). `os` is the list's offset text ("20", "8/10"). A
-    reference step without a preferred run on a telescope raises ValueError."""
+    class. `merges` ({telescope: [runs, ...]}, tables.accepted_merges): a merge whose runs are
+    all in one class of `step` stands in for them (tables.class_entries), its `run` the tuple of
+    its runs, `preferred` when it holds the class's preferred run; without `merges` every run is
+    a single run. `os` is the list's offset text ("20", "8/10"). A reference step without a
+    preferred run on a telescope raises ValueError."""
     out = {}
     for f in ref_steps:
         runs, preferred = curves.display_class(path, f, rfsel, offset)
@@ -69,37 +73,52 @@ def split_runs(path, ref_steps, step, rfsel=STEP_RFSEL, offset=STEP_OFFSET):
                                  % (tel, f, rfsel, offset))
             out.setdefault(tel, []).append(dict(run=int(preferred[tel]), step=f, rfsel=rfsel,
                                                 os=str(offset), ref=True, preferred=True))
-    for c in tables.classes_at_step(path, step):
-        for tel, runs in c.runs.items():
+    for c in tables.classes_at_step(path, step, merges):
+        for tel in c.runs:
+            pref = c.preferred.get(tel)
             out.setdefault(tel, []).extend(
-                dict(run=int(r), step=step, rfsel=c.rfsel, os=c.os, ref=False,
-                     preferred=c.preferred.get(tel) == r) for r in sorted(runs))
+                dict(run=r, step=step, rfsel=c.rfsel, os=c.os, ref=False,
+                     preferred=pref in r if isinstance(r, tuple) else pref == r)
+                for r in tables.class_entries(c, tel))
     return out
 
 
-def combo_points(bt, rs, telescope, entries, camp="july", variant="top", floor="300"):
+def combo_points(bt, rs, telescope, entries, camp="july", variant="top", floor="300", bm=None):
     """One dict per (entry, board, combination containing the board) of the single-run board
-    table `bt`, for the runs `entries` (split_runs) of one telescope: the entry's keys (run,
-    step, rfsel, os, ref, preferred) and tel, board_idx, chip, hv (runs_summary), combo,
-    boards (combo_boards), value_ps, bar_ps, n_pixels, anointed. A run whose board has no
-    anointed combination, or one whose chips differ from runs_summary, raises ValueError."""
+    table `bt`, for the runs `entries` (split_runs) of one telescope; an entry whose run is a
+    merge (a tuple of runs) reads the merged board table `bm` (tables.merge_name), its boards'
+    chip and bias shared by its runs (tables.common_settings raises otherwise). Each dict: the
+    entry's keys (run, step, rfsel, os, ref, preferred) and tel, board_idx, chip, hv
+    (runs_summary), combo, boards (combo_boards), value_ps, bar_ps, n_pixels, anointed. A run
+    whose board has no anointed combination, or one whose chips differ from runs_summary, raises
+    ValueError."""
     tc, tk = campaign.TABLE_CAMPAIGN[camp], campaign.TABLE_TEL[telescope]
     out = []
     for e in entries:
-        boards = {b["board_idx"]: b for b in tables.run_settings(rs, tc, tk, e["run"])}
-        rows = tables.board_rows(bt, telescope, e["run"], variant, floor, campaign=tc,
+        run = e["run"]
+        if isinstance(run, tuple):
+            if bm is None:
+                raise ValueError("%s merge %s: no merged board table given"
+                                 % (telescope, curves.run_label(run)))
+            tables.common_settings(rs, tc, tk, run)
+            table, key, first = bm, tables.merge_name(telescope, run), run[0]
+        else:
+            table, key, first = bt, run, run
+        boards = {b["board_idx"]: b for b in tables.run_settings(rs, tc, tk, first)}
+        rows = tables.board_rows(table, telescope, key, variant, floor, campaign=tc,
                                  reference=None)
         for i, b in sorted(boards.items()):
             chip = style.chip_short(b["chip"])
             mine = rows[rows["board_idx"] == i].sort_values("combo")
             if not (mine["anointed"] == True).any():          # noqa: E712  (a pandas mask)
-                raise ValueError("%s run %d board %d: no anointed combination (variant %s, "
-                                 "floor %s)" % (telescope, e["run"], i, variant, floor))
+                raise ValueError("%s run %s board %d: no anointed combination (variant %s, "
+                                 "floor %s)" % (telescope, curves.run_label(run), i, variant,
+                                                floor))
             for _, r in mine.iterrows():
                 if style.chip_short(r["board_chip"]) != chip:
-                    raise ValueError("%s run %d board %d: %s in the board table, %s in "
-                                     "runs_summary" % (telescope, e["run"], i, r["board_chip"],
-                                                       chip))
+                    raise ValueError("%s run %s board %d: %s in the board table, %s in "
+                                     "runs_summary" % (telescope, curves.run_label(run), i,
+                                                       r["board_chip"], chip))
                 out.append(dict(e, tel=telescope, board_idx=i, chip=chip, hv=b["hv"],
                                 combo=r["combo"], boards=combo_boards(r["combo"]),
                                 value_ps=float(r["value_ps"]),
@@ -138,7 +157,8 @@ def combo_x(pts, x_of_run, dx=COMBO_DX):
     """{(run, board_idx, combo): x}: the combinations of one board in one run side by side,
     `dx` apart, centred on the run's x, in combination-name order."""
     out = {}
-    for (run, i) in sorted({(p["run"], p["board_idx"]) for p in pts}):
+    for (run, i) in sorted({(p["run"], p["board_idx"]) for p in pts},
+                           key=lambda k: (x_of_run[k[0]], k[1])):
         combos = sorted(p["combo"] for p in pts if p["run"] == run and p["board_idx"] == i)
         k = len(combos)
         for j, c in enumerate(combos):
@@ -185,9 +205,9 @@ def combo_split(pts_by_tel, layouts, *, tel_titles, class_text, step_text, ylim,
                 footer, low_label=None, aw=7.0, ah=3.6, scale=SCALE):
     """re11: one row per telescope of `tel_titles` (top to bottom), one panel per board (left to
     right, board order), the points `pts_by_tel` (combo_points) at the x of `layouts`
-    {tel: layout(...)}. Under each panel: tick labels "run" and this board's bias, then
-    class_text(key) under each group (key = group_key), then step_text(step) under each step's
-    groups. The legend (combinations, filled / open, and the small marker, labelled
+    {tel: layout(...)}. Under each panel: tick labels "run" (curves.run_label) and this
+    board's bias, then class_text(key) under each group (key = group_key), then step_text(step)
+    under each step's groups. The legend (combinations, filled / open, and the small marker, labelled
     `low_label`, when a point is under LOW_PIXELS) stands outside the top right panel. Returns
     (figure, numbers)."""
     tels = list(tel_titles)
@@ -211,7 +231,8 @@ def combo_split(pts_by_tel, layouts, *, tel_titles, class_text, step_text, ylim,
             runs = sorted(lay["x"], key=lambda r: lay["x"][r])
             hv = {p["run"]: p["hv"] for p in bp}
             ax.set_xticks([lay["x"][r] for r in runs])
-            ax.set_xticklabels([u"%d\n%s" % (r, blnw.bias_text([hv[r]])) for r in runs])
+            ax.set_xticklabels([u"%s\n%s" % (curves.run_label(r), blnw.bias_text([hv[r]]))
+                                for r in runs])
             if i == 0:
                 ax.set_ylabel(style.YLABEL_RES)
             style.style_axes(ax, scale)
@@ -277,7 +298,7 @@ def combo_split(pts_by_tel, layouts, *, tel_titles, class_text, step_text, ylim,
             style.right_lines(ax, [subj], hs["title"])
     style.footer(fig, footer, scale)
     out = dict(points=numbers, colour="combination (COMBO_COLOR)", ylim_ps=list(ylim),
-               layout={t: dict(x={str(r): x for r, x in layouts[t]["x"].items()},
+               layout={t: dict(x={curves.run_label(r): x for r, x in layouts[t]["x"].items()},
                                groups=[dict(step=k[0], rfsel=k[1], os=k[2], x0=x0, x1=x1,
                                             runs=runs)
                                        for k, x0, x1, runs in layouts[t]["groups"]],
