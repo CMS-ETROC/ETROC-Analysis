@@ -1196,20 +1196,6 @@ RF_BOARD = int(RF_BOARD)
 RF_CHIP = campaign.TELESCOPE_CHIPS[RF_TEL][RF_BOARD]
 
 
-def counted(camp, tel, run, b):
-    """{(row, col): events of its triple} for the counted pixels of board b in a run."""
-    p = pix_medians[(pix_medians["campaign"] == camp) & (pix_medians["tel"] == tel)
-                    & (pix_medians["run"] == run) & (pix_medians["board_idx"] == b)
-                    & pix_medians["passes_floor"]]
-    return {(int(r), int(c)): int(n) for r, c, n in zip(p["row"], p["col"], p["n"])}
-
-
-def board_settings(camp, tel, run, b):
-    (s,) = [x for x in tables.run_settings(RS, campaign.TABLE_CAMPAIGN[camp],
-                                           campaign.TABLE_TEL[tel], run) if x["board_idx"] == b]
-    return s
-
-
 # the chip: the board whose smallest total of counted events over the runs is largest (ties to
 # the first chip name), as the rebuild chose it
 chips = campaign.TELESCOPE_CHIPS[RF_TEL]
@@ -1331,9 +1317,13 @@ TC_OFFSET = TC[R_SAME]["offset"]
 tc_rows = rfsel_hist[(rfsel_hist["campaign"] == RF_CAMP) & (rfsel_hist["tel"] == RF_TEL)
                      & (rfsel_hist["group"].astype(str) == TC_NAME)]
 TC_COMBO = tot_shapes.ANOINTED[RF_BOARD]          # the boards of the chip's triples
-counted16 = {r: counted(RF_CAMP, RF_TEL, r, RF_BOARD) for r in TC_RUNS}
+counted16 = {r: tot_shapes.counted_pixels(pix_medians, RF_CAMP, RF_TEL, r, RF_BOARD)
+             for r in TC_RUNS}
 common16 = set.intersection(*(set(v) for v in counted16.values()))
-hv16 = {b: {r: board_settings(RF_CAMP, RF_TEL, r, b)["hv"] for r in TC_RUNS} for b in TC_COMBO}
+# per run and board: RFSel, threshold offset and bias from the run summary
+settings16 = {r: {s["board_idx"]: s for s in tables.run_settings(
+    RS, campaign.TABLE_CAMPAIGN[RF_CAMP], campaign.TABLE_TEL[RF_TEL], r)} for r in TC_RUNS}
+hv16 = {b: {r: settings16[r][b]["hv"] for r in TC_RUNS} for b in TC_COMBO}
 
 
 def runs_words(runs):
@@ -1354,7 +1344,7 @@ def hv_words(b):
 curves16, rec16, hs16, control16, times16 = [], [], [], [], {}
 for run in TC_RUNS:
     cv = TC[run]
-    s = board_settings(RF_CAMP, RF_TEL, run, RF_BOARD)
+    s = settings16[run][RF_BOARD]
     if (s["rfsel"], s["offset"]) != (cv["rfsel"], cv["offset"]):
         raise ValueError("run %d: RFSel / offset %s in the run summary, %s in the table" % (
             run, (s["rfsel"], s["offset"]), (cv["rfsel"], cv["offset"])))
