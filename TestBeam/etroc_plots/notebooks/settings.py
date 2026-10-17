@@ -34,7 +34,8 @@
 # 80 boards. Every board is drawn as a band, the rule at this step (`../CONVENTIONS.md`,
 # "Resolution and TDC figures"): its value over every 3-board combination containing it. F1 runs
 # 46 and 47 form an accepted merge, and st02, st04 and st05 draw the merge in their place: 76
-# boards there.
+# boards there. On those three a board whose resolution comes from fewer than 128 pixels (half
+# the chip) is a small open marker, named with its count in the footer.
 #
 # Every figure is saved as PNG (200 dpi) and PDF, with `<name>_values.json` beside it: every
 # number drawn, the input files read and the commit of the code.
@@ -314,6 +315,40 @@ def merge_text(pts):
         map(str, m[:-1])), m[-1]) for i, m in mm)
 
 
+def low_marks(pts):
+    """Set p["low"] on the boards of `pts` whose resolution comes from fewer than
+    tables.LOW_PIXELS pixels (settings.low_pixels): the figure draws them small and open. Returns
+    the values entry: the threshold and those boards."""
+    for p in pts:
+        p["low"] = settings.low_pixels(p)
+    low = sorted((p for p in pts if p["low"]),
+                 key=lambda p: (TELS.index(p["tel"]), settings.run_order(p), p["board_idx"]))
+    return dict(threshold=tables.LOW_PIXELS, marker="small open", n_boards=len(pts),
+                points=[dict(tel=p["tel"], run=run_name(p), board_idx=p["board_idx"],
+                             chip=p["chip"], n_pixels=p["band"]["n_pixels"]) for p in low])
+
+
+def low_text(low):
+    """The footer line of low_marks' boards: the rule, how many, and each board's count."""
+    head = (u"Small open markers: resolution from under %d pixels (half the chip), %d of %d boards"
+            % (low["threshold"], len(low["points"]), low["n_boards"]))
+    if not low["points"]:
+        return head + u"."
+    runs = {}
+    for q in low["points"]:
+        runs.setdefault(q["tel"], {}).setdefault(q["run"], []).append(
+            u"%s %d" % (q["chip"], q["n_pixels"]))
+    return head + u": %s." % u"; ".join(
+        u"%s %s" % (t.upper(), u", ".join(u"run %s (%s)" % (r, u", ".join(c))
+                                         for r, c in rr.items()))
+        for t, rr in runs.items())
+
+
+LOW_CONVENTION = ("a board whose resolution comes from fewer than %d pixels (board table n_pixels "
+                  "of the anointed combination; resolution.tables.LOW_PIXELS, half the chip) is "
+                  "a small open marker" % tables.LOW_PIXELS)
+
+
 def bias_text(pts):
     """The bias of the runs drawn, per telescope: one value when every run shares it."""
     parts = []
@@ -406,7 +441,9 @@ save(fig, "st01_res_vs_offset_rfsel2", payload, conventions())
 # cell "The runs and their checks"). The classes are grouped by offset (a dotted line between the
 # groups), RFSel rising within a group; each telescope shows the classes it has. A class at
 # "8/10" or "6/8" holds runs whose boards sit at two offsets (the cell above). Under the merge:
-# both runs and the time of each.
+# both runs and the time of each. A board whose resolution comes from fewer than 128 pixels (half
+# the chip; the board table's count of the anointed combination) is a small open marker: at this
+# step seven boards of H1 runs 56 and 67, each named with its count in the footer.
 #
 # The classes differ in more than the setting on the axis. The RFSel 3 runs came last, 9.0 to
 # 10.0 days after the end of the irradiation, against 4 h to 7.5 days for the RFSel 1 and 2
@@ -415,6 +452,7 @@ save(fig, "st01_res_vs_offset_rfsel2", payload, conventions())
 
 # %%
 p02 = [dict(p) for p in PTS_M]
+LOW_02 = low_marks(p02)
 CLASSES_02 = {t: [(c.rfsel, c.os) for c in CLASSES if t in c.runs] for t in TELS}
 fig, lay = settings.res_by_class(
     p02, CLASSES_02, tel_titles=TEL_TITLES,
@@ -431,12 +469,12 @@ fig, lay = settings.res_by_class(
         u"runs; under it both runs and their times." % merge_text(p02),
         u"Classes grouped by offset, a dotted line between the groups; a class \"8/10\" or "
         u"\"6/8\" holds boards at two offsets. F1 has no good run at RFSel 3, offset 6/8.",
-        BAND_TEXT, RUN_TEXT, bias_text(p02)]))
+        BAND_TEXT, low_text(LOW_02), RUN_TEXT, bias_text(p02)]))
 payload = values(p02, lay)
 payload.update(classes={t: [u"RFSel %d / offset %s" % k for k in v]
-                        for t, v in CLASSES_02.items()}, merges=MERGES_DRAWN)
-save(fig, "st02_res_vs_settings_class", payload, dict(conventions(), merge=MERGE_CONVENTION),
-     inputs=INPUTS_MERGED)
+                        for t, v in CLASSES_02.items()}, merges=MERGES_DRAWN, low_pixels=LOW_02)
+save(fig, "st02_res_vs_settings_class", payload,
+     dict(conventions(), merge=MERGE_CONVENTION, low_pixels=LOW_CONVENTION), inputs=INPUTS_MERGED)
 
 # %% [markdown]
 # ## Figure st03: the step from RFSel 2 to RFSel 3
@@ -588,7 +626,8 @@ def xb_values(pts):
 # class, one marker per offset text. The chip is on the axis, so here the marker is free for the
 # offset: the one settings figure whose marker is not the chip (`../CONVENTIONS.md`, "Settings
 # figures"). The bar runs from the 16th to the 84th percentile of offset / noise width over the
-# board's pixels (the cell above).
+# board's pixels (the cell above). The small open markers are the boards whose resolution (st02,
+# st05) comes from fewer than 128 pixels; their x_B takes the live pixels like every other.
 #
 # H1 has five classes and F1 five. The sixth F1 cell the scan intended, RFSel 3 at offsets 6/8,
 # is run 59, which the good-run list excludes (the setup cell prints the reason). On H1 the
@@ -628,6 +667,7 @@ XB_BAR_CONVENTION = ("16th to 84th percentile of offset / nw over the same pixel
 XB_MERGE_CONVENTION = ("; x_B and bar over the pooled pixels of its runs' autocalibration scans, a "
                        "scan the runs share once")
 p04 = [dict(p) for p in P_XB]
+LOW_04 = low_marks(p04)
 fig, lay = settings.threshold_over_noise(
     p04, CLASSES_04, markers=MARKERS_04, class_labels=LABELS_04, tel_titles=TEL_TITLES,
     xlabel=u"Chip", ylabel=u"x$_\\mathrm{B}$ = threshold offset / median noise width",
@@ -639,6 +679,7 @@ fig, lay = settings.threshold_over_noise(
         u"order." % (sum(len(r) for r in runs_of(p04).values()), len(p04)),
         u"%s: one point per board, x$_\\mathrm{B}$ and bar over %s." % (merge_text(p04),
                                                                           pool_text(p04)),
+        low_text(LOW_04),
         u"Time from the end of the 3.5e15 irradiation to the run start, the classes with "
         u"several runs:",
         u"%s;" % class_times("h1"),
@@ -650,11 +691,12 @@ payload = dict(points=xb_values(p04), layout=lay, ylim=YLIM_04,
                run_facts={u"%s run %d" % k: v for k, v in FACTS.items()},
                live_pixels=N_LIVE, settings_guard=GUARD, step=STEP,
                good_run_drops={u"%s run %d" % k: v for k, v in drops.items()},
-               merges=MERGES_DRAWN)
+               merges=MERGES_DRAWN, low_pixels=LOW_04)
 c = conventions()
 c.update(x_b=XB_CONVENTION, bar=XB_BAR_CONVENTION,
          colour="RFSel (etroc_style.RFSEL_COLOR), marker = offset class (chip on the axis)",
-         merge=MERGE_CONVENTION + XB_MERGE_CONVENTION)
+         merge=MERGE_CONVENTION + XB_MERGE_CONVENTION,
+         low_pixels=LOW_CONVENTION + ", its edge in the RFSel colour (no band behind it)")
 save(fig, "st04_threshold_over_noise", payload, c, inputs=INPUTS_XB)
 
 # %% [markdown]
@@ -677,11 +719,13 @@ save(fig, "st04_threshold_over_noise", payload, c, inputs=INPUTS_XB)
 #
 # What else differs between the points: F1 runs 13 and 14 ran at a lower bias than F1 run 18
 # (RFSel 2, offset 20), and every RFSel 3 run came later after the end of the irradiation than
-# its RFSel 2 partners (the footer gives the times).
+# its RFSel 2 partners (the footer gives the times). As on st02, a board whose resolution comes
+# from fewer than 128 pixels is a small open marker.
 
 # %%
 XLIM_05 = (0.8, 4.2)          # every x bar inside; the first tick (1.0) clear of the y tick labels
 p05 = [dict(p) for p in P_XB]
+LOW_05 = low_marks(p05)
 if min(p["xb_lo"] for p in p05) <= XLIM_05[0] or max(p["xb_hi"] for p in p05) >= XLIM_05[1]:
     raise ValueError("an x bar of st05 reaches outside XLIM_05 %s" % (XLIM_05,))
 fewest = min(p05, key=lambda p: (p["band"]["n_pixels"], TELS.index(p["tel"]),
@@ -707,6 +751,7 @@ fig = settings.res_vs_x(
         u"%s: one band per board from the merged runs' board table, by the rule of the single "
         u"runs, at the x$_\\mathrm{B}$ of %s." % (merge_text(p05), pool_text(p05)),
         BAND_TEXT,
+        low_text(LOW_05),
         XB_TEXT,
         u"x takes the live pixels, y the pixels above the event floor (fewest: %s run %s %s, %d "
         u"pixels)." % (fewest["tel"].upper(), run_name(fewest), fewest["chip"],
@@ -722,11 +767,11 @@ payload = dict(points=[dict(xb, **p["band"]) for xb, p in zip(xb_values(p05), p0
                                   n_pixels=fewest["band"]["n_pixels"]),
                settings_guard=GUARD, step=STEP,
                good_run_drops={u"%s run %d" % k: v for k, v in drops.items()},
-               merges=MERGES_DRAWN)
+               merges=MERGES_DRAWN, low_pixels=LOW_05)
 c = conventions()
 c.update(x="x_B = " + XB_CONVENTION, x_bar=XB_BAR_CONVENTION,
          y="band per board: " + tables.BAND_FOOTER,
-         merge=MERGE_CONVENTION + XB_MERGE_CONVENTION)
+         merge=MERGE_CONVENTION + XB_MERGE_CONVENTION, low_pixels=LOW_CONVENTION)
 save(fig, "st05_res_vs_threshold_over_noise", payload, c, inputs=INPUTS_XB)
 
 # %% [markdown]
@@ -743,6 +788,10 @@ save(fig, "st05_res_vs_threshold_over_noise", payload, c, inputs=INPUTS_XB)
 # The scan runs before the discriminator offset is applied, so the offset of a run is no
 # confound here. The bias and the time after the irradiation are: the small text over each
 # category is the bias of its runs, the footer lists the times.
+#
+# F1 runs 46 and 47, the accepted merge that st02, st04 and st05 draw as one point per board,
+# stay two runs here: st06 compares the autocalibration scans, one per run, not the points of the
+# resolution figures. The footer says so.
 
 # %%
 QUANTITIES_06 = [dict(key="bl", ylabel="Baseline [DAC]"),
@@ -760,6 +809,15 @@ for st in STEPS_06:
 N_MAX_06 = max(len(st["runs"][t]) for st in STEPS_06 for t in TELS)
 p06 = blnw.points(BLNW, STEPS_06, QUANTITIES_06, STATS_06, pitch=0.8 / (N_MAX_06 - 1))
 EXCL_06 = {q: blnw.excluded_range(p06, q) for q in ("bl", "nw")}
+# the merges st02, st04 and st05 draw stay their runs here: st06 compares scans, not points
+SHARED_06 = {(p["tel"], run_name(p)) for p in P_XB if "runs" in p and p["shared_scan"]}
+MERGES_06 = [u"%s runs %s %s" % (t.upper(), u" and ".join(m.split("+")),
+                                 u"(one scan, drawn once per run)" if (t, m) in SHARED_06 else
+                                 u"(a scan each)")
+             for t in TELS for m in MERGES_DRAWN[t]]
+MERGE_LINE_06 = ([u"%s stay separate runs here: st02, st04 and st05 draw the merge as one point "
+                  u"per board; st06 compares scans, not points." % u"; ".join(MERGES_06)]
+                 if MERGES_06 else [])
 
 
 def rfsel_times(tel):
@@ -784,6 +842,7 @@ fig = blnw.ladder_vs_fluence(
         u"category side by side in run order. Small text: sensor bias."
         % (sum(len(st["runs"][t]) for st in STEPS_06 for t in TELS),
            len({(p["tel"], p["run"], p["board_idx"]) for p in p06})),
+        *MERGE_LINE_06,
         u"The autocalibration scan runs before the discriminator offset is applied, so the offset "
         u"within a category is no confound; bias and time after the stop differ between runs:",
         u"time from the end of the 3.5e15 irradiation to the run start, %s;" % rfsel_times("h1"),

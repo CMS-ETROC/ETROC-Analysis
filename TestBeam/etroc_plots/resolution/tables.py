@@ -47,6 +47,9 @@ VARIANT_TEXT = {"top": "most-populated track per pixel",
                 "average": "every track per pixel, inverse-variance mean"}
 ANOINTED_TEXT = "anointed combo (0-1-2 for boards 0-2, 1-2-3 for board 3)"
 
+LOW_PIXELS = 128    # a board whose value comes from fewer fitted pixels (n_pixels; half the chip)
+                    # is drawn as a small open marker where a figure marks it
+
 BAND_FOOTER = ("shaded box = min to max of the board's value over every combination containing "
                "it, marker at its centre, bar = pixel-to-pixel spread of the anointed combination")
 

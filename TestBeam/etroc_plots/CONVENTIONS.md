@@ -104,7 +104,12 @@ rest are for whoever writes the next figure.
   (`tables.classes_at_step`, `settings.class_points`). Its runs each had their own
   autocalibration scan: its x_B and bar pool the pixels of its runs' scans before the median and
   the percentiles, a scan the runs share once (`settings.pixel_x_over_nw`). The figures of one
-  scan per run (st06) keep the runs.
+  scan per run (st06) keep the runs and say so in the footer.
+- A board whose resolution comes from fewer than `tables.LOW_PIXELS` pixels (128, half the chip:
+  the board table's `n_pixels` of the anointed combination, `settings.low_pixels`) is a small
+  open marker on st02, st04 and st05, where the notebook sets `p["low"]`; the footer gives the
+  rule, how many boards and each one's count. On st04 no band stands behind the marker, so its
+  edge keeps the RFSel colour.
 - The threshold over the noise of board B in a run is x_B = offset / median noise width: its
   threshold offset over the median noise width of its live pixels (noise width above 0, the
   pixels of `n_pixels_nw`) from the autocalibration scan before the run, both in DAC codes
