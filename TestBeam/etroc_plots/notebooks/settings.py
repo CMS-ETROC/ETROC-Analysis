@@ -69,12 +69,14 @@
 # * `tables/run_times.csv`: the start of every run, for the time after the irradiation.
 # * `frontend/blnw_by_run.csv`: the autocalibration scan before each run, per board: the RFSel
 #   it recorded (an independent check of the RFSel in `runs_summary.csv`), the threshold offset
-#   and the noise width (x_B of st04 and st05), the baseline and noise width (st06).
+#   (x_B of st04 and st05), the baseline and noise width (st06).
+# * `frontend/blnw_by_pixel.csv.gz`: the noise width of every pixel in each of those scans (x_B
+#   of st04 and st05 and its bar).
 # * `frontend/rfsel_pair_hist.csv`: the TOT of one F1 chip in the pairs of runs that differ in
 #   RFSel only (st07; the table of the frontend notebook's fe15).
 #
-# No other table: st04-st07 read the tables above that st01-st03 read, and the RFSel pair table;
-# the merged runs' table is read for st02, st04 and st05 only.
+# No other table: st04-st07 read the tables above that st01-st03 read, the RFSel pair table and
+# the per-pixel BL/NW table; the merged runs' table is read for st02, st04 and st05 only.
 #
 # The drawing lives in `../resolution/settings.py` (st01-st05), `../frontend/blnw.py` (st06) and
 # `../overview/cartoons.py` (st07, with the curves of `../frontend/tot_shapes.py`); the classes
@@ -130,7 +132,7 @@ campaign = campaigns.active
 check_inputs(only=("tables/irrad/board_table_irrad.csv", "tables/merged/board_table_merged.csv",
                    "tables/runs_summary.csv", "tables/run_times.csv", "july/display_runs_jul.csv",
                    "july/good_runs.csv", "frontend/blnw_by_run.csv",
-                   "frontend/rfsel_pair_hist.csv"))
+                   "frontend/blnw_by_pixel.csv.gz", "frontend/rfsel_pair_hist.csv"))
 
 NOTEBOOK = "TestBeam/etroc_plots/notebooks/settings.ipynb"   # "script" in every values file
 OUT = os.path.join(os.path.abspath(os.environ.get("ETROC_FIGURES") or "figures"), "settings")
@@ -139,6 +141,7 @@ INPUTS = [campaign.BOARD_TABLE, campaign.RUNS_SUMMARY_CSV, campaign.DISPLAY_RUNS
           campaign.GOOD_RUNS_CSV, campaign.RUN_TIMES_CSV, campaign.BLNW_CSV,
           campaign.RFSEL_PAIR_HIST_CSV]
 INPUTS_MERGED = INPUTS + [campaign.BOARD_TABLE_MERGED]   # st02, st04 and st05: the merges too
+INPUTS_XB = INPUTS_MERGED + [campaign.BLNW_PIXELS_CSV]   # st04 and st05: the pixels' noise widths
 
 VARIANT, FLOOR = "top", "300"          # the track variant and event floor of every band
 STEP = campaign.SETTINGS_STEP          # 3.5e15
@@ -489,76 +492,103 @@ save(fig, "st03_rfsel2_vs_3", payload, conventions())
 # %% [markdown]
 # ## The threshold over the noise, x_B
 #
-# x_B is a board's threshold offset in units of its noise: the offset (DAC) over the mean noise
+# x_B is a board's threshold offset in units of its noise: the offset (DAC) over the median noise
 # width (DAC) of the board's live pixels, the pixels whose noise width is above 0 (253 to 256 of
-# 256 on these boards), both from the autocalibration scan the DAQ set the run's thresholds from
-# (`blnw_by_run.csv`). It is one number per board, the offset over the board's mean noise width,
-# not a mean of per-pixel ratios. Its bar is the noise width's pixel-to-pixel standard deviation
-# carried to x_B to first order, offset x nw_std / nw_mean^2: how much x_B varies over the
-# pixels of the board, a spread and not an uncertainty.
+# 256 on these boards), both from the autocalibration scan the DAQ set the run's thresholds from:
+# the offset from `blnw_by_run.csv`, the noise width of every pixel from `blnw_by_pixel.csv.gz`
+# (`settings.pixel_x_over_nw`). Its bar runs from the 16th to the 84th percentile of the ratio
+# offset / noise width over the same pixels: how much x_B varies over the pixels of the board, a
+# spread and not an uncertainty. The noise width is an integer DAC (its median is 5 to 9 on these
+# boards), so the medians are coarse and the bars asymmetric, one side empty where the median is
+# also a percentile: they are drawn as they are.
 #
 # The autocalibration scan runs before the threshold offset is applied, so a run's noise width
 # does not depend on its offset. It does depend on RFSel: the noise widths at RFSel 1 are
 # larger than at RFSel 2, so one offset gives a smaller x_B at RFSel 1.
 #
-# A merge's runs each had their own autocalibration scan: the merge's x_B and bar are the means
-# of its runs' (`settings.merge_x_over_nw`, the deck's rule for the merge of F1 runs 46 and 47),
-# and the values files keep each run's.
+# A merge's runs each had their own autocalibration scan: the merge's x_B and bar pool the pixels
+# of its runs' scans before the median and the percentiles (a scan two runs shared would count
+# once; the cell prints which), and the values files keep each scan's pixel count.
 #
-# The cell below computes x_B for every board drawn in st02, the merge included, and checks that
-# the scan's offset is the board's offset in `runs_summary.csv`.
+# The cell below computes x_B for every board drawn in st04 and st05, the merge included. It
+# checks that the scan's offset is the board's offset in `runs_summary.csv`, and the per-pixel
+# table against `blnw_by_run.csv`: for every single run, the pixels with a noise width above 0
+# are the board's `n_pixels_nw` and their median is its `nw_median`.
 
 # %%
-P_XB = []
+PIXELS = blnw.read_blnw_pixels()
 for p in PTS_M:
-    if "runs" in p:
-        xn = settings.merge_x_over_nw(BLNW, settings.CAMP, p["tel"], p["runs"], p["chip"])
-    else:
-        xn = settings.x_over_nw(BLNW, settings.CAMP, p["tel"], p["run"], p["chip"])
-    if xn["offset"] != p["offset"]:
+    off = settings.scan_offset(BLNW, settings.CAMP, p["tel"], p.get("runs", [p["run"]]),
+                               p["chip"])
+    if off != p["offset"]:
         raise ValueError("%s run %s %s: offset %s in the autocalibration table, %s in "
-                         "runs_summary" % (p["tel"].upper(), run_name(p), p["chip"],
-                                           xn["offset"], p["offset"]))
-    P_XB.append(dict(p, x_b=xn["x"], bar=xn["bar"], nw_mean=xn["nw_mean"], nw_std=xn["nw_std"],
-                     n_live=xn["n_live"], **({"per_run": xn["per_run"]} if "per_run" in xn
-                                             else {})))
+                         "runs_summary" % (p["tel"].upper(), run_name(p), p["chip"], off,
+                                           p["offset"]))
+XB = settings.pixel_x_over_nw(PIXELS, pd.DataFrame(
+    [dict(tel=p["tel"], runs=tuple(p.get("runs", [p["run"]])), chip=p["chip"], offset=p["offset"])
+     for p in PTS_M]))
+P_XB = []
+for p, x in zip(PTS_M, XB.to_dict("records")):
+    if "runs" not in p:
+        r = BLNW[(BLNW["campaign"] == settings.CAMP) & (BLNW["tel"] == p["tel"])
+                 & (BLNW["run"] == p["run"]) & (BLNW["chip"] == p["chip"])].iloc[0]
+        if (x["n_pixels"], x["nw_median"]) != (int(r["n_pixels_nw"]), float(r["nw_median"])):
+            raise ValueError("%s run %d %s: %d pixels, median noise width %g in the per-pixel "
+                             "table; n_pixels_nw %d, nw_median %g in blnw_by_run.csv"
+                             % (p["tel"].upper(), p["run"], p["chip"], x["n_pixels"],
+                                x["nw_median"], r["n_pixels_nw"], r["nw_median"]))
+    P_XB.append(dict(p, x_b=x["x"], xb_lo=x["lo"], xb_hi=x["hi"], nw_median=x["nw_median"],
+                     n_pixels_nw=x["n_pixels"], n_pixels_scan=x["n_pixels_scan"],
+                     n_scans=x["n_scans"], shared_scan=bool(x["shared_scan"])))
 # the live pixels of every scan behind the points: a merge's runs each had their own
-LIVE = [q["n_live"] for p in P_XB for q in p.get("per_run", [p])]
+LIVE = [n for p in P_XB for n in p["n_pixels_scan"]]
 N_LIVE = (min(LIVE), max(LIVE))
 for p in P_XB:
-    if "per_run" in p:
-        print("%s merge %s %s: x_B %.4f, bar %.4f, the means of runs %s" % (
-            p["tel"].upper(), run_name(p), p["chip"], p["x_b"], p["bar"], ", ".join(
-                "%d %.4f, %.4f" % (q["run"], q["x"], q["bar"]) for q in p["per_run"])))
-XB_TEXT = (u"x$_\\mathrm{B}$ = threshold offset / mean noise width of the board's live pixels "
-           u"(noise width above 0: %d-%d of 256 pixels), DAC/DAC,\nboth from the "
-           u"autocalibration scan the DAQ set the run's thresholds from; the scan runs before the "
-           u"offset is applied." % N_LIVE)
-SPREAD_TEXT = settings.spread_text([p["bar"] for p in P_XB],
-                                   u"%(lo).2f-%(hi).2f on 80 %% of the boards, %(min).2f-%(max).2f "
-                                   u"over all %(n)d")
-print("x_B over %d boards: %.2f-%.2f; live pixels %d-%d; linearised spread %s"
-      % (len(P_XB), min(p["x_b"] for p in P_XB), max(p["x_b"] for p in P_XB), N_LIVE[0],
-         N_LIVE[1], SPREAD_TEXT))
+    if "runs" in p:
+        print("%s merge %s %s: x_B %.4f, bar %.4f-%.4f, median noise width %g over %d pixels of "
+              "%d scan(s) (%s per scan)%s" % (
+                  p["tel"].upper(), run_name(p), p["chip"], p["x_b"], p["xb_lo"], p["xb_hi"],
+                  p["nw_median"], p["n_pixels_nw"], p["n_scans"],
+                  ", ".join(map(str, p["n_pixels_scan"])),
+                  ", the runs share one scan" if p["shared_scan"] else ""))
+XB_TEXT = (u"x$_\\mathrm{B}$ = offset / median noise width of the live pixels; bar = 16th to 84th "
+           u"percentile of offset / noise width over the pixels (live: noise width above 0, "
+           u"%d-%d of 256 per scan).\nBoth from the autocalibration scan the DAQ set the run's "
+           u"thresholds from (DAC), taken before the offset is applied; integer noise widths: "
+           u"coarse medians, asymmetric bars." % N_LIVE)
+print("x_B over %d boards: %.2f-%.2f, bars %.2f-%.2f; median noise width %s; live pixels %d-%d "
+      "per scan" % (len(P_XB), min(p["x_b"] for p in P_XB), max(p["x_b"] for p in P_XB),
+                    min(p["xb_lo"] for p in P_XB), max(p["xb_hi"] for p in P_XB),
+                    sorted({p["nw_median"] for p in P_XB}), N_LIVE[0], N_LIVE[1]))
+
+
+def pool_text(pts):
+    """How the merges among `pts` pool their autocalibration scans, in words."""
+    shared = sorted({p["chip"] for p in pts if "runs" in p and p["shared_scan"]})
+    if not shared:
+        return u"the pixels of its runs' scans pooled, one scan per run"
+    return u"the pixels of its runs' scans pooled, a scan the runs share counted once (%s)" % (
+        u", ".join(shared))
 
 
 def xb_values(pts):
-    keys = ("tel", "run", "board_idx", "chip", "rfsel", "os", "offset", "hv", "x_b", "bar",
-            "nw_mean", "nw_std", "n_live")
-    return [dict({k: p[k] for k in keys}, **({"runs": p["runs"], "per_run": p["per_run"]}
-                                            if "runs" in p else {})) for p in pts]
+    keys = ("tel", "run", "board_idx", "chip", "rfsel", "os", "offset", "hv", "x_b", "xb_lo",
+            "xb_hi", "nw_median", "n_pixels_nw", "n_pixels_scan", "n_scans", "shared_scan")
+    return [dict({k: p[k] for k in keys}, **({"runs": p["runs"]} if "runs" in p else {}))
+            for p in pts]
 
 
 # %% [markdown]
 # ## Figure st04: x_B of every board, per chip and class
 #
-# Every display run, 20 runs, 76 boards (F1 runs 46 and 47 as their merge, x_B and bar the means
-# of the two runs'): one panel per telescope, x = chip. In each chip's slot the settings classes
-# stand side by side in the order of the legend (by offset, then RFSel), the runs of a class side
-# by side in run order. Colour = RFSel, as on every settings figure; the marker is the offset
+# Every display run, 20 runs, 76 boards (F1 runs 46 and 47 as their merge, x_B and bar over the
+# pixels of both runs' scans): one panel per telescope, x = chip. In each chip's slot the settings
+# classes stand side by side in the order of the legend (by offset, then RFSel), the runs of a class
+# side by side in run order. Colour = RFSel, as on every settings figure; the marker is the offset
 # class, one marker per offset text. The chip is on the axis, so here the marker is free for the
 # offset: the one settings figure whose marker is not the chip (`../CONVENTIONS.md`, "Settings
-# figures"). The bar is x_B's linearised pixel-to-pixel spread (the cell above).
+# figures"). The bar runs from the 16th to the 84th percentile of offset / noise width over the
+# board's pixels (the cell above).
 #
 # H1 has five classes and F1 five. The sixth F1 cell the scan intended, RFSel 3 at offsets 6/8,
 # is run 59, which the good-run list excludes (the setup cell prints the reason). On H1 the
@@ -591,20 +621,24 @@ def class_times(tel):
     return u"%s %s" % (tel.upper(), u"; ".join(out))
 
 
+XB_CONVENTION = ("threshold offset (blnw_by_run.csv) / median noise width over the board's live "
+                 "pixels (nw > 0, blnw_by_pixel.csv.gz; settings.pixel_x_over_nw)")
+XB_BAR_CONVENTION = ("16th to 84th percentile of offset / nw over the same pixels (numpy's linear "
+                     "interpolation): a pixel-to-pixel spread, not an uncertainty")
+XB_MERGE_CONVENTION = ("; x_B and bar over the pooled pixels of its runs' autocalibration scans, a "
+                       "scan the runs share once")
 p04 = [dict(p) for p in P_XB]
 fig, lay = settings.threshold_over_noise(
     p04, CLASSES_04, markers=MARKERS_04, class_labels=LABELS_04, tel_titles=TEL_TITLES,
-    xlabel=u"Chip", ylabel=u"x$_\\mathrm{B}$ = threshold offset / noise width",
+    xlabel=u"Chip", ylabel=u"x$_\\mathrm{B}$ = threshold offset / median noise width",
     tag=style.settings_text(rfsel=None, offset=None), data=DATA_TEXT, ylim=YLIM_04,
     footer=u"\n".join([
         XB_TEXT,
-        u"Bar: offset x nw_std / nw_mean$^2$, the noise width's pixel-to-pixel spread carried to "
-        u"x$_\\mathrm{B}$ to first order, not an uncertainty: %s." % SPREAD_TEXT,
         u"Every display run, %d runs and %d boards (the runs of each class in the legend). "
         u"Colour = RFSel, marker = offset class; in each chip's slot the classes in legend "
         u"order." % (sum(len(r) for r in runs_of(p04).values()), len(p04)),
-        u"%s: one point per board, x$_\\mathrm{B}$ and bar the means over the runs, each run "
-        u"with its own autocalibration scan." % merge_text(p04),
+        u"%s: one point per board, x$_\\mathrm{B}$ and bar over %s." % (merge_text(p04),
+                                                                          pool_text(p04)),
         u"Time from the end of the 3.5e15 irradiation to the run start, the classes with "
         u"several runs:",
         u"%s;" % class_times("h1"),
@@ -614,42 +648,42 @@ payload = dict(points=xb_values(p04), layout=lay, ylim=YLIM_04,
                markers={o: m for o, m in MARKERS_04.items()},
                classes={t: [u"RFSel %d / offset %s" % k for k in v] for t, v in CLASSES_04.items()},
                run_facts={u"%s run %d" % k: v for k, v in FACTS.items()},
-               live_pixels=N_LIVE, spread=SPREAD_TEXT, settings_guard=GUARD, step=STEP,
+               live_pixels=N_LIVE, settings_guard=GUARD, step=STEP,
                good_run_drops={u"%s run %d" % k: v for k, v in drops.items()},
                merges=MERGES_DRAWN)
 c = conventions()
-c.update(x_b="threshold offset / mean noise width over the board's live pixels (nw > 0), "
-             "blnw_by_run.csv offset / nw_mean",
-         bar="offset * nw_std / nw_mean^2: the pixel-to-pixel spread of the noise width carried "
-             "to x_B to first order, not an uncertainty",
+c.update(x_b=XB_CONVENTION, bar=XB_BAR_CONVENTION,
          colour="RFSel (etroc_style.RFSEL_COLOR), marker = offset class (chip on the axis)",
-         merge=MERGE_CONVENTION + "; x_B and bar the means over its runs "
-                                  "(settings.merge_x_over_nw)")
-save(fig, "st04_threshold_over_noise", payload, c, inputs=INPUTS_MERGED)
+         merge=MERGE_CONVENTION + XB_MERGE_CONVENTION)
+save(fig, "st04_threshold_over_noise", payload, c, inputs=INPUTS_XB)
 
 # %% [markdown]
 # ## Figure st05: resolution against x_B
 #
 # Every board of every display run as a band, at its x_B: 20 runs, 76 boards (F1 runs 46 and 47
-# as their merge), one panel per telescope. Colour = RFSel, marker = chip. No x bar: x_B's
-# linearised spread is stated in the footer instead, so the bars stay those of the resolution.
+# as their merge), one panel per telescope. Colour = RFSel, marker = chip. The x bar, in the
+# RFSel colour, runs from the 16th to the 84th percentile of offset / noise width over the
+# board's pixels (the x_B cell); the y bar is the resolution's pixel-to-pixel spread, as on every
+# band.
 #
-# x and y do not average the same pixels: x_B averages the board's live pixels (253 to 256),
-# the resolution the pixels above the event floor of the track selection (the footer gives how
-# many per board, and the fewest).
+# x and y do not take the same pixels: x_B the board's live pixels (253 to 256), the resolution
+# the pixels above the event floor of the track selection (the footer gives how many per board,
+# and the fewest).
 #
 # F1 runs 46 and 47 (RFSel 1, offset 20) are an accepted merge (`f1_grp_run46_47` in the merged
 # runs' board table) and are drawn as the merge, as on st02 and st04: one band per board from the
-# merged table by the rule of the single runs, at the mean of the two runs' x_B (each run had its
-# own autocalibration scan; the x_B cell prints both).
+# merged table by the rule of the single runs, at the x_B of the pixels of both runs' scans
+# pooled (each run had its own autocalibration scan; the x_B cell prints the counts).
 #
 # What else differs between the points: F1 runs 13 and 14 ran at a lower bias than F1 run 18
 # (RFSel 2, offset 20), and every RFSel 3 run came later after the end of the irradiation than
 # its RFSel 2 partners (the footer gives the times).
 
 # %%
-XLIM_05 = (0.9, 3.6)          # the first tick (1.0) clear of the y tick labels
+XLIM_05 = (0.8, 4.2)          # every x bar inside; the first tick (1.0) clear of the y tick labels
 p05 = [dict(p) for p in P_XB]
+if min(p["xb_lo"] for p in p05) <= XLIM_05[0] or max(p["xb_hi"] for p in p05) >= XLIM_05[1]:
+    raise ValueError("an x bar of st05 reaches outside XLIM_05 %s" % (XLIM_05,))
 fewest = min(p05, key=lambda p: (p["band"]["n_pixels"], TELS.index(p["tel"]),
                                  settings.run_order(p), p["board_idx"]))
 
@@ -665,37 +699,35 @@ def step_times(tel):
 
 fig = settings.res_vs_x(
     p05, tel_titles=TEL_TITLES,
-    xlabel=u"x$_\\mathrm{B}$ = threshold offset / noise width", xlim=XLIM_05, ylim=YLIM,
+    xlabel=u"x$_\\mathrm{B}$ = threshold offset / median noise width", xlim=XLIM_05, ylim=YLIM,
     legend_title=LEGEND_TITLE, tag=style.settings_text(rfsel=None, offset=None), data=DATA_TEXT,
     footer=u"\n".join([
         SELECTION,
         u"Every display run: %s." % counts_text(p05),
         u"%s: one band per board from the merged runs' board table, by the rule of the single "
-        u"runs, at the mean of the runs' x$_\\mathrm{B}$ (each run with its own autocalibration "
-        u"scan)." % merge_text(p05),
+        u"runs, at the x$_\\mathrm{B}$ of %s." % (merge_text(p05), pool_text(p05)),
         BAND_TEXT,
         XB_TEXT,
-        u"No x bar: x$_\\mathrm{B}$'s linearised pixel-to-pixel spread is %s." % SPREAD_TEXT,
-        u"x averages the live pixels, y the pixels above the event floor (fewest: %s run %s "
-        u"%s, %d pixels)." % (fewest["tel"].upper(), run_name(fewest), fewest["chip"],
-                              fewest["band"]["n_pixels"]),
+        u"x takes the live pixels, y the pixels above the event floor (fewest: %s run %s %s, %d "
+        u"pixels)." % (fewest["tel"].upper(), run_name(fewest), fewest["chip"],
+                       fewest["band"]["n_pixels"]),
         u"Time from the end of the 3.5e15 irradiation to the run start, the RFSel 2 to 3 step: "
         u"H1 %s; F1 %s." % (step_times("h1"), step_times("f1")),
         bias_text(p05)]))
 runs05 = runs_of(p05)
 payload = dict(points=[dict(xb, **p["band"]) for xb, p in zip(xb_values(p05), p05)],
                run_facts={u"%s run %d" % (t, r): FACTS[(t, r)] for t in TELS for r in runs05[t]},
-               xlim=XLIM_05, ylim_ps=YLIM, spread=SPREAD_TEXT, live_pixels=N_LIVE,
+               xlim=XLIM_05, ylim_ps=YLIM, live_pixels=N_LIVE,
                fewest_pixels=dict(tel=fewest["tel"], run=fewest["run"], chip=fewest["chip"],
                                   n_pixels=fewest["band"]["n_pixels"]),
                settings_guard=GUARD, step=STEP,
                good_run_drops={u"%s run %d" % k: v for k, v in drops.items()},
                merges=MERGES_DRAWN)
 c = conventions()
-c.update(x="x_B = threshold offset / mean noise width over the board's live pixels, no x bar",
+c.update(x="x_B = " + XB_CONVENTION, x_bar=XB_BAR_CONVENTION,
          y="band per board: " + tables.BAND_FOOTER,
-         merge=MERGE_CONVENTION + "; at the mean of its runs' x_B (settings.merge_x_over_nw)")
-save(fig, "st05_res_vs_threshold_over_noise", payload, c, inputs=INPUTS_MERGED)
+         merge=MERGE_CONVENTION + XB_MERGE_CONVENTION)
+save(fig, "st05_res_vs_threshold_over_noise", payload, c, inputs=INPUTS_XB)
 
 # %% [markdown]
 # ## Figure st06: baseline and noise width against RFSel

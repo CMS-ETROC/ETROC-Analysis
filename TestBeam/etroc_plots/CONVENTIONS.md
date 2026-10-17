@@ -102,21 +102,24 @@ rest are for whoever writes the next figure.
   resolution-against-class and x_B figures (st02, st04, st05): one band per board from the merged
   table by the rule of the single runs, labelled with its runs joined by "+"
   (`tables.classes_at_step`, `settings.class_points`). Its runs each had their own
-  autocalibration scan, so its x_B and bar are the means of its runs' (`settings.merge_x_over_nw`).
-  The figures of one scan per run (st06) keep the runs.
-- The threshold over the noise of board B in a run is x_B = offset / nw_mean: its threshold offset
-  over the mean noise width of its live pixels from the autocalibration scan before the run, both
-  in DAC codes (`settings.x_over_nw`, from `blnw_by_run.csv`). Its bar, offset * nw_std /
-  nw_mean^2, is the pixel-to-pixel spread of the noise width carried to x_B to first order: a
-  spread, not an uncertainty.
+  autocalibration scan: its x_B and bar pool the pixels of its runs' scans before the median and
+  the percentiles, a scan the runs share once (`settings.pixel_x_over_nw`). The figures of one
+  scan per run (st06) keep the runs.
+- The threshold over the noise of board B in a run is x_B = offset / median noise width: its
+  threshold offset over the median noise width of its live pixels (noise width above 0, the
+  pixels of `n_pixels_nw`) from the autocalibration scan before the run, both in DAC codes
+  (`settings.pixel_x_over_nw`: the offset from `blnw_by_run.csv`, the noise width of every pixel
+  from `blnw_by_pixel.csv.gz`). Its bar runs from the 16th to the 84th percentile of offset /
+  noise width over the same pixels: a spread, not an uncertainty. The noise width is an integer
+  DAC, so the medians are coarse and the bars asymmetric; they are drawn as they are.
 - Threshold over the noise (`settings.threshold_over_noise`): x_B of every board with its bar,
   x = chip, the settings classes side by side in each chip's slot. Colour = RFSel as everywhere,
   but the marker is the offset class (`settings.offset_markers`, in offset order), not the chip:
   the chip is already the x axis, and the marker then tells the offset apart where two classes
   share an RFSel. The only settings figure whose marker is not the chip.
-- Resolution against x_B (`settings.res_vs_x`): the band of every board at its x_B, without an x
-  bar (a bar would be the noise-width spread, not an error on x_B). The footer quotes that spread
-  instead (`settings.spread_text`: its 10-90 % range over the boards and its extremes).
+- Resolution against x_B (`settings.res_vs_x`): the band of every board at its x_B, with the
+  x_B bar as an x bar in the RFSel colour (the 16-84 % range of offset / noise width over the
+  pixels, not an error on x_B); the y bar stays the resolution's pixel-to-pixel spread.
 - Baseline and noise width against RFSel (st06): `frontend.blnw.ladder_vs_fluence` with the RFSel
   categories on the x axis in place of the fluence steps, colour = board as in the front-end
   figures; both statistics (all 256 pixels, and the live pixels) are drawn, the live one named

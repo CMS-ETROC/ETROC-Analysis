@@ -1,7 +1,7 @@
 # IRRAD 2026 inputs
 
 The notebooks (`../notebooks/iv.ipynb`, `merged.ipynb`, `maps.ipynb`, `overview.ipynb`,
-`frontend.ipynb` and `universality.ipynb`) draw
+`frontend.ipynb`, `universality.ipynb` and `settings.ipynb`) draw
 the CERN IRRAD 2026 figures (March and July; the universality notebook draws DESY 2026 runs beside
 them) from two kinds of input, in two EOS locations. Raw data (the March IV
 scans, the slow-control logs and the week-1 spark-test log, read by the IV notebook only) are read
@@ -223,7 +223,8 @@ and rank) on 2026-10-09.
 | `nw_median`, `nw_p16`, `nw_p84` | the same for the noise width over the pixels of `nw_mean` (the noise width is an integer DAC, so these are coarse) |
 
 `frontend/blnw_by_pixel.csv.gz`, 98304 rows (gzip-compressed CSV; read by
-`blnw.read_blnw_pixels`, by no notebook here). One row = one pixel of one board in one run: the 256
+`blnw.read_blnw_pixels`, for the threshold over the noise of the settings notebook's st04 and
+st05, `settings.pixel_x_over_nw`). One row = one pixel of one board in one run: the 256
 pixels of every board of `blnw_by_run.csv` that has a scan, from the scan that row names. Pooling
 the pixels of several runs (a merged run) takes their rows together; runs that reused one scan
 (the same `scan_utc`, such as H1 July runs 18 and 19) hold the same pixels.
