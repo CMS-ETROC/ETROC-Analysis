@@ -228,6 +228,15 @@ def test_difference_range_rule_switches_pooling_rounding_and_keeps_a_floor():
         tdc_codes.diff_ranges(synthetic_diffs(), dict(tdc_codes.DIFF_RANGE, pool="both"))
 
 
+def test_difference_ticks_label_both_limits_and_integer_steps_between():
+    assert tdc_codes.diff_ticks(11) == [-11, -9, -6, -3, 0, 3, 6, 9, 11]
+    assert tdc_codes.diff_ticks(2) == [-2, -1, 0, 1, 2]
+    assert tdc_codes.diff_ticks(1) == [-1, 0, 1]
+    # 12 sits half a code from the limit and is left out; 9 stays
+    assert tdc_codes.diff_ticks(12.5) == [-12.5, -9, -6, -3, 0, 3, 6, 9, 12.5]
+    assert tdc_codes.diff_ticks(40) == [-40, -30, -20, -10, 0, 10, 20, 30, 40]
+
+
 # ------------------------------------------------------------------------------- BL/NW tables
 def synthetic_scan():
     """One board's scan (16 x 16, flat index i = 16 row + col) and the run's railed pixels.

@@ -414,13 +414,32 @@ def cal_maps(grids, tel, looks, *, pixels, norm, diff_norm, titles, cbar_labels,
         cax = fig.add_axes([x0 / W2, y, (x1 - x0) / W2, 0.13 / H2])
         cb = fig.colorbar(ims[k], cax=cax, orientation="horizontal", extend="both")
         cb.set_label(lab, fontsize=s["label"] * 0.75, color=style.INK, labelpad=2)
-        cb.ax.xaxis.set_major_locator(MaxNLocator(integer=True))    # CAL codes are integers
+        if k == 1:                          # the difference: both range limits labelled
+            cb.set_ticks(diff_ticks(diff_norm.vmax))
+        else:
+            cb.ax.xaxis.set_major_locator(MaxNLocator(integer=True))    # CAL codes are integers
         cb.ax.tick_params(labelsize=s["tick"] * 0.8)
     return fig, payload
 
 
 def symmetric_norm(lim):
     return Normalize(vmin=-lim, vmax=lim)
+
+
+def diff_ticks(lim, max_ticks=9):
+    """Colour-bar ticks of a symmetric range [-lim, lim]: both limits, and between them the
+    multiples of the smallest step of 1, 2, 3, 5, 10, 20, ... that keeps at most `max_ticks`
+    ticks; a multiple closer to a limit than half a step is left out so the labels do not crowd."""
+    lim = float(lim)
+    for k in range(7):
+        for m in (1, 2, 3, 5):
+            step = m * 10 ** k
+            n = int(np.floor(lim / step))
+            inner = [float(i * step) for i in range(-n, n + 1)
+                     if lim - abs(i * step) >= 0.5 * step]
+            if len(inner) + 2 <= max_ticks:
+                return [-lim] + inner + [lim]
+    return [-lim, 0.0, lim]
 
 
 # The colour range of the July minus March maps (cal_maps' third column), symmetric, [-lim, lim]:
