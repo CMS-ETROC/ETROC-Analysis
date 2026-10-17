@@ -627,24 +627,27 @@ def _numbers(pts, x_of, color_of, open_of):
 
 def _scan(pts_by_tel, *, tel_titles, xlabel, ylim, tag, data, footer, color_by=None,
           open_of=None, xlims=None, kinds=None, kinds_loc="lower left", look_label=None,
-          side=None, mr=0.3, scale=SCALE):
+          side=None, mr=0.3, color_pts=None, scale=SCALE):
     """A row of bias-scan panels, one per telescope of `tel_titles` (left to right): the chip
     legend upper left (one row), the look legend upper right (when colour = look), the marker
     kinds (`kinds`: handles, and the small open marker where the panel has a point under
     LOW_PIXELS) at `kinds_loc`. With `side` (a list of extra handles, possibly empty) the look
     legend is drawn once, outside the last panel on its right, the looks of the whole figure
-    followed by `side`; `mr` inches of right margin hold it. Returns (figure, numbers)."""
+    followed by `side`; `mr` inches of right margin hold it. The colours follow the looks of
+    `color_pts` (default: the points drawn), so a figure drawing part of another figure's
+    points keeps that figure's colours. Returns (figure, numbers)."""
     tels = list(tel_titles)
     open_of = open_of or (lambda p: False)
     every = [p for t in tels for p in pts_by_tel[t]]
-    rule, color_of = _color_of(every, color_by)
+    palette = color_pts or every
+    rule, color_of = _color_of(palette, color_by)
     fig, axes = _row(len(tels), footer, scale, mr=mr)
     numbers = []
     for ax, tel in zip(axes, tels):
         tp = pts_by_tel[tel]
         xlim = (xlims or {}).get(tel) or _span([p["hv"] for p in tp], 0.1, 15.0)
         _axis(ax, xlim, ylim, xlabel, scale)
-        h = bias_scan(ax, tp, color_by=rule, open_of=open_of, figure_pts=every, scale=scale,
+        h = bias_scan(ax, tp, color_by=rule, open_of=open_of, figure_pts=palette, scale=scale,
                       look_label=look_label)
         _legend(ax, h["chips"], "upper left", scale, ncol=len(h["chips"]))
         if h["looks"] and side is None:
@@ -657,7 +660,7 @@ def _scan(pts_by_tel, *, tel_titles, xlabel, ylim, tag, data, footer, color_by=N
         numbers += _numbers(tp, lambda p: p["hv"], color_of, open_of)
     if side is not None:
         s = style.sizes(scale)
-        handles = _handles(every, every, rule, color_of, scale, look_label)["looks"] + list(side)
+        handles = _handles(every, palette, rule, color_of, scale, look_label)["looks"] + list(side)
         lg = axes[-1].legend(handles=handles, loc="upper left", bbox_to_anchor=(1.03, 1.0),
                              borderaxespad=0.0, fontsize=s["legend"], handletextpad=0.4,
                              labelspacing=0.35, handlelength=2.2)
@@ -699,9 +702,10 @@ def res_1p5e15_march_vs_july(pts_by_tel, off_list, *, open_label, **words):
 
 def _time(pts_by_tel, hours, *, tel_titles, xlabel, ylim, tag, data, footer, run_labels,
           label_y, bold=None, stop=None, open_of=None, open_legend=None, xlims=None,
-          low_loc="upper right", scale=SCALE):
+          low_loc="upper right", legend_locs=None, scale=SCALE):
     """A row of time-series panels, one per telescope of `tel_titles`: x = hours[tel][run],
-    colour = board, the chip legend upper left (one row); under each run its label
+    colour = board, the chip legend upper left in one row unless legend_locs {tel: loc or (loc,
+    ncol)} places it elsewhere; under each run its label
     (run_labels[tel][run], at `label_y` ps, bold where (tel, run) is in `bold`); `stop` shades
     the allowed-stop range (stop_band); `open_legend` {tel: (handles, loc, title)}; the small
     open marker's legend at `low_loc` on a panel with a point under LOW_PIXELS."""
@@ -719,7 +723,8 @@ def _time(pts_by_tel, hours, *, tel_titles, xlabel, ylim, tag, data, footer, run
         _, color_of = _color_of(tp, "board")
         h = time_series(ax, tp, hr, stop_band=stop, color_by="board", open_of=open_of,
                         scale=scale)
-        _legend(ax, h["chips"], "upper left", scale, ncol=len(h["chips"]))
+        loc, ncol = _place((legend_locs or {}).get(tel), len(h["chips"]))
+        _legend(ax, h["chips"], loc, scale, ncol=ncol)
         if open_legend and open_legend.get(tel):
             handles, loc, title = open_legend[tel]
             _legend(ax, handles, loc, scale, title=title)
@@ -855,7 +860,7 @@ def res_3p5e15_vs_bias_and_hours(bias_pts, time_pts, hours, *, tel_titles, ylim,
                           [p for t in tels for p in bias_pts[t] + time_pts[t]])
 
 
-def res_vs_bias_summary(pts_by_tel, *, chip_fluence=False, mr=None, **words):
+def res_vs_bias_summary(pts_by_tel, *, chip_fluence=False, mr=None, keep=None, **words):
     """re07: the bias scans of several steps and campaigns on one figure, one panel per
     telescope, the points the notebook gives (the resolution notebook: every March standard run
     and every July display run as a single run, display_singles); colour = fluence step (a later
@@ -864,12 +869,27 @@ def res_vs_bias_summary(pts_by_tel, *, chip_fluence=False, mr=None, **words):
     outside the last panel, with the marker kinds the figure holds; with `chip_fluence` its
     labels give the fluence on the chips (chip_look_text) instead of the bookkeeping fluence.
     `mr` inches of right margin hold that legend (default: wide enough for either labelling).
-    `words` as res_vs_bias_march_preirrad. Returns (figure, numbers)."""
+    `keep` (a function of a point; re12 to re14) draws only the points it keeps, coloured as on
+    the figure of every point. `words` as res_vs_bias_march_preirrad. Returns (figure,
+    numbers)."""
     scale = words.get("scale", SCALE)
+    palette = [p for pts in pts_by_tel.values() for p in pts]
+    if keep is not None:
+        pts_by_tel = {t: [p for p in pts if keep(p)] for t, pts in pts_by_tel.items()}
     every = [p for pts in pts_by_tel.values() for p in pts]
     merged = any(p["merged"] for p in every)
     low = any(low_pixels(p) for p in every)
     return _scan(pts_by_tel, color_by="fluence",
                  side=kind_handles(merged=merged, low=low, scale=scale),
                  look_label=chip_look_text if chip_fluence else look_text,
-                 mr=mr or (3.7 if chip_fluence else 2.9), **words)
+                 mr=mr or (3.7 if chip_fluence else 2.9), color_pts=palette, **words)
+
+
+def res_3p5e15_vs_hours(pts_by_tel, hours, **words):
+    """re15: one step (July 3.5e15) against the hours after the stop, one panel per telescope,
+    colour = board (= chip), every point a band (BAND_STEPS); re06's hours panel without its
+    open-marker runs. `words` as res_july_1p5e15_stability without open_runs and open_legend
+    (tel_titles, xlabel, ylim, tag, data, footer, run_labels, label_y, and the optional stop,
+    xlims, low_loc, legend_locs, scale). Returns (figure, numbers)."""
+    fig, _, numbers = _time(pts_by_tel, hours, **words)
+    return fig, numbers

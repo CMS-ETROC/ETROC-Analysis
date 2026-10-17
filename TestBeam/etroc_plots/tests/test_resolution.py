@@ -3,7 +3,8 @@ with merges, every display run as single runs, the points of single and merged r
 standard operating point, the stop clock with its bounds, the hours since the first run at a
 step, the colour rule, the low-pixel threshold; the fluence ladder's picks (step_winners), the
 one-run-per-condition selector, the floor-"none" pixel lookup and the numbers table; the
-combination split's runs, points and layout.
+combination split's runs, points and layout, with and without merges; the bias summary drawn in
+part (re12 to re14) with the whole figure's colours.
 
 Run from TestBeam/:  python -m pytest etroc_plots/tests
 """
@@ -372,3 +373,60 @@ def test_combo_points_every_combination_and_layout():
     assert lay["width"] == pytest.approx(g + 3)
     assert (lay["x"][4], lay["x"][13]) == pytest.approx((g / 2, g + 0.5))
     assert [len(runs) for _, _, _, runs in lay["groups"]] == [1, 3]
+
+
+def test_split_runs_an_accepted_merge_stands_in_for_its_class_runs(split_display):
+    merges = {"f1": [(3, 4), (46, 47)], "h1": [(3, 4), (18, 19), (47, 48)]}
+    split = combo_split.split_runs(split_display, (1.5e15, 2e15), 3.5e15, merges=merges)
+    h1, f1 = split["h1"], split["f1"]
+    # F1 46+47: both runs in the RFSel 1 class, one entry holding the class's preferred run 47
+    assert [e["run"] for e in f1] == [9, 12, (46, 47), 13, 14, 18]
+    assert [e["preferred"] for e in f1 if e["step"] == 3.5e15] == [True, False, False, True]
+    # H1 47+48 likewise; 18+19 has run 19 off the list; 3+4 is no class's at 3.5e15 and the
+    # reference stays the preferred run alone
+    assert [e["run"] for e in h1] == [4, 12, 64, 67, 56, 33, (47, 48), 18]
+
+
+def test_combo_points_of_a_merge_read_the_merged_table():
+    bt = board_table([46, 47], base=40.0)
+    bm = board_table([tables.merge_name("h1", (46, 47))], base=60.0)
+    for t in (bt, bm):
+        t["combo"] = t["anointed"].map({True: "extra0-dut1-ref2", False: "dut1-ref2-trig3"})
+    rs = runs_summary([(JUL, 46, "3.5e15", 480.0, 20, 1), (JUL, 47, "3.5e15", 480.0, 20, 1),
+                       (JUL, 13, "3.5e15", 390.0, 20, 2)])
+    e = dict(run=(46, 47), step=3.5e15, rfsel=1, os="20", ref=False, preferred=True)
+    pts = combo_split.combo_points(bt, rs, "h1", [e], bm=bm)
+    assert len(pts) == 8 and {p["run"] for p in pts} == {(46, 47)}
+    assert [p["value_ps"] for p in pts if p["board_idx"] == 0] == [65.0, 60.0]
+    assert {p["hv"] for p in pts} == {480.0}
+    with pytest.raises(ValueError):          # a merge needs the merged table
+        combo_split.combo_points(bt, rs, "h1", [e])
+    with pytest.raises(ValueError):          # runs of one merge at different settings
+        combo_split.combo_points(bt, rs, "h1", [dict(e, run=(13, 46))], bm=bm)
+    # single runs and a merge side by side on one axis
+    single = combo_split.combo_points(bt, rs, "h1", [dict(e, run=46)])
+    lay = combo_split.layout([dict(e, run=46), e])
+    xs = combo_split.combo_x(single + pts, lay["x"])
+    assert xs[((46, 47), 0, "extra0-dut1-ref2")] > xs[(46, 0, "extra0-dut1-ref2")]
+
+
+def test_bias_summary_in_part_keeps_the_whole_figures_colours():
+    import matplotlib
+    matplotlib.use("Agg")
+
+    def pt(camp, fluence, i, hv):
+        return dict(tel="h1", camp=camp, run=1, runs=[1], label="1", board_idx=i, chip=CHIPS[i],
+                    value_ps=40.0, bar_ps=3.0, n_pixels=250, hv=hv, fluence=fluence, offset=20,
+                    rfsel=2, rfsel_source="runs_summary", merged=False, band=None, y_ps=40.0,
+                    yerr_ps=3.0)
+    pts = {"h1": [pt("march", 1.5e15, i, 400.0) for i in range(4)]
+           + [pt("july", 1.5e15, i, 540.0) for i in range(4)]}
+    words = dict(tel_titles={"h1": "H1"}, xlabel="bias", ylim=(20.0, 80.0), tag="t", data="d",
+                 footer="f")
+    _, whole = curves.res_vs_bias_summary(pts, **words)
+    _, part = curves.res_vs_bias_summary(pts, keep=lambda p: p["camp"] == "july", **words)
+    assert [q["camp"] for q in part["points"]] == ["july"] * 4
+    # July 1.5e15 is the later look at the step: the later-look hue, as beside March
+    assert {q["color"] for q in part["points"]} == {TIMING_COLORS[0]}
+    assert [q["color"] for q in part["points"]] == [q["color"] for q in whole["points"]
+                                                    if q["camp"] == "july"]
