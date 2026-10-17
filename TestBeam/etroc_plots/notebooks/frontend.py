@@ -434,11 +434,13 @@ for k, tel in enumerate(TELS):
 # in each file), before and after cooling down, and the change (July minus March); the pixel of
 # figures fe03-fe04 is ringed. One CAL colour scale for every CAL map of this notebook, set below
 # from all the maps drawn (0.5th to 99.5th percentile of the modes), so the CAL maps compare by
-# colour across both telescopes. The differences take one symmetric scale per telescope, from
-# that telescope's 99th percentile of |July - March| (11 codes for F1, 2 for H1): one shared
-# scale would draw every H1 difference in nearly one colour. A pixel outside a scale takes the
-# end colour and is counted ("sat N" in its title). Grey: no CAL mode. Maps in the chip frame:
-# pixel (0, 0) at the bottom right.
+# colour across both telescopes. The differences take one symmetric scale shared by both
+# telescopes, the rule `tdc_codes.DIFF_RANGE` (one line to change): the 99th percentile of
+# |July - March| pooled over the pixels of both telescopes with a CAL mode in both runs, rounded
+# up to the next code (11 codes on this pair). The F1 shifts of LF10 and LF12 set that range, so
+# the H1 difference maps read nearly flat, and the per-chip medians in each footer carry the H1
+# code-level numbers. A pixel outside a scale takes the end colour and is counted ("sat N" in its
+# title). Grey: no CAL mode. Maps in the chip frame: pixel (0, 0) at the bottom right.
 #
 # What the difference maps show: the July CAL modes of LF10 and LF12 sit about 10 codes below
 # March over the whole chip, while LF17 and LF18 moved by about 2 codes and the H1 chips by 0 to
@@ -457,15 +459,12 @@ for tel in TELS:
 modes = np.concatenate([g[np.isfinite(g)] for g in grids.values()])
 CAL_NORM = Normalize(vmin=float(np.floor(np.percentile(modes, 0.5))),
                      vmax=float(np.ceil(np.percentile(modes, 99.5))))
-DIFF_LIM, CAL_SHIFT = {}, {}
-for t in TELS:
-    d = {chip: grids[(t, "july", b)] - grids[(t, "march", b)]
-         for b, chip in enumerate(campaign.TELESCOPE_CHIPS[t])}
-    alld = np.concatenate([g[np.isfinite(g)] for g in d.values()])
-    DIFF_LIM[t] = max(1.0, float(np.ceil(np.percentile(np.abs(alld), 99))))
-    # per chip: median and 5th / 95th percentile of July - March over its pixels (+ 0.0: no -0)
-    CAL_SHIFT[t] = {chip: [float(v) + 0.0 for v in np.percentile(g[np.isfinite(g)], [50, 5, 95])]
-                    for chip, g in d.items()}
+DIFFS = {t: {chip: grids[(t, "july", b)] - grids[(t, "march", b)]
+             for b, chip in enumerate(campaign.TELESCOPE_CHIPS[t])} for t in TELS}
+DIFF_LIM = tdc_codes.diff_ranges({t: list(d.values()) for t, d in DIFFS.items()})
+# per chip: median and 5th / 95th percentile of July - March over its pixels (+ 0.0: no -0)
+CAL_SHIFT = {t: {chip: [float(v) + 0.0 for v in np.percentile(g[np.isfinite(g)], [50, 5, 95])]
+                 for chip, g in d.items()} for t, d in DIFFS.items()}
 print("CAL scale %g-%g; difference scale %s" % (
     CAL_NORM.vmin, CAL_NORM.vmax, ", ".join("%s +-%g" % (t, DIFF_LIM[t]) for t in TELS)))
 print("July minus March per chip, [median, 5th, 95th percentile]:", CAL_SHIFT)
@@ -475,17 +474,25 @@ def shift_text(tel):
     return "; ".join(u"%s %+g (%+g to %+g)" % ((c,) + tuple(v)) for c, v in CAL_SHIFT[tel].items())
 
 
+def shared_text():
+    """Whether the two difference maps share their scale, read from DIFF_LIM."""
+    if len(set(DIFF_LIM.values())) == 1:
+        return "the same range on the %s difference maps" % " and ".join(t.upper() for t in TELS)
+    return "here " + ", ".join(u"%s ±%g" % (t.upper(), DIFF_LIM[t]) for t in TELS)
+
+
 def map_footer(tel):
     return (u"CAL mode: median over the loop files of the pixel's most frequent CAL code in each "
             u"file (ea = 0). Difference: July minus March. Grey: no CAL mode.\n"
-            u"One CAL scale for every CAL map of both telescopes; one difference scale per "
-            u"telescope, symmetric, from its 99th percentile of |July - March| (here ±%g).\n"
+            u"One CAL scale for every CAL map of both telescopes; difference scale ±%g, %s:\n"
+            u"%s.\n"
             u"\"sat N\" in a title: N pixels outside that map's scale. Ringed: the pixel of the "
             u"CAL, TOA and TOT histograms. Maps in the %s.\n"
             u"July minus March per chip, median (5th to 95th percentile of its pixels), codes: "
             u"%s.\nCAL counts the delay-line steps in one 3.125 ns clock period, so it moves "
             u"with the chip's temperature and supply; no cause is drawn from these shifts."
-            % (DIFF_LIM[tel], pixel_maps.FRAME_TEXT, shift_text(tel)))
+            % (DIFF_LIM[tel], shared_text(), tdc_codes.diff_range_text(), pixel_maps.FRAME_TEXT,
+               shift_text(tel)))
 
 
 for k, tel in enumerate(TELS):
@@ -510,8 +517,8 @@ for k, tel in enumerate(TELS):
               runs=[dict(campaign=x["campaign"], run=x["run"]) for x in lk]),
          dict(cal_mode="median over the loop files of the per-file mode of the CAL code (ea == 0)",
               scales="CAL: 0.5th-99.5th percentile of every CAL mode of fe05-fe06 (one scale for "
-                     "both); difference: 99th percentile of |July - March| over this telescope's "
-                     "chips, symmetric (one scale per telescope)",
+                     "both); difference: " + tdc_codes.diff_range_text(),
+              difference_rule=dict(tdc_codes.DIFF_RANGE),
               difference_median="per chip: median, 5th and 95th percentile over its pixels of "
                                 "July - March, codes",
               frame=pixel_maps.FRAME_TEXT, fluence=campaign.FLUENCE_CONVENTION),

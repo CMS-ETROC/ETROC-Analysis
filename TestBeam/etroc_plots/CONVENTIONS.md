@@ -88,9 +88,9 @@ rest are for whoever writes the next figure.
 - One colour scale for every map of a notebook (0-120 ps for the IRRAD 2026 resolution maps,
   `VMIN` and `VMAX` in `resolution/pixel_maps.py`), so maps compare by colour; a pixel outside it
   is counted as saturated, a pixel without a value is grey. A map of a difference (the CAL-code
-  change of the front-end notebook) is the exception: its symmetric range is set per telescope,
-  since one range would flatten the telescope with the smaller change, and the footer says so and
-  gives the range.
+  change of the front-end notebook) takes its own symmetric range, set from the data by one rule
+  (`DIFF_RANGE` in `frontend/tdc_codes.py`, pooled over both telescopes by default, so the
+  telescope with the smaller change reads nearly flat); the footer states the rule and the range.
 
 ## Schematics
 

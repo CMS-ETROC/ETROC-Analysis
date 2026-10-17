@@ -421,3 +421,52 @@ def cal_maps(grids, tel, looks, *, pixels, norm, diff_norm, titles, cbar_labels,
 
 def symmetric_norm(lim):
     return Normalize(vmin=-lim, vmax=lim)
+
+
+# The colour range of the July minus March maps (cal_maps' third column), symmetric, [-lim, lim]:
+# lim = the `percentile` of |July - March| over the pixels with a CAL mode in both runs, "pooled"
+# over both telescopes (one range shared by every difference map) or "per_telescope" (one range
+# per telescope), rounded up to the next integer code ("ceil") or not ("none"), at least
+# `min_code`. The CERN IRRAD 2026 talk drew one range per telescope, its 98th percentile without
+# rounding: dict(pool="per_telescope", percentile=98.0, rounding="none", min_code=1.0).
+DIFF_RANGE = dict(pool="pooled", percentile=99.0, rounding="ceil", min_code=1.0)
+
+
+def diff_ranges(diffs, rule=None):
+    """{telescope: lim} of the July minus March colour ranges under `rule` (default DIFF_RANGE).
+    diffs {telescope: [July - March 16 x 16 grid per chip, ...]}; a NaN pixel (no CAL mode in one
+    of the runs) is left out."""
+    rule = DIFF_RANGE if rule is None else rule
+    absd = {}
+    for tel, grids in diffs.items():
+        a = np.abs(np.concatenate([np.asarray(g, dtype=float).ravel() for g in grids]))
+        absd[tel] = a[np.isfinite(a)]
+
+    def lim(a):
+        if not a.size:
+            raise ValueError("no pixel with a CAL mode in both runs")
+        v = float(np.percentile(a, rule["percentile"]))
+        if rule["rounding"] == "ceil":
+            v = float(np.ceil(v))
+        elif rule["rounding"] != "none":
+            raise ValueError("DIFF_RANGE rounding %r: 'ceil' or 'none'" % rule["rounding"])
+        return max(float(rule["min_code"]), v)
+
+    if rule["pool"] == "pooled":
+        shared = lim(np.concatenate(list(absd.values())))
+        return {tel: shared for tel in diffs}
+    if rule["pool"] == "per_telescope":
+        return {tel: lim(a) for tel, a in absd.items()}
+    raise ValueError("DIFF_RANGE pool %r: 'pooled' or 'per_telescope'" % rule["pool"])
+
+
+def diff_range_text(rule=None):
+    """The words of `rule` (default DIFF_RANGE) for a footer or a values file."""
+    rule = DIFF_RANGE if rule is None else rule
+    pct = "%gth percentile" % rule["percentile"]
+    rnd = ", rounded up to the next code" if rule["rounding"] == "ceil" else ""
+    if rule["pool"] == "pooled":
+        return ("one symmetric range shared by both telescopes: the %s of |July - March| over "
+                "the pixels of both telescopes with a CAL mode in both runs%s" % (pct, rnd))
+    return ("one symmetric range per telescope: the %s of |July - March| over that telescope's "
+            "pixels with a CAL mode in both runs%s" % (pct, rnd))

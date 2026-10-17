@@ -1,5 +1,6 @@
 """Tests of the frontend builders: the TOT code inversion and its bins, the RFSel group rows, the
-runs of the fluence ladder, the run set of the rebuild and the hits stated in the code boxes.
+runs of the fluence ladder, the run set of the rebuild, the hits stated in the code boxes and the
+colour range of the CAL difference maps.
 
 Run from TestBeam/:  python -m pytest etroc_plots/tests
 """
@@ -192,3 +193,34 @@ def test_box_lines_state_each_looks_hits_in_range():
             dict(value=2.9, hits_in_range=tdc_codes.hits_in_range(lo, 2 * counts, 0.3, 0.0, 12.3))]
     text = tdc_codes.box_lines("median", [dict(label="March"), dict(label="July")], recs, "%.2f ns")
     assert text.split("\n") == ["median", "March: 3.20 ns, N = 23", "July: 2.90 ns, N = 46"]
+
+
+# ------------------------------------------------------------------------------- CAL difference range
+def synthetic_diffs():
+    """July - March per chip, two chips per telescope. H1: 90 pixels at 0, 9 at +1, 1 at -2 codes;
+    F1: 45 at -2, 50 at -10, 5 at -12.5; the second chip of each holds only pixels without a CAL
+    mode in one of the runs (NaN), which no range may see."""
+    h1 = np.array([0.0] * 90 + [1.0] * 9 + [-2.0]).reshape(10, 10)
+    f1 = np.array([-2.0] * 45 + [-10.0] * 50 + [-12.5] * 5).reshape(10, 10)
+    return {"h1": [h1, np.full((2, 2), np.nan)], "f1": [f1, np.array([np.nan])]}
+
+
+def test_difference_range_is_one_pooled_99th_percentile_rounded_up_on_both_telescopes():
+    # pooled |diff| (200 pixels): the 99th percentile sits among the five 12.5 values -> 13
+    assert tdc_codes.diff_ranges(synthetic_diffs()) == {"h1": 13.0, "f1": 13.0}
+    text = tdc_codes.diff_range_text()
+    assert "shared by both telescopes" in text and "99th percentile" in text
+    assert "rounded up" in text
+
+
+def test_difference_range_rule_switches_pooling_rounding_and_keeps_a_floor():
+    per_tel = dict(tdc_codes.DIFF_RANGE, pool="per_telescope")
+    # H1 alone: the 99th percentile of 100 values lies between 1 and 2 (1.01) -> 2
+    assert tdc_codes.diff_ranges(synthetic_diffs(), per_tel) == {"h1": 2.0, "f1": 13.0}
+    assert "per telescope" in tdc_codes.diff_range_text(per_tel)
+    unrounded = dict(tdc_codes.DIFF_RANGE, rounding="none")
+    assert tdc_codes.diff_ranges(synthetic_diffs(), unrounded) == {"h1": 12.5, "f1": 12.5}
+    flat = {"h1": [np.zeros((4, 4))], "f1": [np.zeros((4, 4))]}
+    assert tdc_codes.diff_ranges(flat) == {"h1": 1.0, "f1": 1.0}
+    with pytest.raises(ValueError, match="pool"):
+        tdc_codes.diff_ranges(synthetic_diffs(), dict(tdc_codes.DIFF_RANGE, pool="both"))
