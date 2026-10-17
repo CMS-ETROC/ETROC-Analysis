@@ -39,12 +39,13 @@ rest are for whoever writes the next figure.
 
 - Colour = fluence, one ladder per campaign (`FLUENCE_COLOR` in the campaign module). Within one
   fluence step, later looks at the same chips (after cooling down, for instance) take hues of their
-  own from `iv_plot.TIMING_COLORS`, never a lighter or darker shade of the step's colour. Six
+  own from `iv_plot.TIMING_COLORS`, never a lighter or darker shade of the step's colour. Seven
   exceptions: the V_gl fit figures (`iv/vgl_plot.py`: fluence is their x axis, one fit per board),
   the baseline / noise-width figures (`frontend/blnw.py`: the fluence step, the look before and
-  after cooling down or the RFSel category is their x axis) and the board TOT figures (`tot_shapes.board_vs_fluence` in
-  `frontend/tot_shapes.py`: the fluence step is their x axis) colour by board
-  (`etroc_style.BOARD_COLOR`), and the bias-current timelines drawn one line per chip
+  after cooling down or the RFSel category is their x axis), the board TOT figures (`tot_shapes.board_vs_fluence` in
+  `frontend/tot_shapes.py`: the fluence step is their x axis) and the one-step resolution figures
+  (`resolution/curves.py`: one fluence step of one campaign, a series per chip, the step named in
+  the header; see Resolution figures) colour by board (`etroc_style.BOARD_COLOR`), and the bias-current timelines drawn one line per chip
   (`iv/preirrad_current.py`, `iv/current_vs_run.py` and the current-limit-hold figures of the IV
   notebook) colour by chip; there the fluence is a shaded band or a label, never a line colour.
   The RFSel comparison (`tot_shapes.rfsel_pairs`: runs of one fluence step that differ in RFSel)
@@ -81,6 +82,36 @@ rest are for whoever writes the next figure.
   (`tot_shapes.FLOOR`). Nothing is pooled across the triples of a pixel. The TOT depends on which
   triple is read (the partner pixels fix where the track crosses the pixel), so a figure of TOT
   says which triple it took.
+
+## Resolution figures
+
+- The resolution figures (`resolution/curves.py`, the resolution notebook) draw the time resolution
+  of every board against its bias or against time, at the standard operating point: threshold
+  offset 20 and RFSel 2, or no RFSel recorded (`curves.standard`).
+- Population: July points come from the display-run list, the class of the step's RFSel and offset
+  (`curves.display_class`). A merge replaces its single runs only when every run of the merge is in
+  that class and the good-run list marks the merge good (`curves.merge_rule`); the notebook prints
+  which merges it took and why it refused the others. Every run drawn is good on the good-run list,
+  or the notebook stops. A run off the display-run list is drawn only where the notebook says why,
+  with an open marker, and the footer names it.
+- A time axis draws single runs: a merge spans the times of its runs and has no one x. The footer
+  says so.
+- One clock per time axis, with its bounds. Hours after the end of a step's irradiation count from
+  the earliest end the records allow (`RAD_STOP_UTC`); the allowed range (`RAD_STOP_BOUNDS_UTC`,
+  latest minus earliest) is shaded at the origin when it spans 15 min or more (`curves.stop_band`)
+  and stated in the footer, and a run's time after the true end lies between its x minus that
+  range and its x. A stability axis counts from the start of the first run at the step
+  (`curves.hours_since_first`).
+- Colour (`curves.color_rule`): several looks (campaign, fluence step) on the axes give colour =
+  look, the fluence ladder with a later look at one step in the later-look hue (July 1.5e15 beside
+  March 1.5e15 is teal, never the March red); one look gives colour = board, one of the exceptions
+  under Colour and markers. `BOARD_COLOR[1]` (#eb6834) is close to the 3.5e15 orange (#ff7f0e), so
+  a one-step figure names its step in the header and never shows a fluence as a colour on its axes.
+- No jitter: points at one x share it (the boards of a run on a time axis, repeats at one bias).
+  The line of a series joins its mean at each x and breaks where a board's bias changes.
+- Under each run on a time axis: its number, bold for the display runs where the population is
+  wider than the list; where a figure quotes them, each chip's in-run bias current (`JULY_REF_CSV`:
+  the median over the run's HV plateau).
 
 ## Settings figures
 
