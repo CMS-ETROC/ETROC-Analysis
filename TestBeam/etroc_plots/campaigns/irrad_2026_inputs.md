@@ -18,11 +18,11 @@ test-beam result tables: 44 files, 117 MB) sit in one folder outside the reposit
 area, so reading them needs a share from its owner (Murtaza Safdari). Rebuilding some of the
 tables reads more places, which the notebooks never read: the LV power-log copies (`LV_LOG_ROOT`,
 in the same personal area) for `july/lv_spans_jul.csv`; the DAQ's run folders
-(`RUN_METADATA_ROOT`, another personal EOS area) for `tables/run_times.csv` and
-`frontend/blnw_by_run.csv`; the merged hits (`DECODED_ROOT`, the same area) for the two TDC tables
+(`RUN_METADATA_ROOT`, another personal EOS area) for `tables/run_times.csv` and the two BL/NW
+tables of `frontend/`; the merged hits (`DECODED_ROOT`, the same area) for the two TDC tables
 of `frontend/`; the reconstructed tracks (`ANALYSIS_ROOT`, the personal area of the tables) for the
 eight track tables of `frontend/`; and the autocalibration scan histories (`BLNW_ROOT`, a group
-area on the LPC EOS) for `frontend/blnw_by_run.csv`. Each needs a share from its owner. To work from your own copy,
+area on the LPC EOS) for the two BL/NW tables of `frontend/`. Each needs a share from its owner. To work from your own copy,
 copy the folders and point `ETROC_INPUTS` and `ETROC_IV_EOS_MARCH` at them (all the variables
 are in the table at the end):
 
@@ -127,7 +127,8 @@ runs of `FRONTEND_RUNS` and the July display runs at RFSel 2, threshold offset 2
   `/eos/uscms/store/group/lpcmtdstudies`: `BaselineHistory.sqlite` per telescope, July in two
   files). sqlite cannot open the histories in place on EOS: copy them, keeping the folders below
   `BLNW_ROOT`, and point `ETROC_BLNW_ROOT` at the copy. It joins each run to the scan the DAQ set
-  its thresholds from (`../frontend/blnw.py` gives the rule).
+  its thresholds from (`../frontend/blnw.py` gives the rule) and writes `blnw_by_run.csv` and
+  `blnw_by_pixel.csv.gz`.
 * The TDC part reads every loop file of the merged hits of each run (`DECODED_DIRS`, under
   `DECODED_ROOT`, default `/eos/user/j/jongho`): about 1 s per file on one lxplus core, 5.5 min
   for the four `COOLDOWN_PAIRS` runs (328 files, 812 million hits), and prints each run's hit counts
@@ -153,17 +154,21 @@ combination (boards 0-1-2 for boards 0-2, boards 1-2-3 for board 3; ties to the 
 the first name), and counts when that triple holds at least 300 events (`tot_shapes.FLOOR`).
 Nothing is pooled across the triples of one pixel.
 
-The published `frontend/blnw_by_run.csv` (2026-10-02) was not made by this rebuild: the scan
-histories could not be read from CERN or the LPC that day. It is the 2026-09-02 build of the same
-join (made outside this repository, from the same histories and run folders), its columns renamed
-to the ones below and its chips named as in `TELESCOPE_CHIPS`, every number unchanged. Rebuilding
-it with the command above replaces it. The two TDC tables were made by the rebuild (`--part tdc`,
+The two BL/NW tables were made by the rebuild (`--part blnw`, every run) on 2026-10-18 on the
+LPC, from xrootd copies of the six scan histories and copies of the 97 runs' `run_metadata.yaml`
+(`ETROC_BLNW_ROOT` and `ETROC_RUN_METADATA_ROOT` pointing at the copies), in 16 s on one core.
+`blnw_by_run.csv` replaced the 2026-09-02 build of the same join (made outside this repository,
+from the same histories and run folders, its columns renamed to the ones below; kept as
+`frontend/superseded/blnw_by_run_2026-09-02.csv`, out of the checksum list): on its 24 columns
+the two agree in every cell of all 384 rows, and the rebuild adds the six median and percentile
+columns. The two TDC tables were made by the rebuild (`--part tdc`,
 default runs) on 2026-10-02, the eight track tables by the rebuild (`--part tracks`, default runs
 and rank) on 2026-10-09.
 
 | table | rows | made by | md5 (first 8; full in `irrad_2026_inputs.md5`) |
 |---|---|---|---|
-| `blnw_by_run.csv` | 384 | the 2026-09-02 build, renamed (above); rebuilt by `--part blnw` (`blnw.build_blnw_table`) | `abc77c4a` |
+| `blnw_by_run.csv` | 384 | `--part blnw`: `blnw.build_blnw_table`, `board_stats` | `e669866c` |
+| `blnw_by_pixel.csv.gz` | 98304 | `--part blnw`: `blnw.build_blnw_table`, `pixel_rows` | `80a3dc8c` |
 | `tdc_pixel_hists.csv` | 19162 | `--part tdc`: `tdc_codes.gather`, `busiest_pixels`, `hist_rows` | `82d783ec` |
 | `tdc_cal_modes.csv` | 4096 | `--part tdc`: `tdc_codes.gather`, `cal_rows` | `15f8c86c` |
 | `triples.csv` | 72653 | `--part tracks`: `tot_shapes.scan_run` (the footer of every track file) | `677a2777` |
@@ -191,6 +196,22 @@ and rank) on 2026-10-09.
 | `nw_mean_allpix`, `nw_std_allpix` | the same for the noise width (DAC), a pixel without a noise width counted as 0 |
 | `bl_mean`, `bl_std`, `n_pixels_bl` | the same over the pixels with 50 < baseline < 1020 DAC and not railed in the run, and their number |
 | `nw_mean`, `nw_std`, `n_pixels_nw` | the same over the pixels with a noise width above 0, and their number |
+| `bl_median`, `bl_p16`, `bl_p84` | median and 16th and 84th percentiles of the baseline over the pixels of `bl_mean` (DAC; numpy's linear interpolation between pixels): the pixel-to-pixel spread, not an uncertainty |
+| `nw_median`, `nw_p16`, `nw_p84` | the same for the noise width over the pixels of `nw_mean` (the noise width is an integer DAC, so these are coarse) |
+
+`frontend/blnw_by_pixel.csv.gz`, 98304 rows (gzip-compressed CSV; read by
+`blnw.read_blnw_pixels`, by no notebook here). One row = one pixel of one board in one run: the 256
+pixels of every board of `blnw_by_run.csv` that has a scan, from the scan that row names. Pooling
+the pixels of several runs (a merged run) takes their rows together; runs that reused one scan
+(the same `scan_utc`, such as H1 July runs 18 and 19) hold the same pixels.
+
+| column | contents |
+|---|---|
+| `campaign`, `tel`, `run`, `board_idx`, `chip` | as in `blnw_by_run.csv` |
+| `row`, `col` | the pixel, chip frame: pixel (0, 0) at the bottom right of a map |
+| `bl`, `nw` | the scan's baseline and noise width of the pixel as stored (DAC): a failed autocalibration stores a baseline of 0, the rail is 1020 and above; empty where the scan has no row for the pixel |
+| `live` | 1 when the pixel counts in `bl_mean` of its board (50 < baseline < 1020 DAC and not railed in the run's threshold DAC, `blnw.live_pixels`), else 0; the noise-width statistics take the pixels with `nw` above 0 instead |
+| `scan_utc` | the start of the scan (UTC), as in `blnw_by_run.csv` |
 
 `frontend/tdc_pixel_hists.csv`, 19162 rows. One row = one non-empty bin of one histogram of one
 pixel in one run. The pixel of each chip is its most populated in the July run of `COOLDOWN_PAIRS`

@@ -681,6 +681,9 @@ ANALYSIS_DIRS = {   # format with tel ("h1") and run; the combo folders sit belo
 # irrad_2026_inputs.md describes their columns).
 INPUTS_FRONTEND = os.path.join(INPUTS, "frontend")
 BLNW_CSV = os.path.join(INPUTS_FRONTEND, "blnw_by_run.csv")
+# one row per pixel of every board with a scan in every run of BLNW_CSV (frontend/blnw.py); read by
+# blnw.read_blnw_pixels, by no notebook here
+BLNW_PIXELS_CSV = os.path.join(INPUTS_FRONTEND, "blnw_by_pixel.csv.gz")
 TDC_PIXEL_HISTS_CSV = os.path.join(INPUTS_FRONTEND, "tdc_pixel_hists.csv")
 TDC_CAL_MODES_CSV = os.path.join(INPUTS_FRONTEND, "tdc_cal_modes.csv")
 TRIPLES_CSV = os.path.join(INPUTS_FRONTEND, "triples.csv")

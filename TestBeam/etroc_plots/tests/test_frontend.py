@@ -1,15 +1,17 @@
 """Tests of the frontend builders: the TOT code inversion and its bins, the RFSel group rows, the
-runs of the fluence ladder, the run set of the rebuild, the hits stated in the code boxes and the
-colour range of the CAL difference maps.
+runs of the fluence ladder, the run set of the rebuild, the hits stated in the code boxes, the
+colour range of the CAL difference maps and the BL/NW tables built from synthetic scans.
 
 Run from TestBeam/:  python -m pytest etroc_plots/tests
 """
 import os
+import sqlite3
 import sys
 
 import numpy as np
 import pandas as pd
 import pytest
+import yaml
 
 sys.path.insert(0, os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                                  "..", "..")))
@@ -224,3 +226,90 @@ def test_difference_range_rule_switches_pooling_rounding_and_keeps_a_floor():
     assert tdc_codes.diff_ranges(flat) == {"h1": 1.0, "f1": 1.0}
     with pytest.raises(ValueError, match="pool"):
         tdc_codes.diff_ranges(synthetic_diffs(), dict(tdc_codes.DIFF_RANGE, pool="both"))
+
+
+# ------------------------------------------------------------------------------- BL/NW tables
+def synthetic_scan():
+    """One board's scan (16 x 16, flat index i = 16 row + col) and the run's railed pixels.
+    BL: 101 live pixels at 400..500 DAC, 100 dead (0), 50 at the rail in the scan (1020), 5 at 999
+    DAC but railed in the run. NW: 201 pixels at 0.5, 1.0, ..., 100.5 DAC, 55 at 0."""
+    i = np.arange(256)
+    bl = np.where(i < 101, 400.0 + i, np.where(i < 201, 0.0, np.where(i < 251, 1020.0, 999.0)))
+    railed = i >= 251
+    nw = np.where(i < 201, 0.5 * (i + 1), 0.0)
+    return bl.reshape(16, 16), nw.reshape(16, 16), railed.reshape(16, 16)
+
+
+def test_board_stats_median_and_16_84_percentiles_use_the_live_pixels_of_each_quantity():
+    bl, nw, railed = synthetic_scan()
+    st = blnw.board_stats(bl, nw, blnw.live_pixels(bl, railed))
+    assert (st["n_pixels_bl"], st["n_pixels_nw"]) == (101, 201)
+    assert (st["bl_median"], st["bl_p16"], st["bl_p84"]) == pytest.approx((450.0, 416.0, 484.0))
+    assert (st["nw_median"], st["nw_p16"], st["nw_p84"]) == pytest.approx((50.5, 16.5, 84.5))
+    assert st["bl_mean"] == pytest.approx(450.0)
+    assert st["nw_mean"] == pytest.approx(50.5)
+    assert st["bl_mean_allpix"] == pytest.approx(np.mean(bl))
+    for k in ("bl_median", "bl_p16", "bl_p84", "nw_median", "nw_p16", "nw_p84"):
+        assert k in blnw.BLNW_COLUMNS
+
+
+def write_scans(path, chip, scans):
+    """A scan history in the newer schema: scans = [(saving time, bl, nw), ...]."""
+    con = sqlite3.connect(path)
+    con.execute("CREATE TABLE baselines (row INTEGER, col INTEGER, baseline REAL, noise_width "
+                "REAL, pixel_timestamp_utc TEXT, chip_name TEXT, saving_timestamp_utc TEXT, "
+                "gain_mode TEXT)")
+    for t, bl, nw in scans:
+        con.executemany("INSERT INTO baselines VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        [(r, c, float(bl[r, c]), float(nw[r, c]), t, chip, t, "2")
+                         for r in range(16) for c in range(16)])
+    con.commit()
+    con.close()
+
+
+def write_run(folder, run, start, chips):
+    """run_<NNN>_x/run_metadata.yaml: chips = {DAQ chip: (elink, offset, dac 16 x 16)}."""
+    d = os.path.join(folder, "run_%03d_x" % run)
+    os.makedirs(d)
+    meta = dict(run_info=dict(timestamp=start, run_name="run_%03d_x" % run),
+                etroc_chips={name: dict(threshold_offset=off, elink_id=el, pixels=dict(
+                    dac_values={"(%d, %d)" % (r, c): float(dac[r, c])
+                                for r in range(16) for c in range(16)}))
+                    for name, (el, off, dac) in chips.items()})
+    with open(os.path.join(d, "run_metadata.yaml"), "w") as fh:
+        yaml.safe_dump(meta, fh)
+
+
+def test_blnw_tables_hold_the_scan_the_run_used_pixel_by_pixel(tmp_path):
+    bl, nw, railed = synthetic_scan()
+    offset = 20
+    dac = np.where(railed, 1023.0, bl + offset)
+    # the scan the run used (05:00) and an earlier one whose baselines are all one code higher
+    write_scans(str(tmp_path / "hist.sqlite"), "CHIP_A",
+                [("2026-07-27 04:00:00", bl + 1.0, nw + 7.0), ("2026-07-27 05:00:00", bl, nw)])
+    folder = str(tmp_path / "meta")
+    write_run(folder, 4, "2026-07-27T06:00:00+00:00",
+              {"CHIP_A": (0, offset, dac), "CHIP_B": (4, offset, dac)})   # CHIP_B: no scan
+    with open(str(tmp_path / "runs.yaml"), "w") as fh:
+        yaml.safe_dump({"h1_run4": {0: {"HV": 400}, 1: {"HV": 400}}}, fh)
+    out, out_pix = str(tmp_path / "by_run.csv"), str(tmp_path / "by_pixel.csv.gz")
+    blnw.build_blnw_table(out, metadata_dirs={("july", "h1"): folder},
+                          sqlites={("july", "h1"): [str(tmp_path / "hist.sqlite")]},
+                          run_yamls={"july": str(tmp_path / "runs.yaml")}, out_pixels_csv=out_pix)
+    by_run = blnw.read_blnw(out).set_index("board_idx")
+    assert list(by_run["match"]) == ["exact", "none"]
+    assert by_run.loc[0, "scan_utc"] == "2026-07-27 05:00:00"
+    assert by_run.loc[0, "bl_median"] == pytest.approx(450.0)
+    assert by_run.loc[0, "nw_p84"] == pytest.approx(84.5)
+    pix = blnw.read_blnw_pixels(out_pix)
+    assert len(pix) == 256 and set(pix["board_idx"]) == {0}
+    assert set(pix["chip"]) == {campaign.TELESCOPE_CHIPS["h1"][0]}
+    assert set(pix["scan_utc"]) == {"2026-07-27 05:00:00"}
+    assert pix["live"].dtype == bool
+    pix = pix.sort_values(["row", "col"])
+    np.testing.assert_array_equal(pix["bl"].to_numpy(), bl.ravel())
+    np.testing.assert_array_equal(pix["nw"].to_numpy(), nw.ravel())
+    np.testing.assert_array_equal(pix["live"].to_numpy(), blnw.live_pixels(bl, railed).ravel())
+    live = pix[pix["live"]]
+    assert len(live) == by_run.loc[0, "n_pixels_bl"]
+    assert live["bl"].median() == by_run.loc[0, "bl_median"]

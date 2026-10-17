@@ -6,8 +6,8 @@
 run from TestBeam/, writes into DIR (copy the files into the frontend/ folder of the inputs and
 update the checksum list to use them). The parts:
 
-  blnw    blnw_by_run.csv from the scan histories (BLNW_SQLITES) and the run metadata
-          (RUN_METADATA_DIRS), every run unless --runs says otherwise
+  blnw    blnw_by_run.csv and blnw_by_pixel.csv.gz from the scan histories (BLNW_SQLITES) and
+          the run metadata (RUN_METADATA_DIRS), every run unless --runs says otherwise
   tdc     tdc_pixel_hists.csv and tdc_cal_modes.csv from the merged hits (DECODED_DIRS), by
           default the runs of COOLDOWN_PAIRS; every loop file of a run is read, about 1 s per
           file on one lxplus core (5.5 min for the four COOLDOWN_PAIRS runs, 328 files)
@@ -81,8 +81,11 @@ def _log(text):
 
 
 def build_blnw(out, runs):
-    df = blnw.build_blnw_table(os.path.join(out, "blnw_by_run.csv"), runs=runs)
-    _log("blnw_by_run.csv: %d rows; match %s" % (len(df), df["match"].value_counts().to_dict()))
+    df = blnw.build_blnw_table(os.path.join(out, "blnw_by_run.csv"), runs=runs,
+                               out_pixels_csv=os.path.join(out, "blnw_by_pixel.csv.gz"))
+    _log("blnw_by_run.csv: %d rows; match %s; blnw_by_pixel.csv.gz: %d rows (256 per board "
+         "with a scan)" % (len(df), df["match"].value_counts().to_dict(),
+                           blnw.NPIX * blnw.NPIX * int((df["match"] != "none").sum())))
 
 
 def build_tdc(out, runs):

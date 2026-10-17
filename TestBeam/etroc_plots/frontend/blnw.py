@@ -1,8 +1,9 @@
 """Autocalibration baseline (BL) and noise width (NW) of every board in every run.
 
-The table, BLNW_CSV in the campaign module, has one row per board per run (columns BLNW_COLUMNS,
-described in the campaign's inputs document). build_blnw_table() makes it from two read-only
-records:
+Two tables, described in the campaign's inputs document: BLNW_CSV, one row per board per run
+(columns BLNW_COLUMNS), and BLNW_PIXELS_CSV, one row per pixel of every board with a scan in every
+run (columns BLNW_PIXEL_COLUMNS: the scan's baseline and noise width of the pixel, whether
+live_pixels() keeps it, the scan's start). build_blnw_table() makes both from two read-only records:
 
   scans   the autocalibration scan histories of the telescope PCs (BLNW_SQLITES): one scan = one
           sweep of one chip, a baseline and a noise width per pixel, in DAC codes
@@ -23,7 +24,9 @@ pixel counted as it was stored, a missing noise width as 0) and over the pixels 
 value: for BL the pixels with 50 < baseline < 1020 DAC and not railed in the run metadata, for NW
 the pixels with a noise width above 0; `n_pixels_bl` and `n_pixels_nw` count them. Mean and
 standard deviation over the pixels: the standard deviation is the pixel-to-pixel spread, not an
-uncertainty.
+uncertainty. Over the same pixels also the median and the 16th and 84th percentiles (`bl_median`,
+`bl_p16`, `bl_p84`, `nw_median`, `nw_p16`, `nw_p84`; numpy's linear interpolation between pixels),
+the pixel-to-pixel spread again, not an uncertainty.
 
 RFSel: the RFSel the scan history records where it records one, else "RFSel<N>" in the run name,
 else the run-config yaml; `rfsel_src` says which, and the March records carry none of the three.
@@ -62,7 +65,12 @@ BLNW_COLUMNS = [
     "hv", "scan_utc", "scan_gap_min", "match", "n_mismatch",
     "bl_mean_allpix", "bl_std_allpix", "nw_mean_allpix", "nw_std_allpix",
     "bl_mean", "bl_std", "n_pixels_bl", "nw_mean", "nw_std", "n_pixels_nw",
+    "bl_median", "bl_p16", "bl_p84", "nw_median", "nw_p16", "nw_p84",
 ]
+# one row per pixel of every board of every run with a scan; row, col in the chip frame (pixel
+# (0, 0) at the bottom right of a map); live = live_pixels() (1 or 0)
+BLNW_PIXEL_COLUMNS = ["campaign", "tel", "run", "board_idx", "chip", "row", "col", "bl", "nw",
+                      "live", "scan_utc"]
 _LOADER = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
 
 
@@ -197,9 +205,13 @@ def match_scan(start, dac, offset, scans, utc_offset_h):
 
 
 def board_stats(bl, nw, live):
-    """Both statistics of one board's scan (the module docstring says which pixels each uses)."""
+    """Both statistics of one board's scan (the module docstring says which pixels each uses),
+    and the median and 16th / 84th percentiles over the pixels of the second."""
     def ms(a):
         return (float(np.mean(a)), float(np.std(a))) if a.size else (np.nan, np.nan)
+
+    def quantiles(a):
+        return tuple(float(v) for v in np.percentile(a, [50, 16, 84])) if a.size else (np.nan,) * 3
     b_all = bl[np.isfinite(bl)]
     n_all = np.nan_to_num(nw, nan=0.0).ravel()
     b_live = bl[live]
@@ -210,23 +222,36 @@ def board_stats(bl, nw, live):
     out["bl_mean"], out["bl_std"] = ms(b_live)
     out["nw_mean"], out["nw_std"] = ms(n_live)
     out["n_pixels_bl"], out["n_pixels_nw"] = int(b_live.size), int(n_live.size)
+    out["bl_median"], out["bl_p16"], out["bl_p84"] = quantiles(b_live)
+    out["nw_median"], out["nw_p16"], out["nw_p84"] = quantiles(n_live)
     return out
 
 
-def build_blnw_table(out_csv=None, metadata_dirs=None, sqlites=None, run_yamls=None, runs=None):
+def pixel_rows(base, bl, nw, live, scan_utc):
+    """BLNW_PIXEL_COLUMNS rows of one board's scan: `base` (campaign, tel, run, board_idx, chip)
+    plus each pixel's bl and nw as stored (NaN where the scan has no row), live and scan_utc."""
+    return [dict(base, row=r, col=c, bl=float(bl[r, c]), nw=float(nw[r, c]),
+                 live=int(bool(live[r, c])), scan_utc=scan_utc)
+            for r in range(NPIX) for c in range(NPIX)]
+
+
+def build_blnw_table(out_csv=None, metadata_dirs=None, sqlites=None, run_yamls=None, runs=None,
+                     out_pixels_csv=None):
     """The BL/NW table (BLNW_COLUMNS), one row per board of every run in the run metadata.
 
     metadata_dirs  {(campaign, telescope): folder of run folders}, default RUN_METADATA_DIRS
     sqlites        {(campaign, telescope): [scan-history sqlite, ...]}, default BLNW_SQLITES
     run_yamls      {campaign: run-config yaml}, default RUN_LIST_YAML
     runs           {(campaign, telescope): runs} to keep only those runs; default every run
-    Written to `out_csv` when given. BLNW_CSV was made with
-    `python -m etroc_plots.frontend.rebuild --out <folder> --part blnw`."""
+    Written to `out_csv` when given; the per-pixel table (BLNW_PIXEL_COLUMNS, the pixels of every
+    board with a scan) to `out_pixels_csv` when given (gzip when it ends in .gz). BLNW_CSV and
+    BLNW_PIXELS_CSV were made with `python -m etroc_plots.frontend.rebuild --out <folder> --part
+    blnw`."""
     metadata_dirs = campaign.RUN_METADATA_DIRS if metadata_dirs is None else metadata_dirs
     sqlites = campaign.BLNW_SQLITES if sqlites is None else sqlites
     run_yamls = campaign.RUN_LIST_YAML if run_yamls is None else run_yamls
     configs = {camp: board_configs(path) for camp, path in run_yamls.items()}
-    rows = []
+    rows, pix_rows = [], []
     for (camp, tel), folder in metadata_dirs.items():
         keep = None if runs is None else set(runs.get((camp, tel), ()))
         if keep is not None and not keep:
@@ -265,12 +290,21 @@ def build_blnw_table(out_csv=None, metadata_dirs=None, sqlites=None, run_yamls=N
                            scan_gap_min=round(gap, 2) if np.isfinite(gap) else np.nan,
                            match=flag, n_mismatch=n_mis)
                 if s is not None:
-                    row.update(board_stats(s["bl"], s["nw"], live_pixels(s["bl"], c["dac"] >= RAIL)))
+                    live = live_pixels(s["bl"], c["dac"] >= RAIL)
+                    row.update(board_stats(s["bl"], s["nw"], live))
+                    pix_rows += pixel_rows({k: row[k] for k in BLNW_PIXEL_COLUMNS[:5]},
+                                           s["bl"], s["nw"], live, row["scan_utc"])
                 rows.append(row)
     df = pd.DataFrame(rows, columns=BLNW_COLUMNS)
     df = df.sort_values(["campaign", "tel", "run", "board_idx"]).reset_index(drop=True)
     if out_csv:
         df.to_csv(out_csv, index=False, float_format="%.6g")
+    if out_pixels_csv:
+        pix = pd.DataFrame(pix_rows, columns=BLNW_PIXEL_COLUMNS)
+        pix = pix.sort_values(["campaign", "tel", "run", "board_idx", "row", "col"])
+        gz = str(out_pixels_csv).endswith(".gz")       # mtime 0: the same rows, the same bytes
+        pix.to_csv(out_pixels_csv, index=False, float_format="%.6g",
+                   compression=dict(method="gzip", mtime=0) if gz else None)
     return df
 
 
@@ -280,6 +314,16 @@ def read_blnw(path=None):
     missing = [c for c in BLNW_COLUMNS if c not in df.columns]
     if missing:
         raise ValueError("BL/NW table lacks the columns %s" % missing)
+    return df
+
+
+def read_blnw_pixels(path=None):
+    """The per-pixel BL/NW table (default BLNW_PIXELS_CSV), `live` as bool."""
+    df = pd.read_csv(path or campaign.BLNW_PIXELS_CSV)
+    missing = [c for c in BLNW_PIXEL_COLUMNS if c not in df.columns]
+    if missing:
+        raise ValueError("per-pixel BL/NW table lacks the columns %s" % missing)
+    df["live"] = df["live"].astype(bool)
     return df
 
 
