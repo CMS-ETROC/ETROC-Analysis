@@ -39,13 +39,15 @@ rest are for whoever writes the next figure.
 
 - Colour = fluence, one ladder per campaign (`FLUENCE_COLOR` in the campaign module). Within one
   fluence step, later looks at the same chips (after cooling down, for instance) take hues of their
-  own from `iv_plot.TIMING_COLORS`, never a lighter or darker shade of the step's colour. Seven
+  own from `iv_plot.TIMING_COLORS`, never a lighter or darker shade of the step's colour. Eight
   exceptions: the V_gl fit figures (`iv/vgl_plot.py`: fluence is their x axis, one fit per board),
   the baseline / noise-width figures (`frontend/blnw.py`: the fluence step, the look before and
-  after cooling down or the RFSel category is their x axis), the board TOT figures (`tot_shapes.board_vs_fluence` in
-  `frontend/tot_shapes.py`: the fluence step is their x axis) and the one-step resolution figures
-  (`resolution/curves.py`: one fluence step of one campaign, a series per chip, the step named in
-  the header; see Resolution figures) colour by board (`etroc_style.BOARD_COLOR`), and the bias-current timelines drawn one line per chip
+  after cooling down or the RFSel category is their x axis), the board TOT figures
+  (`tot_shapes.board_vs_fluence` in `frontend/tot_shapes.py`: the fluence step is their x axis),
+  the one-step resolution figures (`resolution/curves.py`: one fluence step of one campaign, a
+  series per chip, the step named in the header; see Resolution figures) and the fluence ladder
+  (`resolution/ladder.py`: the fluence step is its x axis) colour by board
+  (`etroc_style.BOARD_COLOR`), and the bias-current timelines drawn one line per chip
   (`iv/preirrad_current.py`, `iv/current_vs_run.py` and the current-limit-hold figures of the IV
   notebook) colour by chip; there the fluence is a shaded band or a label, never a line colour.
   The RFSel comparison (`tot_shapes.rfsel_pairs`: runs of one fluence step that differ in RFSel)
@@ -53,7 +55,9 @@ rest are for whoever writes the next figure.
   settings figures (below). The schematic pulses of the RFSel explainer use a grey ramp of their
   own (`cartoons.RF_GREY`): they are not measured series.
 - Marker and line style = chip, by its slot in the telescope. Legends name chips only; the vendor
-  goes in the panel title.
+  goes in the panel title. The fluence ladder is the exception for line style: marker = chip, line
+  style = look on the ladder (March solid, July dashed) and = event floor on its pixel-yield figure
+  (see Resolution figures).
 
 ## Resolution and TDC figures
 
@@ -112,6 +116,29 @@ rest are for whoever writes the next figure.
 - Under each run on a time axis: its number, bold for the display runs where the population is
   wider than the list; where a figure quotes them, each chip's in-run bias current (`JULY_REF_CSV`:
   the median over the run's HV plateau).
+- A bias summary over several July steps (`curves.res_vs_bias_summary`) draws one run per
+  condition of each display class (`curves.one_per_condition`: runs whose boards all sit at the
+  same bias, threshold offset and RFSel form a group; the group keeps the preferred run, else its
+  later run), then the merge rule; the footer names the display runs not drawn and why.
+- The fluence ladder (`resolution/ladder.py`) draws one run per campaign and step
+  (`ladder.step_winners`): March, the highest-bias run at the standard operating point of each step
+  (`MARCH_DISPLAY_RUNS`, checked against the tables; a disagreement stops the notebook); July, the
+  step's preferred display run, replaced by its merge under the merge rule. The two looks at 1.5e15
+  sit 0.06e15 either side of the step (March left, July right): the one x offset on these figures,
+  a dodge between campaigns, not jitter, and the footer says so. Lines join a board's steps within
+  one campaign. Colour = board, marker = chip, line style = look; merges carry the thick black edge.
+- The numbers table (`resolution/numbers_table.py`) has one row per point of the ladder, columns
+  `numbers_table.COLUMNS`: telescope, campaign, bookkeeping fluence, board, chip, run (a merge as
+  "3+4"), merged, bias, threshold offset, RFSel, pixels; the top value and pixel spread (what the
+  ladder draws) and the same with the central track per pixel; at 3.5e15 the band's ends, the
+  anointed value and the central anointed value; and, for July, whether the run is the step's
+  preferred run. At 3.5e15 the top and central values are band centres; the anointed values have
+  columns of their own. It is written as .csv (every digit) and .md (0.1 ps) beside its figure.
+- The pixel-yield figure counts, per board and point of the ladder, the pixels with a resolution
+  at the ladder's event floor (300 events: solid lines with markers) and with tracks of any events
+  (floor "none": dashed, no markers). A floor-"none" row missing from the table is a gap in the
+  dashed line, never 0 (`ladder.floor_none_pixels`). Display runs at a lower bias than the ladder's
+  run at a step are small open markers, named in the footer.
 
 ## Settings figures
 

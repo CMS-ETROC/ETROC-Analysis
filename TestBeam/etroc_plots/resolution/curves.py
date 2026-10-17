@@ -13,6 +13,9 @@ Populations, chosen in the notebook with these helpers:
   merge_rule    a merge replaces its runs only when every run of the merge is in the figure's
                 display-list class and the good-run list marks the merge good
   good_list     the good-run list of one campaign and telescope, merges included ("3+4")
+  one_per_condition
+                one run per bias pattern (every board's bias) of a display class: the preferred
+                run where it is in the group, else the latest run; then the merge rule
 
 Clocks, from the run starts of RUN_TIMES_CSV (overview.timeline.read_run_times):
 
@@ -36,6 +39,13 @@ Figures (each returns the figure and the numbers drawn):
   res_1p5e15_march_vs_july     the March 1.5e15 scan and the July 1.5e15 points
   res_july_1p5e15_stability    July 1.5e15 against the hours since the first run there
   res_2e15_cooling_down        July 2e15 against the hours after the stop, in-run currents
+  res_3p5e15_vs_bias_and_hours July 3.5e15 against the bias and against the hours after the
+                               stop, bands, one row of two panels per telescope
+  res_vs_bias_summary          every March standard run and one July run per condition, colour
+                               = fluence step
+
+The fluence ladder (best resolution per step, pixel yield) is resolution.ladder; the numbers
+table is resolution.numbers_table.
 """
 import re
 
@@ -249,6 +259,31 @@ def display_class(path, step, rfsel=STANDARD_RFSEL, offset=STANDARD_OFFSET):
     return {}, {}
 
 
+def one_per_condition(rs, telescope, runs, preferred=None, camp="july"):
+    """One run per condition among `runs` (the runs of one display class): runs whose boards
+    all sit at the same bias, threshold offset and RFSel (runs_summary, board by board) form a
+    group; a group keeps the preferred run (`preferred`) where it is in the group, else its
+    latest run (the highest run number: the runs of a campaign count up in time). Returns
+    (kept, dropped): the kept runs sorted, dropped {run: why}. Apply merge_rule to the kept
+    runs afterwards: a merge then replaces the kept run it holds."""
+    tc, tk = campaign.TABLE_CAMPAIGN[camp], campaign.TABLE_TEL[telescope]
+    groups = {}
+    for r in sorted({int(x) for x in runs}):
+        key = tuple((b["board_idx"], b["hv"], b["offset"], b["rfsel"])
+                    for b in tables.run_settings(rs, tc, tk, r))
+        groups.setdefault(key, []).append(r)
+    kept, dropped = [], {}
+    for g in groups.values():
+        if preferred is not None and int(preferred) in g:
+            keep, why = int(preferred), "the preferred run"
+        else:
+            keep, why = g[-1], "the later run"
+        kept.append(keep)
+        dropped.update({r: "same bias on every board as run %d, %s" % (keep, why)
+                        for r in g if r != keep})
+    return sorted(kept), dropped
+
+
 # ------------------------------------------------------------------------------- clocks
 def stop_band(step, min_h=STOP_BAND_MIN_H):
     """(0, span) in hours: the allowed range of the stop of `step` (RAD_STOP_BOUNDS_UTC: latest
@@ -339,12 +374,14 @@ def _color_of(pts, color_by):
     return rule, lambda p: colors[look(p)]
 
 
-def _handles(pts, figure_pts, rule, color_of, scale):
+def _handles(pts, figure_pts, rule, color_of, scale, look_label=None):
     """The chip handles of `pts` and, when colour = look, the handles of the looks in `pts`
-    (coloured as on the whole figure, `figure_pts`)."""
+    (coloured as on the whole figure, `figure_pts`), labelled by `look_label` (default
+    look_text)."""
+    look_label = look_label or look_text
     present = set(looks(pts))
     return dict(chips=_chip_handles(pts, rule, color_of, scale),
-                looks=[Line2D([], [], color=c, linewidth=3.0 * scale, label=look_text(k))
+                looks=[Line2D([], [], color=c, linewidth=3.0 * scale, label=look_label(k))
                        for k, c in look_colors(figure_pts).items() if k in present]
                 if rule == "fluence" else [])
 
@@ -354,10 +391,21 @@ def look_text(k):
     return u"%s, %s" % (k[0].capitalize(), style.fluence_label(k[1]))
 
 
+def chip_look_text(k):
+    """Legend text of a look with the fluence on the chips (CHIP_FLUENCE_TEXT, CHIP_FLUENCE_FACTOR
+    x the bookkeeping step): "March, 1.12e15 p/cm2 on the chips"."""
+    if k[1] == 0.0:
+        return u"%s, %s" % (k[0].capitalize(), campaign.CHIP_FLUENCE_TEXT[0.0])
+    return u"%s, %s %s on the chips" % (k[0].capitalize(), campaign.CHIP_FLUENCE_TEXT[k[1]],
+                                        campaign.FLUENCE_UNIT)
+
+
 # ------------------------------------------------------------------------------ drawing
-def _draw(ax, pts, x_of, color_of, open_of, series_of, half_width, scale):
+def _draw(ax, pts, x_of, color_of, open_of, series_of, half_width, scale, linestyle_of=None):
     """Every point at x_of(p): a band where it has one, else the marker and its bar; then one
-    line per series (series_of) through the mean at each x."""
+    line per series (series_of) through the mean at each x, in the chip's line style unless
+    `linestyle_of` (a function of the series' first point) says otherwise."""
+    linestyle_of = linestyle_of or (lambda p: style.chip_linestyle(p["chip"]))
     for p in pts:
         c = color_of(p)
         x = x_of(p)
@@ -377,7 +425,7 @@ def _draw(ax, pts, x_of, color_of, open_of, series_of, half_width, scale):
         if len(xs) < 2:
             continue
         ys = [np.mean([p["y_ps"] for p in s if x_of(p) == x]) for x in xs]
-        ax.plot(xs, ys, color=color_of(s[0]), linestyle=style.chip_linestyle(s[0]["chip"]),
+        ax.plot(xs, ys, color=color_of(s[0]), linestyle=linestyle_of(s[0]),
                 linewidth=1.8 * scale, zorder=2)
 
 
@@ -397,14 +445,15 @@ def _chip_handles(pts, rule, color_of, scale):
 
 
 def bias_scan(ax, pts, color_by=None, open_of=None, half_width=None, figure_pts=None,
-              scale=SCALE):
+              scale=SCALE, look_label=None):
     """Draw `pts` (one telescope) against the bias: x = each board's own bias (p["hv"]), points
     at one bias stacked at that bias (no jitter). Colour by look or by board (`color_by`:
     "fluence", "board" or None for color_rule over `figure_pts`, the whole figure's points,
     default `pts`), marker and line style by chip, an open marker where open_of(p), the thick
     black edge on merged runs; a band where a point has one (`half_width` in V, default 0.8 % of
     the axis span). One line per (chip, look) through the mean at each bias. Returns the legend
-    handles: dict(chips=[...], looks=[...])."""
+    handles: dict(chips=[...], looks=[...]), the looks labelled by `look_label` (default
+    look_text)."""
     open_of = open_of or (lambda p: False)
     figure_pts = figure_pts or pts
     rule, color_of = _color_of(figure_pts, color_by)
@@ -412,16 +461,17 @@ def bias_scan(ax, pts, color_by=None, open_of=None, half_width=None, figure_pts=
         half_width = 0.008 * abs(np.diff(ax.get_xlim())[0])
     _draw(ax, pts, lambda p: p["hv"], color_of, open_of,
           lambda p: (p["chip"], look(p)), half_width, scale)
-    return _handles(pts, figure_pts, rule, color_of, scale)
+    return _handles(pts, figure_pts, rule, color_of, scale, look_label)
 
 
 def time_series(ax, pts, hours, stop_band=None, color_by=None, open_of=None, half_width=None,
                 figure_pts=None, scale=SCALE):
     """Draw `pts` (one telescope) against time: x = hours[p["run"]], every board of a run at its
     run's x (no jitter). Colour, markers, open markers and bands as bias_scan. One line per
-    (chip, look, bias): a series breaks where the bias of its board changes. `stop_band` (0,
-    span) in hours shades the allowed range of the irradiation stop at the origin (stop_band()).
-    Returns the legend handles: dict(chips=[...], looks=[...])."""
+    (chip, look, bias, threshold offset): a series breaks where the bias or the offset of its
+    board changes. `stop_band` (0, span) in hours shades the allowed range of the irradiation
+    stop at the origin (stop_band()). Returns the legend handles: dict(chips=[...],
+    looks=[...])."""
     open_of = open_of or (lambda p: False)
     figure_pts = figure_pts or pts
     rule, color_of = _color_of(figure_pts, color_by)
@@ -431,7 +481,7 @@ def time_series(ax, pts, hours, stop_band=None, color_by=None, open_of=None, hal
     if half_width is None:
         half_width = 0.008 * abs(np.diff(ax.get_xlim())[0])
     _draw(ax, pts, lambda p: hours[p["run"]], color_of, open_of,
-          lambda p: (p["chip"], look(p), p["hv"]), half_width, scale)
+          lambda p: (p["chip"], look(p), p["hv"], p["offset"]), half_width, scale)
     return _handles(pts, figure_pts, rule, color_of, scale)
 
 
@@ -468,10 +518,10 @@ def _footer_in(text, scale):
     return (text.count("\n") + 1) * 1.2 * style.sizes(scale)["ann"] / 72.0
 
 
-def _row(n, footer, scale, aw=7.6, ah=4.6, gx=1.05):
+def _row(n, footer, scale, aw=7.6, ah=4.6, gx=1.05, mr=0.3):
     """`n` panels in one row, each aw x ah inches; the bottom margin holds the tick labels, the
-    axis label and the footer."""
-    fig, axes = blnw._grid(1, n, aw=aw, ah=ah, ml=1.2, mr=0.3, mt=0.62,
+    axis label and the footer; the right margin `mr` inches (a legend outside the last panel)."""
+    fig, axes = blnw._grid(1, n, aw=aw, ah=ah, ml=1.2, mr=mr, mt=0.62,
                            mb=0.7 + _footer_in(footer, scale), gx=gx, gy=0.0, scale=scale)
     return fig, axes[0]
 
@@ -511,27 +561,39 @@ def _numbers(pts, x_of, color_of, open_of):
 
 
 def _scan(pts_by_tel, *, tel_titles, xlabel, ylim, tag, data, footer, color_by=None,
-          open_of=None, xlims=None, kinds=None, kinds_loc="lower left", scale=SCALE):
+          open_of=None, xlims=None, kinds=None, kinds_loc="lower left", look_label=None,
+          side=None, mr=0.3, scale=SCALE):
     """A row of bias-scan panels, one per telescope of `tel_titles` (left to right): the chip
     legend upper left (one row), the look legend upper right (when colour = look), the marker
-    kinds (`kinds`: handles) at `kinds_loc`. Returns (figure, numbers)."""
+    kinds (`kinds`: handles) at `kinds_loc`. With `side` (a list of extra handles, possibly
+    empty) the look legend is drawn once, outside the last panel on its right, the looks of the
+    whole figure followed by `side`; `mr` inches of right margin hold it. Returns (figure,
+    numbers)."""
     tels = list(tel_titles)
     open_of = open_of or (lambda p: False)
     every = [p for t in tels for p in pts_by_tel[t]]
     rule, color_of = _color_of(every, color_by)
-    fig, axes = _row(len(tels), footer, scale)
+    fig, axes = _row(len(tels), footer, scale, mr=mr)
     numbers = []
     for ax, tel in zip(axes, tels):
         tp = pts_by_tel[tel]
         xlim = (xlims or {}).get(tel) or _span([p["hv"] for p in tp], 0.1, 15.0)
         _axis(ax, xlim, ylim, xlabel, scale)
-        h = bias_scan(ax, tp, color_by=rule, open_of=open_of, figure_pts=every, scale=scale)
+        h = bias_scan(ax, tp, color_by=rule, open_of=open_of, figure_pts=every, scale=scale,
+                      look_label=look_label)
         _legend(ax, h["chips"], "upper left", scale, ncol=len(h["chips"]))
-        if h["looks"]:
+        if h["looks"] and side is None:
             _legend(ax, h["looks"], "upper right", scale)
         if kinds and kinds.get(tel):
             _legend(ax, kinds[tel], kinds_loc, scale)
         numbers += _numbers(tp, lambda p: p["hv"], color_of, open_of)
+    if side is not None:
+        s = style.sizes(scale)
+        handles = _handles(every, every, rule, color_of, scale, look_label)["looks"] + list(side)
+        lg = axes[-1].legend(handles=handles, loc="upper left", bbox_to_anchor=(1.03, 1.0),
+                             borderaxespad=0.0, fontsize=s["legend"], handletextpad=0.4,
+                             labelspacing=0.35, handlelength=2.2)
+        axes[-1].add_artist(lg)
     style.compound_header(axes, tag=tag, data=data, scale=scale,
                           subjects=[tel_titles[t] for t in tels])
     style.footer(fig, footer, scale)
@@ -636,3 +698,96 @@ def res_2e15_cooling_down(pts_by_tel, hours, *, stop, braces, **words):
         brace(ax, x0, x1, y, 2.5, text, words.get("scale", SCALE))
         numbers["braces"][tel] = dict(runs=sorted(runs), x0=x0, x1=x1, y_ps=y, text=text)
     return fig, numbers
+
+
+def _place(where, n):
+    """(loc, ncol) of a legend: `where` is a loc, a (loc, ncol) pair or None (upper left, `n`
+    columns: one row)."""
+    if where is None:
+        return "upper left", n
+    return (where, n) if isinstance(where, str) else tuple(where)
+
+
+def res_3p5e15_vs_bias_and_hours(bias_pts, time_pts, hours, *, tel_titles, ylim, tag, data,
+                                 footer, xlabel_bias, xlabel_hours, run_labels, label_y,
+                                 groups, group_y, stop=None, open_runs=None, open_legend=None,
+                                 legend_locs=None, xlims=None, scale=SCALE):
+    """re06: one step (July 3.5e15), one row per telescope of `tel_titles`, top to bottom: on
+    the left the resolution against the bias (bias_pts {tel: points}), on the right against the
+    hours after the stop (time_pts {tel: points}, x = hours[tel][run]). Every point is a band
+    (BAND_STEPS); colour = board, marker = chip. On the time panels: under each run its label
+    (run_labels[tel][run], at `label_y` ps) and, at `group_y` ps, one text under each group of
+    runs (groups[tel]: [(runs, text), ...]), centred on the group; runs of open_runs[tel] are
+    drawn with open markers and named by open_legend {tel: (handles, loc, title)}; `stop`
+    shades the allowed-stop range (stop_band). legend_locs {(tel, "bias" or "hours"): loc or
+    (loc, ncol)} places the chip legend (default upper left, one row); xlims {(tel, panel): (lo,
+    hi)}. Returns (figure, numbers)."""
+    tels = list(tel_titles)
+    open_runs = open_runs or {}
+    open_legend = open_legend or {}
+    legend_locs = legend_locs or {}
+    xlims = xlims or {}
+    s = style.sizes(scale)
+    fig, axes = blnw._grid(len(tels), 2, aw=7.6, ah=4.6, ml=1.2, mr=0.3, mt=0.62,
+                           mb=0.7 + _footer_in(footer, scale), gx=1.05, gy=1.3, scale=scale)
+    numbers, labels = [], {}
+    for row, tel in zip(axes, tels):
+        ax_b, ax_t = row
+        def open_of(p, tel=tel):
+            return p["run"] in open_runs.get(tel, ())
+        bp, tp, hr = bias_pts[tel], time_pts[tel], hours[tel]
+        _, color_of = _color_of(bp + tp, "board")
+        _axis(ax_b, xlims.get((tel, "bias")) or _span([p["hv"] for p in bp], 0.1, 15.0), ylim,
+              xlabel_bias, scale)
+        h = bias_scan(ax_b, bp, color_by="board", open_of=open_of, scale=scale)
+        loc, ncol = _place(legend_locs.get((tel, "bias")), len(h["chips"]))
+        _legend(ax_b, h["chips"], loc, scale, ncol=ncol)
+        numbers += [dict(q, panel="bias") for q in _numbers(bp, lambda p: p["hv"], color_of,
+                                                            open_of)]
+        _axis(ax_t, xlims.get((tel, "hours"))
+              or _span([0.0] + [hr[p["run"]] for p in tp], 0.07, 1.0), ylim, xlabel_hours, scale)
+        h = time_series(ax_t, tp, hr, stop_band=stop, color_by="board", open_of=open_of,
+                        scale=scale)
+        loc, ncol = _place(legend_locs.get((tel, "hours")), len(h["chips"]))
+        _legend(ax_t, h["chips"], loc, scale, ncol=ncol)
+        if open_legend.get(tel):
+            handles, loc, title = open_legend[tel]
+            _legend(ax_t, handles, loc, scale, title=title)
+        for run in sorted({p["run"] for p in tp}, key=lambda r: hr[r]):
+            ax_t.text(hr[run], label_y, run_labels[tel][run], ha="center", va="bottom",
+                      color=style.INK, fontsize=s["ann"], gid=LABEL_GID, zorder=6)
+            labels["%s run %s" % (tel, run)] = dict(text=run_labels[tel][run], x=hr[run],
+                                                    y_ps=label_y)
+        for runs, text in groups.get(tel, []):
+            x = 0.5 * (min(hr[r] for r in runs) + max(hr[r] for r in runs))
+            ax_t.text(x, group_y, text, ha="center", va="bottom", color=style.INK,
+                      fontsize=s["ann"], gid=LABEL_GID, zorder=6)
+            labels["%s runs %s" % (tel, ", ".join(map(str, runs)))] = dict(text=text, x=x,
+                                                                         y_ps=group_y)
+        numbers += [dict(q, panel="hours") for q in _numbers(tp, lambda p: hr[p["run"]],
+                                                             color_of, open_of)]
+    s = style.compound_header(axes[0], tag=tag, data=data, scale=scale,
+                              subjects=[tel_titles[tels[0]]] * 2)
+    for row, tel in zip(axes[1:], tels[1:]):
+        for ax in row:
+            style.right_lines(ax, [tel_titles[tel]], s["title"])
+    style.footer(fig, footer, scale)
+    return fig, dict(points=numbers, color_rule="board", ylim_ps=list(ylim),
+                     xlim={"%s %s" % (t, k): list(ax.get_xlim()) for t, row in zip(tels, axes)
+                           for k, ax in zip(("bias", "hours"), row)},
+                     labels=labels, stop_band_h=list(stop) if stop else None)
+
+
+def res_vs_bias_summary(pts_by_tel, *, chip_fluence=False, mr=None, **words):
+    """re07: every March standard run and one July run per condition (one_per_condition, then
+    the merge rule) against the bias, one panel per telescope; colour = fluence step (a later
+    look at a step in the later-look hue), marker = chip, merged runs with the thick black
+    edge. The look legend stands once, outside the last panel; with `chip_fluence` its labels
+    give the fluence on the chips (chip_look_text) instead of the bookkeeping fluence. `mr`
+    inches of right margin hold that legend (default: wide enough for either labelling).
+    `words` as res_vs_bias_march_preirrad. Returns (figure, numbers)."""
+    scale = words.get("scale", SCALE)
+    merged = any(p["merged"] for pts in pts_by_tel.values() for p in pts)
+    return _scan(pts_by_tel, color_by="fluence", side=kind_handles(merged=merged, scale=scale),
+                 look_label=chip_look_text if chip_fluence else look_text,
+                 mr=mr or (3.7 if chip_fluence else 2.9), **words)

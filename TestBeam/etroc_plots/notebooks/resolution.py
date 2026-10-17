@@ -27,13 +27,22 @@
 #   after the telescopes were reinstalled.
 # * Figure re05: July at 2e15 against the hours after the end of the irradiation step, with each
 #   chip's in-run bias current.
+# * Figure re06: July at 3.5e15 against the bias and against the hours after the end of the
+#   irradiation step.
+# * Figure re07: every bias scan of both campaigns on one figure per telescope, one July run per
+#   condition.
+# * Figure re08: the fluence ladder, each board's resolution at each step at its highest bias.
+# * Figure re09: the numbers behind re08, as a table (.csv, .md and a table figure).
+# * Figure re10: the pixels behind the re08 points, with at least 300 events and with any events.
 #
 # Every point is one board in one run: its value in its anointed 3-board combination (boards
 # 0-1-2 for boards 0, 1 and 2; boards 1-2-3 for board 3), the most-populated track per pixel,
 # tracks with at least 300 events; the width is FWHM/2.355 of the TOA-difference core, as the
-# result tables carry it. The bar is the pixel-to-pixel spread of the board's map. None of these
-# figures has a 3.5e15 point, so none has a band (`../CONVENTIONS.md`, "Resolution and TDC
-# figures").
+# result tables carry it. The bar is the pixel-to-pixel spread of the board's map. Every point at
+# 3.5e15 is a band: a shaded box from the lowest to the highest value of the board over every
+# 3-board combination containing it, the marker at its centre, the bar the anointed
+# combination's pixel-to-pixel spread (`../CONVENTIONS.md`, "Resolution and TDC figures").
+# re01 to re05 have no 3.5e15 point, so no band.
 #
 # Every figure is saved as PNG (200 dpi) and PDF, with `<name>_values.json` beside it: every
 # number drawn, the input files read and the commit of the code.
@@ -69,9 +78,12 @@
 # * `tables/run_times.csv`: the start of every run, for the hours on the time axes.
 # * `july/july_inrun_currents.csv`: each chip's bias current during each July run (re05).
 #
-# The drawing lives in `../resolution/curves.py`, the tables and bands in
+# The drawing lives in `../resolution/curves.py` (bias and time axes),
+# `../resolution/ladder.py` (the fluence ladder and the pixel yield) and
+# `../resolution/numbers_table.py` (the table), the tables and bands in
 # `../resolution/tables.py`. This notebook holds the choices made per figure: the runs, the
-# words and the axis ranges.
+# words and the axis ranges. The table of re09 is written as `re09_numbers_table.csv` and `.md`
+# beside its figure.
 #
 # `resolution.ipynb` and `resolution.py` are the same notebook, kept in step by jupytext. Edit
 # either one, then run `python3 -m jupytext --sync resolution.ipynb` and
@@ -108,6 +120,7 @@ from etroc_plots.inputs import check_inputs                   # noqa: E402
 from etroc_plots.frontend import blnw                         # noqa: E402
 from etroc_plots.overview import timeline                     # noqa: E402
 from etroc_plots.resolution import curves, settings, tables   # noqa: E402
+from etroc_plots.resolution import ladder, numbers_table       # noqa: E402
 
 if campaigns.NAME != CAMPAIGN:
     raise RuntimeError("the package is running campaign %r (ETROC_CAMPAIGN) but CAMPAIGN = %r: "
@@ -174,14 +187,15 @@ def save(fig, stem, payload, conventions):
 # every run of the merge is in the step's display class and the good-run list marks the merge
 # good (`curves.merge_rule`). So H1 3+4 (1.5e15) and 11+12 (2e15) replace the preferred runs 4
 # and 12; H1 6+7 and 18+19 are not good as merges, H1 14+15 and F1 3+4 hold runs off the display
-# class, F1 46+47 sits at RFSel 1. The cell below prints the rule's outcome for every merge.
+# class, F1 46+47 sits at RFSel 1. At 3.5e15 no merge applies: the result run is 18 on both
+# telescopes. The cell below prints the rule's outcome for every merge at every July step.
 #
 # A figure whose axis is time draws single runs: a merge spans the times of its runs (re04,
 # re05). Every run drawn, single or merged, has to be good on the good-run list; the cells stop
 # otherwise.
 
 # %%
-STEPS_JUL = (1.5e15, 2e15)
+STEPS_JUL = (1.5e15, 2e15, 3.5e15)
 CLASS = {f: curves.display_class(campaign.DISPLAY_RUNS_JUL_CSV, f) for f in STEPS_JUL}
 RESULT, MERGE_EFFECT = {}, {}
 for f in STEPS_JUL:
@@ -603,3 +617,374 @@ save(fig, "re05_res_2e15_cooling_down",
                        "allowed stop), hours; the allowed range is RAD_STOP_BOUNDS_UTC",
                  in_run_current="july_inrun_currents.csv i_inrun_uA: median bias current over "
                                 "the run's HV plateau"))
+
+# %% [markdown]
+# ## Figure re06: 3.5e15 against the bias and against the hours after the stop
+#
+# The July display runs at 3.5e15 at the standard operating point (RFSel 2, threshold offset 20):
+# H1 run 18 (IH7 at 530 V, the other chips at 550 V); F1 runs 13 and 14 (LF17 at 370 V, the
+# others at 390 V) and run 18 (LF17 at 450 V, the others at 480 V). One row per telescope: on the
+# left against the bias, on the right against the hours after the end of the irradiation step.
+# One fluence step, so the colour is the board and the step is named in the header. Every point
+# is a band (see the top of this notebook).
+#
+# On the F1 hours panel two more runs are drawn with open markers: runs 50 and 51, the display
+# class at threshold offset 15 (LF10 and LF17 at 450 V, LF12 and LF18 at 480 V), a week after
+# the stop. They differ from run 18 in the offset and in each chip's bias at once, so the
+# offset legend names them; they are not on the bias panel, which holds the offset-20 runs only.
+#
+# The clock: the records fix the 3.5e15 stop to between 15:49:26 and 15:51:26 UTC on 2026-07-25
+# (`RAD_STOP_BOUNDS_UTC`); the hours count from 15:49:26 (`RAD_STOP_UTC`). The allowed range is
+# 2 min, below the 0.25 h that earns a shaded band, so none is drawn.
+#
+# Read with care: on F1 the bias rises from 390/370 V (runs 13, 14) to 480/450 V (run 18) while
+# the hours after the stop grow from 4 to 46, so the two panels show the same three runs from
+# two sides; these runs do not separate the bias from the cooling down. Under each run on the
+# hours panels: its number, and under each group of runs at one bias pattern that bias.
+
+# %%
+runs06, pref06 = CLASS[3.5e15]
+runs15 = curves.display_class(campaign.DISPLAY_RUNS_JUL_CSV, 3.5e15, offset=15)[0]
+B06, T06, H06, OS15 = {}, {}, {}, {}
+for t in TELS:
+    B06[t] = curves.standard(curves.points(BT, BM, RS, t, runs06[t], "july", VARIANT, FLOOR))
+    if sorted({p["run"] for p in B06[t]}) != sorted(runs06[t]):
+        raise RuntimeError("%s: a 3.5e15 display run is not at the standard point" % t)
+    OS15[t] = list(runs15.get(t, []))
+    p15 = curves.points(BT, BM, RS, t, OS15[t], "july", VARIANT, FLOOR)
+    if any(p["offset"] != 15 or p["rfsel"] != 2 for p in p15):
+        raise RuntimeError("%s: a run of the offset-15 class is not at RFSel 2, offset 15" % t)
+    T06[t] = B06[t] + p15
+    H06[t] = curves.hours_after_stop(RUN_TIMES, t, list(runs06[t]) + OS15[t], 3.5e15)
+GOOD06 = check_good([p for t in TELS for p in T06[t]], "july")
+STOP06 = curves.stop_band(3.5e15)        # None: the allowed range is 2 min
+
+
+def bias_groups(pts, hours):
+    """[(runs, bias text)]: the runs of `pts` in time order, consecutive runs at one bias and
+    offset on every board together, with blnw.bias_text of their biases."""
+    out = []
+    for r in sorted({p["run"] for p in pts}, key=lambda r: hours[r]):
+        pattern = tuple((p["board_idx"], p["hv"], p["offset"])
+                        for p in sorted(pts, key=lambda p: p["board_idx"]) if p["run"] == r)
+        if out and out[-1][0] == pattern:
+            out[-1][1].append(r)
+        else:
+            out.append((pattern, [r]))
+    return [(runs, blnw.bias_text([hv for _, hv, _ in pattern])) for pattern, runs in out]
+
+
+GROUPS06 = {t: bias_groups(T06[t], H06[t]) for t in TELS}
+open_legend06 = {t: ([plt.Line2D([], [], color=style.INK, marker="o", linestyle="none",
+                                 markersize=8.5 * curves.SCALE, markerfacecolor=style.INK,
+                                 label=u"20 (runs %s)" % u", ".join(map(str, runs06[t]))),
+                      plt.Line2D([], [], color=style.INK, marker="o", linestyle="none",
+                                 markersize=8.5 * curves.SCALE, markerfacecolor=style.SURFACE,
+                                 markeredgewidth=1.8 * curves.SCALE,
+                                 label=u"15 (runs %s)" % u", ".join(map(str, OS15[t])))],
+                     "upper center", u"threshold offset") for t in TELS if OS15[t]}
+LOCS06 = {("h1", "bias"): "lower center", ("f1", "bias"): "lower right",
+          ("h1", "hours"): "upper left", ("f1", "hours"): ("upper right", 2)}
+merge06 = {k: v for k, v in MERGE_EFFECT.items() if k.endswith("3.5e+15")}
+footer06 = u"\n".join([
+    SELECTION,
+    u"Every point a band: %s." % tables.BAND_FOOTER,
+    u"The display runs at 3.5e15, RFSel 2, threshold offset 20: H1 %s; F1 %s. No merge applies "
+    u"at this step (merge rule)." % (bias_text(B06["h1"], "h1"), bias_text(B06["f1"], "f1")),
+    u"Open markers, hours panel only: the display class at threshold offset 15, %s." % (
+        u"; ".join(u"%s runs %s" % (t.upper(), bias_text([p for p in T06[t] if p["offset"] == 15],
+                                                          t))
+                   for t in TELS if OS15[t])),
+    u"x (right) = hours from %s UTC, the earliest end of the irradiation the records allow (the "
+    u"latest is 2 min later); under each run its number, under each group its bias." % (
+        campaign.RAD_STOP_UTC[3.5e15][11:19]),
+    u"%s. %s" % (counts_text([p for t in TELS for p in T06[t]]), FLUENCE_TEXT)])
+fig, n06 = curves.res_3p5e15_vs_bias_and_hours(
+    B06, T06, H06, tel_titles=TEL_TITLES, ylim=YLIM,
+    tag=style.settings_text(rfsel=2, offset=[20, 15]),
+    data=u"July, bookkeeping fluence %s" % step_text(3.5e15), footer=footer06,
+    xlabel_bias=style.XLABEL_BIAS,
+    xlabel_hours=u"Hours after the end of the %s irradiation" % step_text(3.5e15),
+    run_labels={t: {r: u"%d" % r for r in H06[t]} for t in TELS}, label_y=27.0,
+    groups=GROUPS06, group_y=21.0, stop=STOP06, open_runs={t: set(OS15[t]) for t in TELS},
+    open_legend=open_legend06, legend_locs=LOCS06)
+save(fig, "re06_res_3p5e15_vs_bias_and_hours",
+     payload(n06, footer06, hours={t: {str(r): h for r, h in H06[t].items()} for t in TELS},
+             stop_utc=campaign.RAD_STOP_UTC[3.5e15],
+             stop_bounds_utc=list(campaign.RAD_STOP_BOUNDS_UTC[3.5e15]),
+             offset15_runs=OS15, merge_rule=merge06, good_runs=GOOD06),
+     conventions(colour="board (etroc_style.BOARD_COLOR): one step",
+                 band=tables.BAND_FOOTER,
+                 times="run start (tables/run_times.csv) minus RAD_STOP_UTC[3.5e15] (the "
+                       "earliest allowed stop), hours; the allowed range is RAD_STOP_BOUNDS_UTC"))
+
+# %% [markdown]
+# ## Figure re07: every bias scan, one figure per telescope
+#
+# The summary of re01 to re06 against the bias: every March run at the standard operating point
+# at every step (the populations of re01 and re02, the March scan at 1.5e15 of re03), and the
+# July display runs at RFSel 2, threshold offset 20, one run per condition. A condition is one
+# step and one bias on every board: where the display list holds several runs at one condition,
+# the figure draws the preferred run when it is one of them, else the later run
+# (`curves.one_per_condition`), then the merge rule. So H1 draws 3+4 (1.5e15) and 11+12 (2e15),
+# merged, and 18 (3.5e15); F1 draws 9 (1.5e15), 12 (2e15), 14 and 18 (3.5e15). F1 runs 13 and 14
+# share every board's bias: neither is the preferred run, and the figure takes 14, the later
+# one. To draw 13 instead, put it in place of 14 in `P07` below; the footer lists every display
+# run left out and why.
+#
+# The colour is the fluence step, with July 1.5e15 in the later-look colour (teal) beside the
+# March red; the marker is the chip, the thick black edge marks merged runs. The legend names
+# the bookkeeping fluence. The option `CHIP_FLUENCE07 = True` writes the fluence on the chips
+# (`CHIP_FLUENCE_FACTOR` times the bookkeeping fluence) in the legend instead; the figure is the
+# same otherwise.
+#
+# The July points sit at higher bias than any March point of the same telescope, four months
+# later: the gap between March and July at 1.5e15 mixes the bias, the cooling down and the
+# reinstall (re03).
+
+# %%
+CHIP_FLUENCE07 = False          # True: the legend gives the fluence on the chips
+P07, DROP07M = {t: [] for t in TELS}, {t: {} for t in TELS}
+for f in (0.0, 3e14, 9e14, 1.5e15):
+    k, d = march_points(f)
+    for t in TELS:
+        P07[t] += k[t]
+        DROP07M[t].update(d[t])
+DROP07, TAKEN07, DRAWN07 = {t: {} for t in TELS}, {t: {} for t in TELS}, {t: [] for t in TELS}
+for f in STEPS_JUL:
+    runs, preferred = CLASS[f]
+    for t in TELS:
+        kept, dropped = curves.one_per_condition(RS, t, runs[t], preferred[t])
+        drawn, taken, _ = curves.merge_rule(kept, MERGES[t], runs[t], GOOD[("july", t)])
+        pts = curves.points(BT, BM, RS, t, drawn, "july", VARIANT, FLOOR)
+        if curves.standard(pts) != pts:
+            raise RuntimeError("%s %g: a July run drawn is not at the standard point" % (t, f))
+        P07[t] += pts
+        DRAWN07[t] += [curves.run_label(r) for r in drawn]
+        TAKEN07[t].update({curves.run_label(m): r for m, r in taken.items()})
+        DROP07[t].update(dropped)
+check_good([p for t in TELS for p in P07[t] if p["camp"] == "march"], "march")
+GOOD07 = check_good([p for t in TELS for p in P07[t] if p["camp"] == "july"], "july")
+
+
+def dropped_text(t):
+    """The display runs of `t` not drawn, runs of one reason together."""
+    by = {}
+    for r, why in sorted(DROP07[t].items()):
+        inside = [m for m, rs in TAKEN07[t].items() if r in [int(x) for x in m.split("+")]]
+        by.setdefault(u"in the merge %s" % inside[0] if inside else why, []).append(r)
+    return u"; ".join(u"%s (%s)" % (u", ".join(map(str, rs)), why) for why, rs in by.items())
+
+
+footer07 = u"\n".join([
+    SELECTION,
+    u"March: every run at RFSel 2 (the March RFSel), threshold offset 20, at every step; not "
+    u"drawn: %s." % u"; ".join(u"%s run %d (%s)" % (t.upper(), r, why) for t in TELS
+                                for r, why in sorted(DROP07M[t].items())),
+    u"July: the display runs at RFSel 2, offset 20, one per step and bias (the preferred run, "
+    u"else the later run), merges by the merge rule (thick black edge).",
+    u"July drawn: H1 %s; F1 %s." % (bias_text([p for p in P07["h1"] if p["camp"] == "july"], "h1"),
+                                    bias_text([p for p in P07["f1"] if p["camp"] == "july"], "f1")),
+    u"Display runs not drawn: H1 %s; F1 %s." % (dropped_text("h1"), dropped_text("f1")),
+    u"At 3.5e15 every point is a band: %s." % tables.BAND_FOOTER,
+    u"%s. %s" % (counts_text([p for t in TELS for p in P07[t]]), FLUENCE_TEXT)])
+fig, n07 = curves.res_vs_bias_summary(
+    P07, chip_fluence=CHIP_FLUENCE07, tel_titles=TEL_TITLES, xlabel=style.XLABEL_BIAS,
+    ylim=YLIM, tag=TAG, data=u"March and July, every step", footer=footer07)
+save(fig, "re07_res_vs_bias_summary",
+     payload(n07, footer07, july_drawn=DRAWN07, merges_taken=TAKEN07,
+             not_drawn_july={t: {str(r): w for r, w in DROP07[t].items()} for t in TELS},
+             not_drawn_march={t: {str(r): w for r, w in DROP07M[t].items()} for t in TELS},
+             chip_fluence_legend=CHIP_FLUENCE07, good_runs=GOOD07),
+     conventions(colour="fluence step (FLUENCE_COLOR), a later look at a step in the later-look "
+                        "hue (iv_plot.timing_color)",
+                 july_population="one run per (step, bias on every board) of the display class "
+                                 "(curves.one_per_condition), then the merge rule",
+                 band=tables.BAND_FOOTER))
+
+# %% [markdown]
+# ## Figure re08: the fluence ladder
+#
+# Each board's resolution at each fluence step, one point per step: the run at the highest bias
+# the step reached, where the resolution is best. March: the highest-bias run of each step at
+# the standard operating point (`MARCH_DISPLAY_RUNS`: H1 runs 7, 11, 14, 19; F1 runs 2, 11, 14,
+# 19), checked against the tables by `ladder.step_winners`. July: the preferred display run of
+# each step at RFSel 2, threshold offset 20, replaced by its merge under the merge rule: H1 3+4
+# (1.5e15), 11+12 (2e15), 18 (3.5e15); F1 9, 12, 18.
+#
+# The x axis is the bookkeeping fluence, linear. Both looks at 1.5e15 are drawn: March, and July
+# after four months of cooling down, March 0.06e15 left of the step and July 0.06e15 right of
+# it so the two do not cover each other. The colour is the board, the marker the chip; the line
+# style is the campaign (March solid, July dashed), and lines join a board's steps within one
+# campaign only. At 3.5e15 the points are bands.
+#
+# The highest bias rose from step to step, so this is not the resolution at one bias: each point
+# carries its own bias (re09 lists them).
+
+# %%
+CLASS08 = {f: CLASS[f] for f in STEPS_JUL}
+PREF08 = tables.preferred_runs(campaign.DISPLAY_RUNS_JUL_CSV, rfsel=2, offset=20)
+P08, PICKS08 = {}, {}
+for t in TELS:
+    if [CLASS08[f][1][t] for f in sorted(CLASS08)] != PREF08[t]:
+        raise RuntimeError("%s: the preferred runs of the display classes %s differ from the "
+                           "list's %s" % (t, [CLASS08[f][1][t] for f in sorted(CLASS08)],
+                                          PREF08[t]))
+    P08[t], PICKS08[t] = ladder.step_winners(BT, BM, RS, t, CLASS08, GOOD[("july", t)],
+                                             MERGES[t], variant=VARIANT, floor=FLOOR)
+check_good([p for t in TELS for p in P08[t] if p["camp"] == "march"], "march")
+GOOD08 = check_good([p for t in TELS for p in P08[t] if p["camp"] == "july"], "july")
+# To add with the combo-split figure: the maps notebook draws the single runs H1 4 and 12 at
+# these two steps, where this ladder draws the merges 3+4 and 11+12.
+
+
+def pick_text(t, camp):
+    """"7 (190 V), 11 (280 V)" for the picks of `t` in `camp`, merges marked."""
+    pts = [p for p in P08[t] if p["camp"] == camp]
+    out = []
+    for k in PICKS08[t]:
+        if k["camp"] != camp:
+            continue
+        text = bias_text([p for p in pts if p["label"] == k["run"]], t)
+        if k.get("taken"):
+            text = text[:-1] + u", replacing %d)" % k["preferred"]
+        out.append(text)
+    return u", ".join(out)
+
+
+footer08 = u"\n".join([
+    SELECTION,
+    u"March: the highest-bias run of each step at RFSel 2, threshold offset 20; H1 %s; F1 %s." % (
+        pick_text("h1", "march"), pick_text("f1", "march")),
+    u"July: the preferred display run of each step at RFSel 2, offset 20, merges by the merge "
+    u"rule (thick black edge); H1 %s;" % pick_text("h1", "july"),
+    u"F1 %s." % pick_text("f1", "july"),
+    u"Both looks at 1.5e15: March %.2fe15 left of the step, July %.2fe15 right of it; lines join "
+    u"a board's steps within one campaign." % (ladder.DODGE, ladder.DODGE),
+    u"At 3.5e15 every point is a band: %s." % tables.BAND_FOOTER,
+    u"%s. %s" % (counts_text([p for t in TELS for p in P08[t]]), FLUENCE_TEXT)])
+fig, n08 = ladder.best_res_vs_fluence(
+    P08, tel_titles=TEL_TITLES, ylim=YLIM, tag=TAG,
+    data=u"March and July, highest bias per step", footer=footer08)
+save(fig, "re08_best_res_vs_fluence",
+     payload(n08, footer08, picks={t: PICKS08[t] for t in TELS}, good_runs=GOOD08),
+     conventions(colour="board (etroc_style.BOARD_COLOR): one point per board and step",
+                 line_style="campaign: March solid, July dashed (ladder.LOOK_LINESTYLE)",
+                 x="bookkeeping fluence in 1e15 p/cm2; the two looks at 1.5e15 dodged by "
+                   "+/- %g" % ladder.DODGE,
+                 band=tables.BAND_FOOTER))
+
+# %% [markdown]
+# ## Figure re09: the numbers table
+#
+# The numbers behind re08, one row per telescope, campaign, step and board, written as
+# `re09_numbers_table.csv` (every digit) and `re09_numbers_table.md` (0.1 ps) beside the table
+# figure. Per row: the chip, the run (a merge as "3+4"), its bias, offset and RFSel, the pixels
+# behind the point, the value drawn on the ladder with its pixel-to-pixel spread ("top": the
+# most-populated track per pixel), the same board and run with the central track per pixel
+# ("central"), and at 3.5e15 the band's ends and the anointed combination's own value. At 3.5e15
+# both "top" and "central" are band centres, each of its own track choice, and the anointed
+# value is given for both choices. The table shown in September put the central anointed value
+# in its central column at 3.5e15; here that number is the column "central anointed value". The
+# column "preferred run" says, for July, whether the run is the step's preferred display run
+# or the merge holding it.
+#
+# The table shown in September had 48 of these 56 rows: the eight H1 cells of July 1.5e15 and
+# 2e15 were missing, because the merges were applied there before the display-run filter, which
+# then found neither the merge nor its single runs. Here those cells hold the merges 3+4 and
+# 11+12, as on re08.
+
+# %%
+ALL08 = [p for t in TELS for p in P08[t]]
+CENTRAL09 = numbers_table.central_values(BT, BM, ALL08, FLOOR)
+T09 = numbers_table.numbers_table(ALL08, CENTRAL09)
+TABLE09 = numbers_table.write_table(T09, OUT, "re09_numbers_table")
+print("table: %d rows -> %s" % (len(T09), ", ".join(os.path.basename(p) for p in TABLE09)))
+footer09 = u"\n".join([
+    u"Per cell: top = the value on the fluence ladder, %s, with its pixel-to-pixel spread; "
+    u"central = the same with the central track per pixel." % tables.VARIANT_TEXT[VARIANT],
+    u"Each chip from its anointed combination (boards 0-1-2 for boards 0-2, boards 1-2-3 for "
+    u"board 3), tracks with at least %s events, widths = FWHM/2.355 of the TOA-difference core." % (
+        FLOOR),
+    u"Runs: March, the highest-bias run of each step at RFSel 2, threshold offset 20; July, the "
+    u"preferred display run, merges by the merge rule (merged: the merge of the runs named).",
+    u"At 3.5e15: top and central are band centres; band = the lowest to the highest value of the "
+    u"board over every combination containing it; anointed = the anointed combination's value.",
+    u"At 3.5e15 the anointed combination's value is given for both track choices: anointed "
+    u"(most-populated track) and central anointed (central track).",
+    FLUENCE_TEXT])
+fig, n09 = numbers_table.table_figure(
+    T09, name=u"Resolution per chip and step", tag=TAG,
+    data=u"March and July, highest bias per step", footer=footer09)
+save(fig, "re09_numbers_table",
+     payload(dict(rows=numbers_table.records(T09), cells=n09["cells"], columns=n09["columns"],
+                  table_rows=n09["rows"], files=[os.path.basename(p) for p in TABLE09]),
+             footer09),
+     conventions(top="the value drawn on re08: the anointed combination's value, or the band "
+                     "centre at a step of BAND_STEPS",
+                 central="variant central at the same floor, anointed combination; the band "
+                         "centre at a step of BAND_STEPS",
+                 band=tables.BAND_FOOTER))
+
+# %% [markdown]
+# ## Figure re10: the pixels behind the ladder
+#
+# For each re08 point, the pixels of the board with a resolution: with tracks of at least 300
+# events (solid lines and the chip markers: the pixels behind the ladder's values) and with
+# tracks of any number of events (dashed lines, the same runs at event floor "none"). A pixel
+# counts once it has one track through the anointed combination. The gap between the two lines
+# is the pixels the 300-event floor removes; where the solid line falls, the ladder's values come
+# from fewer pixels.
+#
+# The small open markers at 3.5e15 are the other F1 display runs at that step, 13 and 14 (LF17
+# at 370 V, the others at 390 V), at least 300 events: the display runs at a lower bias than
+# run 18, drawn off the lines. A display run at the same bias as the ladder's run adds no
+# marker.
+#
+# The x axis is as on re08: bookkeeping fluence, both looks at 1.5e15 dodged.
+
+# %%
+TC_JUL = campaign.TABLE_CAMPAIGN["july"]
+
+
+def bias_pattern(t, run):
+    return tuple((b["board_idx"], b["hv"]) for b in tables.run_settings(
+        RS, TC_JUL, campaign.TABLE_TEL[t], run))
+
+
+EXTRA10 = {t: [] for t in TELS}
+for f in STEPS_JUL:
+    runs, _ = CLASS[f]
+    for t in TELS:
+        pick = [p for p in P08[t] if p["camp"] == "july" and p["step"] == f]
+        own = bias_pattern(t, pick[0]["runs"][0])
+        others = [r for r in runs[t] if r not in pick[0]["runs"] and bias_pattern(t, r) != own]
+        extra = curves.standard(curves.points(BT, BM, RS, t, others, "july", VARIANT, FLOOR))
+        EXTRA10[t] += [dict(p, step=style.fluence_key(p["fluence"])) for p in extra]
+check_good([p for t in TELS for p in EXTRA10[t]], "july")
+ANY10 = ladder.floor_none_pixels(BT, BM, ALL08 + [p for t in TELS for p in EXTRA10[t]],
+                                 variant=VARIANT)
+extra_runs10 = {t: sorted({p["run"] for p in EXTRA10[t]}) for t in TELS}
+footer10 = u"\n".join([
+    u"Pixels with a resolution per board, anointed combination, %s: solid = tracks with at "
+    u"least %s events (the points of the fluence ladder), dashed = tracks with any events." % (
+        tables.VARIANT_TEXT[VARIANT], FLOOR),
+    u"Runs as on the fluence ladder: March, the highest-bias run of each step at RFSel 2, "
+    u"threshold offset 20; July, the preferred display run, merges by the merge rule.",
+    u"Small open markers: %s at 3.5e15, display runs at a lower bias than the ladder's run, at "
+    u"least %s events." % (u"; ".join(u"%s runs %s" % (t.upper(), bias_text(EXTRA10[t], t))
+                                      for t in TELS if EXTRA10[t]), FLOOR),
+    u"Both looks at 1.5e15: March %.2fe15 left of the step, July %.2fe15 right of it. %s" % (
+        ladder.DODGE, ladder.DODGE, FLUENCE_TEXT)])
+fig, n10 = ladder.pixel_yield_vs_fluence(
+    P08, ANY10, EXTRA10, tel_titles=TEL_TITLES, ylim=(0.0, 280.0), tag=TAG,
+    data=u"March and July, highest bias per step", footer=footer10,
+    floor_label=u"at least %s events" % FLOOR, any_label=u"any events",
+    extra_label=u"other display runs")
+save(fig, "re10_pixel_yield_vs_fluence",
+     payload(n10, footer10, floors=dict(solid=FLOOR, dashed="none"),
+             extra_runs={t: extra_runs10[t] for t in TELS}),
+     conventions(colour="board (etroc_style.BOARD_COLOR)",
+                 line_style="event floor: solid at least %s events, dashed any events" % FLOOR,
+                 n_pixels_any="n_pixels of the anointed row at floor 'none', same variant and "
+                              "table; None where the table has no row"))
