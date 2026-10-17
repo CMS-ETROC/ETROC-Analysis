@@ -27,7 +27,8 @@ colour = RFSel (etroc_style.RFSEL_COLOR), marker = chip. Three position function
 (offset_slots, class_slots, quarter_slots); st04 uses place too, with the chip as the slot, the
 class in place of the run and the run in place of the board. st04 is the one settings figure whose
 marker is not the chip: the chip is on its axis, so the marker is the offset class
-(offset_markers).
+(offset_markers). A point whose board resolution comes from fewer than tables.LOW_PIXELS fitted
+pixels (low_pixels) is drawn as a small open marker where the notebook sets p["low"] on it.
 
 settings_guard checks, before anything is drawn, the run facts the figures rest on: the display
 list, runs_summary and the autocalibration scan agree on RFSel and on the offsets.
@@ -56,6 +57,7 @@ RUN_GAP = 1.5           # cells between two runs of one slot (one cell per board
 MIN_RUN = 3             # cells a run takes at least: the labels of one-board runs stay apart
 LABEL_GID = "settings_label"     # in-axes texts (run labels, quarter labels): the layout audit
 DIVIDER_GID = "settings_divider"  # the dividers are not data: the layout audit skips them
+LOW_MARKER = 5.5        # the marker size of a board under tables.LOW_PIXELS fitted pixels, x scale
 
 
 def _close(a, b):
@@ -109,6 +111,21 @@ def class_points(bt, rs, display, fluence, variant, floor, bt_merged=None):
                         p["runs"] = list(runs)
                     out.append(p)
     return out
+
+
+def low_pixels(p, threshold=tables.LOW_PIXELS):
+    """True when the board's resolution comes from fewer than `threshold` fitted pixels
+    (p["band"]["n_pixels"], the anointed combination's count in the board table). A figure that
+    marks these sets p["low"] on its points; the drawing then makes the marker small and open."""
+    return p["band"]["n_pixels"] < threshold
+
+
+def _marker(p, size, face, scale):
+    """The size and face of a point's marker: `size` x scale filled with `face`, or, where
+    p["low"] is set (low_pixels), LOW_MARKER x scale with an open (surface-coloured) face."""
+    if p.get("low"):
+        return dict(markersize=LOW_MARKER * scale, markerfacecolor=style.SURFACE)
+    return dict(markersize=size * scale, markerfacecolor=face)
 
 
 def run_order(p):
@@ -326,14 +343,15 @@ def place(pts, slot_x, width=SLOT_WIDTH, run_gap=RUN_GAP, min_run=MIN_RUN):
 
 def draw_slots(ax, pts, cell, centres, run_labels, ylim, scale=SCALE):
     """One band per board at p["x"] (tables.draw_band): box and marker face in the RFSel colour,
-    marker = chip; under each run its label (`run_labels[(tel, run)]`, bold for the preferred
-    run of its class), at the bottom of the axis."""
+    marker = chip, small and open where p["low"] (low_pixels); under each run its label
+    (`run_labels[(tel, run)]`, bold for the preferred run of its class), at the bottom of the
+    axis."""
     s = style.sizes(scale)
     for p in pts:
         c = RFSEL_COLOR[p["rfsel"]]
         tables.draw_band(ax, p["x"], p["band"], c, half_width=0.4 * cell, capsize=2.5,
-                         marker=style.chip_marker(p["chip"]), markersize=8.5 * scale,
-                         markerfacecolor=c, alpha=0.3)
+                         marker=style.chip_marker(p["chip"]), alpha=0.3,
+                         **_marker(p, 8.5, c, scale))
     preferred = {(p["tel"], p["run"]) for p in pts if p["preferred"]}
     tel_of = {(p["slot"], p["run"]): p["tel"] for p in pts}
     y = ylim[0] + 0.025 * (ylim[1] - ylim[0])
@@ -560,9 +578,10 @@ def threshold_over_noise(pts, classes, *, markers, class_labels, tel_titles, xla
     order) stand side by side, the runs of a class side by side in run order, `run_gap` cells
     between classes. Point = x_B (p["x_b"]) with its bar from p["xb_lo"] to p["xb_hi"] (the
     16th to 84th percentile of offset / noise width over the board's pixels, pixel_x_over_nw:
-    asymmetric, one side can be empty); colour = RFSel, marker = markers[os text]; dotted lines
-    between the chips. One legend entry per class, class_labels[(tel, rfsel, os)], in axis
-    order. Returns (figure, layout)."""
+    asymmetric, one side can be empty); colour = RFSel, marker = markers[os text], small and open
+    with an RFSel-coloured edge where p["low"] (low_pixels); dotted lines between the chips. One
+    legend entry per class, class_labels[(tel, rfsel, os)], in axis order. Returns (figure,
+    layout)."""
     tels = list(tel_titles)
     proxies, slot_x = [], {}
     for tel in tels:
@@ -587,11 +606,13 @@ def threshold_over_noise(pts, classes, *, markers, class_labels, tel_titles, xla
         chips = campaign.TELESCOPE_CHIPS[tel]
         for p in [p for p in pts if p["tel"] == tel]:
             c = RFSEL_COLOR[p["rfsel"]]
+            # an open marker keeps the RFSel colour on its edge: there is no band behind it
+            edge = (dict(markeredgecolor=c, markeredgewidth=1.4 * scale) if p.get("low") else
+                    dict(markeredgecolor=style.INK, markeredgewidth=0.9))
             ax.errorbar([p["x"]], [p["x_b"]],
                         yerr=[[p["x_b"] - p["xb_lo"]], [p["xb_hi"] - p["x_b"]]], color=c, ecolor=c,
-                        marker=markers[p["os"]], markersize=7.5 * scale, markerfacecolor=c,
-                        markeredgecolor=style.INK, markeredgewidth=0.9, linestyle="none",
-                        elinewidth=1.3, capsize=2.5, zorder=3)
+                        marker=markers[p["os"]], linestyle="none", elinewidth=1.3, capsize=2.5,
+                        zorder=3, **dict(_marker(p, 7.5, c, scale), **edge))
         for i in range(1, len(chips)):
             divider(ax, i - 0.5)
         ax.set_xlim(-0.5, len(chips) - 0.5)
@@ -620,9 +641,10 @@ def res_vs_x(pts, *, tel_titles, xlabel, xlim, ylim, legend_title, tag, data, fo
     """st05: resolution against x_B (p["x_b"]), one panel per telescope of `tel_titles` (left to
     right), one band per board (tables.draw_band) at its x_B with an x bar from p["xb_lo"] to
     p["xb_hi"] (the 16th to 84th percentile of offset / noise width over the board's pixels,
-    pixel_x_over_nw) in the RFSel colour on the band centre: colour = RFSel, marker = chip; the
-    chip legend upper left (one row), the RFSel legend (`legend_title`, one column) upper right.
-    `xlim` and `ylim` the same on every panel. Returns the figure."""
+    pixel_x_over_nw) in the RFSel colour on the band centre: colour = RFSel, marker = chip, small
+    and open where p["low"] (low_pixels); the chip legend upper left (one row), the RFSel legend
+    (`legend_title`, one column) upper right. `xlim` and `ylim` the same on every panel. Returns
+    the figure."""
     tels = list(tel_titles)
     fig, axes = _row(len(tels), footer, scale)
     axes = axes[0]
@@ -635,8 +657,8 @@ def res_vs_x(pts, *, tel_titles, xlabel, xlim, ylim, legend_title, tag, data, fo
                         ecolor=c, linestyle="none", marker="none", elinewidth=1.3, capsize=2.5,
                         zorder=2)
             tables.draw_band(ax, p["x_b"], p["band"], c, half_width=half_width, capsize=2.5,
-                             marker=style.chip_marker(p["chip"]), markersize=8.5 * scale,
-                             markerfacecolor=c, alpha=0.3)
+                             marker=style.chip_marker(p["chip"]), alpha=0.3,
+                             **_marker(p, 8.5, c, scale))
         ax.set_xlim(*xlim)
         ax.set_ylim(*ylim)
         ax.set_xlabel(xlabel)

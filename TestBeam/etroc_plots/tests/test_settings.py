@@ -1,8 +1,8 @@
 """Tests of the settings helpers: the settings classes of a display-run list and the accepted
 merges they draw in place of their runs, the settings guard, the threshold over the noise from
-the per-pixel noise widths (a merge's pooled scans too) and the offset its scan records, the slot
-positions, the offset markers, the layout audit, the BL/NW point offsets and the RFSel pair
-readers (frontend.tot_shapes).
+the per-pixel noise widths (a merge's pooled scans too) and the offset its scan records, the
+small open marker of a board under 128 fitted pixels, the slot positions, the offset markers,
+the layout audit, the BL/NW point offsets and the RFSel pair readers (frontend.tot_shapes).
 
 Run from TestBeam/:  python -m pytest etroc_plots/tests
 """
@@ -165,6 +165,70 @@ def test_scan_offset_is_the_runs_common_offset():
         settings.scan_offset(bl, "july", "h1", (56, 64), "IH11")           # IH11 at 8, then 6
     with pytest.raises(ValueError, match="0 BL/NW rows"):
         settings.scan_offset(bl, "july", "h1", [99], "IH7")
+
+
+def test_low_pixels_is_fewer_than_128_fitted_pixels():
+    assert tables.LOW_PIXELS == 128
+    assert settings.low_pixels(dict(band=dict(n_pixels=127)))
+    assert not settings.low_pixels(dict(band=dict(n_pixels=128)))
+    assert settings.low_pixels(dict(band=dict(n_pixels=150)), threshold=200)
+
+
+def marked_points():
+    """Two H1 boards of run 56 at RFSel 2: IH7 from 100 fitted pixels, marked (p["low"]), and IH11
+    from 200."""
+    band = dict(marker_ps=40.0, band_lo_ps=38.0, band_hi_ps=42.0, bar_spread_ps=5.0,
+                anointed_ps=40.0, n_combo_rows=2)
+    pts = []
+    for i, (chip, n) in enumerate((("IH7", 100), ("IH11", 200))):
+        p = dict(tel="h1", run=56, board_idx=i, chip=chip, rfsel=2, os="10", offset=10,
+                 preferred=1, slot=0.0, x=0.2 * i, x_b=2.0 + i, xb_lo=1.5 + i, xb_hi=2.5 + i,
+                 band=dict(band, n_pixels=n))
+        p["low"] = settings.low_pixels(p)
+        pts.append(p)
+    assert [p["low"] for p in pts] == [True, False]
+    return pts
+
+
+def drawn_markers(fig, markers):
+    """(markersize, face, edge) of every line on the figure's axes whose marker is in `markers`,
+    in drawing order; the colours as RGBA."""
+    from matplotlib.colors import to_rgba
+    return [(ln.get_markersize(), to_rgba(ln.get_markerfacecolor()),
+             to_rgba(ln.get_markeredgecolor()))
+            for ax in fig.axes for ln in ax.lines if ln.get_marker() in markers]
+
+
+def test_a_marked_board_is_small_and_open_on_the_bands_and_on_x_b():
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import to_rgba
+    c = to_rgba(settings.RFSEL_COLOR[2])
+    small, open_face = settings.LOW_MARKER * settings.SCALE, to_rgba(style.SURFACE)
+    chip_markers = {style.chip_marker("IH7"), style.chip_marker("IH11")}
+    assert len(chip_markers) == 2
+
+    fig, ax = plt.subplots()
+    settings.draw_slots(ax, marked_points(), 0.2, {(0.0, 56): 0.1}, {("h1", 56): "56"}, (0, 150))
+    got = drawn_markers(fig, chip_markers)
+    plt.close(fig)
+    assert [g[:2] for g in got] == [(small, open_face), (8.5 * settings.SCALE, c)]
+
+    fig = settings.res_vs_x(marked_points(), tel_titles={"h1": "H1"}, xlabel="x", xlim=(0, 5),
+                            ylim=(0, 150), legend_title="RFSel", tag="t", data="d", footer="f")
+    got = drawn_markers(fig, chip_markers)
+    plt.close(fig)
+    assert [g[:2] for g in got] == [(small, open_face), (8.5 * settings.SCALE, c)]
+
+    fig, _ = settings.threshold_over_noise(
+        marked_points(), {"h1": [(2, "10")]}, markers={"10": "o"},
+        class_labels={("h1", 2, "10"): "class"}, tel_titles={"h1": "H1"}, xlabel="Chip",
+        ylabel="x", tag="t", data="d", footer="f", ylim=(0, 6))
+    got = drawn_markers(fig, {"o"})
+    plt.close(fig)
+    # no band behind an x_B point: the open marker keeps the RFSel colour on its edge
+    assert got == [(small, open_face, c), (7.5 * settings.SCALE, c, to_rgba(style.INK))]
 
 
 def test_place_puts_a_merge_at_its_first_run():
