@@ -10,6 +10,8 @@ The only paths outside the repository live here, each behind an environment vari
   ETROC_TWC_OUT               the write root. It has no default: write_root() refuses to run
                               without it, and refuses the read root and every data root
 
+JOB_LISTS names the study's seven job lists with the output root each one wrote into.
+
 This module does not import the pipeline core.
 """
 import os
@@ -35,6 +37,22 @@ ALL_ROLES = ("dut", "ref", "trig", "extra")
 
 # The study's live output tree: bank/, cells*/, tables/, tier0/. Read, never written.
 _DEFAULT_TRANSFER_ROOT = "/eos/user/m/musafdar/DESY_May2026/analysis/twc_transfer"
+_RERUN_SEEDED_ROOT = "/eos/user/m/musafdar/DESY_May2026/analysis/twc_transfer_rerun_seeded_20260908"
+
+# The seven job lists the study's cells ran from (copies in jobs/), in the order they ran: a
+# later list that names a cell again redefines it. Each comes with the output root its jobs
+# wrote into, the ${TT_OUT} of that run. cells_stage2_held.tsv was never submitted itself; its
+# six jobs ran from cells_stage3.tsv. cells_rerun.tsv, the seeded rerun of the cells whose
+# verdict sat within the reproducibility jitter, wrote into a separate tree.
+JOB_LISTS = (
+    ("cells.tsv", _DEFAULT_TRANSFER_ROOT),
+    ("cells_stage1.tsv", _DEFAULT_TRANSFER_ROOT),
+    ("cells_stage2.tsv", _DEFAULT_TRANSFER_ROOT),
+    ("cells_stage2_held.tsv", _DEFAULT_TRANSFER_ROOT),
+    ("cells_stage3.tsv", _DEFAULT_TRANSFER_ROOT),
+    ("cells_rerun.tsv", _RERUN_SEEDED_ROOT),
+    ("cells_guardfix_rerun.tsv", _DEFAULT_TRANSFER_ROOT),
+)
 
 # sha1 of the pipeline core files the study's published cells imported (a core last changed on
 # 2026-08-24). With ETROC_TWC_CORE pointing at a core of these hashes, this package reproduces

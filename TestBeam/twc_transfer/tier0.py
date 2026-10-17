@@ -1,7 +1,13 @@
 """Analytic, GMM-free Tier-0 (SPEC.md 4): the change in RMS^2 of every pair difference and every
-board sigma^2 when one set of coefficients replaces another, from stored TOT moments only.
+board sigma^2 when one set of coefficients replaces another, from stored TOT moments only, and
+the screen of a whole bank file built on it (`bank_screen`, the `tier0` command).
 """
+import json
 from itertools import combinations
+
+import numpy as np
+
+from .bank import coeffs_from_row, overlap_from_bank
 
 
 def _var_quad(d, m):
@@ -61,3 +67,94 @@ def tier0_delta(dcoef, moments, cross, roles, resid=None):
         pk = lambda x, y: pair.get("%s-%s" % (x, y), pair.get("%s-%s" % (y, x), 0.0))
         board[r] = 0.5 * (pk(r, o[0]) + pk(r, o[1]) - pk(o[0], o[1]))
     return pair, board, V
+
+
+def bank_screen(bank, max_src=0):
+    """The Tier-0 screen of one bank frame (SPEC 4 Tier-0): every target triple against every
+    other source triple of the same combo, with its floor and its TOT coverage.
+
+    Targets and sources are the bank's full-guard, non-placebo, fold "full" rows; a source
+    triple is used only when it has every role of the target. Per board and per pair:
+
+      dvar     the signed analytic change in RMS^2 (tier0_delta, with the residual moments)
+      P        sqrt(max(dvar, 0)), the curve distance; P_signed keeps the sign of dvar
+      P_null   the same statistic between the target's own two split-half self fits (folds 0
+               and 1): what two independent fits of the same thing differ by
+      P_exc    sqrt(max(P^2 - P_null^2, 0)), the distance in excess of that floor
+      own_var  (board rows) the variance of the coefficient change on the target's TOT
+      cov_C, hist_O, lever_X, lever_X_all, extrap
+               SPEC 5.3 from the stored 25-ps TOT histograms (overlap_from_bank), so the
+               screen reads no event; a pair takes the worse of its two boards
+
+    max_src > 0 keeps the first max_src source triples of the combo (sorted by track name).
+    Returns a pandas DataFrame, one row per (target, source, kind, name).
+    """
+    import pandas as pd
+    b = bank[(bank.guard == "full") & (bank.placebo == 0) & (bank.fold == "full")]
+    halves = bank[(bank.guard == "full") & (bank.placebo == 0) & (bank.fold.isin(["0", "1"]))]
+    rows = []
+    for (run, combo, tgt), g in b.groupby(["run", "combo", "src_file"]):
+        roles = list(g["role"])
+        gi = g.set_index("role")
+        mom = {r: (float(gi.loc[r, "m1"]), float(gi.loc[r, "m2"]),
+                   float(gi.loc[r, "m3"]), float(gi.loc[r, "m4"])) for r in roles}
+        cross = {k: tuple(v) for k, v in json.loads(g.iloc[0]["pair_moments"]).items()}
+        rm = json.loads(g.iloc[0]["resid_moments"]) if "resid_moments" in g.columns else None
+        c_self = {r: coeffs_from_row(gi.loc[r]) for r in roles}
+
+        # the floor: the target's own two split-half self fits, differenced
+        null_pair, null_board = {}, {}
+        h = halves[(halves.run == run) & (halves.combo == combo) & (halves.src_file == tgt)]
+        h0 = h[h.fold == "0"].set_index("role")
+        h1 = h[h.fold == "1"].set_index("role")
+        if set(h0.index) >= set(roles) and set(h1.index) >= set(roles):
+            dn = {r: coeffs_from_row(h0.loc[r]) - coeffs_from_row(h1.loc[r]) for r in roles}
+            null_pair, null_board, _ = tier0_delta(dn, mom, cross, roles, resid=rm)
+
+        srcs = b[(b.combo == combo)]
+        if max_src:
+            srcs = srcs[srcs.src_file.isin(sorted(srcs.src_file.unique())[:max_src])]
+        for (srun, sfile), sg in srcs.groupby(["run", "src_file"]):
+            if sfile == tgt and srun == run:
+                continue
+            sgi = sg.set_index("role")
+            cs = {r: coeffs_from_row(sgi.loc[r]) for r in sgi.index}
+            if set(cs) != set(roles):
+                continue
+            d = {r: cs[r] - c_self[r] for r in roles}
+            pair, board, V = tier0_delta(d, mom, cross, roles, resid=rm)
+            ovb = {}
+            for r in roles:
+                try:
+                    ovb[r] = overlap_from_bank(sgi.loc[r], gi.loc[r], cs[r])
+                except Exception:
+                    ovb[r] = {}
+
+            def emit(kind, name, dv, nullv, ov):
+                P = np.sqrt(max(dv, 0.0))
+                Pn = np.sqrt(max(nullv, 0.0)) if np.isfinite(nullv) else np.nan
+                rows.append(dict(
+                    run=run, combo=combo, tgt=tgt, src_run=srun, src=sfile, kind=kind,
+                    name=name, dvar=dv, P=P,
+                    P_signed=float(np.sign(dv) * np.sqrt(abs(dv))),
+                    P_null=Pn, P_exc=(np.sqrt(max(P ** 2 - Pn ** 2, 0.0))
+                                      if np.isfinite(Pn) else np.nan),
+                    own_var=V.get(name, np.nan) if kind == "board" else np.nan,
+                    cov_C=ov.get("cov_C", np.nan), hist_O=ov.get("hist_O", np.nan),
+                    lever_X=ov.get("lever_X", np.nan),
+                    lever_X_all=ov.get("lever_X_all", np.nan),
+                    extrap=ov.get("extrap", np.nan)))
+
+            for r in roles:
+                emit("board", r, board[r], null_board.get(r, np.nan), ovb.get(r, {}))
+            for k, v in pair.items():
+                x, y = k.split("-")
+                o = {}
+                if ovb.get(x) and ovb.get(y):
+                    o = dict(cov_C=min(ovb[x]["cov_C"], ovb[y]["cov_C"]),
+                             hist_O=min(ovb[x]["hist_O"], ovb[y]["hist_O"]),
+                             lever_X=max(ovb[x]["lever_X"], ovb[y]["lever_X"]),
+                             lever_X_all=max(ovb[x]["lever_X_all"], ovb[y]["lever_X_all"]),
+                             extrap=max(ovb[x]["extrap"], ovb[y]["extrap"]))
+                emit("pair", k, v, null_pair.get(k, np.nan), o)
+    return pd.DataFrame(rows)
