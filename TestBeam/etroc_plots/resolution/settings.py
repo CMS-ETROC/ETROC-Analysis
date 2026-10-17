@@ -6,7 +6,10 @@ discriminator threshold offset above the baseline. A settings class is one (RFSe
 display-run list (resolution.tables.classes_at_step). Its offset is the list's text: "10", or
 "8/10" for runs whose boards sit at different offsets; each board's own offset comes from
 runs_summary (tables.run_settings). Every board of every run is drawn as a band (tables.band; the
-step is one of BAND_STEPS).
+step is one of BAND_STEPS). Given the merged runs' board table, class_points draws a class's
+accepted merge (tables.classes_at_step) in place of its runs: one band per board from the merged
+table, the point's run the merge's name and its runs in p["runs"]; merge_x_over_nw gives the
+merge's x_B.
 
 Figures, the words on them passed in by the notebook:
 
@@ -56,33 +59,57 @@ def _close(a, b):
 
 
 # ------------------------------------------------------------------------- points and checks
-def class_points(bt, rs, display, fluence, variant, floor):
+def class_points(bt, rs, display, fluence, variant, floor, bt_merged=None):
     """Every board of every run of the display-run list `display` (a path) at `fluence`: one dict
     per (telescope, run, board) with tel, run, board_idx, chip, rfsel and os (the run's class in
     the list), offset and hv (the board's own, from runs_summary `rs`), preferred (the run is its
     class's preferred run) and band (tables.band of the board table `bt` at `variant`, `floor`).
-    Ordered by telescope (TELESCOPE_CHIPS), class (classes_at_step), run and board."""
+    Ordered by telescope (TELESCOPE_CHIPS), class (classes_at_step), run and board.
+
+    With the merged runs' board table `bt_merged`, a class's accepted merges
+    (tables.accepted_merges, tables.classes_at_step) stand in place of their runs: run is the
+    merge's name (tables.merge_name), runs its runs, rfsel and offset the runs' common ones
+    (tables.common_settings, which also stops on a chip or bias that differs between the runs),
+    preferred when it holds the class's preferred run, band from `bt_merged` by the same rule."""
     if not any(_close(fluence, f) for f in campaign.BAND_STEPS):
         raise ValueError("%g is not one of BAND_STEPS %s: the settings figures draw every board "
                          "as a band" % (fluence, campaign.BAND_STEPS))
     tc = campaign.TABLE_CAMPAIGN[CAMP]
-    classes = tables.classes_at_step(display, fluence)
+    merges = None if bt_merged is None else tables.accepted_merges(bt_merged, tc)
+    classes = tables.classes_at_step(display, fluence, merges)
     out = []
     for tel, chips in campaign.TELESCOPE_CHIPS.items():
         for c in classes:
-            for run in c.runs.get(tel, []):
-                for b in tables.run_settings(rs, tc, campaign.TABLE_TEL[tel], run):
+            for entry in tables.class_entries(c, tel):
+                merge = isinstance(entry, tuple)
+                runs = entry if merge else (entry,)
+                run, table = (tables.merge_name(tel, runs), bt_merged) if merge else (entry, bt)
+                if merge:
+                    s = tables.common_settings(rs, tc, campaign.TABLE_TEL[tel], runs)
+                    if (s["rfsel"], (s["offset"],)) != (c.rfsel, tables.os_offsets(c.os)):
+                        raise ValueError("%s merge %s: RFSel %s, offset %s in runs_summary; the "
+                                         "class is RFSel %d, offset %s" % (
+                                             tel, run, s["rfsel"], s["offset"], c.rfsel, c.os))
+                for b in tables.run_settings(rs, tc, campaign.TABLE_TEL[tel], runs[0]):
                     chip = style.chip_short(b["chip"])
                     if chip != chips[b["board_idx"]]:
                         raise ValueError("%s run %d board %d: runs_summary chip %s, the campaign "
-                                         "has %s" % (tel, run, b["board_idx"], b["chip"],
+                                         "has %s" % (tel, runs[0], b["board_idx"], b["chip"],
                                                      chips[b["board_idx"]]))
-                    out.append(dict(tel=tel, run=run, board_idx=b["board_idx"], chip=chip,
-                                    rfsel=c.rfsel, os=c.os, offset=b["offset"], hv=b["hv"],
-                                    preferred=run == c.preferred.get(tel),
-                                    band=tables.band(bt, tel, run, b["board_idx"], variant,
-                                                     floor, campaign=tc)))
+                    p = dict(tel=tel, run=run, board_idx=b["board_idx"], chip=chip,
+                             rfsel=c.rfsel, os=c.os, offset=b["offset"], hv=b["hv"],
+                             preferred=c.preferred.get(tel) in runs,
+                             band=tables.band(table, tel, run, b["board_idx"], variant, floor,
+                                              campaign=tc))
+                    if merge:
+                        p["runs"] = list(runs)
+                    out.append(p)
     return out
+
+
+def run_order(p):
+    """A point's place in run order: its run, or a merge's first run (p["runs"])."""
+    return p["runs"][0] if "runs" in p else p["run"]
 
 
 def x_over_nw(blnw_table, campaign_key, tel, run, chip):
@@ -105,6 +132,20 @@ def x_over_nw(blnw_table, campaign_key, tel, run, chip):
                                                                            chip, mean))
     return dict(x=off / mean, bar=off * std / mean ** 2, offset=off, nw_mean=mean, nw_std=std,
                 n_live=int(r["n_pixels_nw"]))
+
+
+def merge_x_over_nw(blnw_table, campaign_key, tel, runs, chip):
+    """x_B of one board in the merge of `runs`, each run with its own autocalibration scan: x and
+    bar the means of the runs' x_over_nw, offset their common offset, nw_mean and nw_std the
+    means, n_live the fewest; per_run keeps each run's x_over_nw (with its run). Raises
+    ValueError when the runs' offsets differ."""
+    per = [dict(x_over_nw(blnw_table, campaign_key, tel, r, chip), run=int(r)) for r in runs]
+    if len({p["offset"] for p in per}) != 1:
+        raise ValueError("%s %s runs %s: offsets %s in the BL/NW table"
+                         % (campaign_key, tel, list(runs), [p["offset"] for p in per]))
+    mean = {k: float(np.mean([p[k] for p in per])) for k in ("x", "bar", "nw_mean", "nw_std")}
+    return dict(mean, offset=per[0]["offset"], n_live=min(p["n_live"] for p in per),
+                per_run=per)
 
 
 def settings_guard(rs, display, blnw_table, fluence=None):
@@ -219,8 +260,9 @@ def quarter_slots(quarters, quarter=2.3, pitch=1.0):
 # ---------------------------------------------------------------------- drawing primitive
 def place(pts, slot_x, width=SLOT_WIDTH, run_gap=RUN_GAP, min_run=MIN_RUN):
     """Stamp p["x"] on every point; each carries p["slot"], a key of `slot_x` (slot -> centre).
-    The runs of a slot stand side by side in run order, the boards of a run side by side in
-    board order, one cell per board and `run_gap` cells between runs, centred on the slot; a run
+    The runs of a slot stand side by side in run order (run_order: a merge at its first run), the
+    boards of a run side by side in board order, one cell per board and `run_gap` cells between
+    runs, centred on the slot; a run
     of fewer than `min_run` boards takes `min_run` cells, its boards centred in them. One cell for
     the whole figure: the fullest slot fills `width`. Returns (cell, {(slot, run): the x of the
     run's centre})."""
@@ -235,7 +277,7 @@ def place(pts, slot_x, width=SLOT_WIDTH, run_gap=RUN_GAP, min_run=MIN_RUN):
     centres = {}
     for slot, runs in groups.items():
         x = slot_x[slot] - n_cells(runs) * cell / 2.0
-        for run in sorted(runs):
+        for run in sorted(runs, key=lambda r: run_order(runs[r][0])):
             boards = sorted(runs[run], key=lambda p: p["board_idx"])
             span = max(len(boards), min_run)
             x0 = x + (span - len(boards)) * cell / 2.0
@@ -502,8 +544,8 @@ def threshold_over_noise(pts, classes, *, markers, class_labels, tel_titles, xla
             if p["tel"] != tel:
                 continue
             k = order[(p["rfsel"], p["os"])]
-            runs = sorted({q["run"] for q in pts if q["tel"] == tel
-                           and (q["rfsel"], q["os"]) == (p["rfsel"], p["os"])})
+            runs = [r for _, r in sorted({(run_order(q), q["run"]) for q in pts if q["tel"] == tel
+                                          and (q["rfsel"], q["os"]) == (p["rfsel"], p["os"])})]
             proxies.append(dict(slot=(tel, p["chip"]), run=k, board_idx=runs.index(p["run"]),
                                 ref=p))
     cell, centres = place(proxies, slot_x, run_gap=run_gap, min_run=1)
