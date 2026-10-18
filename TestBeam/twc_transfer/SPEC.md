@@ -847,7 +847,14 @@ text of `agg_by_cell`, collapsed by `classify_lpo_shape`) and the mean `lpo_pair
 - `results_r2/axis_<A,B,C,D,E,I,J,K>.csv`, the axes of stages 1 and 2;
 - `results_r3/axis_F_long.csv` and `axis_F.csv`: axis F long, and wide (the rows of the
   primary f only, one per cell, kind, pair or board, family and tag, the arms of `WIDE_ARMS`
-  side by side, and the `xfer_lin` mu minus the `xfer` mu);
+  side by side, and the `xfer_lin` mu minus the `xfer` mu). A cell whose source triple is one
+  of its targets has two rows of an arm under one wide key, its transfer row and its
+  self-transfer row (rule 9 of section 8 keeps them apart); the wide table takes the transfer
+  row (`self_transfer` 0) when there is one, else the self-transfer row, and writes the flag
+  of the row it took as `<arm>_self_transfer`, after `<arm>_present` (empty for an absent
+  arm). The study's table took the last row, so on 12 keys of `F_desy_f0p8153` (cells F2 and
+  F3, 48 arm entries) it shows the self-transfer row (`campaigns.AXIS_F_AS_PUBLISHED`). The
+  long tables keep both rows, in the study's 24 columns and without the flag;
 - `results_r3/summary_F.md`: the cell table of axis F, `campaigns.AXIS_F_CELLS`, under the
   heading "Cells and what each compares". Each label must name exactly one level-F cell of
   `cells_stage3.tsv` and every such cell must have a label, else `AxesError`;

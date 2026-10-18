@@ -24,7 +24,9 @@ reduction reads with --results-root):
   results_r2/axis_<A,B,C,D,E,I,J,K>.csv    the eight axes of the second wave
   results_r3/axis_F_long.csv, axis_F.csv   axis F, long and wide (one row per cell, kind, pair
                                            or board, family and primary f; the arms of
-                                           WIDE_ARMS side by side)
+                                           WIDE_ARMS side by side, each its transfer row when
+                                           the key has one, else its self-transfer row, and
+                                           <arm>_self_transfer says which)
   results_r3/summary_F.md                  the cell table of axis F (campaigns.AXIS_F_CELLS)
   results_r3/guardfix/axis_<E,J,K>_gf.csv  with --guardfix: the guardfix cells only
 
@@ -129,8 +131,9 @@ def classify_lpo_shape(raw):
     return "mixed"
 
 
-def axis_row(axis, r, label, is_primary, guardfix=False):
-    """One axis-table row (AXIS_COLUMNS, + GUARDFIX_COLUMNS) from one merged row `r`."""
+def axis_row(axis, r, label, is_primary, guardfix=False, self_transfer=False):
+    """One axis-table row (AXIS_COLUMNS, + GUARDFIX_COLUMNS) from one merged row `r`; with
+    `self_transfer`, also the row's self_transfer flag (0 or 1, NaN when the row has none)."""
     row = dict(
         axis=axis, cell=r["cell"], arm=r["arm"], kind=r["kind"],
         board_or_role=r["name"], family=r["extrap_family"],
@@ -147,6 +150,9 @@ def axis_row(axis, r, label, is_primary, guardfix=False):
     if guardfix:
         row.update(lpo_shape=classify_lpo_shape(r.get("lpo_shape", np.nan)),
                    lpo_pairs=r.get("lpo_pairs", np.nan))
+    if self_transfer:
+        flag = r.get("self_transfer", np.nan)
+        row["self_transfer"] = int(flag) if pd.notna(flag) else np.nan
     return row
 
 
@@ -159,29 +165,53 @@ def sort_axis(D, arm_order):
                           "f_inflate"]).drop(columns="_armkey")
 
 
-def axis_table(axis, merged, arm_order=ARM_ORDER, cells=None, guardfix=False):
+def axis_table(axis, merged, arm_order=ARM_ORDER, cells=None, guardfix=False,
+               self_transfer=False):
     """The table of one axis. `merged` is [(label, is_primary, merge_triples frame)] in the
-    order of its tags; `cells`, when given, keeps only those cells."""
+    order of its tags; `cells`, when given, keeps only those cells; `self_transfer` adds the
+    flag of each row as a last column (what wide_table needs; the written tables leave it out)."""
     rows = []
     for label, is_primary, m in merged:
         if cells is not None:
             m = m[m["cell"].isin(cells)]
         for _, r in m.iterrows():
-            rows.append(axis_row(axis, r, label, is_primary, guardfix))
+            rows.append(axis_row(axis, r, label, is_primary, guardfix, self_transfer))
     return sort_axis(pd.DataFrame(rows), arm_order)
 
 
+def _arm_row(key, arm, rows):
+    """The one row of an arm under a wide key: the transfer row (self_transfer 0) when there
+    is one, else the self-transfer row (1). An aggregation keeps the two apart (SPEC 8, rule
+    9) while the wide key does not, so a cell whose source triple is one of its targets has
+    both under one key."""
+    if len(rows) > 1:
+        rows = [r for r in rows if r.self_transfer == 0] or \
+            [r for r in rows if r.self_transfer == 1]
+    if len(rows) != 1:
+        raise AxesError("%d rows of arm %s under the wide key %s, none of them the one row of "
+                        "self_transfer 0 or 1" % (len(rows), arm, key))
+    return rows[0]
+
+
 def wide_table(FL):
-    """axis_F.csv from the long table of axis F: per (cell, kind, pair or board, family,
-    agg_tag, f) of the primary f, the n_pix, mu, se, tau, TOST, guard and presence of each arm
-    of WIDE_ARMS, the xfer row's cov_C, lever_X, lever_X_all and primary flag, and the xfer_lin
-    mu minus the xfer mu. Rows by cell, kind (pair, board), pair or board, family (interp,
-    extrap, na)."""
+    """axis_F.csv from the long table of axis F with its self_transfer column (axis_table with
+    self_transfer=True): per (cell, kind, pair or board, family, agg_tag, f) of the primary f,
+    the n_pix, mu, se, tau, TOST, guard, presence and self_transfer flag of each arm of
+    WIDE_ARMS, the xfer row's cov_C, lever_X, lever_X_all and primary flag, and the xfer_lin mu
+    minus the xfer mu. An arm with a transfer row and a self-transfer row under one key shows
+    the transfer row (_arm_row). Rows by cell, kind (pair, board), pair or board, family
+    (interp, extrap, na)."""
+    if "self_transfer" not in FL.columns:
+        raise AxesError("the long table of axis F has no self_transfer column: build it with "
+                        "axis_table(..., self_transfer=True)")
     prim = FL[FL.f_variant_is_primary == True].copy()          # noqa: E712
     wide_rows = []
     for key, g in prim.groupby(WIDE_KEY, dropna=False):
         rec = dict(zip(WIDE_KEY, key))
-        by_arm = {r.arm: r for _, r in g.iterrows()}
+        by_arm = {}
+        for _, r in g.iterrows():
+            by_arm.setdefault(r.arm, []).append(r)
+        by_arm = {arm: _arm_row(key, arm, rows) for arm, rows in by_arm.items()}
         for arm in WIDE_ARMS:
             r = by_arm.get(arm)
             rec["%s_n_pix" % arm] = int(r.n_pix) if r is not None else np.nan
@@ -191,6 +221,7 @@ def wide_table(FL):
             rec["%s_tost" % arm] = r.tost if r is not None else np.nan
             rec["%s_guard_verdict" % arm] = r.guard_verdict if r is not None else np.nan
             rec["%s_present" % arm] = r is not None
+            rec["%s_self_transfer" % arm] = r.self_transfer if r is not None else np.nan
         xr = by_arm.get("xfer")
         rec["cov_C"] = xr.cov_C if xr is not None else np.nan
         rec["lever_X"] = xr.lever_X if xr is not None else np.nan
@@ -203,6 +234,8 @@ def wide_table(FL):
             rec["delta_xferlin_minus_xfer_mu_ps"] = np.nan
         wide_rows.append(rec)
     W = pd.DataFrame(wide_rows)
+    for arm in WIDE_ARMS:
+        W["%s_self_transfer" % arm] = W["%s_self_transfer" % arm].astype("Int64")
     W["_kindkey"] = W["kind"].map({"pair": 0, "board": 1}).fillna(2)
     W["_famkey"] = W["family"].map({"interp": 0, "extrap": 1, "na": 2}).fillna(3)
     return W.sort_values(["cell", "_kindkey", "board_or_role", "_famkey"]).drop(
@@ -297,10 +330,10 @@ def build(read_root, outdir, axes=None, guardfix=False):
             _write(D, path)
             written[path] = D
             continue
-        FL = axis_table("F", merged, arm_order=ARM_ORDER_F)
+        FL = axis_table("F", merged, arm_order=ARM_ORDER_F, self_transfer=True)
         W = wide_table(FL)
         r3 = os.path.join(outdir, "results_r3")
-        for name, D in (("axis_F_long.csv", FL), ("axis_F.csv", W)):
+        for name, D in (("axis_F_long.csv", FL[AXIS_COLUMNS]), ("axis_F.csv", W)):
             _write(D, os.path.join(r3, name))
             written[os.path.join(r3, name)] = D
         md = os.path.join(r3, "summary_F.md")
