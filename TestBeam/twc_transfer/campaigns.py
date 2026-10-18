@@ -19,7 +19,8 @@ The only paths outside the repository live here, each behind an environment vari
 JOB_LISTS names the study's seven job lists with the output root each one wrote into; WAVES
 the cell code each wave ran, whether cell.py reproduces it and which published tables it
 feeds (CELL_VERSIONS is its short form); TABLE_VERSIONS the tables this package gives back
-byte for byte and the one it corrects (axis_F.csv, AXIS_F_AS_PUBLISHED), with their md5 and
+byte for byte and the one it corrects (axis_F.csv; the study's version is AXIS_F_AS_PUBLISHED,
+the universality table composed from that UNIV_AXIS_F_WIDE_AS_PUBLISHED), with their md5 and
 command (versions_markdown() renders both for the README);
 F_CAL the error inflation of the aggregation per campaign, at the two precisions the study
 used (March's is known to four decimals only), and AGG_F the f each campaign's groups are aggregated with; THIN_RULE and THIN_RUNS the
@@ -433,7 +434,8 @@ AXIS_F_CELLS = CELL_DESC["F"]
 # 2026-10-18; the study's is AXIS_F_AS_PUBLISHED); and of the universality
 # tables etroc_plots.universality.reduce composes from them (its master part copies
 # master_cells.csv; its axes part composes the axis tables with the guardfix overlay and
-# appends the self_transfer flag; its cells part reads the job lists and summary_F.md).
+# appends the self_transfer flag; its cells part reads the job lists and summary_F.md), the
+# wide axis-F table composed from the corrected axis_F.csv (published 2026-10-18).
 STUDY_TABLE_MD5 = {
     "master/master_cells.csv": "62cfc93f96be1dcbab6cad770da772fa",
     "results_r2/axis_A.csv": "f54ef48af42e2379c1fe8017f08466ef",
@@ -456,10 +458,15 @@ STUDY_TABLE_MD5 = {
 # with <arm>_self_transfer, and differs from the study's on those 12 rows and in the five flags.
 AXIS_F_AS_PUBLISHED = ("44c661a62fdbf95b05dd7d67cd86cb74",
                        "as published (12 keys carry the self-transfer row)")
+# univ_axis_F_wide.csv as composed from AXIS_F_AS_PUBLISHED, published until 2026-10-18, when
+# the table composed from the port's axis_F.csv (PUBLISHED_MD5) replaced it
+UNIV_AXIS_F_WIDE_AS_PUBLISHED = ("911efb7d856178f24e60a87b5203a755",
+                                 "published until 2026-10-18 (12 rows carry the self-transfer "
+                                 "row)")
 PUBLISHED_MD5 = {
     "univ_master_cells.csv": "62cfc93f96be1dcbab6cad770da772fa",
     "univ_axis_r2.csv": "15c688966ce406593454391e9d6120ff",
-    "univ_axis_F_wide.csv": "911efb7d856178f24e60a87b5203a755",
+    "univ_axis_F_wide.csv": "09418b9acd0a698f1c9f3717e25b6b35",
     "univ_axis_F_long.csv": "51302099b643b24014141af7d860a059",
     "univ_cells.csv": "2fcde80b93bff79a4d9eb54292546318",
 }
@@ -487,7 +494,8 @@ TABLE_VERSIONS = (
 ) + (
     ("results_r3/axis_F.csv", "python -m twc_transfer axes", ("stage3",),
      "agg_F_* (the four tags of AXIS_TAGS F); the study's table, md5 %s %s, differs on "
-     "those 12 rows and lacks the five <arm>_self_transfer columns" % AXIS_F_AS_PUBLISHED,
+     "those 12 rows and lacks the five <arm>_self_transfer columns; univ_axis_F_wide.csv is "
+     "composed from this table since 2026-10-18" % AXIS_F_AS_PUBLISHED,
      True),
     ("results_r3/axis_F_long.csv", "python -m twc_transfer axes", ("stage3",),
      "agg_F_* (the four tags of AXIS_TAGS F)", True),
@@ -504,8 +512,9 @@ TABLE_VERSIONS = (
     ("univ_axis_F_long.csv", _REDUCE % "axes", ("stage3",),
      "results_r3/axis_F_long.csv and the self_transfer flag", True),
     ("univ_axis_F_wide.csv", _REDUCE % "axes", ("stage3",),
-     "the study's results_r3/axis_F.csv, md5 %s %s, and the self_transfer flag"
-     % AXIS_F_AS_PUBLISHED, True),
+     "this package's results_r3/axis_F.csv (above) and the self_transfer flag, checked "
+     "against the table's own; composed from the study's axis_F.csv it was md5 %s, %s"
+     % UNIV_AXIS_F_WIDE_AS_PUBLISHED, True),
     ("univ_cells.csv", _REDUCE % "cells",
      ("round1", "stage1", "stage2", "stage3", "rerun_seeded", "guardfix"),
      "the seven job lists and the cell table of summary_F.md", True),
