@@ -1,8 +1,9 @@
 """Tests of the universality readers: the study's verdict override on the level cells, the axis
 tables the reduction composes (a rerun's file replacing the rows of its cells), the
-self-transfer flag (the reduction's join that recovers it, the rows the notebook leaves out by
-it), the axis-F pair rows the linear-refit figure draws, the DESY beam of a set of runs, and
-the reduction's default study folder.
+self-transfer flag (the reduction's join that recovers it, its check of the flag columns a wide
+axis-F table carries, the rows the notebook leaves out by it), the axis-F pair rows the
+linear-refit figure draws, the DESY beam of a set of runs, and the reduction's default study
+folder.
 
 Run from TestBeam/:  python -m pytest etroc_plots/tests
 """
@@ -100,6 +101,99 @@ def test_axis_sources_rerun_needs_the_round2_columns_first(tmp_path):
         reduce.axis_table([os.path.join(str(tmp_path), "results_r2", "axis_X.csv"), rerun])
 
 
+F_TAG = "F_desy_f0p8153"
+# the axis-F rows of the synthetic tables: (cell, arm, kind, pair, family, n_pix, self_transfer,
+# mu, se); the pair ref-extra holds a transfer row and a self-transfer row of xfer on one key
+F_ROWS = [("F2_d1", "xfer", "pair", "ref-extra", "extrap", 69, 0, "5.32", "1.1"),
+          ("F2_d1", "xfer", "pair", "ref-extra", "extrap", 5, 1, "0.0", "0.2"),
+          ("F2_d1", "xfer_lin", "pair", "ref-extra", "extrap", 69, 0, "4.1", "1.0"),
+          ("F2_d1", "xfer", "pair", "ref-trig", "extrap", 5, 1, "0.0", "0.2")]
+# the wide rows: per pair the rows its arms hold (indices into F_ROWS), the others absent
+F_WIDE_HELD = [("ref-extra", {"xfer": 0, "xfer_lin": 2}), ("ref-trig", {"xfer": 3})]
+# the flag columns of the wide table, and the flags the reduction writes per wide row
+F_WIDE_FLAG_NAMES = ["%s_self_transfer" % arm for arm in reduce.WIDE_ARMS]
+F_WIDE_FLAGS = [["0", "0", "", "", ""], ["1", "", "", "", ""]]
+
+
+def synthetic_axis_f(root, port_flags=None):
+    """A study folder for the axes part: one round-2 axis, X, of one row; the long and the wide
+    axis-F tables of F_ROWS; the aggregation table behind them, under root/tables. With
+    port_flags (one list per wide row, in the order of F_WIDE_FLAG_NAMES) the wide table carries
+    each arm's <arm>_self_transfer after its <arm>_present, as twc_transfer's axes writes it.
+    Returns the paths of reduce._results_paths that build_axes reads."""
+    long_head = "axis,cell,arm,kind,board_or_role,family,agg_tag,n_pix,mu_ps,se_ps"
+    write_text(os.path.join(root, "results_r2", "axis_X.csv"),
+               long_head + "\nX,X1,xfer,pair,ref-extra,extrap,%s,40,0.5,0.1\n" % F_TAG)
+    write_text(os.path.join(root, "results_r3", "axis_F_long.csv"), long_head + "\n" + "".join(
+        "F,%s,%s,%s,%s,%s,%s,%d,%s,%s\n" % (c, a, k, p, f, F_TAG, n, mu, se)
+        for c, a, k, p, f, n, _, mu, se in F_ROWS))
+    head = ["cell", "kind", "board_or_role", "family", "agg_tag"]
+    for arm in reduce.WIDE_ARMS:
+        head += ["%s_%s" % (arm, x) for x in ("n_pix", "mu_ps", "se_ps", "present")]
+        head += ["%s_self_transfer" % arm] if port_flags else []
+    lines = [",".join(head + ["delta_xferlin_minus_xfer_mu_ps"])]
+    for r, (pair, held) in enumerate(F_WIDE_HELD):
+        fields = ["F2_d1", "pair", pair, "extrap", F_TAG]
+        for a, arm in enumerate(reduce.WIDE_ARMS):
+            if arm in held:
+                _, _, _, _, _, n, _, mu, se = F_ROWS[held[arm]]
+                fields += [str(n), mu, se, "True"]
+            else:
+                fields += ["", "", "", "False"]
+            fields += [port_flags[r][a]] if port_flags else []
+        lines.append(",".join(fields + ["-1.22" if r == 0 else ""]))
+    write_text(os.path.join(root, "results_r3", "axis_F.csv"), "\n".join(lines) + "\n")
+    write_text(os.path.join(root, "tables", "agg_" + F_TAG, "agg_by_cell.csv"),
+               "cell,arm,kind,name,extrap_family,n_pix,self_transfer,mu,se\n"
+               "X1,xfer,pair,ref-extra,extrap,40,0,0.5,0.1\n" + "".join(
+                   "%s,%s,%s,%s,%s,%d,%d,%s,%s\n" % r for r in F_ROWS))
+    return {"axis:X": [os.path.join(root, "results_r2", "axis_X.csv")],
+            "F_long": os.path.join(root, "results_r3", "axis_F_long.csv"),
+            "F_wide": os.path.join(root, "results_r3", "axis_F.csv")}
+
+
+def reduce_axis_f(tmp_path, monkeypatch, port_flags=None):
+    """The text of univ_axis_F_wide.csv the axes part writes from synthetic_axis_f."""
+    root, out = str(tmp_path / "study"), str(tmp_path / "out")
+    os.makedirs(out)
+    paths = synthetic_axis_f(root, port_flags)
+    monkeypatch.setattr(reduce.campaign, "UNIV_AXIS_SOURCES", {"X": ("results_r2/axis_X.csv",)})
+    reduce.build_axes(out, paths, root)
+    with open(os.path.join(out, "univ_axis_F_wide.csv"), newline="") as fh:
+        return fh.read()
+
+
+def expected_axis_f_wide(tmp_path):
+    """The study's wide table of synthetic_axis_f, its lines as written, with the flags the
+    reduction appends."""
+    root = str(tmp_path / "expected")
+    with open(synthetic_axis_f(root)["F_wide"], newline="") as fh:
+        lines = fh.read().splitlines()
+    return "".join("%s,%s\n" % (line, ",".join(f)) for line, f in
+                   zip(lines, [F_WIDE_FLAG_NAMES] + F_WIDE_FLAGS))
+
+
+def test_axis_f_wide_without_flag_columns_gets_the_flags_appended(tmp_path, monkeypatch):
+    text = reduce_axis_f(tmp_path, monkeypatch)
+    assert text == expected_axis_f_wide(tmp_path)
+    assert text.splitlines()[1].endswith(",-1.22,0,0,,,")
+
+
+def test_axis_f_wide_flag_columns_that_agree_are_written_once_at_the_end(tmp_path, monkeypatch):
+    text = reduce_axis_f(tmp_path, monkeypatch, port_flags=F_WIDE_FLAGS)
+    assert text == expected_axis_f_wide(tmp_path)
+    assert text.splitlines()[0].count("_self_transfer") == len(reduce.WIDE_ARMS)
+
+
+def test_axis_f_wide_flag_column_that_differs_from_the_join_stops(tmp_path, monkeypatch):
+    flags = [list(f) for f in F_WIDE_FLAGS]
+    flags[1][0] = "0"            # the self-transfer row of ref-trig marked as a transfer row
+    with pytest.raises(SystemExit, match="1 of its <arm>_self_transfer values differ.*\n  "
+                                         "F2_d1/pair/ref-trig/extrap xfer_self_transfer: the "
+                                         "table holds '0', the join gives '1'"):
+        reduce_axis_f(tmp_path, monkeypatch, port_flags=flags)
+
+
 def test_without_self_transfer_drops_flagged_rows():
     long = pd.DataFrame(dict(cell=["a", "a", "b"], self_transfer=[0, 1, 0]))
     assert list(transfer.without_self_transfer(long).index) == [0, 2]
@@ -174,8 +268,10 @@ def test_axis_r2_holds_the_guardfix_rows_of_its_cells():
 
 @pytest.mark.skipif(not tables_reachable(), reason="the universality tables are not reachable")
 def test_axis_f_pair_rows_with_both_arms():
-    rows = levels.refit_rows(transfer.without_self_transfer(transfer.read_axis_f()))
-    assert len(rows) == 45
+    every = transfer.read_axis_f()
+    rows = levels.refit_rows(transfer.without_self_transfer(every))
+    assert len(rows) == 49 and len(levels.refit_rows(every)) == 49
+    assert rows.cell.nunique() == every.cell.nunique() == 11
     assert (rows.family == "interp").sum() == 16
     assert not rows.duplicated(["cell", "kind", "board_or_role", "family"]).any()
     assert rows.margin_ps.notna().all()
