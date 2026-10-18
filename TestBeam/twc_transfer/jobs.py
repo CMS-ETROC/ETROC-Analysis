@@ -323,10 +323,14 @@ def package_sha(pkg_dir=PKG_DIR):
     return h.hexdigest()[:16]
 
 
+CORE_FILES = ("twc_solver.py", "bootstrap.py", "io_utils.py")
+
+
 def core_files_sha1(core_dir):
-    """{file: sha1} of the pipeline core files in `core_dir` (read, not imported)."""
+    """{file: sha1} of the pipeline core files (CORE_FILES) in `core_dir` (read, not
+    imported)."""
     out = {}
-    for name in ("twc_solver.py", "bootstrap.py", "io_utils.py"):
+    for name in CORE_FILES:
         p = os.path.join(core_dir, name)
         if os.path.isfile(p):
             with open(p, "rb") as fh:
@@ -378,10 +382,11 @@ WRAPPER = r"""#!/bin/bash
 #                and a cell continues its table where it stopped
 #
 # Checks, in this order, each with its own exit code: 90 no job_id; 91 the package cannot be
-# read (AFS); 92 the package is not the version the DAG was written for; 93 no job table;
-# 94 the job is not in it; 95 the write root is not writable; 96 the LCG environment does not
-# source; 97 no TestBeam/ to run from. Any other code is the command's own. The roots below
-# are the ones the table's commands were expanded with. `wrapper.sh --help` prints this text.
+# read (AFS); 92 the package is not the version the DAG was written for; 98 the pipeline core
+# is not the one it was written for; 93 no job table; 94 the job is not in it; 95 the write
+# root is not writable; 96 the LCG environment does not source; 97 no TestBeam/ to run from.
+# Any other code is the command's own. The roots below are the ones the table's commands were
+# expanded with. `wrapper.sh --help` prints this text.
 set -o pipefail
 
 JOB="${1:-}"
@@ -395,6 +400,8 @@ TWC_REPO=@REPO@
 TWC_DAG_DIR=@DAG_DIR@
 TWC_TSV=@TABLE@
 TWC_EXPECT_SHA=@SHA@
+TWC_CORE=@CORE@
+TWC_EXPECT_CORE=@CORE_SHA@
 @EXPORTS@
 TWC_PKG="$TWC_REPO/TestBeam/twc_transfer"
 
@@ -418,6 +425,22 @@ if [ "$SHA" != "$TWC_EXPECT_SHA" ]; then
     say "FATAL the package changed since the DAG was written (expected $TWC_EXPECT_SHA, got $SHA)."
     say "      Every node of one DAG runs one version of the package: write the DAG again."
     exit 92
+fi
+
+# 2b. one pipeline core for every node: the sha1 of each of its files, as
+#     jobs.core_files_sha1() computed them when the DAG was written
+CORE_SHA=""
+for f in @CORE_FILES@; do
+    [ -f "$TWC_CORE/$f" ] || continue
+    CORE_SHA="$CORE_SHA${CORE_SHA:+ }$f=$(sha1sum < "$TWC_CORE/$f" | cut -c1-40)"
+done
+say "core $TWC_CORE ${CORE_SHA:-(none of its files)}"
+if [ "$CORE_SHA" != "$TWC_EXPECT_CORE" ]; then
+    say "FATAL the core changed since the DAG was written."
+    say "      expected '$TWC_EXPECT_CORE'"
+    say "      got      '$CORE_SHA'"
+    say "      Every node of one DAG runs one core: write the DAG again."
+    exit 98
 fi
 
 # 3. the job table: the copy condor transferred, else the one beside the DAG
@@ -481,7 +504,10 @@ exit "$rc"
 
 def wrapper_text(table, dag_dir, sha, campaign_roots, read_root, write_root, core_dir=None,
                  repo=REPO_DIR, stamp=""):
-    """The wrapper script of a DAG, with its roots, its table and the package sha written in."""
+    """The wrapper script of a DAG, with its roots, its table, the package sha and the sha1 of
+    the core files written in (the core is `core_dir`, else the repository's)."""
+    core = core_dir or os.path.join(repo, "TestBeam", "condor_at_lxplus", "core")
+    core_sha = " ".join("%s=%s" % kv for kv in sorted(core_files_sha1(core).items()))
     from .__main__ import THREAD_VARS
     exports = ["export ETROC_TWC_OUT=%s" % shlex.quote(write_root),
                "export ETROC_TWC_TRANSFER_ROOT=%s" % shlex.quote(read_root)]
@@ -491,7 +517,8 @@ def wrapper_text(table, dag_dir, sha, campaign_roots, read_root, write_root, cor
                    else "unset ETROC_TWC_CORE")
     subs = {"@STAMP@": stamp, "@TABLE_NAME@": table, "@REPO@": shlex.quote(repo),
             "@DAG_DIR@": shlex.quote(dag_dir), "@TABLE@": shlex.quote(table),
-            "@SHA@": sha, "@EXPORTS@": "\n".join(exports),
+            "@SHA@": sha, "@EXPORTS@": "\n".join(exports), "@CORE@": shlex.quote(core),
+            "@CORE_SHA@": shlex.quote(core_sha), "@CORE_FILES@": " ".join(sorted(CORE_FILES)),
             "@THREADS@": "export " + " ".join("%s=1" % v for v in THREAD_VARS)}
     text = WRAPPER
     for k, v in subs.items():
@@ -501,8 +528,8 @@ def wrapper_text(table, dag_dir, sha, campaign_roots, read_root, write_root, cor
 
 def write_dag(path, dag_dir, campaign_roots, read_root, write_root, parse, dag_name=None,
               retry=1, maxjobs=12, prep_node=True, stream=None):
-    """Write the condor DAG of the job list `path` under `dag_dir` (a folder in the write root;
-    a relative one is taken in it). Submits nothing. Every command is expanded (read root,
+    """Write the condor DAG of the job list `path` under `dag_dir` (a new or empty folder in the
+    write root; a relative one is taken in it). Submits nothing. Every command is expanded (read root,
     write root, campaign roots) and parsed first; the list must hold exactly one smoke row.
 
       <dag_dir>/<list name>            the job table, every placeholder expanded
@@ -522,6 +549,10 @@ def write_dag(path, dag_dir, campaign_roots, read_root, write_root, parse, dag_n
     if not campaigns.inside(dag_dir, write_root):
         raise ValueError("%s is not inside the write root %s" % (dag_dir, write_root))
     campaigns.refuse_inside(dag_dir, campaigns.protected_roots(), "the DAG folder %s" % dag_dir)
+    if os.path.isdir(dag_dir) and os.listdir(dag_dir):
+        raise ValueError("%s exists and is not empty: write each job list's DAG into a new, "
+                         "empty folder (one DAG folder and one write root per list; DAGMan "
+                         "keeps its rescue files beside a DAG)" % dag_dir)
     jobs = expanded_jobs(path, campaign_roots, read_root, write_root, parse)
     smoke = [j for j in jobs if j["level"] == "smoke"]
     cells = [j for j in jobs if j["level"] != "smoke"]
@@ -539,10 +570,6 @@ def write_dag(path, dag_dir, campaign_roots, read_root, write_root, parse, dag_n
     default_dag = dagbase == "transfer_cells"
     pfx = "" if default_dag else dagbase + "_"
     bsuf = "" if default_dag else "_" + dagbase.replace("transfer_", "")
-    dag = os.path.join(dag_dir, dagbase + ".dag")
-    if os.path.exists(dag):
-        raise ValueError("%s exists: write the DAG into a new folder (DAGMan keeps its rescue "
-                         "files beside a DAG)" % dag)
     sha = package_sha()
     core_env = os.environ.get("ETROC_TWC_CORE")
     core = core_env or REPO_CORE
@@ -668,8 +695,9 @@ def write_dag(path, dag_dir, campaign_roots, read_root, write_root, parse, dag_n
            "sub files      sub/%s{cell,smoke,%sagg}.sub" % (pfx, "prep," if prep_node else "")]
     man += ["aggregation    %s: f=%s, %d cells" % (p["tag"], repr(p["f"]), len(p["cells"]))
             for p in plan]
-    man += ["", "Every node runs the package version above: wrapper.sh exits 92 when the",
-            "package's modules have changed since the DAG was written."]
+    man += ["", "Every node runs the package version and the core above: wrapper.sh exits 92",
+            "when the package's modules, 98 when the core's files, have changed since the DAG",
+            "was written."]
     put("manifest.txt" if default_dag else "manifest_%s.txt" % dagbase, "\n".join(man) + "\n")
 
     for name in sorted(written):

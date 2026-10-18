@@ -189,6 +189,15 @@ the campaign roots replaced by `${ETROC_TWC_ROOT_<CAMPAIGN>}`; `${TT_OUT}` stays
 Expanded with the default roots they give back the study's commands byte for byte (a test
 checks the digests). 247 rows: 236 cell jobs (6 of them smoke tests) and 11 Tier-0 jobs.
 
+Run each list into its own write root. The lists name the same outputs under `${TT_OUT}`, and
+every cell row passes `--overwrite` (236 of 247, all but the Tier-0 rows): the 26 rows of `cells_rerun.tsv` write the
+tables of 8 rows of `cells_stage1.tsv` (`cells/<cell>/<cell>[_cNofM].csv` of E12, E13, the two
+chunks of I2, J1 to J4) and of 18 rows of `cells_stage2.tsv` (the 11 chunks of A4, the 3 of A6,
+B6, C7, K3 and the smoke cell `smoke_B1_same_26to3_n3`), with the same job ids; the 6 rows of
+`cells_stage2_held.tsv` write the chunk tables of A8 and A9 that `cells_stage3.tsv` writes
+again. The study ran the seeded rerun in a tree of its own for that reason
+(`campaigns.JOB_LISTS`). Every list but `cells_stage2_held.tsv` has a smoke row named SMOKE.
+
 ## Condor
 
 `jobs --write-dag DIR` turns a job list into an HTCondor DAG, as the study's DAGs were laid
@@ -196,7 +205,8 @@ out, and submits nothing:
 
     python -m twc_transfer jobs --list cells_guardfix_rerun.tsv --write-dag dag_guardfix --retry 3
 
-A relative DIR is taken in the write root; an absolute one must lie inside it. It receives:
+A relative DIR is taken in the write root; an absolute one must lie inside it. DIR must be new
+or empty: one DAG folder per list, and one write root per list (Job lists). It receives:
 
 - the job table, under the list's name, with every `${TT_OUT}` and `${ETROC_TWC_ROOT_<CAMPAIGN>}`
   filled in as `jobs --dry-run` prints it: the read root under the input flags (`--bank`,
@@ -211,8 +221,10 @@ A relative DIR is taken in the write root; an absolute one must lie inside it. I
   microcentury, AGG as longlunch;
 - `wrapper.sh`, the executable of every node. In order, each with its own exit code, it checks
   the job id (90), that the package can be read (91, AFS), that the package's sha256 is the one
-  the DAG was written for (92: every node of a DAG runs one version), the job table and the
-  job's row in it (93, 94), that the write root is writable from the worker (95), the LCG
+  the DAG was written for (92: every node of a DAG runs one version), that the sha1 of the
+  core files is the one recorded when the DAG was written (98: one core per DAG), the job
+  table and the job's row in it (93, 94), that the write root is writable from the worker
+  (95), the LCG
   environment (96) and `TestBeam/` (97). It then exports `PYTHONHASHSEED=0`, the six thread
   variables at 1 and `PYTHONUNBUFFERED=1`, drops `--overwrite` on a retry so that a cell resumes
   its table, and runs `nice -n 19 python3 -m twc_transfer <command>`, logging to
@@ -243,8 +255,9 @@ Before submitting, on lxplus:
        bash $ETROC_TWC_OUT/dag_guardfix/wrapper.sh --help
        bash $ETROC_TWC_OUT/dag_guardfix/wrapper.sh SMOKE 0
 
-4. Leave the package alone while the DAG runs: a node exits 92 when a module changed after the
-   DAG was written. Write the DAG again, into a new folder, after any change.
+4. Leave the package and the core alone while the DAG runs: a node exits 92 when a module,
+   98 when a core file, changed after the DAG was written. Write the DAG again, into a new
+   folder, after any change.
 
 Then submit from the DAG folder by hand, with the `-maxjobs` of the manifest:
 
@@ -256,7 +269,8 @@ than by querying the scheduler in a loop.
 Compared with the study's DAG of the same list, with the default roots: the same 19 nodes in
 the same order, the same VARS keys and values on the 16 cell nodes (cell id, memory, flavour),
 the same PARENT lines, and the same wrapper steps in the same order (exit codes 90 to 96, the
-seed, the threads, the retry rule, 97, the run). The 17 commands are the study's byte for byte
+seed, the threads, the retry rule, 97, the run), to which this wrapper adds the core check (98)
+after 92. The 17 commands are the study's byte for byte
 once the `--out` root, here the write root, is mapped back to the study's tree. What differs:
 RETRY is 1 unless `--retry 3` is given, as the study's reruns had it; the submit files carry no
 `environment` line, since the roots are written into the wrapper; the batch names start with
