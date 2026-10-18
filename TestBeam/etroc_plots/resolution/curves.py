@@ -10,9 +10,12 @@ is drawn as one.
 Populations, chosen in the notebook with these helpers:
 
   standard      threshold offset 20 and RFSel 2 (or none recorded): the standard operating point
-  merge_rule    a merge replaces its runs only when every run of the merge is in the figure's
-                display-list class and the good-run list marks the merge good
-  good_list     the good-run list of one campaign and telescope, merges included ("3+4")
+  merge_rule    a merge replaces its runs only when it passes the one merge verdict of every
+                figure (tables.good_merges: accepted in the merged runs' board table and good
+                on the good-run list) and every run of the merge is in the figure's
+                display-list class
+  good_list     the good-run list of one campaign and telescope, merges included ("3+4"):
+                tables.good_list, the one reader of the settings and resolution figures
   one_per_condition
                 one run per bias pattern (every board's bias) of a display class: the preferred
                 run where it is in the group, else the latest run; then the merge rule
@@ -53,7 +56,7 @@ Figures (each returns the figure and the numbers drawn):
   res_vs_bias_summary          every March standard run and the July runs the notebook gives,
                                colour = fluence step
 
-The fluence ladder (best resolution per step, pixel yield) is resolution.ladder; the numbers
+The fluence ladder (one point per board and step, the pixel yield) is resolution.ladder; the numbers
 table is resolution.numbers_table; the combination split at one step is
 resolution.combo_split.
 """
@@ -189,29 +192,7 @@ def runs_at_step(rs, telescope, camp, step):
 
 
 # ------------------------------------------------------------------------ good runs, merges
-def _good_flag(value, where):
-    if isinstance(value, (bool, np.bool_)):
-        return bool(value)
-    if str(value).strip() in ("True", "False"):
-        return str(value).strip() == "True"
-    raise ValueError("%s: good = %r is not True or False" % (where, value))
-
-
-def good_list(camp, telescope, path=None):
-    """{label: (good, reason)} of the good-run list (GOOD_RUNS_CSV) for one campaign ("march" /
-    "july") and telescope, single runs ("12") and merges ("3+4") alike."""
-    path = path or campaign.GOOD_RUNS_CSV
-    df = pd.read_csv(path, dtype={"run": str})
-    name = {"march": campaign.GOOD_RUNS_CAMPAIGN_MARCH, "july": campaign.GOOD_RUNS_CAMPAIGN}[camp]
-    df = df[(df["campaign"] == name) & (df["telescope"] == campaign.GOOD_RUNS_TEL[telescope])]
-    out = {}
-    for _, row in df.iterrows():
-        label = "+".join(str(int(r)) for r in str(row["run"]).split("+"))
-        if label in out:
-            raise ValueError("%s: %s %s run %s is listed twice" % (path, name, telescope, label))
-        out[label] = (_good_flag(row["good"], "%s, %s run %s" % (path, telescope, label)),
-                      row["reason"])
-    return out
+good_list = tables.good_list      # the one good-run list reader (settings and resolution)
 
 
 def not_good(runs, good):
@@ -228,10 +209,13 @@ def not_good(runs, good):
 def merge_rule(runs, merges, display_class, good):
     """Which merges replace their runs on a result figure. A merge replaces its runs only when
     every run of the merge is in the figure's display-list class (`display_class`, the run
-    numbers of the class) and the good-run list (`good`, good_list) marks the merge good.
+    numbers of the class) and the good-run list (`good`, good_list) marks the merge good; with
+    `merges` the accepted merges, that is the one merge verdict (tables.good_merges) plus the
+    class.
 
     runs     the figure's runs (ints), in drawing order
-    merges   the merges available (tuples of run numbers; table_merges)
+    merges   the merges available: the accepted merges of the telescope (tuples of run numbers;
+             tables.accepted_merges)
     Returns (drawn, taken, refused): drawn = `runs` with each taken merge in place of its runs
     (where its first run stood), taken = {merge: [the runs of `runs` it replaced]},
     refused = {merge: reason}."""

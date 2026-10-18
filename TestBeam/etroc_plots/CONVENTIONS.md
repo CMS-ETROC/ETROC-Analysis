@@ -95,11 +95,16 @@ rest are for whoever writes the next figure.
   of every board against its bias or against time, at the standard operating point: threshold
   offset 20 and RFSel 2, or no RFSel recorded (`curves.standard`).
 - Population: July points come from the display-run list, the class of the step's RFSel and offset
-  (`curves.display_class`). A merge replaces its single runs only when every run of the merge is in
-  that class and the good-run list marks the merge good (`curves.merge_rule`); the notebook prints
-  which merges it took and why it refused the others. Every run drawn is good on the good-run list,
-  or the notebook stops. A run off the display-run list is drawn only where the notebook says why,
-  with an open marker, and the footer names it.
+  (`curves.display_class`). A merge replaces its single runs only when it passes the one merge
+  verdict of the settings and resolution figures (`tables.good_merges`: the merged runs' board
+  table accepts it and the good-run list marks it good) and every run of the merge is in that
+  class (`curves.merge_rule`); the notebook prints which merges it took and why it refused the
+  others. Every run drawn is good on the good-run list, or the notebook stops. A run off the
+  display-run list is drawn only where the notebook says why, and the footer names it.
+- An open marker means what its figure's legend or footer says, stated per figure: on the
+  resolution notebook's re03 a July run off the display-run list, on re04 the F1 runs at 480 V
+  (runs 3 and 4; the others at 460 V), on re06 the display class at threshold offset 15; the
+  combination figures state theirs below. The small open marker is the under-128-pixel rule.
 - A figure may override the merge rule where its footer says so: it draws single runs, and the
   footer names the merges the rule would have drawn in their place (`curves.merge_override`).
   The resolution notebook's re03 and re07 do.
@@ -152,9 +157,10 @@ rest are for whoever writes the next figure.
   run at a step are small open markers, named in the footer.
 - The combination split (`resolution/combo_split.py`) draws each board's value in every 3-board
   combination containing it, run by run: the references (the preferred display runs at RFSel 2,
-  offset 20 of the earlier steps), then every display run of the step, an accepted merge whose
-  runs are all in one settings class in place of those runs (as on the settings figures), grouped
-  by settings class under the axis with the class and the step written below the run numbers.
+  offset 20 of the earlier steps), then every display run of the step, a merge that passes the one
+  verdict and whose runs are all in one settings class in place of those runs (as on the settings
+  figures), grouped by settings class under the axis with the class and the step written below
+  the run numbers.
   Colour = combination, filled = the anointed combination, open = the others, marker = chip, bar =
   the pixel spread in that combination; no band.
 - An appendix figure follows the rules of the figure it derives from and its footer names that
