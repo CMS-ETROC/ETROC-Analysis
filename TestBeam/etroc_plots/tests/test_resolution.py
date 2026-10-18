@@ -1,8 +1,9 @@
 """Tests of the resolution helpers: the merge rule and its per-figure override, the good-run list
 with merges, every display run as single runs, the points of single and merged runs, the
 standard operating point, the stop clock with its bounds, the hours since the first run at a
-step, the colour rule, the low-pixel threshold; the fluence ladder's picks (step_winners), the
-one-run-per-condition selector, the floor-"none" pixel lookup and the numbers table; the
+step, the colour rule, the low-pixel threshold and the good-run list reader the settings figures
+share; the fluence ladder's picks (step_winners), the one-run-per-condition selector, the
+floor-"none" pixel lookup and the numbers table; the
 combination split's runs, points and layout, with and without merges; the bias summary drawn in
 part (re12 to re14) with the whole figure's colours; the combination checks (re16 to re18): the
 partner-excluded combination, the pair-corrected midpoint, a missing combination reported, the HV
@@ -10,6 +11,7 @@ cycle between runs and the shared autocalibration scan.
 
 Run from TestBeam/:  python -m pytest etroc_plots/tests
 """
+import inspect
 import math
 import os
 import sys
@@ -26,7 +28,7 @@ from etroc_plots.campaigns import active as campaign            # noqa: E402
 from etroc_plots.etroc_style import BOARD_COLOR                  # noqa: E402
 from etroc_plots.iv.iv_plot import TIMING_COLORS                 # noqa: E402
 from etroc_plots.resolution import (combo_check, combo_split, curves, ladder,  # noqa: E402
-                                    numbers_table, tables)
+                                    numbers_table, settings, tables)
 
 JUL, MAR = campaign.TABLE_CAMPAIGN["july"], campaign.TABLE_CAMPAIGN["march"]
 CHIPS = campaign.TELESCOPE_CHIPS["h1"]
@@ -304,9 +306,21 @@ def test_display_singles_every_run_of_every_step():
     assert curves.display_singles(classes, "x1") == []
 
 
+def test_one_good_run_list_reader_for_settings_and_resolution(good_csv):
+    # the merge verdict of the settings figures (tables.good_merges) and the merge rule here read
+    # the good-run list through one function
+    assert curves.good_list is tables.good_list
+    assert curves.good_list("july", "h1", path=good_csv)["18+19"] == (False, "r18+19")
+
+
 # ------------------------------------------------------------------------------ low pixels
 def test_low_pixels_below_128_only():
     assert curves.LOW_PIXELS == 128
+    # one threshold for the settings and resolution figures: the settings figures mark a board
+    # through settings.low_pixels, whose threshold defaults to tables.LOW_PIXELS
+    assert curves.LOW_PIXELS == tables.LOW_PIXELS
+    threshold = inspect.signature(settings.low_pixels).parameters["threshold"].default
+    assert threshold == curves.LOW_PIXELS
     pts = [dict(tel="h1", label="11", board_idx=i, chip=c, n_pixels=n)
            for i, (c, n) in enumerate(zip(CHIPS, (127, 128, 45, 256)))]
     assert [curves.low_pixels(p) for p in pts] == [True, False, True, False]

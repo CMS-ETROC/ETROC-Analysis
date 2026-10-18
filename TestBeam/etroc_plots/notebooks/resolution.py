@@ -31,7 +31,8 @@
 #   irradiation step.
 # * Figure re07: every bias scan of both campaigns on one figure per telescope, every July display
 #   run as a single run.
-# * Figure re08: the fluence ladder, each board's resolution at each step at its highest bias.
+# * Figure re08: the fluence ladder, each board's resolution at each step from the display run of
+#   the step.
 # * Figure re09: the numbers behind re08, as a table (.csv, .md and a table figure).
 # * Figure re10: the pixels behind the re08 points, with at least 300 events and with any events.
 # * Figure re11: the combination split at 3.5e15: each board's resolution in every 3-board
@@ -63,6 +64,12 @@
 # A point built from fewer than 128 pixels (half the chip; `curves.LOW_PIXELS`) is drawn as a
 # small open marker on every figure, the legend says "under 128 pixels" and the footer gives the
 # counts (on re11 the small marker keeps its fill: filled is the anointed combination there).
+#
+# The IRRAD 2026 loops behind these figures were recorded with the readout saturated: 47 to 81 %
+# of the ETROC2 packets lost their header and were dropped at decoding, so every number below is
+# a measurement on the surviving hits, selected by buffer state, with the selection bias open.
+# Details, and what it means per figure type: the "Data quality" section of the package README
+# (`../README.md`).
 #
 # Every figure is saved as PNG (200 dpi) and PDF, with `<name>_values.json` beside it: every
 # number drawn, the input files read and the commit of the code.
@@ -181,7 +188,7 @@ BM = tables.read_board_table(campaign.BOARD_TABLE_MERGED)
 RS = tables.read_runs_summary(campaign.RUNS_SUMMARY_CSV)
 RUN_TIMES = timeline.read_run_times()
 GOOD = {(c, t): curves.good_list(c, t) for c in ("march", "july") for t in TELS}
-MERGES = {t: curves.table_merges(BM, t, "july") for t in TELS}
+MERGES = {t: tables.accepted_merges(BM, campaign.TABLE_CAMPAIGN["july"]).get(t, []) for t in TELS}
 CURRENTS = curves.inrun_currents()
 
 
@@ -216,19 +223,21 @@ def save(fig, stem, payload, conventions):
 #
 # The July points come from the display-run list, at the standard operating point (RFSel 2,
 # offset 20): at each step, its display runs and its preferred run. Where a merge of runs exists,
-# the merge rule decides whether a result figure draws it: a merge replaces its runs only when
-# every run of the merge is in the step's display class and the good-run list marks the merge
-# good (`curves.merge_rule`). So H1 3+4 (1.5e15) and 11+12 (2e15) replace the preferred runs 4
+# the merge rule decides whether a result figure draws it: a merge replaces its runs only when it
+# passes the one merge verdict of the settings and resolution figures (`tables.good_merges`: the
+# merged runs' board table accepts it and the good-run list marks it good) and every run of the
+# merge is in the step's display class (`curves.merge_rule`, given the accepted merges `MERGES`).
+# So H1 3+4 (1.5e15) and 11+12 (2e15) replace the preferred runs 4
 # and 12; H1 6+7 and 18+19 are not good as merges, H1 14+15 and F1 3+4 hold runs off the display
 # class, F1 46+47 sits at RFSel 1. At 3.5e15 no merge applies: the result run is 18 on both
 # telescopes. The cell below prints the rule's outcome for every merge at every July step.
 #
 # A figure whose axis is time draws single runs: a merge spans the times of its runs (re04,
 # re05). Two figures override the rule and say so in their footers: re03 and re07 draw the
-# populations of the deck's figures, H1 run 4 and the other display runs as single runs
-# (`curves.merge_override` names the merges they leave out); the fluence ladder (re08 to re10)
-# draws the merges by the rule. re11 draws every settings class at 3.5e15 and takes the rule of
-# the settings figures: an accepted merge whose runs are all in one class stands in for them (F1
+# display runs as single runs, so H1 run 4 where the rule would draw 3+4 (`curves.merge_override`
+# names the merges they leave out); the fluence ladder (re08 to re10) draws the merges by the
+# rule. re11 draws every settings class at 3.5e15 and takes the rule of the settings figures: a
+# merge that passes the one verdict and whose runs are all in one class stands in for them (F1
 # 46+47). The appendix figures draw the points of the figures they derive from (re12 to re14
 # those of re07, re15 those of re06), so the same choices. Every run drawn, single or merged, has
 # to be good on the good-run list; the cells stop otherwise.
@@ -263,6 +272,7 @@ YLIM = (20.0, 80.0)            # ps, every figure
 TEL_TITLES = dict(campaign.TELESCOPE_TITLE)
 TAG = style.settings_text(rfsel=2, offset=20)
 # one footer line each: a footer line stays under about 180 characters to fit the figure width
+SURVIVING_TEXT = u"Pixel counts are the surviving readout sample."
 SELECTION = (u"Selection: %s, tracks with at least %s events, each chip from its anointed "
              u"combination (boards 0-1-2 for boards 0-2, boards 1-2-3 for board 3).\n"
              u"Widths = FWHM/2.355 of the TOA-difference core, as the result tables carry them; "
@@ -316,8 +326,8 @@ def counts_text(pts):
 
 
 def low_line(pts):
-    """[the footer line of the points under LOW_PIXELS] or [] when there are none: "Small open
-    markers, under 128 pixels: H1 run 11 (IH7 45, IH11 35, IH12 40, IH13 79)."."""
+    """[the footer lines of the points under LOW_PIXELS] or [] when there are none: "Small open
+    markers, under 128 pixels: H1 run 11 (IH7 45, IH11 35, IH12 40, IH13 79).", SURVIVING_TEXT."""
     runs = {}
     for q in curves.low_pixel_points(pts):
         chips = runs.setdefault((q["tel"], q["label"]), [])
@@ -327,7 +337,31 @@ def low_line(pts):
         return []
     return [u"Small open markers, under %d pixels (half the chip): %s." % (
         curves.LOW_PIXELS, u"; ".join(u"%s run %s (%s)" % (t.upper(), r, u", ".join(c))
-                                      for (t, r), c in runs.items()))]
+                                      for (t, r), c in runs.items())), SURVIVING_TEXT]
+
+
+def drawn_range(p):
+    """(low, high) in ps of what point `p` draws: its marker and bar (y_ps +/- yerr_ps), widened
+    to its band box where it is a band."""
+    lo, hi = p["y_ps"] - p["yerr_ps"], p["y_ps"] + p["yerr_ps"]
+    if p.get("band"):
+        lo, hi = min(lo, p["band"]["band_lo_ps"]), max(hi, p["band"]["band_hi_ps"])
+    return lo, hi
+
+
+def check_ylim(rows, ylim, stem, above=False):
+    """Stops on a point whose drawn range (drawn_range) leaves `ylim`; `rows` {row: {tel:
+    points}}, one figure's points as {"points": {tel: points}}. With `above`, a point reaching
+    past the top is allowed (re18 draws it as an off-scale arrow) and listed: [(tel, run, chip,
+    row, value)]."""
+    every = [(r, p, drawn_range(p)) for r in rows for t in TELS for p in rows[r].get(t, [])]
+    over = [(p["tel"], p["run"], p["chip"], r, round(p["value_ps"], 1)) for r, p, (lo, hi) in every
+            if hi > ylim[1]]
+    out = [(p["tel"], p["run"], p["chip"], r, round(p["value_ps"], 1)) for r, p, (lo, hi) in every
+           if lo < ylim[0]]
+    if out or (over and not above):
+        raise RuntimeError("%s: points outside %s: %s" % (stem, ylim, out + over))
+    return over
 
 
 def check_good(pts, camp):
@@ -397,6 +431,7 @@ footer01 = u"\n".join([
                                     for r, why in sorted(DROP01[t].items()))] + low_line(
     [p for t in TELS for p in P01[t]]) + [
     u"Lines join each chip's points in bias order."])
+check_ylim({"points": P01}, YLIM, "re01_res_vs_bias_march_preirrad")
 fig, n01 = curves.res_vs_bias_march_preirrad(
     P01, tel_titles=TEL_TITLES, xlabel=style.XLABEL_BIAS, ylim=YLIM, tag=TAG,
     data=u"March, pre-irradiation", footer=footer01)
@@ -436,6 +471,7 @@ footer02 = u"\n".join([
     if any(DROP02.values()) else u"No run of these steps is at another operating point."] + (
     low_line([p for t in TELS for p in P02[t]])) + [
     FLUENCE_TEXT + u" Lines join each chip's points of one step in bias order."])
+check_ylim({"points": P02}, YLIM, "re02_res_vs_bias_march_steps")
 fig, n02 = curves.res_vs_bias_march_steps(
     P02, tel_titles=TEL_TITLES, xlabel=style.XLABEL_BIAS, ylim=YLIM, tag=TAG,
     data=u"March, after each irradiation step", footer=footer02)
@@ -450,12 +486,12 @@ save(fig, "re02_res_vs_bias_march_steps",
 # The March scan at 1.5e15 (runs 16, 17, 19 on both telescopes, as in re02, in the step's
 # colour) beside the July points at the same bookkeeping fluence, measured after four months of
 # cooling down, in the later-look colour (teal; the March red stays with March). The July
-# points are the deck's population, and this figure overrides the merge rule to draw it (the
-# footer says so): the preferred display run of each telescope as a single run, H1 run 4 at
+# points are the preferred display run of each telescope as a single run, and this figure
+# overrides the merge rule to draw them (the footer says so): H1 run 4 at
 # 540 V (the rule would draw the merge 3+4 in its place, as re08 does) and F1 run 9 at 460 V.
 #
 # Two more July points are drawn with open markers: H1 run 10 at 550 V and F1 run 4 at 480 V.
-# They are off the display-run list; they are the deck's second July point per telescope, kept
+# They are off the display-run list; they are a second July bias point per telescope, kept
 # because the display runs sit at one bias per telescope. To drop them, set `EXTRA03 = {}` in
 # the cell below; to draw the merge rule's result instead, use `RESULT` in place of
 # `curves.merge_override`.
@@ -497,6 +533,7 @@ footer03 = u"\n".join([
                    bias_text([p for p in july03["f1"] if p["run"] in off03["f1"]], "f1"))] + (
     low_line([p for t in TELS for p in P03[t]])) + [
     u"%s. %s" % (counts_text([p for t in TELS for p in P03[t]]), FLUENCE_TEXT)])
+check_ylim({"points": P03}, YLIM, "re03_res_1p5e15_march_vs_july")
 fig, n03 = curves.res_1p5e15_march_vs_july(
     P03, off03, open_label=u"off the display list", tel_titles=TEL_TITLES,
     xlabel=style.XLABEL_BIAS, ylim=YLIM, tag=TAG,
@@ -513,9 +550,9 @@ save(fig, "re03_res_1p5e15_march_vs_july",
 #
 # The July runs at 1.5e15 at the standard operating point, against the hours since the first
 # run at that fluence (run 3 on both telescopes, from the run starts of `tables/run_times.csv`):
-# H1 runs 3, 4, 5 at 540 V; F1 runs 3 and 4 at 480 V (open markers) and 5 to 9 at 460 V. This is the design the user chose for a stability check after the
-# telescopes went back into the beam, four months after the March irradiation; it is not a
-# cooling-down curve (no irradiation step precedes it).
+# H1 runs 3, 4, 5 at 540 V; F1 runs 3 and 4 at 480 V (open markers) and 5 to 9 at 460 V. This
+# set is a stability check after the telescopes went back into the beam, four months after the
+# March irradiation; it is not a cooling-down curve (no irradiation step precedes it).
 #
 # The population is wider than the display list: the display runs (H1 3, 4; F1 7, 8, 9) are
 # bold in the run labels, the others are named in the footer. The time axis draws single runs,
@@ -527,7 +564,7 @@ save(fig, "re03_res_1p5e15_march_vs_july",
 # time; the lines break at the change.
 
 # %%
-STABILITY = {"h1": [3, 4, 5], "f1": [3, 4, 5, 6, 7, 8, 9]}    # the user's design
+STABILITY = {"h1": [3, 4, 5], "f1": [3, 4, 5, 6, 7, 8, 9]}    # the stability set (markdown above)
 P04, H04, FIRST04 = {}, {}, {}
 for t in TELS:
     P04[t] = curves.standard(curves.points(BT, BM, RS, t, STABILITY[t], "july", VARIANT, FLOOR))
@@ -586,6 +623,7 @@ footer04 = u"\n".join([
         u"%s runs %s" % (t.upper(), bias_text(NOT04[t], t)) for t in TELS if NOT04[t])] + (
     low_line([p for t in TELS for p in P04[t]])) + [
     u"%s. %s" % (counts_text([p for t in TELS for p in P04[t]]), FLUENCE_TEXT)])
+check_ylim({"points": P04}, YLIM, "re04_res_july_1p5e15_stability")
 fig, n04 = curves.res_july_1p5e15_stability(
     P04, H04, open_runs=OPEN04, open_legend=open_legend04, tel_titles=TEL_TITLES,
     xlabel=u"Hours since the first run at %s" % step_text(1.5e15), ylim=YLIM, tag=TAG,
@@ -669,6 +707,7 @@ footer05 = u"\n".join([
     u"run's HV plateau. %s." % counts_text([p for t in TELS for p in P05[t]])] + low_line(
     [p for t in TELS for p in P05[t]]) + [
     FLUENCE_TEXT])
+check_ylim({"points": P05}, YLIM, "re05_res_2e15_cooling_down")
 fig, n05 = curves.res_2e15_cooling_down(
     P05, H05, stop=STOP05, braces=BRACE05, tel_titles=TEL_TITLES,
     xlabel=u"Hours after the end of the %s irradiation" % step_text(2e15), ylim=YLIM, tag=TAG,
@@ -771,6 +810,7 @@ footer06 = u"\n".join([
         campaign.RAD_STOP_UTC[3.5e15][11:19])] + low_line(
     [p for t in TELS for p in B06[t] + T06[t]]) + [
     u"%s. %s" % (counts_text([p for t in TELS for p in T06[t]]), FLUENCE_TEXT)])
+check_ylim({"bias": B06, "hours": T06}, YLIM, "re06_res_3p5e15_vs_bias_and_hours")
 fig, n06 = curves.res_3p5e15_vs_bias_and_hours(
     B06, T06, H06, tel_titles=TEL_TITLES, ylim=YLIM,
     tag=style.settings_text(rfsel=2, offset=[20, 15]),
@@ -797,7 +837,7 @@ save(fig, "re06_res_3p5e15_vs_bias_and_hours",
 # at every step (the populations of re01 and re02, the March scan at 1.5e15 of re03), and every
 # July display run at RFSel 2, threshold offset 20, each as a single run
 # (`curves.display_singles`): H1 runs 3, 4 (1.5e15), 11, 12 (2e15), 18 (3.5e15); F1 runs 7 to
-# 14 and 18. This is the deck's population, and the figure overrides the merge rule to draw it
+# 14 and 18. The figure overrides the merge rule to draw every display run as a single run
 # (the footer says so): no merge replaces a run here (the rule would draw H1 3+4 and 11+12, as
 # re08 does), and no run is left out where two runs sit at one bias on every board (F1 13 and
 # 14 at 3.5e15): such runs stack at one bias. `curves.one_per_condition` picks one run per
@@ -850,6 +890,7 @@ footer07 = u"\n".join([
         u"%s %s" % (t.upper(), m) for t in TELS for m in OVER07[t]),
     u"At 3.5e15 every point is a band: %s." % tables.BAND_FOOTER] + low_line(july07) + [
     u"%s. %s" % (counts_text([p for t in TELS for p in P07[t]]), FLUENCE_TEXT)])
+check_ylim({"points": P07}, YLIM, "re07_res_vs_bias_summary")
 fig, n07 = curves.res_vs_bias_summary(
     P07, chip_fluence=CHIP_FLUENCE07, tel_titles=TEL_TITLES, xlabel=style.XLABEL_BIAS,
     ylim=YLIM, tag=TAG, data=u"March and July, every step", footer=footer07)
@@ -867,8 +908,8 @@ save(fig, "re07_res_vs_bias_summary",
 # %% [markdown]
 # ## Figure re08: the fluence ladder
 #
-# Each board's resolution at each fluence step, one point per step: the run at the highest bias
-# the step reached, where the resolution is best. March: the highest-bias run of each step at
+# Each board's resolution at each fluence step, one point per step from the display run of the
+# step. March: the highest-bias run of each step at
 # the standard operating point (`MARCH_DISPLAY_RUNS`: H1 runs 7, 11, 14, 19; F1 runs 2, 11, 14,
 # 19), checked against the tables by `ladder.step_winners`. July: the preferred display run of
 # each step at RFSel 2, threshold offset 20, replaced by its merge under the merge rule: H1 3+4
@@ -880,8 +921,8 @@ save(fig, "re07_res_vs_bias_summary",
 # style is the campaign (March solid, July dashed), and lines join a board's steps within one
 # campaign only. At 3.5e15 the points are bands.
 #
-# The highest bias rose from step to step, so this is not the resolution at one bias: each point
-# carries its own bias (re09 lists them).
+# The display runs sit at different biases from step to step, so this is not the resolution at
+# one bias: each point carries its own bias (re09 lists them).
 #
 # The maps notebook draws H1 at 1.5e15 and 2e15 from the single runs 4 and 12, the preferred
 # display runs (its ladder and March-against-July maps, maps15 to maps18), where this ladder and
@@ -929,9 +970,10 @@ footer08 = u"\n".join([
     u"At 3.5e15 every point is a band: %s." % tables.BAND_FOOTER] + low_line(
     [p for t in TELS for p in P08[t]]) + [
     u"%s. %s" % (counts_text([p for t in TELS for p in P08[t]]), FLUENCE_TEXT)])
+check_ylim({"points": P08}, YLIM, "re08_best_res_vs_fluence")
 fig, n08 = ladder.best_res_vs_fluence(
     P08, tel_titles=TEL_TITLES, ylim=YLIM, tag=TAG,
-    data=u"March and July, highest bias per step", footer=footer08)
+    data=u"March and July, the display run per step", footer=footer08)
 save(fig, "re08_best_res_vs_fluence",
      payload(n08, footer08, picks={t: PICKS08[t] for t in TELS}, good_runs=GOOD08),
      conventions(colour="board (etroc_style.BOARD_COLOR): one point per board and step",
@@ -981,7 +1023,7 @@ footer09 = u"\n".join([
     FLUENCE_TEXT])
 fig, n09 = numbers_table.table_figure(
     T09, name=u"Resolution per chip and step", tag=TAG,
-    data=u"March and July, highest bias per step", footer=footer09)
+    data=u"March and July, the display run per step", footer=footer09)
 save(fig, "re09_numbers_table",
      payload(dict(rows=numbers_table.records(T09), cells=n09["cells"], columns=n09["columns"],
                   table_rows=n09["rows"], files=[os.path.basename(p) for p in TABLE09]),
@@ -1035,6 +1077,8 @@ footer10 = u"\n".join([
     u"Pixels with a resolution per board, anointed combination, %s: solid = tracks with at "
     u"least %s events (the points of the fluence ladder), dashed = tracks with any events." % (
         tables.VARIANT_TEXT[VARIANT], FLOOR),
+    u"Pixels with a resolution in the surviving readout sample; the IRRAD loops lost 47-81 % of "
+    u"their packet headers, so this counts DAQ survival as much as the chip.",
     u"Runs as on the fluence ladder: March, the highest-bias run of each step at RFSel 2, "
     u"threshold offset 20; July, the preferred display run, merges by the merge rule.",
     u"Small open markers: %s at 3.5e15, display runs at a lower bias than the ladder's run, at "
@@ -1044,7 +1088,7 @@ footer10 = u"\n".join([
         ladder.DODGE, ladder.DODGE, FLUENCE_TEXT)])
 fig, n10 = ladder.pixel_yield_vs_fluence(
     P08, ANY10, EXTRA10, tel_titles=TEL_TITLES, ylim=(0.0, 280.0), tag=TAG,
-    data=u"March and July, highest bias per step", footer=footer10,
+    data=u"March and July, the display run per step, surviving sample", footer=footer10,
     floor_label=u"at least %s events" % FLOOR, any_label=u"any events",
     extra_label=u"other display runs")
 save(fig, "re10_pixel_yield_vs_fluence",
@@ -1066,12 +1110,13 @@ save(fig, "re10_pixel_yield_vs_fluence",
 # (the display list's order), by run number within a class. H1 run 19 is not on the display list
 # at 3.5e15 and is not drawn.
 #
-# The merge rule of the settings figures applies: an accepted merge of the merged board table
-# (`tables.accepted_merges`) whose runs are all in one settings class at 3.5e15 stands in for
-# them, its combinations read from the merged table. So F1 46+47 (RFSel 1, offset 20) is drawn
-# as one merge, as on the settings notebook's st02, st04 and st05, and runs 46 and 47 are not
-# drawn apart. No other accepted merge has all its runs in one class at 3.5e15 (H1 18+19: run 19
-# is not on the display list there). The references are the preferred runs alone, H1 4 and 12 as
+# The merge rule of the settings figures applies: a merge that passes the one merge verdict
+# (`tables.good_merges`: accepted in the merged board table and good on the good-run list) and
+# whose runs are all in one settings class at 3.5e15 stands in for them, its combinations read
+# from the merged table. So F1 46+47 (RFSel 1, offset 20) is drawn as one merge, as on the
+# settings notebook's st02, st04 and st05, and runs 46 and 47 are not drawn apart. No other merge
+# has all its runs in one class at 3.5e15 (H1 18+19 is not good, and run 19 is not on the display
+# list there). The references are the preferred runs alone, H1 4 and 12 as
 # on the maps notebook, so H1 3+4 and 11+12 are not drawn.
 #
 # The combination checks re16 to re18 (appendix) read the same combination rows and draw, for
@@ -1088,9 +1133,9 @@ save(fig, "re10_pixel_yield_vs_fluence",
 
 # %%
 YLIM11 = (20.0, 120.0)          # ps: H1 run 56 (offset 8/10) reaches past 100 with its bar
-ACCEPTED11 = tables.accepted_merges(BM, campaign.TABLE_CAMPAIGN["july"])
+MERGES11 = tables.good_merges(BM, "july")      # the one merge verdict: accepted and good
 SPLIT11 = combo_split.split_runs(campaign.DISPLAY_RUNS_JUL_CSV, (1.5e15, 2e15), 3.5e15,
-                                 merges=ACCEPTED11)
+                                 merges=MERGES11)
 P11, LAYOUT11 = {}, {}
 for t in TELS:
     runs11 = [e["run"] for e in SPLIT11[t]]
@@ -1130,7 +1175,8 @@ def split_text(t):
 
 
 def low_line11(pts):
-    """The footer line of the points under LOW_PIXELS, per telescope: points, then runs."""
+    """The footer lines of the points under LOW_PIXELS, per telescope: points, then runs; then
+    SURVIVING_TEXT."""
     low = [p for p in pts if curves.low_pixels(p)]
     if not low:
         return []
@@ -1142,7 +1188,7 @@ def low_line11(pts):
         curves.LOW_PIXELS, len(low), len(pts), sum(p["anointed"] for p in low), u"; ".join(
             u"%s run%s %s" % (t.upper(), u"s" if len(by[t]) > 1 else u"",
                               u", ".join(map(curves.run_label, sorted(by[t]))))
-            for t in TELS if t in by))]
+            for t in TELS if t in by)), SURVIVING_TEXT]
 
 
 all11 = [p for t in TELS for p in P11[t]]
@@ -1154,7 +1200,7 @@ footer11 = u"\n".join([
     u"pixel-to-pixel spread of the board's map in that combination.",
     u"H1: %s." % split_text("h1"),
     u"F1: %s." % split_text("f1"),
-    u"An accepted merge whose runs are all in one settings class stands in for them, its "
+    u"A merge accepted and good whose runs are all in one settings class stands in for them, its "
     u"combinations from the merged table (the settings figures' rule): %s. Under each panel: run "
     u"and this board's bias, then the settings class, then the step." % u"; ".join(
         u"%s %s" % (t.upper(), u", ".join(map(curves.run_label, MERGED11[t])))
@@ -1180,9 +1226,9 @@ save(fig, "re11_combo_split_3p5e15",
                  bar="pixel-to-pixel spread of the board's map in that combination",
                  band="none: every combination drawn",
                  population="references = the preferred display runs at 1.5e15 and 2e15 (RFSel "
-                            "2, offset 20), then every display run at 3.5e15; an accepted merge "
-                            "(tables.accepted_merges) whose runs are all in one settings class "
-                            "stands in for them"))
+                            "2, offset 20), then every display run at 3.5e15; a merge accepted "
+                            "and good (tables.good_merges) whose runs are all in one settings "
+                            "class stands in for them"))
 
 # %% [markdown]
 # # Appendix: figures of the July talk drawn from the points above
@@ -1250,6 +1296,7 @@ for stem, camp, steps, what, data, xlims in SUBSETS:
     keep = keep_looks(camp, steps)
     kept = {t: [p for p in P07[t] if keep(p)] for t in TELS}
     footer = subset_footer(kept, what)
+    check_ylim({"points": kept}, YLIM, stem)
     fig, N_SUB[stem] = curves.res_vs_bias_summary(
         P07, keep=keep, chip_fluence=CHIP_FLUENCE07, tel_titles=TEL_TITLES,
         xlabel=style.XLABEL_BIAS, ylim=YLIM, tag=TAG, data=data, footer=footer, xlims=xlims)
@@ -1293,6 +1340,7 @@ footer15 = u"\n".join([
         campaign.RAD_STOP_UTC[3.5e15][11:19])] + low_line(
     [p for t in TELS for p in P15[t]]) + [
     u"%s. %s" % (counts_text([p for t in TELS for p in P15[t]]), FLUENCE_TEXT)])
+check_ylim({"points": P15}, YLIM, "re15_res_vs_hours_after_3p5e15")
 fig, n15 = curves.res_3p5e15_vs_hours(
     P15, H15, tel_titles=TEL_TITLES,
     xlabel=u"Hours after the end of the %s irradiation" % step_text(3.5e15), ylim=YLIM,
@@ -1317,7 +1365,7 @@ save(fig, "re15_res_vs_hours_after_3p5e15",
 # single-run board table's combination rows (`../resolution/combo_check.py`):
 #
 # * top row, the anointed combination (boards 0-1-2 for boards 0-2, 1-2-3 for board 3): the
-#   values of re07 and re06;
+#   anointed values (at 3.5e15, re06 and re07 draw the band centre instead);
 # * middle row, the combination without the board's HV partner (boards 0 and 1, and 2 and 3,
 #   are HV pairs): board 0 from boards 0-2-3, board 1 from 1-2-3, board 2 from 0-1-2, board 3
 #   from 0-1-3;
@@ -1412,18 +1460,6 @@ def missing_text(missing):
     return u"; ".join(parts) if parts else u"none"
 
 
-def check_ylim(rows, ylim, stem, above=False):
-    """Stops on a point whose bar leaves `ylim`; with `above`, a point reaching past the top is
-    allowed (re18 draws it as an off-scale arrow) and listed: [(tel, run, chip, row, value)]."""
-    over = [(p["tel"], p["run"], p["chip"], r, round(p["value_ps"], 1)) for r in rows
-            for t in TELS for p in rows[r][t] if p["value_ps"] + p["bar_ps"] > ylim[1]]
-    out = [(p["tel"], p["run"], p["chip"], r, round(p["value_ps"], 1)) for r in rows
-           for t in TELS for p in rows[r][t] if p["value_ps"] - p["bar_ps"] < ylim[0]]
-    if out or (over and not above):
-        raise RuntimeError("%s: points outside %s: %s" % (stem, ylim, out + over))
-    return over
-
-
 def runs_text(runs_by_tel):
     """"H1 6, 7; F1 15" from {tel: [run, ...]}."""
     return u"; ".join(u"%s %s" % (t.upper(), u", ".join(map(str, sorted(runs_by_tel[t]))))
@@ -1454,8 +1490,8 @@ def rows_footer(what, rows, missing, dropped):
             if any(w == why for t in TELS for w in dropped[t].values())) or u"none"))
     low = [p for p in every if curves.low_pixels(p)]
     if low:
-        lines.append(u"Small markers, under %d pixels (half the chip): %d of %d points." % (
-            curves.LOW_PIXELS, len(low), len(every)))
+        lines += [u"Small markers, under %d pixels (half the chip): %d of %d points." % (
+            curves.LOW_PIXELS, len(low), len(every)), SURVIVING_TEXT]
     lines.append(u"%d points. %s" % (len(every), FLUENCE_TEXT))
     return u"\n".join(lines)
 
@@ -1479,7 +1515,7 @@ ROWS_CONVENTIONS = dict(
 
 for stem, camp, steps, data, ylim in (
         ("re16_res_vs_bias_combo_check_jul", "july", STEPS_JUL, u"July, every step",
-         (20.0, 90.0)),           # ps: H1 runs 56 and 70 of the middle row reach past 80
+         (20.0, 90.0)),           # ps: middle row, H1 run 18 and F1 runs 13, 14 reach past 80
         ("re17_res_vs_bias_combo_check_mar", "march", STEPS_MAR, u"March, every step", YLIM)):
     pts, dropped = check_population(camp, steps)
     rows, missing = check_rows(pts)
