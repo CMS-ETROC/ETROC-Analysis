@@ -15,7 +15,8 @@ source, applied to another, the target, and the time resolution that costs. The 
 event cut and the width are the pipeline's own (`condor_at_lxplus/core/twc_solver.py` and
 `bootstrap.py`, imported unmodified); this package adds the bookkeeping around them: frozen
 evaluation folds, per-event leakage checks, a coefficient bank, the arms, the analytic Tier-0
-screen, the transfer cell, the statistics and the aggregation of cells. `SPEC.md` beside this file defines all of it.
+screen, the transfer cell, the statistics, the aggregation of cells, the round-1 chain to the
+table of the level cells and the axis tables. `SPEC.md` beside this file defines all of it.
 
 ## Environment variables
 
@@ -45,6 +46,8 @@ screen, the transfer cell, the statistics and the aggregation of cells. `SPEC.md
 | `stats` | `kcal_from_cells`, `random_effects`, `tost`, `margin_for`, `source_random_effect`, `holm`, `p_nonequiv` |
 | `cell` | the transfer cell: the source of each mode, the board-identity checks, the pixel-to-board protocols, `cmd_cell`, the cell table `CELL_COLUMNS` |
 | `agg` | the aggregation of cell tables: one function per rule, `aggregate` (in memory), `cmd_agg`, the table columns `DELTA_COLUMNS`, `AGG_COLUMNS`, `CALIBRATION_COLUMNS` |
+| `master` | the round-1 chain: `recon`, `cell_verdicts`, `f_stability`, `cell_final`, `primary_rows`, `recompute`, `master_table`, `level_verdicts`, `run`, `cmd_master` |
+| `axes` | the axis tables: `merge_triples`, `axis_table`, `wide_table`, `overlay` (the guardfix overlay), `f_cell_table`, `build`, `cmd_axes`, `AXIS_COLUMNS` |
 | `cli`, `__main__` | the command line, `python -m twc_transfer` (below) |
 | `jobs` | the job lists: reader, root expansion, `--dry-run`; the study's seven lists are in `jobs/` |
 
@@ -84,6 +87,12 @@ From `TestBeam/`, with a folder of your own as the write root. The recipe is ind
     python -m twc_transfer agg --cells 'cells_guardfix/J?_h1_*/*.csv' --f-inflate 0.9259 \
         --out $ETROC_TWC_OUT/tables/agg_J_jul_guardfix_f0p9259
     python -m twc_transfer jobs --list cells.tsv --dry-run
+    python -m twc_transfer master
+    python -m twc_transfer axes
+    python -m twc_transfer axes --guardfix
+    mkdir -p $ETROC_TWC_OUT/condor && cp twc_transfer/jobs/*.tsv $ETROC_TWC_OUT/condor/
+    python -m etroc_plots.universality.reduce --out $ETROC_TWC_OUT/univ \
+        --results-root $ETROC_TWC_OUT --part axes --part cells
 
 `index` lists a run's track files with their event counts (`bank/index_<campaign>_<run>.parquet`),
 `fit` (or `bank`) writes the coefficient bank of a run (`bank/coeffs_<campaign>_<run>.parquet`;
@@ -103,14 +112,25 @@ above re-aggregates the four cells of the study's group `J_jul_guardfix` as its 
 `--f-precision full`, the bootstrap's full value) and records that in `f_source`; the study
 passed f with `--f-inflate`, so only that gives its tables back byte for byte. `jobs --dry-run`
 prints every command of a job list with its roots filled in and checks that it parses.
-`SPEC.md` sections 3, 6, 7 and 8 list every mode, every option, every rule of the aggregation
-and every output column.
+
+`master` runs round 1's chain (recon, verdicts, recompute, levels) from its seven aggregation
+tables, read as they are, and its cell tables, into `$ETROC_TWC_OUT/master/`:
+`master_cells.csv`, the table of the level cells, `level_verdicts.csv` and thirteen intermediate
+files (about 10 s). `axes` writes the axis tables of stages 1 to 3 from the aggregation tables
+behind them, `results_r2/axis_<X>.csv` and `results_r3/axis_F.csv`, `axis_F_long.csv`,
+`summary_F.md`; `axes --guardfix` the guardfix tables of axes E, J and K,
+`results_r3/guardfix/axis_<X>_gf.csv` (seconds each). The last two commands need
+`etroc_plots.universality`, the universality notebook's package, which this tree does not
+hold yet: its reduction composes these tables into the ones the notebook reads, and it takes
+the job lists from `<results root>/condor/`, hence the copy. `SPEC.md` sections 3 and 6 to 10
+list every mode, every option, every rule of the aggregation and the chain, and every output
+column.
 
 What refuses to run, and why:
 
-- A writing subcommand (`index`, `bank`/`fit`, `tier0`, `cell`/`transfer`, `agg`) without
-  `ETROC_TWC_OUT`: there is no default output folder, so nothing lands in the study's own tree
-  by accident.
+- A writing subcommand (`index`, `bank`/`fit`, `tier0`, `cell`/`transfer`, `agg`, `master`,
+  `axes`) without `ETROC_TWC_OUT`: there is no default output folder, so nothing lands in the
+  study's own tree by accident.
 - `ETROC_TWC_OUT` equal to the read root (`ETROC_TWC_TRANSFER_ROOT`) or to a campaign's
   step-10 root: outputs would mix with the inputs.
 - In a job list, `${TT_OUT}` under a flag that is neither an input nor `--out`, an unknown
@@ -122,6 +142,10 @@ What refuses to run, and why:
 - Resuming a cell table whose columns are not `cell.CELL_COLUMNS`.
 - An aggregation whose k_cal pool of a one-board pair holds a row identical to the baseline
   (SPEC.md 8, rule 7): it would pull the error scale down; nothing is written.
+- In the round-1 chain, an aggregation table that is not one of the seven of round 1
+  (`campaigns.ROUND1_AGG_TAGS`).
+- An axis-F cell table whose labels do not name the level-F cells of `cells_stage3.tsv` one to
+  one, and `axes --guardfix` with an axis other than E, J or K.
 
 `python -m twc_transfer` pins the thread pools to one thread and, if `PYTHONHASHSEED` is not
 0, restarts itself once with `PYTHONHASHSEED=0` and says so: the placebo of a cell whose source
@@ -191,6 +215,24 @@ study's `tables/agg_<tag>/`:
   self-transfer rows, absent in round 1) change `k_cal` in 30 of 302 groups, by up to 15 %, and
   with it `mu`, `se` and the interval: `tost` changes on 2 rows and `fail_holm` on 1.
 
+The round-1 chain and the axis tables were checked against the study's tables, run from the
+read root on lxplus:
+
+- `master`: `master_cells.csv` (43 cells, 105 columns) and the other thirteen CSV tables are
+  byte for byte the study's. `recon.json` has the same entries less `prereg_coverage_cells`,
+  which the study took from its pre-registration notes rather than from a table. The
+  self-check joins 2143 rows, with differences up to 4.3e-5 ps in mu and 5.9e-5 ps in se and 3
+  TOST verdicts that differ, as in the study's own run.
+- `axes`: the eight tables of `results_r2/`, `axis_F.csv`, `axis_F_long.csv` and, with
+  `--guardfix`, the three guardfix tables are byte for byte the study's
+  (`campaigns.STUDY_TABLE_MD5`). The cell table of `summary_F.md` is line for line the study's;
+  the rest of the study's file (its hypothesis, verdict tables and anomalies) is prose and not
+  produced.
+- Through the universality reduction (the recipe above), `univ_axis_r2.csv` (6011 rows),
+  `univ_axis_F_long.csv`, `univ_axis_F_wide.csv` and `univ_cells.csv` are byte for byte the
+  published tables (`campaigns.PUBLISHED_MD5`), and `master_cells.csv` is byte for byte
+  `univ_master_cells.csv`, which the reduction's master part copies from the study's tree.
+
 ## Versions
 
 The study's published cells imported a pipeline core of these sha1 (`campaigns.CELLS_CORE_SHA1`):
@@ -242,3 +284,21 @@ means byte for byte on the tags compared above. The tables of the seeded rerun's
 tags `agg_A_r2_desy_*`, `agg_dt_*` and `agg_V2_*` were not compared. Which cells form a group,
 and the f of each tag, were the study's drivers' choice (the group column of the job list; the
 f named by the tag's suffix); `agg` takes the patterns and the f as arguments.
+
+The tables made from the aggregation tables, and what gives them back:
+
+| table | made from | this package |
+|---|---|---|
+| `master/master_cells.csv` and its intermediates | the seven round-1 tables (258cb1f8) and the round-1 cells | `master` reproduces them, from those tables as they are |
+| `results_r2/axis_<B,C,D,E,I,J,K>.csv` | the stage-1 and stage-2 tables (05793488) | `axes` reproduces them |
+| `results_r2/axis_A.csv` | `agg_A_r2_desy_*`, the stage-2 cells aggregated again (code version not recorded) | `axes` reproduces it |
+| `results_r3/axis_F.csv`, `axis_F_long.csv`, the cell table of `summary_F.md` | the stage-3 tables of axis F (698f72f9) | `axes` reproduces them |
+| `results_r3/guardfix/axis_<E,J,K>_gf.csv` | the guardfix tables (e83f71c1) | `axes --guardfix` reproduces them |
+| `univ_axis_r2.csv`, `univ_axis_F_long.csv`, `univ_axis_F_wide.csv`, `univ_cells.csv` | the tables above and the job lists | the universality reduction on this package's output reproduces them |
+
+"Reproduces" means byte for byte, and no table is only line for line equal: axis A is byte for
+byte the study's once its rows carry the label the study gave them, `A_desy_*`, rather than the
+name of the folder they are read from (`campaigns.AXIS_TAGS`). Neither command reads
+`calibration.csv`. `master` reads round 1's tables and does not re-aggregate:
+re-aggregating round 1's cells with `agg` changes the DESY May numbers (Parity, above), so
+`master` run on such tables would not give the study's `master_cells.csv`.

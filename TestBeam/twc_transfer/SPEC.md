@@ -3,7 +3,9 @@
 What the package computes and the rules it keeps. Sections 0, 1, 2, 4 and 5 define the library
 in this directory; section 3 the transfer operations of the cell command (cell.py), its modes
 and the two pixel-to-board protocols; sections 6 and 7 the commands and the tables they write;
-section 8 the aggregation of the cell tables (agg.py).
+section 8 the aggregation of the cell tables (agg.py); section 9 the round-1 chain from the
+aggregation tables to the table of the level cells (master.py); section 10 the axis tables
+(axes.py).
 The code cites sections as "SPEC 1", "SPEC 5.1" and so on.
 
 ## 0. Layout and invariants
@@ -441,6 +443,11 @@ unchanged.
            [--f-inflate F | --f-cal C [--f-precision agg|full]] [--nmin-eval 600]
            [--tier0 FILE] [--out DIR]
            -> tables/{delta_by_triple,agg_by_cell,calibration}.csv   (section 8)
+    master [--jobs cells.tsv] [--out DIR]
+           -> master/master_cells.csv and its intermediate tables     (section 9)
+    axes   [--axis A|B|C|D|E|F|I|J|K ...] [--guardfix] [--out DIR]
+           -> results_r2/axis_<X>.csv, results_r3/axis_F.csv, axis_F_long.csv, summary_F.md;
+              with --guardfix results_r3/guardfix/axis_<E,J,K>_gf.csv   (section 10)
 
 - `--combo` absent means every combo of the run that has a `time/` folder. `--ntrip` takes the
   largest track files of each combo (file size as the proxy for event count); `bank` skips a
@@ -448,13 +455,15 @@ unchanged.
   those files from the k-th on.
 - The study's banks were written with `fit --campaign C --run R --ntrip 40 --folds both
   --placebo`, the remaining options at their defaults.
-- **The write root.** `index`, `bank`, `tier0`, `cell` and `agg` need `ETROC_TWC_OUT` and write under
-  it (the arrows above are relative to it); `--out` names another output file. They refuse to
-  start when it is unset, when it is the read root `ETROC_TWC_TRANSFER_ROOT`, and when it is the
-  step-10 root of a campaign, so no run writes into the study's tree or among the track files.
+- **The write root.** `index`, `bank`, `tier0`, `cell`, `agg`, `master` and `axes` need
+  `ETROC_TWC_OUT` and write under it (the arrows above are relative to it); `--out` names
+  another output file or folder. They refuse to start when it is unset, when it is the read
+  root `ETROC_TWC_TRANSFER_ROOT`, and when it is the step-10 root of a campaign, so no run
+  writes into the study's tree or among the track files.
   Only these subcommands create the output folders, and `cell --dry-run` creates none.
 - **Inputs.** `tier0 --bank`, `cell --src-bank`, `agg --cells` and `agg --tier0` are read from
-  the read root when the path is relative.
+  the read root when the path is relative. `master` and `axes` read only the read root and the
+  job lists in `jobs/`.
 - **Cell targets.** `--ntrip` takes the largest track files of the target combo (`all`: every
   one); `--triples` names them instead (track names without `.parquet`, in the target combo's
   `time/` folder; a name with no file is dropped); `--chunk k/N` then keeps every N-th from the
@@ -651,3 +660,130 @@ aggregate only), 9, 10, the plain primary flag and rule 12; it had no rule 3, 7,
 exclusions of rule 6, the `notwc_1b` retention gain G of rule 8, the `xfer_lpo` primary rule,
 or the column `placebo_minus_notwc1b_ps` (45 columns), and its cell tables lack the seven
 protocol columns.
+
+## 9. The round-1 chain
+
+`python -m twc_transfer master` (`master.py`) runs the four stages by which the study turned
+round 1 (job list `cells.tsv`) into the table of its level cells, `master_cells.csv`, and the
+verdict of each level. `run()` runs them in order; each stage reads the tables of the stages
+before it back from the output folder as written, as the study's scripts did, so the CSV round
+trip is part of the result.
+
+**Inputs**, all in the read root and read as they are:
+
+- The seven round-1 aggregation tables `tables/<tag>/agg_by_cell.csv`, the closed list
+  `campaigns.ROUND1_AGG_TAGS` of (tag, campaign group, f): `agg_desy_f0p8153`,
+  `agg_desy_f1p0`, `agg_aug_fmeas`, `agg_aug_f0p8153`, `agg_aug_f1p0`, `agg_mar_f0p9524`,
+  `agg_jul_f0p9259`. Any other tag is refused (`MasterError`). Their schema is round 1's (45
+  columns, section 8, versions); the chain reads its columns by name (`ROUND1_AGG_READ`) and
+  never re-aggregates, since the later rules of section 8 change k_cal on the DESY May cells.
+  The table of each group whose verdict is the cell's is `campaigns.ROUND1_PRIMARY_TAG`.
+- `cells/<cell>/*.csv` and `*.log` of every cell of the job list: round 1's cell tables (43
+  columns, `ROUND1_CELL_COLUMNS`: `cell.CELL_COLUMNS` less the seven protocol columns) and their
+  job logs. A table of another schema is read with a line.
+- The job list, `jobs/cells.tsv` by default (`--jobs`): each cell's level and campaign group.
+
+**f, at two precisions** (`campaigns.F_CAL`). The verdicts carry each table's f as its folder
+names it, four decimals; the recomputation uses the bootstrap's full value of the cell's group,
+as the study's own recomputation did.
+
+**Stages and outputs** (`master.OUTPUTS`, under `<write root>/master/` or `--out`):
+
+1. recon: `recon_cells.csv`, per cell its jobs, files, exit codes, rows, target triples, arms,
+   event counts, source run and the round-1 tables that hold it; `recon.json`, the totals and
+   the cells of the pre-registration (`campaigns.ROUND1_PREREG`, 40 cells, and the four of
+   `ROUND1_ADDED`) found and missing.
+2. verdicts: `cell_verdicts.csv`, per (cell, table) the binding primary row (largest |mu| over
+   the margin) and the verdict by the rules below; `f_stability.csv`, per cell its verdicts
+   across the tables of its group; `cell_final.csv`, the final verdict on the group's primary
+   table; `primary_rows.csv`, the primary (xfer, pair, interp) rows with Holm within each cell.
+3. recompute: every cell of the job list but the Tier-0 and smoke cells, recomputed from its
+   cell tables by code of its own (it imports neither `agg` nor `stats`): the n_eval floor (a
+   triple goes when one of its board rows has n < 600), the symmetric censoring (a triple and
+   quantity go from every arm when one arm's value is not finite or has `neg_radicand`), the
+   paired delta against `self_cf`, k_cal per (cell, run, arm, kind) as in section 8, se =
+   f k_cal scale, the self arms set to `self_transfer` 0, the same-pixel transfers of the same
+   run and combo dropped, DerSimonian-Laird with the source term, TOST against max(1 ps, 2 % of
+   the median baseline). It writes `recheck_by_group.csv` (the aggregation's grouping),
+   `selfcheck_join.csv` and `selfcheck_spot.csv` (that grouping joined with the primary tables
+   on (cell, arm, kind, name, self_transfer, extrap_family); a line gives the largest
+   differences, it is not a gate), `alltriples_by_cell.csv` (pooled over both extrapolation
+   families), and three audits: `support_by_cell.csv` (interpolating rows and triples),
+   `same_pixel_audit.csv` (each cell with and without the transfers whose source triple is the
+   target triple) and `spec_literal.csv` (the error from the half-split of the paired
+   difference, section 4, beside the one the aggregation uses).
+4. levels: `master_cells.csv`, one row per cell of `cell_final.csv`, sorted by level and cell:
+   its final verdict, the all-triples headline of the pairs (`all_*`, the binding xfer pair row
+   among the rows that are not self transfers, and the inverse-variance mean over the pairs)
+   and of the boards (`allb_*`), the target triples and source run, the interpolating
+   fraction, the verdicts across f and the audit columns (`AUDIT_COLUMNS`);
+   `level_verdicts.csv`, per level (`campaigns.LEVEL_TITLES`) its counts and verdict.
+
+**Rules** (the pre-registered rules of round 1 where the pre-registration is explicit, the
+conservative reading where it is not):
+
+- R1. The headline arm is `xfer` against the `self_cf` baseline; `self_in` is optimism only.
+- R2. Pair widths are primary (section 4); the board sigma is secondary and reported.
+- R3. TOST at alpha 0.05 against max(1.0 ps, 2 % of sigma(`self_cf`)), read from the table:
+  PASS iff the 90 % interval lies inside the margin.
+- R4. Transferability is claimed on the interpolating family only; the extrapolating family is
+  reported beside it and never carries a PASS.
+- R5. A cell passes only if every primary (pair, interp) row passes, an intersection-union test
+  with no multiplicity correction on PASS. A guarded FAIL row takes precedence over an
+  unguarded row, giving "FAIL (also unguarded on one pair)"; the pre-registration orders
+  neither way, and this order follows its rule that one FAIL row makes the cell FAIL (post hoc).
+- R5b. The aggregation applies Holm to a cell's board FAIL claims only; `primary_rows.csv` adds
+  Holm over the primary rows within each cell as a sensitivity.
+- R6. A row whose guard is not `ok` cannot pass (NA-UNGUARDED); "uninformative" means the self
+  leave-pair-out cost exceeds the margin. The pre-registration states it for level e only; it is
+  applied to every level (post hoc).
+- R7. A cell on a thin target run (`campaigns.THIN_RUNS`) is SUPPORTING, never PASS.
+- R8. A verdict that changes between the f of DESY May (0.8153, 1.0) or of DESY August (0.8979,
+  0.8153, 1.0) is UNSTABLE, not PASS.
+- R9. No claim below 0.45 ps: `below_noclaim` flags |mu| under it.
+- R10. The placebo gate: |R_median| < 0.05 on the placebo arm (`placebo_ok`).
+
+The level verdict: PASS when every cell passes; "PASS (supporting cells excluded from the
+claim)" when the others pass; INCONCLUSIVE when every cell is unguarded or has no rows; FAIL
+when a cell fails and none passes, MIXED when a cell fails and one passes; MIXED otherwise.
+
+## 10. The axis tables
+
+`python -m twc_transfer axes` (`axes.py`) condenses the aggregation tables behind each axis of
+the study into one table per axis, the input of `etroc_plots.universality.reduce --part axes`.
+
+**Inputs**, in the read root: `tables/<folder>/agg_by_cell.csv` and `delta_by_triple.csv` of
+every folder of the closed lists `campaigns.AXIS_TAGS` (per axis: folder, the label its rows
+carry as `agg_tag`, the f, whether that f is the campaign's primary one) and
+`campaigns.GUARDFIX_AXIS_TAGS`; the job lists `jobs/cells_stage3.tsv` and
+`jobs/cells_guardfix_rerun.tsv`. Axis A reads `agg_A_r2_desy_*` and labels its rows `A_desy_*`:
+stage 3 reused the group name `A_desy`, so `tables/agg_A_desy_*` hold only its cells A8 and A9,
+and the A1 to A7 rows are in the `_r2` folders, aggregated again from the stage-2 cells.
+
+**A row** (`axis_row`, `AXIS_COLUMNS`, 24 columns) is one `agg_by_cell` row, read by name,
+joined (`merge_triples`) with the mean over its target triples of `delta_by_triple`'s `cov_C`,
+`lever_X` and `lever_X_all` on (cell, arm, kind, name, extrap_family); the per-row `extrap` 0/1
+maps to `interp`/`extrap`, a row without one to `na`. `agg_by_cell` has a `lever_X_all` column
+of its own, so the join keeps both copies under other names and the axis row's `lever_X_all` is
+empty on every row, as in the study's tables. Rows are sorted by cell, arm (`ARM_ORDER`; axis F
+`ARM_ORDER_F`), kind, board or pair and f. The guardfix tables add `lpo_shape` (the side-car
+text of `agg_by_cell`, collapsed by `classify_lpo_shape`) and the mean `lpo_pairs` of
+`delta_by_triple`, and hold only the cells of `cells_guardfix_rerun.tsv` (smoke left out).
+
+**Outputs**, under the write root or `--out`, with the study's names:
+
+- `results_r2/axis_<A,B,C,D,E,I,J,K>.csv`, the axes of stages 1 and 2;
+- `results_r3/axis_F_long.csv` and `axis_F.csv`: axis F long, and wide (the rows of the
+  primary f only, one per cell, kind, pair or board, family and tag, the arms of `WIDE_ARMS`
+  side by side, and the `xfer_lin` mu minus the `xfer` mu);
+- `results_r3/summary_F.md`: the cell table of axis F, `campaigns.AXIS_F_CELLS`, under the
+  heading "Cells and what each compares". Each label must name exactly one level-F cell of
+  `cells_stage3.tsv` and every such cell must have a label, else `AxesError`;
+- with `--guardfix`, `results_r3/guardfix/axis_<E,J,K>_gf.csv`.
+
+**The guardfix overlay** (`overlay`, as the universality reduction applies it): every row of a
+cell of the guardfix table replaces that cell's rows of the axis table, placed where the cell's
+first row was; the other rows keep their place; a guardfix cell absent from the axis table is
+appended; `lpo_shape` and `lpo_pairs` are dropped. On the study's tables it replaces 4 cells of
+E, 4 of J and 3 of K (axis E 1383 rows to 1395, J 369 to 370, K 576 to 684). `axes --guardfix`
+reports the counts when the axis table is in the output folder.
