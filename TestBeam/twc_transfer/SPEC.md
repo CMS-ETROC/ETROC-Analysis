@@ -428,7 +428,9 @@ unchanged.
            -> bank/coeffs_<C>_<R>.parquet          (alias: fit)
     tier0  --bank FILE [--tag all] [--max-src 0]
            -> tier0/transfer_<tag>.parquet
-    jobs   --list LIST [--job ID ...] --dry-run
+    jobs   --list LIST (--dry-run [--job ID ...] | --check-inputs | --agg
+                      | --write-dag DIR [--dag-name N] [--retry 1] [--maxjobs 12]
+                        [--no-prep-node])                           (section 6a)
     cell   --cell ID --mode a|b|c|cb|d|e|f|inrun --campaign C --run R --combo X [--root DIR]
            [--src-campaign C] [--src-run R] [--src-combo X] [--src-root DIR] [--src-triple T]
            [--src-bank FILE] [--src-k 5] [--src-pick auto|pixpop|trkpop] [--src-cap 0]
@@ -486,7 +488,71 @@ unchanged.
   refused, as is a write root equal to the read root. Expanded with the default roots and
   `${TT_OUT}` left in place, the lists reproduce the study's commands byte for byte.
   `jobs --dry-run` prints every command expanded and parses it with the parser above; a cell
-  command must name its row's `cell_id` in `--cell`.
+  command must name its row's `cell_id` in `--cell`. `jobs` takes exactly one of its four
+  modes; the other three are the condor driver (section 6a).
+
+### 6a. The condor driver
+
+`jobs --list LIST --write-dag DIR` (`jobs.write_dag`) writes the HTCondor DAG of a job list and
+submits nothing. A job list in, a DAG out; the layout is the study's.
+
+- **Where.** DIR is taken in the write root when relative and must lie inside it when
+  absolute; a DIR that holds `<dag>.dag` already is refused (DAGMan keeps its rescue files
+  beside a DAG). The write root is required, as for every writing subcommand.
+- **Checks before anything is written.** Every command is expanded (`${TT_OUT}` per flag,
+  `${ETROC_TWC_ROOT_<CAMPAIGN>}` from `campaigns.CAMPAIGNS`) and parsed, and a cell command
+  names its row's `cell_id`; the list holds exactly one row of level `smoke`; no other row uses
+  a job id of the DAG's own nodes (SMOKE, PREP, AGG); every group of a cell row names a
+  campaign of `campaigns.AGG_F` (below). Any failure raises and writes nothing.
+- **Files.** Under DIR: the job table under the list's name, a header row and one row per job,
+  every command expanded (the wrapper then has no placeholder left to fill); `<dag>.dag`;
+  `sub/<p>{smoke,prep,cell,agg}.sub`; `wrapper.sh` (mode 755); `manifest<s>.txt`; `logs/`.
+  `<dag>` is `--dag-name`, by default `transfer_` and the list's name without its `cells_`
+  prefix and `.tsv`; `<p>` is `<dag>_` and `<s>` is `_<dag>`, both empty for the name
+  `transfer_cells`.
+- **The DAG.** `JOB SMOKE`, then (unless `--no-prep-node`) `JOB PREP` with `PARENT SMOKE CHILD
+  PREP`, then one `JOB` per row other than the smoke row, in the list's order, each with `VARS
+  <id> job_id cell_id mem flavour retry="$(RETRY)"` and `RETRY <id> <retry>` when the retry is
+  not 0, then `JOB AGG`; `PARENT PREP` (or SMOKE) `CHILD` the cell nodes and the cell nodes
+  `CHILD AGG`, eight ids to a line. SMOKE, PREP and AGG carry `RETRY` and no `VARS`.
+- **Flavour.** `workday` when the row's `est_min` exceeds 90 or its command passes `--src-k` 5
+  or more (each source pixel multiplies the fits the estimate undercounts), else
+  `longlunch`; the smoke and PREP nodes `microcentury`, AGG `longlunch`.
+- **Submit files.** vanilla, `MY.WantOS = "el9"`, one CPU, 2 GB of disk, the job table as
+  the input file, no output files; arguments `$(job_id) $(retry)` with the row's memory for a
+  cell, `<smoke job id> 0` with the smoke row's memory, `PREP 0` with 2000 MB, `AGG 0` with
+  4000 MB; output, error and event logs in `DIR/logs/`.
+- **The wrapper.** The roots the commands were expanded with (exported as `ETROC_TWC_OUT`,
+  `ETROC_TWC_TRANSFER_ROOT`, `ETROC_TWC_ROOT_<CAMPAIGN>`), `ETROC_TWC_CORE` as it was when the
+  DAG was written (unset otherwise), the repository, the table and the package sha are
+  written into it. Per node, in order, each with its exit code: a job id (90); the package
+  readable (91); `package_sha()` (sha256 of the package's `*.py` files read in name order,
+  first 16 hex characters) equal to the written one (92); the job table, the transferred copy
+  or the one in DIR (93); the job's row in it, or the node PREP or AGG (94); `mkdir -p` of the
+  log folder, `$ETROC_TWC_OUT/cells/<cell_id>` or `$ETROC_TWC_OUT/logs` (95); the LCG_104d
+  environment (96); then `PYTHONHASHSEED=0`, the six thread variables of `__main__` at 1 and
+  `PYTHONUNBUFFERED=1`; on a retry above 0 every ` --overwrite` is dropped from the command;
+  `cd TestBeam/` (97); `nice -n 19 python3 -m twc_transfer <command>`, its output appended to
+  `<log folder>/<job_id>.log`; the node's exit code is the command's.
+- **PREP** runs `jobs --list <table> --check-inputs` (`check_inputs`): the inputs the commands
+  name (`tier0 --bank`; the target run's folder of `index`, `bank` and cells, for a cell its
+  combo's `time/` folder; a cell's source run folder when `--src-run` or `--src-campaign` is
+  given, by the source-root rule of section 3; `--src-bank`), each printed when missing; it
+  exits non-zero when any is. It builds nothing: f is a campaign fact and banks are inputs.
+- **AGG** runs `jobs --list <table> --agg` (`agg_plan`, `run_agg`). Groups are the `group`
+  values of the cell rows (levels other than `smoke` and `f`); a group's campaign is its last
+  `_` part after dropping a trailing `_guardfix` (`desy`, `D_mar`, `K_desy_guardfix`). Per
+  group and per `(suffix, f)` of `campaigns.AGG_F[campaign]`, one `agg --cells <patterns>
+  --f-inflate <f> --out <write root>/tables/agg_<group>_<suffix>`, the patterns being
+  `<folder of --out>/*.csv` per cell (a cell's chunk tables share the folder), or the cell's
+  default table when the command has no `--out`. A cell with no table is printed and left out;
+  a group with none is skipped; the node fails when an `agg` fails.
+- **Manifest.** Written time, package path and sha, the core directory with the sha1 of its
+  three files and whether they equal `campaigns.CELLS_CORE_SHA1`, the two roots, the counts
+  per level, the distinct cells, the smoke row, the CPU estimate (and with 20 % contingency),
+  `--maxjobs`, the file names and one line per aggregation of AGG.
+- **Never.** `--write-dag` runs no condor command and no cell; `--check-inputs` reads only
+  file listings; `--agg` writes only under `<write root>/tables/`.
 
 ## 7. Output tables
 

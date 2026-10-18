@@ -22,7 +22,7 @@ table of the level cells and the axis tables. `SPEC.md` beside this file defines
 
 | variable | meaning | default |
 |---|---|---|
-| `ETROC_TWC_CORE` | the pipeline core directory to import `bootstrap` and `twc_solver` from | this repository's `TestBeam/condor_at_lxplus/core` |
+| `ETROC_TWC_CORE` | the pipeline core directory to import `bootstrap` and `twc_solver` from; a core of the hashes of `campaigns.CELLS_CORE_SHA1` reproduces the study's cells, another reruns them (Versions) | this repository's `TestBeam/condor_at_lxplus/core` |
 | `ETROC_TWC_ROOT_<CAMPAIGN>` | the step-10 analysis root of a campaign (`MAR`, `JUL`, `DESY`, `AUG`); track files are `<root>/tracks_<run>/<combo>/time/track_*.parquet` | the campaign trees in `campaigns.py` |
 | `ETROC_TWC_TRANSFER_ROOT` | the read root: the study's outputs (bank, cells, tables), never written; the same variable and default as `etroc_plots` | the study's output tree in `campaigns.py` |
 | `ETROC_TWC_OUT` | the write root | none: `campaigns.write_root()` raises when it is unset, or when it is the read root or a data root |
@@ -34,7 +34,7 @@ table of the level cells and the axis tables. `SPEC.md` beside this file defines
 
 | module | what it holds |
 |---|---|
-| `campaigns` | step-10 roots per campaign, the read root, the write root, the event cap, the core sha1 of the study's cells, the cell versions |
+| `campaigns` | step-10 roots per campaign, the read root, the write root, the event cap, the core sha1 of the study's cells, the waves and the version tables, f per campaign (`F_CAL`, `F_GATE`, `AGG_F`), the thin rule, the levels, the axis tags and what their cells compare |
 | `_core` | loads the pipeline core, exposes `BS` (bootstrap) and `TS` (twc_solver), `core_versions()` |
 | `naming` | combos and roles, pixel triples, run directories, sibling combos, track ranking, `ensure_dirs(root)` |
 | `events` | `load_events`, `Triple`, per-event identity (`event_keys`), the leakage asserts |
@@ -49,7 +49,7 @@ table of the level cells and the axis tables. `SPEC.md` beside this file defines
 | `master` | the round-1 chain: `recon`, `cell_verdicts`, `f_stability`, `cell_final`, `primary_rows`, `recompute`, `master_table`, `level_verdicts`, `run`, `cmd_master` |
 | `axes` | the axis tables: `merge_triples`, `axis_table`, `wide_table`, `overlay` (the guardfix overlay), `f_cell_table`, `build`, `cmd_axes`, `AXIS_COLUMNS` |
 | `cli`, `__main__` | the command line, `python -m twc_transfer` (below) |
-| `jobs` | the job lists: reader, root expansion, `--dry-run`; the study's seven lists are in `jobs/` |
+| `jobs` | the job lists: reader, root expansion, `--dry-run`, and the condor driver (`write_dag`, `check_inputs`, `agg_plan`); the study's seven lists are in `jobs/` |
 
 The package re-exports nothing; import the modules. `etroc_plots` never imports it.
 
@@ -76,7 +76,8 @@ here writes a file. A caller that writes passes `ensure_dirs(campaigns.write_roo
 ## Command line
 
 From `TestBeam/`, with a folder of your own as the write root. The recipe is index, then bank
-(and the Tier-0 screen of it), then cells, then their aggregation:
+(and the Tier-0 screen of it), then cells, then their aggregation, then the round-1 chain and
+the axis tables, then the universality reduction:
 
     export ETROC_TWC_OUT=/path/to/your/output
     python -m twc_transfer index --campaign mar --run h1_run1 --combo extra0-ref1-dut2
@@ -87,6 +88,7 @@ From `TestBeam/`, with a folder of your own as the write root. The recipe is ind
     python -m twc_transfer agg --cells 'cells_guardfix/J?_h1_*/*.csv' --f-inflate 0.9259 \
         --out $ETROC_TWC_OUT/tables/agg_J_jul_guardfix_f0p9259
     python -m twc_transfer jobs --list cells.tsv --dry-run
+    python -m twc_transfer jobs --list cells_guardfix_rerun.tsv --write-dag dag_guardfix --retry 3
     python -m twc_transfer master
     python -m twc_transfer axes
     python -m twc_transfer axes --guardfix
@@ -111,7 +113,8 @@ above re-aggregates the four cells of the study's group `J_jul_guardfix` as its 
 `--f-cal jul` gives the same f from `campaigns.F_CAL` (with
 `--f-precision full`, the bootstrap's full value) and records that in `f_source`; the study
 passed f with `--f-inflate`, so only that gives its tables back byte for byte. `jobs --dry-run`
-prints every command of a job list with its roots filled in and checks that it parses.
+prints every command of a job list with its roots filled in and checks that it parses;
+`jobs --write-dag` writes the condor DAG of a list and submits nothing (Condor, below).
 
 `master` runs round 1's chain (recon, verdicts, recompute, levels) from its seven aggregation
 tables, read as they are, and its cell tables, into `$ETROC_TWC_OUT/master/`:
@@ -146,12 +149,30 @@ What refuses to run, and why:
   (`campaigns.ROUND1_AGG_TAGS`).
 - An axis-F cell table whose labels do not name the level-F cells of `cells_stage3.tsv` one to
   one, and `axes --guardfix` with an axis other than E, J or K.
+- `jobs --write-dag` into a folder outside the write root or one that holds the DAG already, on a
+  list without exactly one smoke row, with a job id named SMOKE, PREP or AGG on another row, or
+  with a group that names no campaign (its cells would be aggregated with another campaign's f).
 
 `python -m twc_transfer` pins the thread pools to one thread and, if `PYTHONHASHSEED` is not
 0, restarts itself once with `PYTHONHASHSEED=0` and says so: the placebo of a cell whose source
 is refitted from events, and of the in-run split, is seeded from Python's `hash()` of strings,
 which is salted per process otherwise. Those seeds reproduce the study's cells only under
 LCG_104d (Python 3.9.12) with `PYTHONHASHSEED=0`; under another Python they are not verified.
+
+## How etroc_plots reads these
+
+The universality notebook's reduction (`etroc_plots.universality.reduce`, last line of the
+recipe) composes this package's tables into the ones the notebook reads:
+
+- `--results-root` is the write root, `$ETROC_TWC_OUT`: `results_r2/axis_<A..K>.csv`,
+  `results_r3/axis_F.csv`, `axis_F_long.csv`, `summary_F.md`,
+  `results_r3/guardfix/axis_<E,J,K>_gf.csv`, and the seven job lists in `condor/`, which are
+  byte for byte `twc_transfer/jobs/*.tsv` (hence the copy in the recipe);
+- `--twc-root` (default the read root) still supplies `tables/agg_<tag>/agg_by_cell.csv`, for
+  the self_transfer flag of the axis rows, and `bank/`;
+- the round-1 table of the level cells: `master` writes it to
+  `$ETROC_TWC_OUT/master/master_cells.csv`, with the md5 of the copy the reduction takes from
+  the read root.
 
 ## Job lists
 
@@ -161,6 +182,82 @@ output root it wrote into. They are the study's tables with their comment lines 
 the campaign roots replaced by `${ETROC_TWC_ROOT_<CAMPAIGN>}`; `${TT_OUT}` stays as it was.
 Expanded with the default roots they give back the study's commands byte for byte (a test
 checks the digests). 247 rows: 236 cell jobs (6 of them smoke tests) and 11 Tier-0 jobs.
+
+## Condor
+
+`jobs --write-dag DIR` turns a job list into an HTCondor DAG, as the study's DAGs were laid
+out, and submits nothing:
+
+    python -m twc_transfer jobs --list cells_guardfix_rerun.tsv --write-dag dag_guardfix --retry 3
+
+A relative DIR is taken in the write root; an absolute one must lie inside it. It receives:
+
+- the job table, under the list's name, with every `${TT_OUT}` and `${ETROC_TWC_ROOT_<CAMPAIGN>}`
+  filled in as `jobs --dry-run` prints it: the read root under the input flags (`--bank`,
+  `--src-bank`, `--root`, `--src-root`, `--cells`, `--tier0`), the write root under `--out`;
+- `<dag>.dag`: SMOKE, then PREP, then one node per other row of the table (chunk rows are
+  separate nodes of one cell), then AGG. The name is `transfer_` and the list's name without
+  `cells_` (`--dag-name` changes it); `--retry` sets every node's RETRY (the study's DAG had 3 for
+  the guardfix rerun, 1 is the default) and `--no-prep-node` leaves PREP out;
+- `sub/[<dag>_]{smoke,prep,cell,agg}.sub`: el9, one CPU, 2 GB of disk; a cell node takes its
+  row's memory and the flavour longlunch, or workday when its estimate exceeds 90 min or it
+  rotates five or more source pixels (`--src-k` 5 or more); smoke and PREP run as
+  microcentury, AGG as longlunch;
+- `wrapper.sh`, the executable of every node. In order, each with its own exit code, it checks
+  the job id (90), that the package can be read (91, AFS), that the package's sha256 is the one
+  the DAG was written for (92: every node of a DAG runs one version), the job table and the
+  job's row in it (93, 94), that the write root is writable from the worker (95), the LCG
+  environment (96) and `TestBeam/` (97). It then exports `PYTHONHASHSEED=0`, the six thread
+  variables at 1 and `PYTHONUNBUFFERED=1`, drops `--overwrite` on a retry so that a cell resumes
+  its table, and runs `nice -n 19 python3 -m twc_transfer <command>`, logging to
+  `$ETROC_TWC_OUT/cells/<cell>/<job>.log`. `wrapper.sh --help` prints the list;
+- `manifest[_<dag>].txt`: the package sha, the core and whether it is the core of the study's
+  cells, the roots, the counts, the CPU estimate and the aggregations of the AGG node;
+- `logs/`, for condor's output, error and event logs.
+
+The PREP node is `jobs --list <table> --check-inputs`: it fails when a bank file, a run's track
+folder or a combo the commands name does not exist. The study's PREP node also computed the
+f_cal bootstraps and built banks; here f is a campaign fact (`campaigns.F_CAL`) and the banks
+are read from the read root. The AGG node is `jobs --list <table> --agg`: per group of the
+table (its group column; smoke and level-f rows excluded), one `agg` per f of the group's
+campaign (`campaigns.AGG_F`), over the tables in the folder of each job's `--out`, into
+`$ETROC_TWC_OUT/tables/agg_<group>_<f suffix>/`; a cell with no table yet is listed and left
+out. Both also run by hand, with the same commands.
+
+Before submitting, on lxplus:
+
+1. Read the summary `--write-dag` prints and the manifest: jobs per level, the CPU estimate,
+   `inputs: N named, 0 missing`, and the core line. With this repository's core the cells
+   rerun and do not reproduce the study's numbers (Versions); export `ETROC_TWC_CORE` before
+   writing the DAG to run another core, and the wrapper carries it.
+2. Keep the write root, and with it the DAG folder and the condor logs, on AFS (a work area):
+   CERN's batch service does not take a submit folder or job logs on EOS.
+3. Run the smoke node by hand, then read its log; the DAG runs it first as well:
+
+       bash $ETROC_TWC_OUT/dag_guardfix/wrapper.sh --help
+       bash $ETROC_TWC_OUT/dag_guardfix/wrapper.sh SMOKE 0
+
+4. Leave the package alone while the DAG runs: a node exits 92 when a module changed after the
+   DAG was written. Write the DAG again, into a new folder, after any change.
+
+Then submit from the DAG folder by hand, with the `-maxjobs` of the manifest:
+
+    cd $ETROC_TWC_OUT/dag_guardfix && condor_submit_dag -maxjobs 12 transfer_guardfix_rerun.dag
+
+and follow it in `transfer_guardfix_rerun.dag.dagman.out`, `logs/` and the cell logs rather
+than by querying the scheduler in a loop.
+
+Compared with the study's DAG of the same list, with the default roots: the same 19 nodes in
+the same order, the same VARS keys and values on the 16 cell nodes (cell id, memory, flavour),
+the same PARENT lines, and the same wrapper steps in the same order (exit codes 90 to 96, the
+seed, the threads, the retry rule, 97, the run). The 17 commands are the study's byte for byte
+once the `--out` root, here the write root, is mapped back to the study's tree. What differs:
+RETRY is 1 unless `--retry 3` is given, as the study's reruns had it; the submit files carry no
+`environment` line, since the roots are written into the wrapper; the batch names start with
+`twc_transfer_` rather than `tt_transfer_`; and PREP and AGG run the wrapper (the input check,
+the aggregation plan) where the study ran `prep.sh` (bootstraps and banks, workday, 4000 MB)
+and `agg_guardfix.sh`, so PREP is microcentury with 2000 MB. The wrapper also checks the
+package's sha unconditionally, where the study's skipped the check when no sha was given.
 
 ## Tests
 
@@ -208,6 +305,11 @@ study's `tables/agg_<tag>/`:
   on the same node on the same files, gives the same three files.
 - Stage 1 `J_jul_f0p9259` (7 cells; 23316, 369 and 98 rows) and `I_mar_f0p9524` (99000, 393, 90
   rows), stage 3 `G_desy_f0p8153` (21330, 434, 128 rows): byte for byte the study's.
+- The AGG node's plan (`jobs --agg`, run on the study's cell tables into a folder of its own)
+  over `cells_stage1.tsv` (7 tags), `cells_stage2.tsv` (8), `cells_stage3.tsv` (8),
+  `cells_rerun.tsv` (14, in the seeded rerun's tree) and `cells_guardfix_rerun.tsv` (4): all
+  123 files byte for byte the study's. The stage-2 tags of group `A_desy` equal the study's
+  `agg_A_r2_desy_*`, whose aggregation has no recorded code version.
 - Round 1 is re-derived, not reproduced (Versions, below). On `agg_mar_f0p9524` the rows and
   every shared column are equal; the port adds `placebo_minus_notwc1b_ps` to `agg_by_cell.csv`
   and the seven protocol columns, empty, to `delta_by_triple.csv`, since the round-1 cell tables
@@ -248,57 +350,110 @@ coefficients in their last bits; `bootstrap.py` differs only in the default of i
 from the bytes of the residuals, a last-bit change in a coefficient can move a width by the
 fit's restart jitter rather than by the float difference. To reproduce a published number,
 point `ETROC_TWC_CORE` at a core of the hashes above; `_core.core_versions()` reports what was
-loaded.
+loaded, and the manifest of a DAG says which core its cells run on.
 
-The study's cells ran under five versions of its cell code (`campaigns.CELL_VERSIONS`, the
-sha256 prefix of its `tt.py`), all on the core above:
+What the repository's core changes, measured on one node with nothing but the core changed:
 
-| wave | job list | tt.py | this package |
+- one triple of mar `h1_run1` (6000 events, 16 arms): the coefficients by at most 3.8e-12
+  relative and the widths of 10 arms by at most 5e-13 ps, but the placebo pair's width by
+  2.85 ps (4.6 %) and its board sigma by 2.12 ps;
+- the smoke cell of `cells_guardfix_rerun.tsv` (240 rows): 165 `value` entries move, by up to
+  3.85 ps, while `rms`, `iqr` and the overlap columns move by less than 3e-12;
+- one triple of the stage-3 cell F2 (mode d, 390 rows): 368 `value` entries move, by up to
+  0.481 ps, and the smooth columns by at most 1e-11;
+- the aggregation fits no width: its tables are byte for byte the same with either core
+  (`J_jul_guardfix_f0p9259`).
+
+The archived core reproduces the study's cells because it gives the residuals the study's
+bytes, so `width_gmm` takes the study's restarts; the repository's core reruns them, with
+differences of the size of the restart jitter. Neither is wrong; only the first gives back a
+published table.
+
+The study ran in waves, each from its own job list and cell code (`campaigns.WAVES`: the
+sha256 prefix of its `tt.py`, all on the core above). The first table says what this package
+does with each wave's cells and aggregation tables and which published tables the wave feeds;
+the second lists every table this package gives back byte for byte, with its md5 and the
+command that writes it (`campaigns.TABLE_VERSIONS`). Both are rendered by
+`campaigns.versions_markdown()`, and a test checks that they are the ones below.
+
+| wave | job list | tt.py | cells here | aggregation tags | aggregation here | feeds |
+|---|---|---|---|---|---|---|
+| round 1 | `cells.tsv` | 258cb1f8 | reruns them (older cell, older columns) | agg_desy_*, agg_aug_*, agg_mar_f0p9524, agg_jul_f0p9259 | re-derives them (later rules, more columns): agg_desy_f0p8153 changes tost on 2 rows; master reads them as they are | `univ_master_cells.csv`, `univ_cells.csv` |
+| stage 1 | `cells_stage1.tsv` | 05793488 | reruns them (older cell) | the groups of cells_stage1.tsv: axes D, E, I, J | reproduces them (all 7 tags compared) | `univ_axis_r2.csv`, `univ_cells.csv` |
+| stage 2 | `cells_stage2.tsv` | 05793488 | reruns them (older cell) | the groups of cells_stage2.tsv: axes A, B, C, K | reproduces them (all 8 tags compared; its A_desy tags are the study's agg_A_r2_desy_*, since stage 3 reused the folder name) | `univ_axis_r2.csv`, `univ_cells.csv` |
+| stage 3 | `cells_stage3.tsv` | 698f72f9 | reproduces them (one triple per cell in modes c, d, e and xfer-lin compared) | the groups of cells_stage3.tsv: A8 and A9, F, G | reproduces them (all 8 tags compared) | `univ_axis_F_long.csv`, `univ_axis_F_wide.csv`, `univ_cells.csv` |
+| seeded rerun | `cells_rerun.tsv` | 698f72f9 | reproduces them (the stage-3 code) | the groups of cells_rerun.tsv, in the rerun's own tree | reproduces them (all 14 tags compared) | `univ_cells.csv` |
+| guardfix | `cells_guardfix_rerun.tsv` | e83f71c1 | reproduces them (the smoke cell compared, 240 rows) | agg_E_jul_guardfix_*, agg_J_jul_guardfix_*, agg_K_desy_guardfix_* | reproduces them (all 4 tags compared) | `univ_axis_r2.csv`, `univ_cells.csv` |
+| v2 wave 1 | `cells_v2w1.tsv` | e83f71c1 | reproduces them (the guardfix code); the list is not in jobs/ | agg_V2_* | the guardfix code, not compared | none |
+
+| table | md5 | command | waves (tt.py) | made from |
+|---|---|---|---|---|
+| `master/master_cells.csv` | `62cfc93f96be1dcbab6cad770da772fa` | `python -m twc_transfer master` | round 1 (258cb1f8) | the seven round-1 aggregation tables, read as they are, and the round-1 cell tables |
+| `results_r2/axis_A.csv` | `f54ef48af42e2379c1fe8017f08466ef` | `python -m twc_transfer axes` | stage 2 (05793488); the aggregation's code version is not recorded | agg_A_r2_desy_*, the stage-2 cells of axis A aggregated again (the plan of `jobs --agg` on cells_stage2.tsv gives them back) |
+| `results_r2/axis_B.csv` | `5103089c07b8d2b6b2551bfc2f90c61a` | `python -m twc_transfer axes` | stage 2 (05793488) | agg_B_desy_f0p8153, agg_B_desy_f1p0 |
+| `results_r2/axis_C.csv` | `332b93b9bcfd22dbe057d38adfda2eed` | `python -m twc_transfer axes` | stage 2 (05793488) | agg_C_desy_f0p8153, agg_C_desy_f1p0 |
+| `results_r2/axis_D.csv` | `1cf27fe9d4e66aa94479d159a986d4b3` | `python -m twc_transfer axes` | stage 1 (05793488) | agg_D_mar_f0p9524 |
+| `results_r2/axis_E.csv` | `b8d9c6fe9a585f054cf85670aade857e` | `python -m twc_transfer axes` | stage 1 (05793488) | agg_E_aug_fmeas, agg_E_aug_f0p8153, agg_E_aug_f1p0, agg_E_jul_f0p9259 |
+| `results_r2/axis_I.csv` | `4656d575599dfb9b7bcc68b21ef1a0e0` | `python -m twc_transfer axes` | stage 1 (05793488) | agg_I_mar_f0p9524 |
+| `results_r2/axis_J.csv` | `281926f5e3c313fb0d08e55859de78e7` | `python -m twc_transfer axes` | stage 1 (05793488) | agg_J_jul_f0p9259 |
+| `results_r2/axis_K.csv` | `d5b4825caf1f5483af1a69689759e9f3` | `python -m twc_transfer axes` | stage 2 (05793488) | agg_K_desy_f0p8153, agg_K_desy_f1p0 |
+| `results_r3/axis_F.csv` | `44c661a62fdbf95b05dd7d67cd86cb74` | `python -m twc_transfer axes` | stage 3 (698f72f9) | agg_F_* (the four tags of AXIS_TAGS F) |
+| `results_r3/axis_F_long.csv` | `8cead873b7cc767f21b356cbd74bd136` | `python -m twc_transfer axes` | stage 3 (698f72f9) | agg_F_* (the four tags of AXIS_TAGS F) |
+| `results_r3/guardfix/axis_E_gf.csv` | `2f0a77c5a5c58ffca95bb7fa2c24645f` | `python -m twc_transfer axes --guardfix` | guardfix (e83f71c1) | agg_E_jul_guardfix_f0p9259 |
+| `results_r3/guardfix/axis_J_gf.csv` | `7e4758c43efdd7d51f079c06f9ed8681` | `python -m twc_transfer axes --guardfix` | guardfix (e83f71c1) | agg_J_jul_guardfix_f0p9259 |
+| `results_r3/guardfix/axis_K_gf.csv` | `db411e3e2daa8a45eeb0dafb84a55361` | `python -m twc_transfer axes --guardfix` | guardfix (e83f71c1) | agg_K_desy_guardfix_f0p8153, agg_K_desy_guardfix_f1p0 |
+| `univ_master_cells.csv` | `62cfc93f96be1dcbab6cad770da772fa` | `python -m etroc_plots.universality.reduce --part master` | round 1 (258cb1f8) | a copy of master_cells.csv |
+| `univ_axis_r2.csv` | `15c688966ce406593454391e9d6120ff` | `python -m etroc_plots.universality.reduce --part axes` | stage 1 (05793488), stage 2 (05793488), guardfix (e83f71c1) | the eight results_r2 axis tables, the guardfix rows replacing those of their 11 cells, and the self_transfer flag from the aggregation tables |
+| `univ_axis_F_long.csv` | `51302099b643b24014141af7d860a059` | `python -m etroc_plots.universality.reduce --part axes` | stage 3 (698f72f9) | results_r3/axis_F_long.csv and the self_transfer flag |
+| `univ_axis_F_wide.csv` | `911efb7d856178f24e60a87b5203a755` | `python -m etroc_plots.universality.reduce --part axes` | stage 3 (698f72f9) | results_r3/axis_F.csv and the self_transfer flag |
+| `univ_cells.csv` | `2fcde80b93bff79a4d9eb54292546318` | `python -m etroc_plots.universality.reduce --part cells` | round 1 (258cb1f8), stage 1 (05793488), stage 2 (05793488), stage 3 (698f72f9), seeded rerun (698f72f9), guardfix (e83f71c1) | the seven job lists and the cell table of summary_F.md |
+
+"Reproduces" means byte for byte for an aggregation or a derived table, and for a cell the
+same table except `ts` when its command runs on a core of the hashes above; "reruns" means the
+command runs but computes with the current cell; "not compared" means the code is the same as
+a compared wave's and no table of that wave was run against the study's. `cell.py` is the
+guardfix version; the stage-3 version differs from it only by `--lpo-fallback`, whose default
+is the stage-3 behaviour. `agg.py` is the guardfix version too; stages 1 to 3 lack only its
+merge of the `lpo_shape` side-cars, which acts only on cells that have one. Round 1 lacks the
+one-board identical-pair drop, the k_cal exclusions, the structural-zero stop, the `notwc_1b`
+retention gain, the `xfer_lpo` primary rule and the column `placebo_minus_notwc1b_ps`: its
+tables are read as they are, and re-aggregating its cells changes the DESY May numbers
+(Parity, above), so `master` run on such tables would not give the study's
+`master_cells.csv`. Which cells form a group, and the f of each tag, were the study's drivers'
+choice, which `jobs --agg` follows (`campaigns.AGG_F`). Axis A is byte for byte the study's once
+its rows carry the label the study gave them, `A_desy_*`, rather than the name of the folder
+they are read from (`campaigns.AXIS_TAGS`). Neither `master` nor `axes` reads
+`calibration.csv`. The tags `agg_dt_*` and `agg_V2_*` were not compared.
+
+## Acceptance evidence
+
+What was run against what, on lxplus under LCG_104d with `PYTHONHASHSEED=0`:
+
+| part | compared against | counts | result |
 |---|---|---|---|
-| round 1 | `cells.tsv` | 258cb1f8 | reruns it (older cell, older columns) |
-| stage 1, stage 2 | `cells_stage1.tsv`, `cells_stage2.tsv` | 05793488 | reruns them (older cell) |
-| stage 3, seeded rerun | `cells_stage3.tsv`, `cells_rerun.tsv` | 698f72f9 | reproduces them |
-| guardfix, v2 wave 1 | `cells_guardfix_rerun.tsv`, `cells_v2w1.tsv` | e83f71c1 | reproduces them |
+| library (naming, events, bank, arms, widths, Tier-0, statistics) | the study's toolkit on one triple, archived core | 2367 items | bit for bit |
+| job lists | the study's seven lists, expanded with the default roots | 7 lists, 247 rows | byte for byte; 247 of 247 parse |
+| cell, mode a | the smoke cell of `cells_guardfix_rerun.tsv`, archived core | 240 rows x 50 columns, 5 triples | equal except `ts`; side-car equal |
+| cell, modes c, d, e, xfer-lin | one triple each of G_P3_run26_n100, F2, F7, F8; the stage-3 toolkit rerun on the same node | 54, 390, 108, 108 rows | equal to the rerun except `ts`; `ks_d`, `ks_p` differ from the batch node's table by at most 3.3e-14, as the rerun does |
+| aggregation | every tag of stages 1 to 3, the seeded rerun (in its own tree) and the guardfix rerun, through the plan of `jobs --agg` on the study's cell tables | 41 tags x 3 files = 123 files | byte for byte; round 1 re-derived (`agg_desy_f0p8153`: 2 of its TOST verdicts change) |
+| round-1 chain | `master_cells.csv` and 13 intermediate tables | 43 cells x 105 columns, 14 files | byte for byte |
+| axis tables | `results_r2/` (8), `axis_F.csv`, `axis_F_long.csv`, the 3 guardfix tables | 13 tables | byte for byte |
+| universality reduction | the published tables | 4 tables, and the master copy | byte for byte |
+| condor driver | the study's DAG of `cells_guardfix_rerun.tsv` | 19 nodes, 16 VARS lines, 5 PARENT lines, 17 commands | the same nodes in the same order, VARS keys and values, PARENT lines and wrapper steps in order; 17 of 17 commands byte for byte once the `--out` root is mapped back (Condor) |
 
-`cell.py` is the guardfix version; the stage-3 version differs from it only by
-`--lpo-fallback`, whose default is the stage-3 behaviour. "Reproduces" means the same command
-on a core of the hashes above gives the same table except `ts`; "reruns" means the command runs
-but computes with the current cell. `cells_v2w1.tsv` is not among the lists in `jobs/`.
+## Limits
 
-The study's aggregation tables (`tables/agg_<tag>/`, one per group and f) were written by four
-versions of its `agg`:
-
-| wave | tags | tt.py | this package |
-|---|---|---|---|
-| round 1 | `agg_desy_*`, `agg_aug_*`, `agg_mar_f0p9524`, `agg_jul_f0p9259` | 258cb1f8 | re-derives them (later rules, more columns) |
-| stage 1, stage 2 | the groups of `cells_stage1.tsv`, `cells_stage2.tsv` | 05793488 | reproduces them |
-| stage 3 | the groups of `cells_stage3.tsv` | 698f72f9 | reproduces them |
-| guardfix | `agg_*_guardfix_*` | e83f71c1 | reproduces them |
-
-`agg.py` is the guardfix version; stages 1 to 3 lack only its merge of the `lpo_shape`
-side-cars, which acts only on cells that have one. Round 1 lacks the one-board identical-pair
-drop, the k_cal exclusions, the structural-zero stop, the `notwc_1b` retention gain, the
-`xfer_lpo` primary rule and the column `placebo_minus_notwc1b_ps`: its tables are read as they
-are, and re-aggregating its cells changes the DESY May numbers (Parity, above). "Reproduces"
-means byte for byte on the tags compared above. The tables of the seeded rerun's tree and the
-tags `agg_A_r2_desy_*`, `agg_dt_*` and `agg_V2_*` were not compared. Which cells form a group,
-and the f of each tag, were the study's drivers' choice (the group column of the job list; the
-f named by the tag's suffix); `agg` takes the patterns and the f as arguments.
-
-The tables made from the aggregation tables, and what gives them back:
-
-| table | made from | this package |
-|---|---|---|
-| `master/master_cells.csv` and its intermediates | the seven round-1 tables (258cb1f8) and the round-1 cells | `master` reproduces them, from those tables as they are |
-| `results_r2/axis_<B,C,D,E,I,J,K>.csv` | the stage-1 and stage-2 tables (05793488) | `axes` reproduces them |
-| `results_r2/axis_A.csv` | `agg_A_r2_desy_*`, the stage-2 cells aggregated again (code version not recorded) | `axes` reproduces it |
-| `results_r3/axis_F.csv`, `axis_F_long.csv`, the cell table of `summary_F.md` | the stage-3 tables of axis F (698f72f9) | `axes` reproduces them |
-| `results_r3/guardfix/axis_<E,J,K>_gf.csv` | the guardfix tables (e83f71c1) | `axes --guardfix` reproduces them |
-| `univ_axis_r2.csv`, `univ_axis_F_long.csv`, `univ_axis_F_wide.csv`, `univ_cells.csv` | the tables above and the job lists | the universality reduction on this package's output reproduces them |
-
-"Reproduces" means byte for byte, and no table is only line for line equal: axis A is byte for
-byte the study's once its rows carry the label the study gave them, `A_desy_*`, rather than the
-name of the folder they are read from (`campaigns.AXIS_TAGS`). Neither command reads
-`calibration.csv`. `master` reads round 1's tables and does not re-aggregate:
-re-aggregating round 1's cells with `agg` changes the DESY May numbers (Parity, above), so
-`master` run on such tables would not give the study's `master_cells.csv`.
+- Modes b, cb, f and inrun of the cell were never run against the study's tables; nor was the
+  in-run placebo's seed.
+- The cell comparisons of modes c, d, e and xfer-lin took one triple per cell; mode a took the
+  five triples of one smoke cell.
+- The placebo seeds come from Python's `hash()` of strings under `PYTHONHASHSEED=0`; they are
+  verified under Python 3.9.12 (LCG_104d) only.
+- With the repository's core the cells rerun; only `ETROC_TWC_CORE` at the archived core
+  reproduces them (Versions).
+- Round 1's aggregation tables are re-derived by `agg`, not reproduced; `master` reads them as
+  they are.
+- The f_cal bootstrap is not part of this package: f is a campaign fact (`campaigns.F_CAL`).
+- The condor driver's DAG was compared with the study's by its files; no DAG written by this
+  package has been submitted.
+- `etroc_plots.universality`, which the last line of the recipe runs, is not on this branch.
