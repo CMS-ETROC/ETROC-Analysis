@@ -102,7 +102,7 @@ The code that made these is not in this repository; the origin column says what 
 | `universality/univ_cells.csv` | every cell of the TWC-transfer study (one comparison of a source and a target): its level or axis, its source and target runs | the study's job lists (its toolkit is not in this repository; specification dated 2026-09-09), reduced by `python -m etroc_plots.universality.reduce`. Columns and command in "Universality tables" below |
 | `universality/univ_master_cells.csv` | the study's verdict table of the level cells | the inputs of the study's round-1 report of 2026-09-04 (its `master_cells.csv`), copied byte for byte by the same command |
 | `universality/univ_axis_r2.csv` | the follow-up axes A-E and I-K, every arm of every cell | the study's eight round-2 axis tables, the guard-fix rerun's rows replacing those of its 11 cells of axes E, J and K, with the self-transfer flag from the study's aggregation tables, by the same command |
-| `universality/univ_axis_F_wide.csv`, `universality/univ_axis_F_long.csv` | axis F, the source correction with its linear term refitted on the target: the arms side by side, and in the shape of the other axes | the study's two axis-F tables, copied with the self-transfer flag by the same command |
+| `universality/univ_axis_F_wide.csv`, `universality/univ_axis_F_long.csv` | axis F, the source correction with its linear term refitted on the target: the arms side by side, and in the shape of the other axes | the study's long axis-F table and the wide one as `python -m twc_transfer axes` writes it (the transfer row of each arm; "Universality tables" below), copied with the self-transfer flag by the same command |
 | `universality/twc_bank_best.csv` | one time-walk correction per pixel and run, DESY May and August and IRRAD March and July 2026: the quadratic's coefficients, and the TOT range and histogram behind it | the study's coefficient bank (63 files, 102 MB), reduced to the best fit per pixel by the same command |
 
 ## Test-beam result tables
@@ -396,22 +396,29 @@ the axis tables `UNIV_AXIS_SOURCES` names (`results_r2/axis_{A,B,C,D,E,I,J,K}.cs
 `summary_F.md`). On one lxplus core the cells, master and axes parts take 3 s together and the
 bank part 12 s. Published 2026-10-02 (cells, master, bank) and 2026-10-18 (the three axis tables,
 with the guard-fix rows of axes E, J and K and the `self_transfer` flag; their 2026-10-02 versions
-are kept as `universality/superseded/<file>_2026-10-02.csv`):
+are kept as `universality/superseded/<file>_2026-10-02.csv`). `univ_axis_F_wide.csv` was made again
+on 2026-10-18 from the corrected `results_r3/axis_F.csv` (below); the version before it, with the
+self-transfer row on 12 keys, is kept as
+`universality/superseded/univ_axis_F_wide_2026-10-18_self_transfer_rows.csv` (md5
+`911efb7d856178f24e60a87b5203a755`):
 
 | file | rows | columns | md5 |
 |---|---|---|---|
 | `univ_cells.csv` | 131 | 8 | `2fcde80b93bff79a4d9eb54292546318` |
 | `univ_master_cells.csv` | 43 | 105 | `62cfc93f96be1dcbab6cad770da772fa` |
 | `univ_axis_r2.csv` | 6011 | 25 | `15c688966ce406593454391e9d6120ff` |
-| `univ_axis_F_wide.csv` | 167 | 51 | `911efb7d856178f24e60a87b5203a755` |
+| `univ_axis_F_wide.csv` | 167 | 51 | `09418b9acd0a698f1c9f3717e25b6b35` |
 | `univ_axis_F_long.csv` | 2863 | 25 | `51302099b643b24014141af7d860a059` |
 | `twc_bank_best.csv` | 18414 | 20 | `001872b9be344ec9d9aa252bf1b9a011` |
 
 The files the reduction reads are copied unchanged, at their relative paths, to
-`universality/results/` (108 files, 114 MB, copied 2026-10-18; checksums in
+`universality/results/` (114 MB, copied 2026-10-18; 109 files, checksums in
 `universality/results/files.md5`): the study folder's `condor/`, `results_r2/` and `results_r3/`
 (with `guardfix/`), and from `TWC_TRANSFER_ROOT` the bank files, the round-1 table of the level
-cells and the aggregation tables. `TWC_RESULTS_ROOT` points there by default, and `--twc-root`
+cells and the aggregation tables. One file is not the study's: `results_r3/axis_F.csv` is the
+corrected table `python -m twc_transfer axes` writes (md5 `d5425a11ff92f69c4528c57f5936ff0f`),
+and the study's (md5 `44c661a62fdbf95b05dd7d67cd86cb74`) is kept beside it as
+`results_r3/superseded/axis_F_as_published.csv`. `TWC_RESULTS_ROOT` points there by default, and `--twc-root`
 can point there too: run on that copy for both roots, the reduction remakes the six tables above
 with the checksums listed.
 
@@ -536,12 +543,23 @@ family at the primary error factor, with the arms side by side.
 | `<arm>_n_pix`, `<arm>_mu_ps`, `<arm>_se_ps`, `<arm>_tau`, `<arm>_tost`, `<arm>_guard_verdict`, `<arm>_present` | for each of `xfer`, `xfer_lin`, `xfer_lin_lpo`, `xfer_clip` and `xfer_rescale`, the columns of the long table and whether the arm has the row (35 columns) |
 | `cov_C`, `lever_X`, `lever_X_all`, `spec_primary_row` | of the `xfer` row |
 | `delta_xferlin_minus_xfer_mu_ps` | `xfer_lin_mu_ps` minus `xfer_mu_ps` |
-| `<arm>_self_transfer` | for each of the five arms, the `self_transfer` flag of the long-table row the arm holds (as in the long table); empty when the arm has no row (5 columns, appended by the reduction) |
+| `<arm>_self_transfer` | for each of the five arms, the `self_transfer` flag of the long-table row the arm holds (as in the long table); empty when the arm has no row (5 columns, the last ones: the reduction's join gives them, and checks that the flag columns of `axis_F.csv`, each after its `<arm>_present` there, hold the same values). 0 on every arm entry that holds a row |
 
-The study's builder keeps one long-table row per arm and key. On 12 rows (F2 and F3) the `xfer`,
-`xfer_lin`, `xfer_clip` and `xfer_rescale` arms hold the self-transfer row (1-5 pixels) beside a
-`xfer_lin_lpo` arm that is not; the same arms' rows over the other pixels (3-70) are in the long
-table only.
+The wide table is made from `results_r3/axis_F.csv` as `python -m twc_transfer axes` writes it
+(md5 `d5425a11ff92f69c4528c57f5936ff0f`; the package `TestBeam/twc_transfer` at commit 95a0e41f,
+from the stage-3 aggregation tables of axis F). Where a key (cell, kind, pair or board, family,
+tag) holds two rows of an arm in the long table, the transfer row and the self-transfer row, that
+table shows the transfer row. The study's own builder kept whichever came last, and on 12 keys of
+`F_desy_f0p8153`, 4 of F2 and 8 of F3, that was the self-transfer row of the `xfer`, `xfer_lin`,
+`xfer_clip` and `xfer_rescale` arms (48 entries: 1-5 pixels, and a penalty of exactly 0.0 ps in
+`xfer`, beside an `xfer_lin_lpo` arm that was not); the extrapolating `xfer` row of one F3 pair,
+for example, read n_pix 5, mu 0.000 ps, PASS where its transfer row is n_pix 69, mu 5.32 ps,
+FAIL.
+The study's table is kept as `universality/results/results_r3/superseded/axis_F_as_published.csv`
+and the wide table made from it as
+`universality/superseded/univ_axis_F_wide_2026-10-18_self_transfer_rows.csv`. The two wide tables
+differ on those 12 rows only: in the four arms (now over 3-70 pixels), in
+`delta_xferlin_minus_xfer_mu_ps` and in the four arms' flags (1 before, 0 now).
 
 `universality/twc_bank_best.csv`, 18414 rows from the 63 bank files (DESY May 17 files and 3878
 rows; August 10 and 2286; March H1 13 and 4620, F1 15 and 5448; July H1 4 and 884, F1 4 and

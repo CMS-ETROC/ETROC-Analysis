@@ -32,8 +32,8 @@
 #   triples, with the study's verdicts and each cell's margin.
 # * Figure un04: the penalty before and after refitting the linear term of the correction on
 #   the target, per pair row of the re-scored cells.
-# * Figure un05: the threshold-offset and RFSel steps of August, against a floor at the same
-#   settings.
+# * Figure un05: the threshold-offset and RFSel steps of August, against a control with the
+#   settings held and the beam stepped from 4 to 3 GeV.
 # * Figure un06: three controls: the floor on one day, a board correction pooled over pixels
 #   against the pixel's own, and March to July against the bias step.
 #
@@ -857,24 +857,24 @@ save(fig, "un03_penalty_per_cell",
 # on the target than the correction as is). Per pair row the penalty before (grey) and after
 # (red); filled markers are interpolating rows, open ones extrapolating. A pair is named by the
 # chips of its two boards in the target run (the study's combination of that run, as the
-# coefficient table records it). Four extrapolating board-to-board rows (one pair at 0 deg, all
-# three at 30 deg; five pixels each, a penalty of exactly 0.0 before the refit) are self
-# transfers, their source triple being the target triple, and are left out (listed under
-# self_transfer_left_out in the values file). The wide axis-F table holds one row per pair, here
-# the self-transfer one, so these four pairs are not drawn, and cell F3 (board to board at 30 deg)
-# has no row left; their rows over the other pixels are in the long table only.
+# coefficient table records it). Where a cell's source triple is one of its target triples (cells
+# F1 to F3), a pair or board can have two rows of an arm: the transfer row, over the pixels
+# transferred, and the self-transfer row, over the pixels whose source triple is the target
+# triple. The wide axis-F table holds the transfer row of every arm (its `<arm>_self_transfer`
+# flags, checked by the reduction against the study's aggregation, are 0 throughout), so every
+# pair row of the eleven cells is drawn and none is a self transfer.
 
 # %%
 F_ROWS = levels.refit_rows(AXIS_F)
-assert len(F_ROWS) == 45 and (F_ROWS.family == "interp").sum() == 16, F_ROWS.family.value_counts()
+assert len(F_ROWS) == 49 and (F_ROWS.family == "interp").sum() == 16, F_ROWS.family.value_counts()
 F_SELF = levels.refit_rows(SELF_F)
 F_SELF_KEYS = PAIR_KEY + ["xfer_n_pix", "xfer_mu_ps", "xfer_lin_n_pix", "xfer_lin_mu_ps"]
-assert len(F_SELF) == 4 and (F_SELF.xfer_mu_ps == 0.0).all(), F_SELF[F_SELF_KEYS]
+assert len(F_SELF) == 0, F_SELF[F_SELF_KEYS]
 assert not (F_ROWS.xfer_mu_ps == 0.0).any(), F_ROWS[F_ROWS.xfer_mu_ps == 0.0][F_SELF_KEYS]
-print("un04 self-transfer rows left out:\n%s" % F_SELF[F_SELF_KEYS].to_string())
+print("un04 self-transfer rows left out: %d" % len(F_SELF))
 f_cells = sorted(set(F_ROWS.cell), key=transfer.natkey)
 f_none = sorted(set(AXIS_F_ALL.cell) - set(f_cells), key=transfer.natkey)   # nothing left to draw
-assert set(f_none) <= set(F_SELF.cell), f_none
+assert not f_none, f_none
 assert_none_left_out(f_cells, "un04")
 un04_irrad = good_run_check(f_cells, "un04")
 un04_runs = cell_runs(f_cells)
@@ -893,17 +893,14 @@ fig, axes, drawn, covered = levels.un04_linear_refit(
                       open="open: target TOT beyond the source's", margin="margin, max(1 ps, 2 %)"),
     line1=facility_line(un04_runs), subject="Before and after a linear TOT refit",
     footer=from_hits(
-        ("Per pair row of %d of the %d re-scored cells: the penalty with the source's "
-         "correction as is and with its quadratic term kept and its linear term refitted on "
-         "the target (fold-matched), 90 %% intervals; grey bar: the row's margin. %d rows: %d "
+        ("Per pair row of the %d re-scored cells: the penalty with the source's correction as "
+         "is and with its quadratic term kept and its linear term refitted on the target "
+         "(fold-matched), 90 %% intervals; grey bar: the row's margin. %d rows: %d "
          "interpolating, %d extrapolating. A pair is named by the chips of its two boards in "
-         "the target run.\nLeft out: %d extrapolating board-to-board rows whose source "
-         "triple is the target triple (self transfer; penalty exactly 0.0 before the "
-         "refit)%s.\n%s"
-         % (len(f_cells), AXIS_F_ALL.cell.nunique(), len(F_ROWS),
-            (F_ROWS.family == "interp").sum(), (F_ROWS.family == "extrap").sum(), len(F_SELF),
-            (", among them every row of %s" % " and ".join(c.split("_")[0] for c in f_none)
-             if f_none else ""), settings_footer(un04_runs))),
+         "the target run.\nEach row is over the pixels transferred; none is a self transfer "
+         "(source triple = target triple).\n%s"
+         % (len(f_cells), len(F_ROWS), (F_ROWS.family == "interp").sum(),
+            (F_ROWS.family == "extrap").sum(), settings_footer(un04_runs))),
         "IRRAD rows (cells %s)" % ", ".join(UN04_IRRAD_F)))
 F_KEYS = ["fnum", "cell", "base_cell", "kind", "board_or_role", "chips", "family", "xfer_n_pix",
           "xfer_mu_ps", "xfer_se_ps", "xfer_tost", "xfer_lin_n_pix", "xfer_lin_mu_ps",
@@ -935,8 +932,8 @@ save(fig, "un04_linear_refit",
 # Axis E steps the front end: the threshold offset and the RFSel. The IRRAD settings steps of the
 # study exist only at 3.5e15 (July, H1 and F1, cells E1-E12), so none is drawn; what remains are
 # the three August cells, two steps that change the offset and the RFSel together and a control
-# at the same settings. Per cell and family a bar: the pixel-weighted mean penalty of its pair
-# rows (weights n_pix) with its 90 % interval.
+# with the settings held, whose beam steps from 4 to 3 GeV. Per cell and family a bar: the
+# pixel-weighted mean penalty of its pair rows (weights n_pix) with its 90 % interval.
 
 # %%
 E_ALL = transfer.primary_rows(AXIS_R2)
@@ -979,6 +976,10 @@ E_LABEL, E_COLOR = {}, {}
 for cell in E_CELLS:
     E_LABEL[cell], both = step_words(cell)
     E_COLOR[cell] = levels.AXIS_COLOR["E"] if both else style.INK_MUTED
+# the legend entry of the grey cells says what their labels say, below the runs line
+E_HELD = {"; ".join(E_LABEL[c].split("\n")[1:]) for c in E_CELLS
+          if E_COLOR[c] == style.INK_MUTED}
+assert len(E_HELD) == 1, E_HELD
 E_BARS = levels.family_bars(E_ALL, E_CELLS)
 for b in E_BARS:
     print("    %-30s %-6s n_rows %d n_pix %3d  mu %+.3f  se %.3f ps" % (
@@ -986,7 +987,7 @@ for b in E_BARS:
 fig, axes, drawn, covered = levels.un05_settings_steps(
     E_BARS, cell_labels=E_LABEL, cell_colors=E_COLOR,
     legend=[(levels.AXIS_COLOR["E"], "offset and RFSel step together"),
-            (style.INK_MUTED, "same settings (floor)")],
+            (style.INK_MUTED, E_HELD.pop())],
     family_words=dict(interp="solid: target TOT within the source's",
                       extrap="hatched: target TOT beyond it"),
     ylabel="Pair penalty, pixel-weighted [ps]", line1=facility_line(un05_runs),

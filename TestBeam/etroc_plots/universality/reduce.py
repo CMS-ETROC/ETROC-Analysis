@@ -30,7 +30,12 @@ hold a tag under another name). The parts:
           univ_axis_F_wide.csv (from results_r3/axis_F_long.csv and axis_F.csv): each line
           copied unchanged (the columns a later file adds dropped), with the study's
           self_transfer flag appended (the wide table, whose row holds several arms side by side,
-          gets one per arm, <arm>_self_transfer). Seconds.
+          gets one per arm, <arm>_self_transfer). An axis_F.csv that carries the five
+          <arm>_self_transfer columns itself (the one twc_transfer's axes command writes, each
+          after its <arm>_present) has every value of them checked against the flag of the
+          join, and stops naming each arm entry where the two differ; its lines are copied
+          without those columns and the flags appended, so the table has them once, at the end,
+          as for the study's axis_F.csv. Seconds.
   bank    twc_bank_best.csv from the 63 bank files (102 MB): per (campaign, run, board_id, row,
           col) the fit with the most events (BEST_FILTER, then the first row of highest n_fit, the
           study's own tie-break). 12 s on one lxplus core (2026-10-02), 10.5 MB out.
@@ -40,7 +45,8 @@ and pixels): the study aggregates such rows as their own group, leaves them out 
 summaries, and its axis tables carry them with no column that marks them. The flag is recovered
 by the study's own join: each row matches exactly one row of its aggregation table on (cell, arm,
 kind, name, family, agg_tag, n_pix), with the same mu and se, or the reduction stops naming the
-rows that do not.
+rows that do not. The join gives the flag of every table read, the wide axis-F table's flag
+columns included when it carries them (they are checked, not taken).
 
 Each part prints its row counts. The bank's hv, temp and angle_deg columns are empty in every
 file (checked); the table leaves them out, and the figures take a run's conditions from the
@@ -85,6 +91,7 @@ JOIN_KEYS = ["cell", "arm", "kind", "board_or_role", "family", "agg_tag", "n_pix
 AGG_COLUMNS = ["cell", "arm", "kind", "name", "extrap_family", "n_pix", "self_transfer", "mu",
                "se"]
 WIDE_ARMS = ("xfer", "xfer_lin", "xfer_lin_lpo", "xfer_clip", "xfer_rescale")   # axis_F.csv
+WIDE_FLAGS = tuple("%s_self_transfer" % arm for arm in WIDE_ARMS)
 
 
 def _log(text):
@@ -358,6 +365,56 @@ def self_transfer_flags(rows, agg, what):
     return flags.astype(int).tolist()
 
 
+def wide_self_transfer(header, lines, frame, agg):
+    """(header, lines, flags, n_held) of the wide axis-F table (table_lines gives header, lines
+    and frame). flags is {<arm>_self_transfer: one value per line}: the flag of the row the arm
+    holds, by the join (self_transfer_flags), and empty where the arm holds none (<arm>_present
+    not True); n_held counts the arm entries that hold a row. A table without flag columns comes
+    back as it is. A table that carries all five WIDE_FLAGS columns (the twc_transfer port's,
+    each after its <arm>_present) has every value of them compared, as written ("0", "1" or
+    empty), with the value the reduction writes, and comes back without those columns, every
+    other field as written; the reduction stops naming each arm entry where the two differ, and
+    on a table that carries only some of the five."""
+    names = next(csv.reader([header]))
+    flags, n_held = {}, 0
+    for arm in WIDE_ARMS:
+        has = (frame["%s_present" % arm] == True).values          # noqa: E712
+        sub = frame[has]
+        rows = pd.DataFrame(dict(cell=sub.cell, arm=arm, kind=sub.kind,
+                                 board_or_role=sub.board_or_role, family=sub.family,
+                                 agg_tag=sub.agg_tag, n_pix=sub["%s_n_pix" % arm],
+                                 mu_ps=sub["%s_mu_ps" % arm], se_ps=sub["%s_se_ps" % arm]))
+        got = iter(self_transfer_flags(rows, agg, "univ_axis_F_wide arm %s" % arm))
+        flags["%s_self_transfer" % arm] = [next(got) if h else "" for h in has]
+        n_held += int(has.sum())
+    carried = [c for c in names if c in WIDE_FLAGS]
+    if not carried:
+        return header, lines, flags, n_held
+    if sorted(carried) != sorted(WIDE_FLAGS):
+        raise SystemExit("axis_F.csv carries %s; the reduction reads a table with all five of %s "
+                         "or none" % (", ".join(carried), ", ".join(WIDE_FLAGS)))
+    at = {c: names.index(c) for c in WIDE_FLAGS}
+    keep = [i for i in range(len(names)) if i not in at.values()]
+    key = [names.index(c) for c in ("cell", "kind", "board_or_role", "family")]
+    if _csv_line(names) != header:
+        raise SystemExit("axis_F.csv: the header is not as a CSV writer writes it: %s" % header)
+    out, differ = [], []
+    for n, line in enumerate(lines):
+        fields = next(csv.reader([line]))
+        if _csv_line(fields) != line:
+            raise SystemExit("axis_F.csv: a line is not as a CSV writer writes its fields, so "
+                             "they cannot be copied without the flag columns: %s" % line)
+        for c, i in at.items():
+            if fields[i] != str(flags[c][n]):
+                differ.append("%s %s: the table holds %r, the join gives %r" % (
+                    "/".join(fields[k] for k in key), c, fields[i], str(flags[c][n])))
+        out.append(_csv_line([fields[i] for i in keep]))
+    if differ:
+        raise SystemExit("axis_F.csv: %d of its <arm>_self_transfer values differ from the "
+                         "flag of the join:\n  %s" % (len(differ), "\n  ".join(differ)))
+    return _csv_line([names[i] for i in keep]), out, flags, n_held
+
+
 def _write_with_columns(dst, header, lines, columns):
     """`lines` under `header` as given, each with the values of `columns` ({name: values}, one
     value per line) appended."""
@@ -404,23 +461,19 @@ def build_axes(out, paths, twc_root):
     _log("univ_axis_F_long.csv: %d rows (from %s), self_transfer 1 on %d"
          % (len(flong), paths["F_long"], sum(st)))
 
-    per_arm = {}
-    for arm in WIDE_ARMS:
-        has = (fwide["%s_present" % arm] == True).values          # noqa: E712
-        sub = fwide[has]
-        rows = pd.DataFrame(dict(cell=sub.cell, arm=arm, kind=sub.kind,
-                                 board_or_role=sub.board_or_role, family=sub.family,
-                                 agg_tag=sub.agg_tag, n_pix=sub["%s_n_pix" % arm],
-                                 mu_ps=sub["%s_mu_ps" % arm], se_ps=sub["%s_se_ps" % arm]))
-        flags = iter(self_transfer_flags(rows, agg, "univ_axis_F_wide arm %s" % arm))
-        per_arm["%s_self_transfer" % arm] = [next(flags) if h else "" for h in has]
+    carried = any(c in next(csv.reader([wide_head])) for c in WIDE_FLAGS)
+    wide_head, wide_lines, per_arm, n_held = wide_self_transfer(wide_head, wide_lines, fwide, agg)
     _write_with_columns(os.path.join(out, "univ_axis_F_wide.csv"), wide_head, wide_lines, per_arm)
     flagged = [i for i in range(len(fwide)) if any(v == 1 for v in
                                                     (per_arm[c][i] for c in per_arm))]
     mixed = [i for i in flagged if any(v == 0 for v in (per_arm[c][i] for c in per_arm))]
     _log("univ_axis_F_wide.csv: %d rows (from %s), a self-transfer arm on %d of them (%d of "
-         "these also hold an arm that is not)" % (len(fwide), paths["F_wide"], len(flagged),
-                                                  len(mixed)))
+         "these also hold an arm that is not); %s" % (
+             len(fwide), paths["F_wide"], len(flagged), len(mixed),
+             "the table's own <arm>_self_transfer columns equal the join's flag on all %d arm "
+             "entries that hold a row and are empty on the other %d, written once, at the end"
+             % (n_held, len(WIDE_ARMS) * len(fwide) - n_held) if carried else
+             "the flags of the join appended (the table carries none)"))
 
 
 # --------------------------------------------------------------------------------------- bank
