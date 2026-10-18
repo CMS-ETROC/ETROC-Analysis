@@ -40,9 +40,11 @@ CAMPAIGN_TEXT = {"may": "DESY May 2026", "aug": "DESY Aug 2026"}
 BANK_CAMPAIGN = {"desy": "may", "aug": "aug"}
 
 # DESY-II electrons. May ran at 4 GeV throughout. In August the DAQ run names of runs 7-21 and 23
-# carry "_3GeV" (AUG_3GEV_RUNS); runs 5, 6 and 22 ran at 4 GeV.
-BEAM_TEXT = "4 GeV electrons"
+# carry "_3GeV" (AUG_3GEV_RUNS); runs 5, 6 and 22 ran at 4 GeV (AUG_4GEV_RUNS), as the August
+# yaml's comments say too. beam_gev() and beam_text() read these; every DESY label and values
+# file takes its beam from beam_text().
 AUG_3GEV_RUNS = frozenset(list(range(7, 22)) + [23])
+AUG_4GEV_RUNS = frozenset({5, 6, 22})
 
 # The board-config yamls, located like the IRRAD campaign's (irrad_2026.MARCH_YAML). The August
 # file is the corrected one: the same settings as DESY_TB_2026Aug.yaml, with the measured
@@ -91,6 +93,43 @@ def _temp(value):
     return float(m.group(1))
 
 
+def _run_number(run):
+    return int(str(run).rsplit("run", 1)[-1])
+
+
+def beam_gev(campaign, run):
+    """The electron energy of one DESY run in GeV: 4 in May; in August 3 for AUG_3GEV_RUNS and 4
+    for AUG_4GEV_RUNS, and a ValueError for a run in neither. campaign "may" or "aug", or the
+    bank's code ("desy" = May); run an int or "run26"."""
+    campaign, run = BANK_CAMPAIGN.get(campaign, campaign), _run_number(run)
+    if campaign == "may":
+        return 4
+    if campaign != "aug":
+        raise KeyError("DESY campaign %r: use one of %s" % (campaign, sorted(YAML)))
+    if run in AUG_3GEV_RUNS:
+        return 3
+    if run in AUG_4GEV_RUNS:
+        return 4
+    raise ValueError("no beam energy recorded for DESY Aug run %d" % run)
+
+
+def beam_text(campaign, runs):
+    """The beam of a set of runs of one DESY campaign, as a figure states it: "4 GeV electrons" or
+    "3 GeV electrons" when every run shares it, else "3 and 4 GeV electrons (run 5 at 4 GeV)",
+    naming the runs at 4 GeV. Arguments as for beam_gev."""
+    by = {}
+    for r in runs:
+        by.setdefault(beam_gev(campaign, r), set()).add(_run_number(r))
+    if not by:
+        raise ValueError("beam_text needs at least one run")
+    if len(by) == 1:
+        return "%d GeV electrons" % next(iter(by))
+    four = sorted(by[4])
+    words = ("run %d" % four[0] if len(four) == 1 else
+             "runs %s and %d" % (", ".join(str(r) for r in four[:-1]), four[-1]))
+    return "3 and 4 GeV electrons (%s at 4 GeV)" % words
+
+
 def run_settings(campaign, run):
     """Per board of one DESY run, from the campaign's yaml (module docstring: the quirks), as a
     list of dicts in board order:
@@ -105,7 +144,7 @@ def run_settings(campaign, run):
         rfsel      int, from the yaml's RFSel key or DEFAULT_RFSEL[campaign]; None when unknown
 
     campaign is "may" or "aug" (BANK_CAMPAIGN maps the bank's codes); run an int or "run26"."""
-    run = int(str(run).rsplit("run", 1)[-1])
+    run = _run_number(run)
     cfg = _config(campaign)
     key = "run%d" % run
     if key not in cfg:

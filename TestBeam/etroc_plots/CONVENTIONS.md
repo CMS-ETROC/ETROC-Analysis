@@ -129,8 +129,9 @@ rest are for whoever writes the next figure.
   module; 2e15 and 3.5e15 for IRRAD 2026) are not drawn. Where this leaves something out, the
   figure or the notebook says what, as a fact about the data (at which steps those comparisons
   exist), with the counts left out.
-- The TOT under a correction curve is drawn in 50 ps bins (two 25 ps bins of the coefficient
-  bank summed), the bin on the axis label.
+- The TOT under a correction curve is drawn in 100 ps bins (four 25 ps bins of the coefficient
+  bank summed; one TOT code is about 40 to 45 ps, so finer bins show the comb of the codes), the
+  bin on the axis label.
 
 ## Values files
 

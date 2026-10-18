@@ -31,10 +31,10 @@ lists, chips, fluence steps, input locations). No data lives in the repository.
 | `resolution/` | the test-beam result tables: readers, the anointed-combination selection, the combination band, run settings; the pixel-map layouts |
 | `overview/` | the setup and method schematics, and the campaign timeline with its run-time table builder |
 | `frontend/` | the 12 front-end tables, their rebuild and drawing. The tables: `blnw_by_run` (baseline and noise width per board and run) and `blnw_by_pixel` (per pixel), `tdc_pixel_hists` and `tdc_cal_modes` (TDC codes of one pixel per chip, CAL mode of every pixel), and from the track files `triples`, `tot_pixel_medians`, `tot_pooled_summary`, `tot_pooled_hist`, `dtoa_triples`, `dtoa_pooled_hist`, `pixel_hists` (the fixed pixels' TOT in ns and in TOT codes, and their TOA difference) and `rfsel_pair_hist` (the RFSel pairs and their time-control group) (columns in `campaigns/irrad_2026_inputs.md`). The rebuild: `python -m etroc_plots.frontend.rebuild --out DIR [--part blnw\|tdc\|tracks] [--runs ...] [--rank rows\|bytes]`, run from `TestBeam/` (the track part imports the pipeline's time-walk solver, `condor_at_lxplus/core/twc_solver.py`); on one lxplus core the TDC part took 5.5 min and the track part 87 min for 30 runs (about three minutes per run). `--rank rows` (the default) gives each pixel the triple with the most events, `--rank bytes` the largest file, the rule of the talk figures. The BL/NW part reads the scan histories on the LPC EOS: `--part blnw` with `ETROC_BLNW_ROOT` pointing at copies of them (and `ETROC_RUN_METADATA_ROOT` at copies of the run folders where those are out of reach) rebuilds both BL/NW tables in seconds; the published ones (2026-10-18) agree with the earlier build of `blnw_by_run.csv` in every cell |
-| `universality/` | the TWC-transfer study's tables, their reduction and the TWC curves. The six tables (`univ_cells`, `univ_master_cells`, `univ_axis_r2`, `univ_axis_F_wide`, `univ_axis_F_long`, `twc_bank_best`; columns in `campaigns/irrad_2026_inputs.md`) are made by `python -m etroc_plots.universality.reduce --out DIR --results-root S`, run from `TestBeam/` on lxplus, in about 15 s on one core; `transfer.py` reads them (with the study's verdict override) and holds the curve arithmetic, `curves.py` draws the curves, `levels.py` the pair-penalty figures |
+| `universality/` | the TWC-transfer study's tables, their reduction and the TWC curves. The six tables (`univ_cells`, `univ_master_cells`, `univ_axis_r2`, `univ_axis_F_wide`, `univ_axis_F_long`, `twc_bank_best`; columns in `campaigns/irrad_2026_inputs.md`) are made by `python -m etroc_plots.universality.reduce --out DIR` (the study's files read by default from their copy in `universality/results/` of the inputs), run from `TestBeam/` on lxplus, in about 15 s on one core; `transfer.py` reads them (with the study's verdict override) and holds the curve arithmetic, `curves.py` draws the curves, `levels.py` the pair-penalty figures |
 | `inputs.py` | the input check every notebook runs first |
 | `lv_log.py` | the July LV power log: its file-spans table builder, the LV-off periods and the LV-on time before a run |
-| `tests/` | pytest tests of the universality readers: the study's verdict override, the axis tables the reduction composes, the self-transfer flag and the rows left out by it, and the axis-F rows (how to run them: under Running a notebook) |
+| `tests/` | pytest tests (how to run them: under Running a notebook): `test_frontend.py` (14 tests) of the frontend builders: the TOT code inversion and its bins, the RFSel group rows, the runs of the fluence ladder, the run set of the rebuild, the hits stated in the code boxes, the colour range of the CAL difference maps and the BL/NW tables built from synthetic scans; `test_universality.py` (15 tests) of the universality readers: the study's verdict override, the axis tables the reduction composes, the self-transfer flag and the rows left out by it, the axis-F rows, the DESY beam of a set of runs and the reduction's default study folder |
 | `CONVENTIONS.md` | the rules every figure follows |
 
 ## Data quality: the IRRAD 2026 readout was saturated
@@ -69,6 +69,12 @@ merged hits, the TOT and TOA difference from the track files) ends its footer wi
 "Hits and pixel counts are the surviving readout sample, selected by buffer state; see README,
 Data quality." (`READOUT_FOOTER` in the campaign module). Figures fe01-fe02 do not carry it: they
 are drawn from the autocalibration scans, not from event readout.
+
+The universality figures with IRRAD runs end their footer with the same line, after the part it
+applies to: un01 (its bias, fluence and March-to-July panels), un02 (the rows of axes D and I),
+un03 (the cells of levels g and h), un04 (the rows of cells F8 to F11, re-scored fluence and
+March-to-July cells) and un06 (its March-to-July panel). Figure un05 draws DESY runs only and does
+not carry it; the DESY 2026 data are clean.
 
 The per-loop census and the readout mechanism are documented with the DAQ work and will be
 published with it.
