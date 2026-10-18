@@ -196,7 +196,8 @@ def build_parser(raising=False):
                     help="print every command expanded and parse it; writes nothing")
     mq.add_argument("--write-dag", dest="write_dag", default=None, metavar="DIR",
                     help="write the DAG, its submit files, its wrapper and the expanded job "
-                         "table under DIR (in the write root); submits nothing")
+                         "table under DIR (a new or empty folder in the write root, one per "
+                         "list); submits nothing")
     mq.add_argument("--check-inputs", dest="check_inputs", action="store_true",
                     help="list every input the commands name that does not exist (the DAG's "
                          "PREP node)")

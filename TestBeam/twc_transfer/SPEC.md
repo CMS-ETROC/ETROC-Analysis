@@ -503,8 +503,9 @@ unchanged.
 submits nothing. A job list in, a DAG out; the layout is the study's.
 
 - **Where.** DIR is taken in the write root when relative and must lie inside it when
-  absolute, and never inside one of `campaigns.protected_roots()`; a DIR that holds `<dag>.dag`
-  already is refused (DAGMan keeps its rescue files beside a DAG). The write root is required, as for every writing subcommand.
+  absolute, and never inside one of `campaigns.protected_roots()`; a DIR that exists and is
+  not empty is refused (one DAG folder per list; DAGMan keeps its rescue files beside a DAG).
+  The write root is required, as for every writing subcommand.
 - **Checks before anything is written.** Every command is expanded (`${TT_OUT}` per flag,
   `${ETROC_TWC_ROOT_<CAMPAIGN>}` from `campaigns.CAMPAIGNS`) and parsed, and a cell command
   names its row's `cell_id`; the list holds exactly one row of level `smoke`; no other row uses
@@ -530,10 +531,13 @@ submits nothing. A job list in, a DAG out; the layout is the study's.
   4000 MB; output, error and event logs in `DIR/logs/`.
 - **The wrapper.** The roots the commands were expanded with (exported as `ETROC_TWC_OUT`,
   `ETROC_TWC_TRANSFER_ROOT`, `ETROC_TWC_ROOT_<CAMPAIGN>`), `ETROC_TWC_CORE` as it was when the
-  DAG was written (unset otherwise), the repository, the table and the package sha are
-  written into it. Per node, in order, each with its exit code: a job id (90); the package
+  DAG was written (unset otherwise), the repository, the table, the package sha, the core
+  folder and the sha1 of its files (`core_files_sha1`, as the manifest's core line prints them)
+  are written into it. Per node, in order, each with its exit code: a job id (90); the package
   readable (91); `package_sha()` (sha256 of the package's `*.py` files read in name order,
-  first 16 hex characters) equal to the written one (92); the job table, the transferred copy
+  first 16 hex characters) equal to the written one (92); the sha1 of each file of
+  `jobs.CORE_FILES` present in the core folder, joined as the manifest joins them, equal to the
+  written ones (98); the job table, the transferred copy
   or the one in DIR (93); the job's row in it, or the node PREP or AGG (94); `mkdir -p` of the
   log folder, `$ETROC_TWC_OUT/cells/<cell_id>` or `$ETROC_TWC_OUT/logs` (95); the LCG_104d
   environment (96); then `PYTHONHASHSEED=0`, the six thread variables of `__main__` at 1 and

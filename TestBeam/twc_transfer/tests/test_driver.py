@@ -115,7 +115,7 @@ def test_wrapper_checks_seed_and_threads(toy):
     path, roots, read, write = toy
     text = open(_write(toy)["wrapper.sh"]).read()
     codes = [int(m.group(1)) for m in re.finditer(r"exit (9\d)\b", text)]
-    assert codes == [90, 91, 92, 93, 94, 95, 96, 97]
+    assert codes == [90, 91, 92, 98, 93, 94, 95, 96, 97]
     run = text.index("python3 -m twc_transfer \"$@\"")
     assert text.index("export PYTHONHASHSEED=0\n") < run
     threads = re.search(r"^export ((?:\w+=1 ?)+)$", text, re.M).group(1).split()
@@ -151,6 +151,32 @@ def test_wrapper_runs_its_checks(toy, monkeypatch, tmp_path):
     assert not os.path.exists(os.path.join(toy[3], "cells"))
 
 
+@pytest.mark.skipif(not (shutil.which("sha256sum") and shutil.which("sha1sum")),
+                    reason="needs sha256sum and sha1sum")
+def test_the_wrapper_exits_98_when_the_core_changed_after_the_dag_was_written(toy, monkeypatch,
+                                                                              tmp_path):
+    core = tmp_path / "core"
+    core.mkdir()
+    for name in ("twc_solver.py", "bootstrap.py", "io_utils.py"):
+        (core / name).write_text("# %s\n" % name)
+    monkeypatch.setenv("ETROC_TWC_CORE", str(core))
+    written = _write(toy)
+    sha = " ".join("%s=%s" % kv for kv in sorted(J.core_files_sha1(str(core)).items()))
+    manifest = open(written["manifest_transfer_toy.txt"]).read()
+    assert "core           %s  %s" % (core, sha) in manifest
+    cwd = tmp_path / "worker"
+    cwd.mkdir()
+
+    def run():
+        return subprocess.run(["bash", written["wrapper.sh"], "nope", "0"], cwd=str(cwd),
+                              capture_output=True, text=True)
+    assert run().returncode == 94                    # the core is the one the DAG was written for
+    (core / "twc_solver.py").write_text("# twc_solver.py, edited\n")
+    got = run()
+    assert got.returncode == 98, got.stdout
+    assert "core changed since the DAG was written" in got.stdout
+
+
 def test_write_dag_refusals(toy, tmp_path):
     path, roots, read, write = toy
     _write(toy)
@@ -172,6 +198,19 @@ def test_write_dag_refusals(toy, tmp_path):
     with pytest.raises(ValueError, match="'E_x' names no campaign"):
         J.write_dag(str(nocamp), "d5", roots, read, write, cli.parse_command)
     assert sorted(os.listdir(write)) == ["dag"]
+
+
+def test_two_lists_never_share_a_dag_folder(toy, tmp_path):
+    path, roots, read, write = toy
+    first = _write(toy)
+    other = tmp_path / "cells_other.tsv"
+    other.write_text(open(path).read())
+    with pytest.raises(ValueError, match="not empty"):
+        J.write_dag(str(other), "dag", roots, read, write, cli.parse_command)
+    dag = os.path.dirname(first["wrapper.sh"])
+    assert sorted(os.listdir(dag)) == ["cells_toy.tsv", "logs", "manifest_transfer_toy.txt",
+                                       "sub", "transfer_toy.dag", "wrapper.sh"]
+    assert "for the job table cells_toy.tsv." in open(first["wrapper.sh"]).read()
 
 
 def test_group_campaign():
