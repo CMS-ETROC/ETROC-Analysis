@@ -6,8 +6,9 @@
           -> <write root>/bank/coeffs_<campaign>_<run>.parquet
   tier0   the analytic Tier-0 screen over one bank file (SPEC.md 4)
           -> <write root>/tier0/transfer_<tag>.parquet
-  cell    (alias transfer) one transfer cell; its arguments are parsed, so that job lists can
-          be checked, but this version does not run it
+  cell    (alias transfer) one transfer cell, every arm, one row per (triple, arm, quantity)
+          (cell.py, SPEC.md 3 and 7) -> <write root>/cells/<cell>.csv; --dry-run prints the
+          plan (targets, sources, the output file and the write root) and writes nothing
   jobs    a job list (jobs.py): with --dry-run, every command expanded and parsed
 
 Argument names, defaults and types are those of the study's own command line, so the
@@ -16,9 +17,11 @@ commands of its job lists parse unchanged. `--out` overrides an output file name
 Every subcommand that writes needs the write root, ETROC_TWC_OUT (campaigns.write_root()):
 there is no default, and the read root and the step-10 data roots are refused, so nothing is
 ever written into the study's own tree or among the track files. Only those subcommands make
-the output folders under it. `tier0 --bank` is read from the read root when it is a relative
-path. python -m twc_transfer (__main__.py) also pins the thread pools to one thread and fixes
-PYTHONHASHSEED=0; main() called from Python does neither.
+the output folders under it, and a cell's --dry-run makes none. `tier0 --bank` and
+`cell --src-bank` are read from the read root when they are relative paths.
+python -m twc_transfer (__main__.py) also pins the thread pools to one thread and fixes
+PYTHONHASHSEED=0, which the cell placebo seeds need (cell.py); main() called from Python
+does neither.
 """
 import argparse
 import os
@@ -26,7 +29,7 @@ import time
 
 from . import campaigns
 
-WRITING = ("index", "bank", "fit", "tier0")
+WRITING = ("index", "bank", "fit", "tier0", "cell", "transfer")
 CELL_MODES = ["a", "b", "c", "cb", "d", "e", "f", "inrun"]
 
 
@@ -76,7 +79,7 @@ def build_parser(raising=False):
         q.set_defaults(func=cmd_bank)
 
     for nm in ("cell", "transfer"):
-        q = sub.add_parser(nm, help="one transfer cell (SPEC.md 3); parsed, not run here")
+        q = sub.add_parser(nm, help="one transfer cell (SPEC.md 3)")
         common(q)
         q.add_argument("--cell", required=True, help="cell id (output file name)")
         q.add_argument("--mode", required=True, choices=CELL_MODES)
@@ -86,7 +89,8 @@ def build_parser(raising=False):
         q.add_argument("--src-triple", dest="src_triple", default=None)
         q.add_argument("--src-root", dest="src_root", default=None)
         q.add_argument("--src-bank", dest="src_bank", default=None,
-                       help="bank parquet to read the source coefficients from")
+                       help="bank parquet to read the source coefficients from; a relative "
+                       "path is taken in the read root")
         q.add_argument("--role-map", dest="role_map", default=None,
                        help="'tgt_role:src_role,...'")
         q.add_argument("--src-parity-contrast", dest="src_parity_contrast",
@@ -235,8 +239,8 @@ def cmd_tier0(a, root):
 
 # ------------------------------------------------------------------------------ cell / jobs
 def cmd_cell(a, root):
-    raise SystemExit("twc_transfer cell: not available in this version of the package; "
-                     "`jobs --dry-run` parses cell commands without running them")
+    from . import cell
+    cell.cmd_cell(a, root)
 
 
 def cmd_jobs(a, root):
@@ -254,7 +258,9 @@ def main(argv=None):
     a = build_parser().parse_args(argv)
     root = None
     if a.cmd in WRITING:
-        from .naming import ensure_dirs
-        root = ensure_dirs(_write_root())
+        root = _write_root()
+        if not getattr(a, "dry_run", False):
+            from .naming import ensure_dirs
+            ensure_dirs(root)
     a.func(a, root)
     return 0

@@ -15,7 +15,7 @@ source, applied to another, the target, and the time resolution that costs. The 
 event cut and the width are the pipeline's own (`condor_at_lxplus/core/twc_solver.py` and
 `bootstrap.py`, imported unmodified); this package adds the bookkeeping around them: frozen
 evaluation folds, per-event leakage checks, a coefficient bank, the arms, the analytic Tier-0
-screen and the statistics. `SPEC.md` beside this file defines all of it.
+screen, the transfer cell and the statistics. `SPEC.md` beside this file defines all of it.
 
 ## Environment variables
 
@@ -33,7 +33,7 @@ screen and the statistics. `SPEC.md` beside this file defines all of it.
 
 | module | what it holds |
 |---|---|
-| `campaigns` | step-10 roots per campaign, the read root, the write root, the event cap, the core sha1 of the study's cells |
+| `campaigns` | step-10 roots per campaign, the read root, the write root, the event cap, the core sha1 of the study's cells, the cell versions |
 | `_core` | loads the pipeline core, exposes `BS` (bootstrap) and `TS` (twc_solver), `core_versions()` |
 | `naming` | combos and roles, pixel triples, run directories, sibling combos, track ranking, `ensure_dirs(root)` |
 | `events` | `load_events`, `Triple`, per-event identity (`event_keys`), the leakage asserts |
@@ -43,6 +43,7 @@ screen and the statistics. `SPEC.md` beside this file defines all of it.
 | `arms` | `self_coeff_maps`, `transferred_map`, `xfer_lin_map`, `xfer_lin_lpo_map`, the arm names |
 | `tier0` | `tier0_delta`, the analytic change of RMS^2 per pair and board |
 | `stats` | `kcal_from_cells`, `random_effects`, `tost`, `margin_for`, `source_random_effect`, `holm`, `p_nonequiv` |
+| `cell` | the transfer cell: the source of each mode, the board-identity checks, the pixel-to-board protocols, `cmd_cell`, the cell table `CELL_COLUMNS` |
 | `cli`, `__main__` | the command line, `python -m twc_transfer` (below) |
 | `jobs` | the job lists: reader, root expansion, `--dry-run`; the study's seven lists are in `jobs/` |
 
@@ -70,35 +71,51 @@ here writes a file. A caller that writes passes `ensure_dirs(campaigns.write_roo
 
 ## Command line
 
-From `TestBeam/`, with a folder of your own as the write root:
+From `TestBeam/`, with a folder of your own as the write root. The recipe is index, then bank
+(and the Tier-0 screen of it), then cells:
 
     export ETROC_TWC_OUT=/path/to/your/output
     python -m twc_transfer index --campaign mar --run h1_run1 --combo extra0-ref1-dut2
     python -m twc_transfer fit --campaign mar --run f1_run12 --ntrip 40 --folds both --placebo
     python -m twc_transfer tier0 --bank $ETROC_TWC_OUT/bank/coeffs_mar_f1_run12.parquet --tag f1_run12
+    python -m twc_transfer cell --cell jul_51to48 --mode a --campaign jul --run h1_run48 \
+        --combo dut1-ref2-trig3 --src-run h1_run51 --ntrip 5 --lpo --lpo-fallback own --dry-run
     python -m twc_transfer jobs --list cells.tsv --dry-run
 
 `index` lists a run's track files with their event counts (`bank/index_<campaign>_<run>.parquet`),
 `fit` (or `bank`) writes the coefficient bank of a run (`bank/coeffs_<campaign>_<run>.parquet`;
 the line above is how the study built its banks), and `tier0` screens one bank file
 (`tier0/transfer_<tag>.parquet`); a relative `--bank` is read from the read root, so
-`--bank bank/coeffs_desy_run13.parquet` screens the study's own bank of that run. `jobs
---dry-run` prints every command of a job list with its roots filled in and checks that it
-parses. `SPEC.md` sections 6 and 7 list every option and every output column.
+`--bank bank/coeffs_desy_run13.parquet` screens the study's own bank of that run. `cell`
+evaluates one transfer cell, every arm on every target triple, into `cells/<cell>.csv`; the
+line above prints its plan (the study's smoke job of `cells_guardfix_rerun.tsv` under another
+name: five July H1 triples of run 48 corrected with run 51's coefficients), and without
+`--dry-run` it runs in about two minutes. `--src-bank` takes a source's coefficients from a bank file instead
+of refitting them (modes a, b, c, cb and f). A cell that stops can be started again with the
+same command: the target triples already in its table are skipped. `jobs --dry-run` prints
+every command of a job list with its roots filled in and checks that it parses. `SPEC.md`
+sections 3, 6 and 7 list every mode, every option and every output column.
 
 What refuses to run, and why:
 
-- A writing subcommand (`index`, `bank`/`fit`, `tier0`) without `ETROC_TWC_OUT`: there is no
-  default output folder, so nothing lands in the study's own tree by accident.
+- A writing subcommand (`index`, `bank`/`fit`, `tier0`, `cell`/`transfer`) without
+  `ETROC_TWC_OUT`: there is no default output folder, so nothing lands in the study's own tree
+  by accident.
 - `ETROC_TWC_OUT` equal to the read root (`ETROC_TWC_TRANSFER_ROOT`) or to a campaign's
   step-10 root: outputs would mix with the inputs.
 - In a job list, `${TT_OUT}` under a flag that is neither an input nor `--out`, an unknown
   placeholder, or a write root equal to the read root.
-- `cell`: its arguments parse (so job lists can be checked), but this version does not run it.
+- A cell whose flags would change its meaning without saying so (SPEC.md 3): a source board that
+  is not the target's board without a `--role-map`, `--role-map` in modes e and inrun, mode cb
+  without both `--src-role` and `--xfer-board`, `--xfer-lin` on a one-board cell or without
+  `--arms ext`, `--src-parity-contrast` with a source in another run.
+- Resuming a cell table whose columns are not `cell.CELL_COLUMNS`.
 
 `python -m twc_transfer` pins the thread pools to one thread and, if `PYTHONHASHSEED` is not
-0, restarts itself once with `PYTHONHASHSEED=0` and says so: some of the study's draws are
-seeded from Python's `hash()` of a string, which is salted per process otherwise.
+0, restarts itself once with `PYTHONHASHSEED=0` and says so: the placebo of a cell whose source
+is refitted from events, and of the in-run split, is seeded from Python's `hash()` of strings,
+which is salted per process otherwise. Those seeds reproduce the study's cells only under
+LCG_104d (Python 3.9.12) with `PYTHONHASHSEED=0`; under another Python they are not verified.
 
 ## Job lists
 
@@ -113,8 +130,9 @@ checks the digests). 247 rows: 236 cell jobs (6 of them smoke tests) and 11 Tier
 
     cd TestBeam && python -m pytest twc_transfer/tests -q
 
-Synthetic data only: the tests read no data file (only the package's own job lists), touch
-nothing under `/eos` and need no network.
+Synthetic data only: the tests read no data file but the package's own job lists and the toy
+track files the cell tests write under pytest's temporary folder; they touch nothing under
+`/eos` and need no network.
 
 ## Parity with the study's toolkit
 
@@ -131,6 +149,18 @@ Tier-0 with and without residual moments, the overlap metrics and every statisti
 - With this repository's core, quantities that do not go through the solve stay bit for bit
   equal; coefficients move by at most 3.8e-12 relative; most widths agree to 1e-12 ps, but a
   few move by the GMM restart jitter, up to 2.85 ps on one placebo pair (see below).
+
+The cell was checked on two cells of the study, against their tables, with `PYTHONHASHSEED=0`:
+
+- The smoke cell of `cells_guardfix_rerun.tsv` (mode a, five triples, `--lpo --lpo-fallback
+  own`), with a core of the hashes below: all 240 rows and 50 columns equal the study's table
+  as text, except `ts`, and the side-car is equal. With this repository's core, 165 of the 240
+  `value` entries move, by up to 3.85 ps, while `rms`, `iqr` and the overlap columns move by
+  less than 3e-12: the GMM restart jitter of a last-bit change.
+- One triple (`--triples`) of the stage-3 P3 cell `G_P3_run26_n100`: its 54 rows equal a rerun of
+  the study's stage-3 toolkit on the same node except `ts`. Both differ from the study's
+  table, which was made on a batch node, in `ks_d` (13 entries, at most 2e-16) and `ks_p` (12
+  entries, at most 1.5e-14).
 
 ## Versions
 
@@ -149,5 +179,18 @@ fit's restart jitter rather than by the float difference. To reproduce a publish
 point `ETROC_TWC_CORE` at a core of the hashes above; `_core.core_versions()` reports what was
 loaded.
 
-The command line has the index, the bank and the Tier-0 screen; the cell and aggregation
-commands are not part of this version.
+The study's cells ran under five versions of its cell code (`campaigns.CELL_VERSIONS`, the
+sha256 prefix of its `tt.py`), all on the core above:
+
+| wave | job list | tt.py | this package |
+|---|---|---|---|
+| round 1 | `cells.tsv` | 258cb1f8 | reruns it (older cell, older columns) |
+| stage 1, stage 2 | `cells_stage1.tsv`, `cells_stage2.tsv` | 05793488 | reruns them (older cell) |
+| stage 3, seeded rerun | `cells_stage3.tsv`, `cells_rerun.tsv` | 698f72f9 | reproduces them |
+| guardfix, v2 wave 1 | `cells_guardfix_rerun.tsv`, `cells_v2w1.tsv` | e83f71c1 | reproduces them |
+
+`cell.py` is the guardfix version; the stage-3 version differs from it only by
+`--lpo-fallback`, whose default is the stage-3 behaviour. "Reproduces" means the same command
+on a core of the hashes above gives the same table except `ts`; "reruns" means the command runs
+but computes with the current cell. `cells_v2w1.tsv` is not among the lists in `jobs/`. The
+aggregation command is not part of this version.

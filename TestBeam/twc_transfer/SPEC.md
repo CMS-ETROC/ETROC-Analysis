@@ -1,11 +1,9 @@
 # twc_transfer: specification of the library
 
 What the package computes and the rules it keeps. Sections 0, 1, 2, 4 and 5 define the library
-in this directory; sections 6 and 7 the commands that write the index, the bank and the Tier-0
-screen, and the tables they write. Section 3 (the transfer operations and the two
-pixel-to-board protocols) belongs to the cell command and is specified with it; section 3 below
-holds only the terms of it that the library code uses. The code cites sections as "SPEC 1",
-"SPEC 5.1" and so on.
+in this directory; section 3 the transfer operations of the cell command (cell.py), its modes
+and the two pixel-to-board protocols; sections 6 and 7 the commands and the tables they write.
+The code cites sections as "SPEC 1", "SPEC 5.1" and so on.
 
 ## 0. Layout and invariants
 
@@ -113,7 +111,7 @@ re-expressing them in one declared basis, the target's TOT mean and sd (`solve.r
 `cov_c` and the TOT moments are what let Tier-0 (section 4) and the analytic fit-noise
 prediction run without re-reading events.
 
-## 3. Transfer operations: the terms the library uses
+## 3. Transfer operations
 
 A cell is (source, target, mode). In an `all3` transfer, the headline, all three boards take the
 source's coefficients. In a `one_board` transfer one board takes them and the other two keep
@@ -125,6 +123,94 @@ contiguous file block of a triple to the other. The pixel-to-board protocols pic
 as "the most populous pixel, its coefficients from its most populous track":
 `naming.pixel_tracks` ranks a board's pixels by the total size of the track files that carry
 them and names each pixel's largest track.
+
+**Modes** (`cell --mode`). Each names where a target triple's source comes from.
+
+| mode | source of a target triple |
+|---|---|
+| `a` run to run | the triple with the target's own pixels in `--src-run` (and `--src-campaign`, `--src-combo`), named by the target's role -> pixel map |
+| `b` angle to angle | as `a`; the source run is another angle |
+| `f` cross grid | as `a` |
+| `c` pixel to board | a named source triple applied to every target triple of the combo: whole-triple (`all3`) by default, protocol P3 (3b) with `--xfer-board` |
+| `cb` pixel to other board | protocol P4 (3b): one board's polynomial of a named source triple onto another board |
+| `d` board to board | a named source triple, its boards mapped onto the target's by `--role-map 'tgt:src,...'` |
+| `e` pooled board | per board, the `--pool-ntrip` largest triples of the target run, leave-one-pixel-out |
+| `inrun` in-run split | one half of the target triple itself; the other half is evaluated |
+
+In modes `a`, `b` and `f` the source is read from the source run's track file of the same pixels
+(or its bank row, with `--src-bank`; so is a named source in modes `c` and `cb`). In modes `c`,
+`cb` and `d` the sources are named by
+`--src-triple` (comma-separated) and completed to `--src-k` sources by `--src-pick`: `trkpop`
+takes the largest track files whose pixels are new on every board, `pixpop` ranks the pixels of
+the board the polynomial is fitted on (`--src-role`, else `--xfer-board`) by population and
+takes each one's largest track, `auto` is `pixpop` when a board is named and `trkpop`
+otherwise; every target is evaluated against every source. `--src-cap` raises the source's own
+event cap (0 follows `--cap`).
+
+Mode `e` (`cell.pooled_source`) assembles the pool one board at a time: for board r every pool
+triple whose pixel on r is the target's is dropped (`--pool-lopo-scope triple` drops only the
+target's own triple, the biased variant kept for comparison), each triple contributes at most
+`--pool-cap` events with its TOA median-centred per board, and only board r's coefficients are
+taken from the pooled solve. `xfer_avg` (with `--arms ext`) is the solve-then-average
+alternative in the centred basis, n-weighted, with the gauge constant set to zero. The
+leave-pair-out guard of the pool (`cell.pooled_lpo_source`) pools the sibling-combo events of
+the first `--pool-lpo-ntrip` pool triples under the same exclusion.
+
+Mode `inrun` fits the source on one half of the target triple and evaluates the other:
+`--split block` the contiguous file blocks A and B (drift is charged to the transfer),
+`--split parity` the two file parities, with the evaluation half's folds re-derived from the
+rank of its files. Its leave-pair-out guard is the sibling combo's events restricted to the
+source half's files.
+
+`--xfer-lin` adds `xfer_lin` and `xfer_lin_lpo` (section 4) to a whole-triple cell; it needs
+`--arms ext` and is refused with `--xfer-board`. `--src-parity-contrast` adds `xfer_srcmatch`
+and `xfer_srccross`: the source refitted on the file parity that matches the evaluation fold
+and on the other one, whose difference is the drift a same-run source shares with its target;
+it is refused unless the source is in the target's campaign and run.
+
+**Board identity.** Role sets are not board identity: two campaigns can give the same role names
+to different boards (March H1 `extra0-ref1-dut2`, July H1 `extra0-dut1-ref2`). Every cell
+asserts that the source puts the same board under each role as the target and stops with
+`cell.BoardIdentityError` otherwise, naming the complete `--role-map` that would fix it when one
+exists. Mode `d` is exempt once a `--role-map` declares the mapping; mode `cb` declares its
+substitution with `--src-role` and `--xfer-board`, which it requires. `--role-map` is refused in
+modes `e` and `inrun`, which have no source with a role map of its own, and in modes `a`, `b`
+and `f` with a source in the target's own run and combo, where it would make a cross-board
+transfer inside one run under a same-pixel label (`LeakageError`). A role map permutes the
+source's coefficients, placebo, statistics, pixels and leave-pair-out fits onto the target's
+role names. The per-event keys of section 1 are compared only when both sides put the same
+board under each role name; the row records this as `keys_comparable`.
+
+**Self-transfer.** In modes `a`, `b`, `c`, `cb`, `d` and `f` a target's `self_transfer` is 1
+exactly when the source triple's name is the target's, the source run (`--src-run`, else the
+target's) is the target's run and the source combo (`--src-combo`, else the target's) is its
+combo; the campaign is not compared. Such a target takes its own fold-matched fits in `xfer`
+= `self_cf`, `placebo` = `placebo_self` and `xfer_lpo` = `self_cf_lpo` (in a one-board cell,
+board `sr`'s fold-matched fit on board `xb`), and the `xfer_clip` / `shift` / `rescale` /
+`calfix` variants are built from that `xfer`: the self-transfer null of 5.5. The diagnostics
+`xfer_1b:<board>` and `xfer_lin` take the source's coefficients as they are, which for such a
+target are its own fit on all its events, so its rows of those two arms are in-sample. In modes
+`e` and `inrun` the flag is always 0. The self arms are written with `self_transfer` = 0 and
+blank source columns.
+
+### 3b. The pixel-to-board protocols
+
+- P3, pixel to board (`--mode c --xfer-board B1`): the coefficients of source pixel P1 on board
+  B1, from its most populous track, applied to board B1 of every other target triple; B2 and B3
+  keep their own `self_cf` coefficients. The cell's own source triple is not a target (its
+  `xfer` arm would be `self_cf` itself).
+- P4, pixel to other board (`--mode cb --src-role B1 --xfer-board B2`): P1's coefficients from
+  B1 applied to board B2 of every target triple; B1 and B3 keep their own. The two flags must
+  name different boards; mode `c` with two different boards is refused and pointed at `cb`.
+
+`--xfer-board` and `--src-role` are target role names (a `--role-map` has re-keyed the source
+onto them); the source pixels are ranked on the source's own board. In a one-board cell every
+transfer-derived arm (`xfer`, `placebo`, `xfer_lpo`, the extended variants) replaces board
+`xb` only, and the reference arm `notwc_1b` (section 4) is added. The leave-pair-out guard of
+pair (`xb`, y) needs a source solve that excluded y, `lpo[y][sr]`; for y = `sr` there is none,
+so P4 guards one of `xb`'s two pairs and P3 both. The number of guarded pairs is written as
+`lpo_pairs` (under `--lpo-fallback own` also for an `all3` cell, counting the guard entries
+filled, up to 6).
 
 ## 4. Estimator and errors
 
@@ -340,8 +426,16 @@ unchanged.
     tier0  --bank FILE [--tag all] [--max-src 0]
            -> tier0/transfer_<tag>.parquet
     jobs   --list LIST [--job ID ...] --dry-run
-    cell   the arguments of one transfer cell (alias: transfer); parsed, not run, by this
-           version
+    cell   --cell ID --mode a|b|c|cb|d|e|f|inrun --campaign C --run R --combo X [--root DIR]
+           [--src-campaign C] [--src-run R] [--src-combo X] [--src-root DIR] [--src-triple T]
+           [--src-bank FILE] [--src-k 5] [--src-pick auto|pixpop|trkpop] [--src-cap 0]
+           [--role-map T:S,...] [--xfer-board B] [--src-role B] [--split block|parity]
+           [--pool-ntrip 40] [--pool-cap 1500] [--pool-lopo-scope board|triple]
+           [--pool-lpo-ntrip 6] [--arms core|ext] [--lpo] [--lpo-fallback sibling|own]
+           [--xfer-lin] [--src-parity-contrast] [--ntrip 12|all] [--triples T,...]
+           [--chunk k/N] [--nmin 600] [--nmin-src 1000] [--nmin-fold 250] [--cap 6000]
+           [--max-triples N] [--timebudget S] [--flush 2] [--fast] [--overwrite] [--dry-run]
+           -> cells/<ID>.csv                          (alias: transfer)
 
 - `--combo` absent means every combo of the run that has a `time/` folder. `--ntrip` takes the
   largest track files of each combo (file size as the proxy for event count); `bank` skips a
@@ -349,12 +443,24 @@ unchanged.
   those files from the k-th on.
 - The study's banks were written with `fit --campaign C --run R --ntrip 40 --folds both
   --placebo`, the remaining options at their defaults.
-- **The write root.** `index`, `bank` and `tier0` need `ETROC_TWC_OUT` and write under it (the
-  arrows above are relative to it); `--out` names another output file. They refuse to start
-  when it is unset, when it is the read root `ETROC_TWC_TRANSFER_ROOT`, and when it is the
+- **The write root.** `index`, `bank`, `tier0` and `cell` need `ETROC_TWC_OUT` and write under
+  it (the arrows above are relative to it); `--out` names another output file. They refuse to
+  start when it is unset, when it is the read root `ETROC_TWC_TRANSFER_ROOT`, and when it is the
   step-10 root of a campaign, so no run writes into the study's tree or among the track files.
-  Only these subcommands create the output folders.
-- **Inputs.** `tier0 --bank` is read from the read root when the path is relative.
+  Only these subcommands create the output folders, and `cell --dry-run` creates none.
+- **Inputs.** `tier0 --bank` and `cell --src-bank` are read from the read root when the path is
+  relative.
+- **Cell targets.** `--ntrip` takes the largest track files of the target combo (`all`: every
+  one); `--triples` names them instead (track names without `.parquet`, in the target combo's
+  `time/` folder; a name with no file is dropped); `--chunk k/N` then keeps every N-th from the
+  k-th on. A target with fewer than `--nmin` events, or a fold with fewer than `--nmin-fold`, is
+  skipped, and every skip is printed at the end. `--max-triples` stops after that many measured
+  triples and `--timebudget` after that many seconds; either leaves a resumable table.
+- **`cell --dry-run`** prints the plan (the number of targets, sources and arms, the mode, the
+  target, the source, the target names, the output file and the write root) and writes
+  nothing; it reads only file listings and, when the output table exists, its `tgt_triple`
+  column.
+- The placebo seeds of a cell need `PYTHONHASHSEED=0` (section 7).
 - **Job lists** (`jobs.py`). The seven lists the study ran are in `jobs/`, in the order of
   `campaigns.JOB_LISTS`, which also records the output root each wrote into (the seeded rerun,
   `cells_rerun.tsv`, wrote into its own tree). A row has seven tab-separated fields, `job_id
@@ -387,3 +493,34 @@ unchanged.
   coefficient change over the target's TOT), and the overlap metrics `cov_C`, `hist_O`,
   `lever_X`, `lever_X_all`, `extrap` of `bank.overlap_from_bank` (a pair takes the smaller
   coverage and overlap and the larger lever of its two boards).
+- `cells/<ID>.csv` (`cell.CELL_COLUMNS`, 50 columns in a fixed order): one row per (target
+  triple, source, arm, kind, name). `kind = pair` rows carry the pair width (`name` = `a-b`,
+  `value` the pooled-fold width, `v_f0` / `v_f1` per fold, the width fit's `ks_d`, `ks_p`,
+  `accepted`, `comps`, `grid_step`, `iqr`, `rms`); `kind = board` rows the board sigma solved
+  from the three pair widths (`own_slope`, `neg_radicand`). Every row carries the cell's
+  identity (`cell`, `mode`, `campaign`, `run`, `combo`, `tgt_triple`, `tgt_key`), the source
+  (`src_run`, `src_combo`, `src_triple`, `n_fit_src`, `self_transfer`, `same_pixel`,
+  `same_board`, `src_file_overlap`, `src_keys_checked`, `keys_comparable`, `n_pool_excluded`),
+  the protocol columns (`xfer_board`, `src_role`, `src_pick`, `src_pix_rc`, `src_pix_ntrk`,
+  `src_pix_pop`, `lpo_pairs`), the overlap metrics on transfer arms (`cov_C`, `hist_O`,
+  `lever_X`, `lever_X_all`, `extrap`), `rho`, and `ts`, the time the target's rows were made.
+  There is no `git_sha` column.
+- **Resume, keyed on `tgt_triple`.** Rows are appended after every `--flush` target triples
+  (default 2) and at the end, with the fixed column list. A table that exists is resumed unless
+  `--overwrite` is given: its header must be `CELL_COLUMNS` (otherwise the cell stops before
+  reading an event), the target triples already in it are skipped and the others appended, so a
+  rerun of the same command never writes a triple twice. `--overwrite` removes the table
+  first.
+- `<table without .csv>.lpo_shape.json`, under `--lpo-fallback own` only: for each
+  `tgt_triple`, which construction built each dropped role's leave-pair-out guard,
+  `{"self": {role: "sibling"|"own"}, "xfer": {role: ...}}` (target side, source side). It is
+  merged into an existing side-car, under `--overwrite` too (which removes only the table), and
+  is not locked: two chunk jobs of one cell writing the same side-car can overwrite each
+  other's entries.
+- **Placebo seeds.** A source refitted from events seeds its placebo with
+  `abs(hash(("placebo", source triple name, source run))) % 2**31`, and the in-run split with
+  `abs(hash((target triple name, "pl"))) % 2**31`: Python's string hash, fixed only by
+  `PYTHONHASHSEED`. With `PYTHONHASHSEED=0` (set by `python -m twc_transfer`) under LCG_104d
+  (Python 3.9.12) these are the seeds of the study's cells; other Python versions are not
+  verified. A bank source's placebo was seeded when the bank was made (section 2) and does not
+  depend on it.
