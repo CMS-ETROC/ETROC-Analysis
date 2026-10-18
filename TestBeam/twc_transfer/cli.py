@@ -9,6 +9,8 @@
   cell    (alias transfer) one transfer cell, every arm, one row per (triple, arm, quantity)
           (cell.py, SPEC.md 3 and 7) -> <write root>/cells/<cell>.csv; --dry-run prints the
           plan (targets, sources, the output file and the write root) and writes nothing
+  agg     the aggregation of a group of cell tables (agg.py, SPEC.md 8)
+          -> <write root>/tables/{delta_by_triple,agg_by_cell,calibration}.csv
   jobs    a job list (jobs.py): with --dry-run, every command expanded and parsed
 
 Argument names, defaults and types are those of the study's own command line, so the
@@ -17,8 +19,9 @@ commands of its job lists parse unchanged. `--out` overrides an output file name
 Every subcommand that writes needs the write root, ETROC_TWC_OUT (campaigns.write_root()):
 there is no default, and the read root and the step-10 data roots are refused, so nothing is
 ever written into the study's own tree or among the track files. Only those subcommands make
-the output folders under it, and a cell's --dry-run makes none. `tier0 --bank` and
-`cell --src-bank` are read from the read root when they are relative paths.
+the output folders under it, and a cell's --dry-run makes none. `tier0 --bank`,
+`cell --src-bank`, `agg --cells` and `agg --tier0` are read from the read root when they are
+relative paths.
 python -m twc_transfer (__main__.py) also pins the thread pools to one thread and fixes
 PYTHONHASHSEED=0, which the cell placebo seeds need (cell.py); main() called from Python
 does neither.
@@ -29,7 +32,7 @@ import time
 
 from . import campaigns
 
-WRITING = ("index", "bank", "fit", "tier0", "cell", "transfer")
+WRITING = ("index", "bank", "fit", "tier0", "cell", "transfer", "agg")
 CELL_MODES = ["a", "b", "c", "cb", "d", "e", "f", "inrun"]
 
 
@@ -135,6 +138,28 @@ def build_parser(raising=False):
     q.add_argument("--out", default=None)
     q.set_defaults(func=cmd_tier0)
 
+    q = sub.add_parser("agg", help="aggregate a group of cell tables (SPEC.md 8)")
+    q.add_argument("--cells", nargs="+", required=True,
+                   help="cell tables or glob patterns; a relative one is taken in the read "
+                   "root")
+    q.add_argument("--baseline", default="self_cf")
+    fq = q.add_mutually_exclusive_group()
+    fq.add_argument("--f-inflate", dest="f_inflate", type=float, default=None,
+                    help="the error inflation f (SPEC.md 4). Default: the read root's "
+                    "tables/f_cal.json, else 1.0 with a warning")
+    fq.add_argument("--f-cal", dest="f_cal", default=None, choices=sorted(campaigns.F_CAL),
+                    help="f of this campaign (campaigns.F_CAL), at --f-precision")
+    q.add_argument("--f-precision", dest="f_precision", default="agg", choices=["agg", "full"],
+                   help="with --f-cal: agg = the four decimals the study aggregated with "
+                   "(default), full = the bootstrap's value")
+    q.add_argument("--nmin-eval", dest="nmin_eval", type=int, default=600,
+                   help="the n_eval floor (SPEC.md 5); 0 disables")
+    q.add_argument("--tier0", default=None,
+                   help="a tier0 table: regress the measured delta on its P_exc; a relative "
+                   "path is taken in the read root")
+    q.add_argument("--out", default=None, help="the output folder (default <write root>/tables)")
+    q.set_defaults(func=cmd_agg)
+
     q = sub.add_parser("jobs", help="check a job list")
     q.add_argument("--list", required=True, dest="job_list",
                    help="a job list file, or the name of one in jobs/")
@@ -237,10 +262,15 @@ def cmd_tier0(a, root):
               % (100.0 * float(np.nanmean(bb["P_exc"] <= 0))))
 
 
-# ------------------------------------------------------------------------------ cell / jobs
+# ------------------------------------------------------------------------ cell / agg / jobs
 def cmd_cell(a, root):
     from . import cell
     cell.cmd_cell(a, root)
+
+
+def cmd_agg(a, root):
+    from . import agg
+    agg.cmd_agg(a, root)
 
 
 def cmd_jobs(a, root):

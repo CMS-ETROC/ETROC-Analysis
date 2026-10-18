@@ -23,7 +23,8 @@ WRITING = [["index", "--campaign", "mar", "--run", "no_such_run"],
            ["tier0", "--bank", "bank/no_such_bank.parquet", "--tag", "t"],
            ["cell", "--cell", "x", "--mode", "a", "--campaign", "mar", "--run", "no_such_run"],
            ["transfer", "--cell", "x", "--mode", "a", "--campaign", "mar", "--run",
-            "no_such_run"]]
+            "no_such_run"],
+           ["agg", "--cells", "cells/no_such_cell/*.csv"]]
 
 
 @pytest.mark.parametrize("argv", WRITING, ids=lambda a: a[0])
