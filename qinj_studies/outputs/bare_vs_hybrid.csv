@@ -1,13 +1,13 @@
 quantity,unit,bare,hybrid,ratio,capacitance_sensitivity,note
-"Preamplifier gain, 8–27 fC",DAC/fC,9.415931730691343,5.956670877206114,0.6326161921703695,LOW — expected to transfer,it did not: the sensor costs 37 % of the gain
-Preamplifier gain,mV/fC,3.678098332301306,2.326824561408638,0.6326161921703694,LOW — expected to transfer,the same statement in volts
+"Preamplifier gain, 9–28 fC",DAC/fC,9.415931730691355,5.95667087720612,0.6326161921703692,LOW — expected to transfer,it did not: the sensor costs 37 % of the preamp gain
+Preamplifier gain,mV/fC,3.6780983323013103,2.3268245614086407,0.6326161921703694,LOW — expected to transfer,the same statement in volts
 S-curve width sigma (shared-sigma fit),DAC,0.9200000000000006,0.9300000000000006,1.0108695652173914,HIGH — expected to grow,it did not move: ratio 1.01
-ENC = sigma / gain,electrons,609.8375014002355,974.4710576862634,1.597919208721668,HIGH — expected to grow,"it grew — entirely through the gain, not the edge"
+ENC = sigma / (preamp gain),electrons,609.8375014002347,974.4710576862624,1.5979192087216685,HIGH — expected to grow,"it grew — entirely through the preamp gain, not the edge"
 Autocal noise width NW,DAC,3.1666666666666665,4.444444444444445,1.4035087719298247,HIGH — expected to grow,"it did grow, unlike sigma; NW is an accumulator measurement, not an edge"
-Turn-off above baseline at 15 fC,DAC,116.03,72.94,0.6286305265879514,LOW,"tracks the gain ratio, as it must"
-"TOT at BL+20, 15 fC",code,49.8727961312087,84.93931826540148,1.7031192324155522,LOW — expected to transfer,it did not: RFSel unrecorded on both sides is the likely cause
-"TOA jitter at BL+20, 8 fC",ps,10.779213167804386,27.65874449124334,2.5659335297176558,HIGH,above the floor on both sides — the useful jitter number
-"TOA jitter at BL+20, 15 fC",ps,6.358746929372668,10.581210749322471,1.6640402373060594,HIGH,"both at the quantisation floor — a limit, not a resolution"
-Minimum charge reaching BL+20,fC,4.256997250465033,5.515267729956572,1.2955770007495508,LOW,"higher, as the lower gain requires"
-"Walk with charge, 5→27 fC at BL+20",ps,493.33965693726395,1383.660375853261,2.804681027353971,MEDIUM,much larger on the hybrid
+Turn-off above baseline at 16 fC,DAC,116.03,72.94,0.6286305265879514,LOW,"tracks the preamp gain ratio, as it must"
+"TOT at BL+20, 16 fC",code,49.8727961312087,84.93931826540148,1.7031192324155522,LOW — expected to transfer,it did not: RFSel unrecorded on both sides is the likely cause
+"TOA jitter at BL+20, 9 fC",ps,10.779213167804386,27.65874449124334,2.5659335297176558,HIGH,above the floor on both sides — the useful jitter number
+"TOA jitter at BL+20, 16 fC",ps,6.358746929372668,10.581210749322471,1.6640402373060594,HIGH,"both at the quantisation floor — a limit, not a resolution"
+Minimum charge reaching BL+20,fC,5.256997250464964,6.515267729956488,1.2393515574656682,LOW,"higher, as the lower preamp gain requires"
+"Walk with charge, 6→28 fC at BL+20",ps,493.33965693726395,1383.660375853261,2.804681027353971,MEDIUM,much larger on the hybrid
 TDC quantisation floor,ps,5.371679958467383,5.237183122939937,0.9749618673176093,none,"a property of the TDC and CAL, not of the front end"

@@ -4,11 +4,13 @@
 # **Chip** `ET2p01_Bar4` — an ETROC2 **version 2.01 bonded to an LGAD**, i.e. a hybrid module.
 # **Campaign** CERN climate chamber, January 2024. **Temperatures** −25, 0 and +22 °C.
 # **Sensor bias** 210 V, 0 V with the cable still plugged in, or not recorded, depending on the
-# configuration. **Pixels** 9, rows {2, 8, 14} × columns {2, 8, 14}. **Charges** 5–27 fC.
+# configuration. **Pixels** 9, rows {2, 8, 14} × columns {2, 8, 14}. **Charges** 6–28 fC
+# (QSel 5–27; the injected charge is QSel + 1 fC, ETROC2 Reference Manual rev 0.60 §3.1.4, applied
+# by the loaders since 2026-10-18).
 #
 # This is the companion to `qinj_studies/01_bare_et2p01_tid_jan2024.ipynb`, which analyses a
 # **bare** ET2.01 die from the same chip revision and the same January-2024 campaign. Both
-# notebooks import the same `qinj_common.py`, so the turn-off estimator, the gain fit, the
+# notebooks import the same `qinj_common.py`, so the turn-off estimator, the preamp gain fit, the
 # S-curve fit, the TOT law and the quantisation floor are literally the same functions. Any
 # difference between the two sets of results is therefore a difference in the data.
 #
@@ -158,7 +160,7 @@ print(CFG.loc[TDC_CONFIGS, ["temperature_source", "hv_source"]].to_string())
 #
 # **A noise width is carried only where the baseline came from an attributed map that passed.**
 # A map that cannot be attributed to a configuration carries no usable `NW` either, which is why
-# some configurations below have a gain, a σ and a NoiseOnly RMS but no `NW`.
+# some configurations below have a preamp gain, a σ and a NoiseOnly RMS but no `NW`.
 
 # %%
 rows = []
@@ -227,7 +229,7 @@ print("points flagged cal_rms > 2 codes (flagged, not cut): %d of %d (%.1f %%)"
 
 # %%
 # --- Explainer 1: one hybrid S-curve, with the bare chip's edge drawn beside it.
-gh = PR[(PR.config == PRIMARY) & (PR.row == 8) & (PR.col == 8) & (PR.charge_fC == 15)].sort_values("dac")
+gh = PR[(PR.config == PRIMARY) & (PR.row == 8) & (PR.col == 8) & (PR.charge_fC == 16)].sort_values("dac")
 bl_h = float(BLC[(BLC.config == PRIMARY) & (BLC.row == 8) & (BLC.col == 8)].BL_dac.iloc[0])
 cv_h, _ = Q.curves_from(gh, keys=("row", "col", "charge_fC"))
 sig_h, _, mu_h, _ = Q.scurve_sigma(cv_h, boot=0)
@@ -267,13 +269,13 @@ ax.legend(loc="center left", fontsize=12)
 ax.set_title("the sensor barely changes the edge width — the first result", loc="left", fontsize=14)
 fig.tight_layout()
 Q.fig_header(fig, "Explainer: one discriminator S-curve, hybrid against bare",
-       tag="pixel (row 8, col 8), 15 fC, ET2.01 + LGAD, 0 °C, HV 210 V", scale=0.62)
+       tag="pixel (row 8, col 8), 16 fC, ET2.01 + LGAD, 0 °C, HV 210 V", scale=0.62)
 Q.save_fig(fig, "hyb_expl1_scurve")
 plt.show()
 
 # %%
 # --- Explainer 2: what one threshold sweep records.
-pix, qq = (8, 8), 15
+pix, qq = (8, 8), 16
 d = DP[(DP.row == pix[0]) & (DP.col == pix[1]) & (DP.charge_fC == qq)].sort_values("offset")
 fig, axs = plt.subplots(1, 4, figsize=(22, 5.4))
 for ax, (col, lab, cc) in zip(axs, [("toa_ns", "TOA  [ns]", Q.C_BLUE),
@@ -348,9 +350,9 @@ print("pixels with a point exactly at BL+20, by charge:", n20.to_dict())
 print("On the bare die the same count was:", B["jitter_off20_n_by_charge"])
 
 # %% [markdown]
-# **5 fC reaches the operating point on only 5 of 9 pixels here**, against 9 of 12 on the bare
-# die. That is the lower gain showing up as reduced coverage, and it is why the pooled 5 and
-# 6 fC numbers below average fewer pixels than the rest.
+# **6 fC reaches the operating point on only 5 of 9 pixels here**, against 9 of 12 on the bare
+# die. That is the lower preamp gain showing up as reduced coverage, and it is why the pooled 6 and
+# 7 fC numbers below average fewer pixels than the rest.
 #
 # ## 5. What the campaign actually monitored
 #
@@ -533,13 +535,13 @@ print("and none of the -25 °C ones. It has no HV column, no temperature column,
 print("in any of its distinct note values -- the thermal phase in the note is all it records.")
 
 # %% [markdown]
-# ## 6. Turn-off and gain
+# ## 6. Turn-off and preamp gain
 #
 # The same two estimators as on the bare die, computed by the same function: the **discriminator
-# (trigger-bit) 50 % turn-off**, which has a real denominator but saturates below 8 fC, and the
-# **TDC-readout turn-off**, which is linear down to 5 fC but is censored above 8 fC because the
-# sweep's upper bound was set to the binary search's own answer. The gain fit therefore uses the
-# discriminator turn-off over 8–27 fC only.
+# (trigger-bit) 50 % turn-off**, which has a real denominator but saturates below 9 fC, and the
+# **TDC-readout turn-off**, which is linear down to 6 fC but is censored above 9 fC because the
+# sweep's upper bound was set to the binary search's own answer. The preamp gain fit therefore uses the
+# discriminator turn-off over 9–28 fC only.
 
 # %%
 TOF = Q.turnoff_table(PR, ["config", "row", "col", "charge_fC"])
@@ -565,11 +567,11 @@ tab["bare_trig_offset"] = [B["turnoff_off_by_charge"][str(int(c))] for c in tab.
 tab["hybrid / bare"] = (tab.trig_turnoff_offset_mean / tab.bare_trig_offset).round(3)
 print("primary config, pooled over 9 pixels; bare-die values from notebook 01\n")
 print(tab.to_string())
-print("\nThe discriminator turn-off is flat from 5 to 8 fC here too (%.1f -> %.1f -> %.1f DAC):"
-      % tuple(tab.trig_turnoff_offset_mean[[5, 6, 8]]))
+print("\nThe discriminator turn-off is flat from 6 to 9 fC here too (%.1f -> %.1f -> %.1f DAC):"
+      % tuple(tab.trig_turnoff_offset_mean[[6, 7, 9]]))
 print("the same saturation the bare die showed.")
-print("\nAbove 8 fC the hybrid turns off at %.0f-%.0f %% of the bare offset, which is the gain"
-      % (100 * tab.loc[[15, 22, 27], "hybrid / bare"].min(), 100 * tab.loc[[15, 22, 27], "hybrid / bare"].max()))
+print("\nAbove 9 fC the hybrid turns off at %.0f-%.0f %% of the bare offset, which is the preamp gain"
+      % (100 * tab.loc[[16, 23, 28], "hybrid / bare"].min(), 100 * tab.loc[[16, 23, 28], "hybrid / bare"].max()))
 print("ratio measured a different way -- as it must be.")
 
 # %%
@@ -577,7 +579,7 @@ gf = []
 for (cfg, r, c), g in TOF.groupby(["config", "row", "col"]):
     rec = dict(config=cfg, row=r, col=c, BL_dac=g.BL_dac.iloc[0])
     rec.update(Q.gain_fit(g, g.BL_dac.iloc[0], charge_col="charge_fC"))
-    lo = g[(g.charge_fC <= 8) & g.tdc_turnoff_dac.notna()
+    lo = g[(g.charge_fC <= 9) & g.tdc_turnoff_dac.notna()
            & (~g.tdc_turnoff_censored.fillna(False))].sort_values("charge_fC")
     if len(lo) >= 2:
         s2, *_ = Q.wls(lo.charge_fC, lo.tdc_turnoff_dac, np.full(len(lo), 0.5))
@@ -588,20 +590,24 @@ GF.to_csv(Q.OUTDIR / "hybrid_gain_fits.csv", index=False)
 gp = GF[GF.config == PRIMARY]
 pg, pl = Q.pooled(gp.gain_dac_per_fc), Q.pooled(gp.gain_lowQ_tdc_dac_per_fc)
 pi, pq = Q.pooled(gp.intercept_offset_dac), Q.pooled(gp.Qmin_at_off_fC)
-print("gain           %.3f +- %.3f DAC/fC, pixel RMS %.3f (%.0f %%), range %.2f to %.2f"
+print("preamp gain           %.3f +- %.3f DAC/fC, pixel RMS %.3f (%.0f %%), range %.2f to %.2f"
       % (pg["mean"], pg["sem"], pg["rms"], 100 * pg["rms"] / pg["mean"],
          gp.gain_dac_per_fc.min(), gp.gain_dac_per_fc.max()))
 print("in volts       %.3f +- %.3f mV/fC" % (pg["mean"] * Q.LSB_MV, pg["sem"] * Q.LSB_MV))
-print("low-Q check    %.3f +- %.3f DAC/fC (TDC turn-off, 5-8 fC)" % (pl["mean"], pl["sem"]))
+print("low-Q check    %.3f +- %.3f DAC/fC (TDC turn-off, 6-9 fC)" % (pl["mean"], pl["sem"]))
 print("intercept      %.2f +- %.2f DAC relative to the baseline" % (pi["mean"], pi["sem"]))
 print("Q_min at BL+20 %.3f +- %.3f fC, pixel RMS %.2f" % (pq["mean"], pq["sem"], pq["rms"]))
-Q.check("gain, primary config", pg["mean"], SN["gain"]["dac_per_fc"], 0.01, "DAC/fC", LEDGER)
-Q.check("gain uncertainty on the mean", pg["sem"], SN["gain"]["sem"], 0.01, "DAC/fC", LEDGER)
-Q.check("gain pixel RMS", pg["rms"], SN["gain"]["rms"], 0.01, "DAC/fC", LEDGER)
-Q.check("gain in volts", pg["mean"] * Q.LSB_MV, SN["gain"]["mv_per_fc"], 0.01, "mV/fC", LEDGER)
+Q.check("preamp gain, primary config", pg["mean"], SN["gain"]["dac_per_fc"], 0.01, "DAC/fC", LEDGER)
+Q.check("preamp gain uncertainty on the mean", pg["sem"], SN["gain"]["sem"], 0.01, "DAC/fC", LEDGER)
+Q.check("preamp gain pixel RMS", pg["rms"], SN["gain"]["rms"], 0.01, "DAC/fC", LEDGER)
+Q.check("preamp gain in volts", pg["mean"] * Q.LSB_MV, SN["gain"]["mv_per_fc"], 0.01, "mV/fC", LEDGER)
 Q.check("low-charge cross-check", pl["mean"], SN["gain"]["lowQ"], 0.02, "DAC/fC", LEDGER)
-Q.check("fit intercept referred to the baseline", pi["mean"], SN["gain"]["intercept"], 0.10, "DAC", LEDGER)
-Q.check("minimum charge reaching BL+20", pq["mean"], SN["gain"]["Qmin"], 0.02, "fC", LEDGER)
+# `SN` was published on the QSel-label axis (charge 1 fC low): its intercept is the physical one
+# plus (preamp gain) x 1 fC per pixel, its Q_min the physical one minus 1 fC. Converted back for the ledger
+# only; the physical values printed above are what this notebook quotes.
+pi_label = Q.pooled(gp.intercept_offset_dac + gp.gain_dac_per_fc * Q.QSEL_LABEL_OFFSET_FC)
+Q.check("fit intercept referred to the baseline, QSel-label axis", pi_label["mean"], SN["gain"]["intercept"], 0.10, "DAC", LEDGER)
+Q.check("minimum charge reaching BL+20, QSel-label axis", pq["mean"] - Q.QSEL_LABEL_OFFSET_FC, SN["gain"]["Qmin"], 0.02, "fC", LEDGER)
 print("\ngain ratio hybrid / bare: %.3f  (bare %.3f DAC/fC)"
       % (pg["mean"] / B["gain_dac_per_fc"], B["gain_dac_per_fc"]))
 print("pixel spread: %.0f %% here against %.0f %% on the bare die -- tighter, on 9 pixels against 12"
@@ -609,8 +615,8 @@ print("pixel spread: %.0f %% here against %.0f %% on the bare die -- tighter, on
 
 # %% [markdown]
 # **The intercept is not the baseline here either.** Extrapolated to zero charge the fitted
-# turn-off lands about 13 DAC below the baseline, against 22 DAC on the bare die. So
-# `turn-off = BL + gain × Q` remains the wrong model on a hybrid, and estimating a gain by
+# turn-off lands about 19 DAC below the baseline, against 31 DAC on the bare die. So
+# `turn-off = BL + (preamp gain) × Q` remains the wrong model on a hybrid, and estimating a preamp gain by
 # drawing a line from the baseline through one measured point still reads low.
 
 # %%
@@ -631,7 +637,7 @@ ax.errorbar(Q.CHARGES, [B["turnoff_off_by_charge"][str(c)] for c in Q.CHARGES],
             fmt="^:", ms=10, lw=2.2, color=Q.GREY, capsize=5, label="bare die, discriminator 50 %")
 xf = np.linspace(0, 29, 50)
 ax.plot(xf, pg["mean"] * xf + pi["mean"], ":", color=Q.C_GREEN, lw=2.6,
-        label=f"fit 8–27 fC: {pg['mean']:.2f} DAC/fC")
+        label=f"fit 9–28 fC: {pg['mean']:.2f} DAC/fC")
 ax.axhline(Q.OP_OFFSET, color=Q.C_MAG, ls="-.", lw=2, label="BL+20")
 ax.set_xlabel("injected charge  [fC]")
 ax.set_ylabel("turn-off above baseline  [DAC LSB]")
@@ -640,7 +646,7 @@ ax.set_title("thin lines = single pixels", loc="left", fontsize=15)
 
 ax = axs[1]
 for (r, c), g in tp.groupby(["row", "col"]):
-    h = g[g.charge_fC >= 8].sort_values("charge_fC")
+    h = g[g.charge_fC >= 9].sort_values("charge_fC")
     f = GF[(GF.config == PRIMARY) & (GF.row == r) & (GF.col == c)]
     if not len(f) or pd.isna(f.gain_dac_per_fc.iloc[0]):
         continue
@@ -659,7 +665,7 @@ ax.hist(GF[GF.config == PRIMARY].gain_dac_per_fc.dropna(), bins=bins, color=Q.C_
 bg = pd.read_csv(Q.OUTDIR / "bare_gain_fits.csv")
 bg = bg[(bg.dose == 0) & (bg.temp == 12)].gain_dac_per_fc.dropna()
 ax.hist(bg, bins=bins, histtype="step", color=Q.GREY, lw=3, label=f"bare die, mean {bg.mean():.2f}")
-ax.set_xlabel("per-pixel gain  [DAC LSB / fC]")
+ax.set_xlabel("per-pixel preamp gain  [DAC LSB / fC]")
 ax.set_ylabel("pixels")
 ax.legend(fontsize=13)
 ax.set_title("lower, and less scattered", loc="left", fontsize=15)
@@ -736,21 +742,22 @@ out = j20.copy()
 out["bare"] = [B["jitter_off20_by_charge"][str(int(c))] for c in out.index]
 out["hybrid / bare"] = (out["mean"] / out.bare).round(2)
 print(out.round(2).to_string())
-pool_pub = {int(r["charge_fC"]): r for r in SN["pooled_primary"]} if isinstance(SN["pooled_primary"], list) else {}
+pool_pub = ({int(r["charge_fC"]) + Q.QSEL_LABEL_OFFSET_FC: r for r in SN["pooled_primary"]}   # published keys are QSel labels
+            if isinstance(SN["pooled_primary"], list) else {})
 for ch, want in zip(Q.CHARGES, [103.7, 63.0, 27.7, 10.6, 10.2, 8.1]):
     Q.check(f"TOA jitter at BL+20, {ch} fC", j20.loc[ch, "mean"], want, 0.06, "ps", LEDGER)
 
 # %% [markdown]
 # **This is where the sensor becomes visible, and it is at the bottom of the charge range, not
-# the top.** For 15 fC and above the hybrid sits within a factor of two of the quantisation
+# the top.** For 16 fC and above the hybrid sits within a factor of two of the quantisation
 # floor, exactly as the bare die did: those points are limits, not resolutions, because the
 # injection is synchronous with the clock and the LGAD is attached but is not generating the
 # signal. The high-charge branch still cannot be compared with a beam per-board resolution.
 #
-# At 5, 6 and 8 fC the hybrid is far above the floor **and far above the bare die** — the ratios
+# At 6, 7 and 9 fC the hybrid is far above the floor **and far above the bare die** — the ratios
 # in the table above. The bare-die study predicted that "a hybrid showing larger jitter is not a
 # regression, it is the first time the measurement is above its floor". That is what happened.
-# The 8 fC point at BL+20 is the lowest charge that is comfortably above the floor, and it is
+# The 9 fC point at BL+20 is the lowest charge that is comfortably above the floor, and it is
 # the number a future scan should be designed around.
 
 # %%
@@ -796,7 +803,7 @@ nw = Q.pooled(BLC[BLC.config == PRIMARY].NW_map_dac)
 norms = Q.pooled(BLC[BLC.config == PRIMARY].noise_rms_dac)
 print("S-curves fitted        %d  (9 pixels x 6 charges)" % len(curves))
 print("shared-sigma fit       sigma = %.3f +- %.3f DAC = %.4f mV" % (sigma, sigma_sd, sigma * Q.LSB_MV))
-print("ENC = sigma / gain     %.0f +- %.0f electrons" % (enc, enc_err))
+print("ENC = sigma / (preamp gain)     %.0f +- %.0f electrons" % (enc, enc_err))
 print("autocal noise width    NW = %.3f +- %.3f DAC (pixel RMS %.3f)" % (nw["mean"], nw["sem"], nw["rms"]))
 print("in-config NoiseOnly    RMS = %.3f +- %.3f DAC" % (norms["mean"], norms["sem"]))
 print("NW / sigma             %.3f" % (nw["mean"] / sigma))
@@ -807,7 +814,7 @@ Q.check("NW / sigma", nw["mean"] / sigma, SN["nw"]["nw_over_sigma"], 0.01, "", L
 
 print("\n--- against the bare die, from notebook 01 ---")
 print("sigma  hybrid %.3f DAC / bare %.3f DAC  = x %.3f" % (sigma, B["sigma_dac"], sigma / B["sigma_dac"]))
-print("gain   hybrid %.3f / bare %.3f          = x %.3f" % (gain, B["gain_dac_per_fc"], gain / B["gain_dac_per_fc"]))
+print("preamp gain   hybrid %.3f / bare %.3f          = x %.3f" % (gain, B["gain_dac_per_fc"], gain / B["gain_dac_per_fc"]))
 print("ENC    hybrid %.0f e- / bare %.0f e-      = x %.3f" % (enc, B["enc_e"], enc / B["enc_e"]))
 print("NW     hybrid %.2f DAC / bare %.2f DAC   = x %.3f" % (nw["mean"], B["nw_dac"], nw["mean"] / B["nw_dac"]))
 
@@ -815,9 +822,9 @@ print("NW     hybrid %.2f DAC / bare %.2f DAC   = x %.3f" % (nw["mean"], B["nw_d
 # ### The headline result, and why it inverts the expectation
 #
 # The threshold-edge width in DAC is **unchanged** by bonding a sensor — 0.93 against 0.92 DAC,
-# a ratio of 1.01, well inside the bootstrap error on either. What changed is the **gain**,
+# a ratio of 1.01, well inside the bootstrap error on either. What changed is the **preamp gain**,
 # which fell to 63 % of the bare value. ENC is the ratio of the two, so the ENC grew by a factor
-# of about 1.6 **entirely through the gain, not through the noise edge**.
+# of about 1.6 **entirely through the preamp gain, not through the noise edge**.
 #
 # The usual capacitance argument predicts a *wider* threshold edge on a sensor-loaded front end.
 # Here the edge width in DAC did not move, and the charge-referred noise grew because the
@@ -849,9 +856,9 @@ GB.to_csv(Q.OUTDIR / "hybrid_gain_by_config.csv", index=False)
 print(GB[["config", "temperature_C", "hv_state", "power_tag", "n_pixels", "gain_dac_per_fc",
           "gain_sem", "sigma_dac", "ENC_e", "NW_map", "noise_rms", "BL_mean", "has_sweep"]]
       .round(3).to_string(index=False))
-print("\nsigma spans %.2f to %.2f DAC across -25 to +22 C and both bias states, while the gain"
+print("\nsigma spans %.2f to %.2f DAC across -25 to +22 C and both bias states, while the preamp gain"
       % (GB.sigma_dac.min(), GB.sigma_dac.max()))
-print("moves by %.0f %%. Every ENC difference in this table is a gain difference in disguise."
+print("moves by %.0f %%. Every ENC difference in this table is a preamp gain difference in disguise."
       % (100 * (GB.gain_dac_per_fc.max() / GB.gain_dac_per_fc.min() - 1)))
 
 # %%
@@ -923,20 +930,29 @@ for off in Q.OFFS:
     fits[off] = dict(a=a, b=b_, chi2_ndf=c2, res=dict(zip(s.charge_fC.astype(int), res.round(2))))
     print("\nBL+%d:  TOT = %.2f + %.2f ln(Q/fC),  chi2/ndf %.2f" % (off, a, b_, c2))
     print("        residuals [code]:", fits[off]["res"])
-Q.check("TOT at BL+20, 15 fC", t20.loc[15, "tot_code_mean"], 84.9, 0.06, "code", LEDGER)
-Q.check("TOT log law intercept a at BL+20", fits[20]["a"], SN["tot_fit_off20"]["a"], 0.02, "code", LEDGER)
-Q.check("TOT log law slope b at BL+20", fits[20]["b"], SN["tot_fit_off20"]["b"], 0.02, "code", LEDGER)
-Q.check("TOT log law chi2/ndf at BL+20", fits[20]["chi2_ndf"], SN["tot_fit_off20"]["chi2_ndf"], 0.02, "", LEDGER)
+Q.check("TOT at BL+20, 16 fC", t20.loc[16, "tot_code_mean"], 84.9, 0.06, "code", LEDGER)
+# The published log laws were fitted in ln of the QSel label; ln Q is not shift-invariant, so the
+# ledger refits on the label axis to check reproduction, and the physical law above is what is quoted.
+fits_label = {}
+for off in Q.OFFS:
+    s = TOT[(TOT.offset == off) & (TOT.n_pixels >= 2)].sort_values("charge_fC")
+    a, b_, _, _, c2, _ = Q.logfit(s.charge_fC - Q.QSEL_LABEL_OFFSET_FC, s.tot_code_mean, s.tot_code_sem)
+    fits_label[off] = dict(a=a, b=b_, chi2_ndf=c2)
+print("\nBL+20 on the QSel-label axis (as published): TOT = %.2f + %.2f ln(label), chi2/ndf %.2f"
+      % (fits_label[20]["a"], fits_label[20]["b"], fits_label[20]["chi2_ndf"]))
+Q.check("TOT log law intercept a at BL+20, QSel-label axis", fits_label[20]["a"], SN["tot_fit_off20"]["a"], 0.02, "code", LEDGER)
+Q.check("TOT log law slope b at BL+20, QSel-label axis", fits_label[20]["b"], SN["tot_fit_off20"]["b"], 0.02, "code", LEDGER)
+Q.check("TOT log law chi2/ndf at BL+20, QSel-label axis", fits_label[20]["chi2_ndf"], SN["tot_fit_off20"]["chi2_ndf"], 0.02, "", LEDGER)
 for off in (10, 15):
-    Q.check(f"TOT log law chi2/ndf at BL+{off}", fits[off]["chi2_ndf"],
+    Q.check(f"TOT log law chi2/ndf at BL+{off}, QSel-label axis", fits_label[off]["chi2_ndf"],
             SN["tot_fits_other"][f"{PRIMARY}|off{off}"]["chi2_ndf"], 0.02, "", LEDGER)
 
 # %% [markdown]
 # **TOT did not transfer, and the campaign cannot say why.** At BL+20 the hybrid sits at about
-# 1.7 to 1.8 times the bare TOT above 8 fC, and the bare chip's well-behaved
-# `19.3 + 10.7 ln Q` is replaced by a much steeper, badly fitting law with χ²/ndf near 9 and
-# residuals reaching +10 codes. The fit is progressively better further down the edge — χ²/ndf
-# 3.7 at BL+15 and 2.4 at BL+10 — so the poor fit at BL+20 is a real change of shape near the
+# 1.7 to 1.8 times the bare TOT above 9 fC, and the bare chip's well-behaved
+# `16.6 + 11.4 ln(Q/fC)` is replaced by a much steeper, badly fitting law with χ²/ndf near 10
+# and residuals reaching +11 codes. The fit is progressively better further down the edge —
+# χ²/ndf 4.2 at BL+15 and 2.7 at BL+10 — so the poor fit at BL+20 is a real change of shape near the
 # operating point, not a fitting artefact.
 #
 # The bare-die study listed TOT-versus-charge as "expected to transfer". It does not. But this
@@ -955,7 +971,7 @@ for off in Q.OFFS:
     s = TOT[TOT.offset == off].sort_values("charge_fC")
     ax.errorbar(s.charge_fC, s.tot_code_mean, yerr=s.tot_code_pixel_rms, fmt="-", marker=Q.OMK[off],
                 ms=11, lw=2.4, color=Q.OCOL[off], capsize=5, label=f"hybrid, BL+{off}")
-    qq = np.linspace(4.6, 28, 200)
+    qq = np.linspace(5.6, 29, 200)
     ax.plot(qq, fits[off]["a"] + fits[off]["b"] * np.log(qq), ":", color=Q.OCOL[off], lw=2.2)
 ax.errorbar(Q.CHARGES, [B["tot_off20_by_charge"][str(c)] for c in Q.CHARGES],
             yerr=[B["tot_off20_rms_by_charge"][str(c)] for c in Q.CHARGES],
@@ -1051,13 +1067,14 @@ w20_med = DP[DP.offset == 20].groupby("charge_fC").toa_ns.median() * 1e3
 print("walk with threshold, BL+5 -> BL+20, per (pixel, charge): min %.0f, max %.0f, median %.0f ps"
       % (np.nanmin(walk_thr), np.nanmax(walk_thr), np.nanmedian(walk_thr)))
 print("  bare die, same quantity computed on the pooled curve: -146 to +17 ps")
-print("walk with charge at BL+20, 5 -> 27 fC: %+.0f ps (mean over pixels), %+.0f ps (median)"
-      % (w20_mean[27] - w20_mean[5], w20_med[27] - w20_med[5]))
-print("  8 -> 27 fC, excluding the marginal 5 fC point: %+.0f ps" % (w20_mean[27] - w20_mean[8]))
-print("  bare die, 5 -> 27 fC at BL+20: %+.0f ps" % B["walk_charge_5to27_at_off20_ps"])
-Q.check("walk with charge, 5->27 fC at BL+20", w20_mean[27] - w20_mean[5],
+print("walk with charge at BL+20, 6 -> 28 fC: %+.0f ps (mean over pixels), %+.0f ps (median)"
+      % (w20_mean[28] - w20_mean[6], w20_med[28] - w20_med[6]))
+print("  9 -> 28 fC, excluding the marginal 6 fC point: %+.0f ps" % (w20_mean[28] - w20_mean[9]))
+print("  bare die, 6 -> 28 fC at BL+20: %+.0f ps" % B["walk_charge_6to28_at_off20_ps"])
+# published under the QSel-label names 5to27 and 8to27: the same points
+Q.check("walk with charge, 6->28 fC at BL+20", w20_mean[28] - w20_mean[6],
         SN["walk_charge_5to27_at_off20_ps"], 1.0, "ps", LEDGER)
-Q.check("walk with charge, 8->27 fC at BL+20", w20_mean[27] - w20_mean[8],
+Q.check("walk with charge, 9->28 fC at BL+20", w20_mean[28] - w20_mean[9],
         SN["walk_charge_8to27_at_off20_ps"], 1.0, "ps", LEDGER)
 Q.check("walk with threshold, minimum", float(np.nanmin(walk_thr)), SN["walk_thr_5to20_ps"]["min"], 1.0, "ps", LEDGER)
 Q.check("walk with threshold, median", float(np.nanmedian(walk_thr)), SN["walk_thr_5to20_ps"]["median"], 1.0, "ps", LEDGER)
@@ -1118,7 +1135,7 @@ plt.show()
 # The threshold walk is substantially larger here than on the bare die — a median of about
 # −170 ps over BL+5 to BL+20, against a few tens of picoseconds on the pooled bare curve. A
 # few-DAC threshold error is no longer cheap on a hybrid. The charge walk is larger too,
-# +1384 ps from 5 to 27 fC against +493 ps bare, and it is measured against a *known* injected
+# +1384 ps from 6 to 28 fC against +493 ps bare, and it is measured against a *known* injected
 # charge, which is exactly the handle beam data does not have.
 #
 # ## 11. The bias bracket and the temperature series
@@ -1133,16 +1150,16 @@ plt.show()
 # %%
 br = GB.set_index("config").loc[[CFG_HVREF, CFG_HV0]]
 bracket = pd.DataFrame({
-    "gain [DAC/fC]": br.gain_dac_per_fc, "sigma [DAC]": br.sigma_dac,
+    "preamp gain [DAC/fC]": br.gain_dac_per_fc, "sigma [DAC]": br.sigma_dac,
     "ENC [e-]": br.ENC_e, "NoiseOnly RMS [DAC]": br.noise_rms, "BL [DAC]": br.BL_mean})
 bracket.loc["ratio (HV 0 V / reference)"] = bracket.iloc[1] / bracket.iloc[0]
 bracket.index = ["m25c_v10, HV not recorded", "m25c_v12, HV 0 V, cable plugged in",
                  "ratio (HV 0 V / reference)"]
 print(bracket.round(3).to_string())
-Q.check("bias bracket, gain ratio", bracket.iloc[2]["gain [DAC/fC]"],
+Q.check("bias bracket, preamp gain ratio", bracket.iloc[2]["preamp gain [DAC/fC]"],
         br.gain_dac_per_fc.iloc[1] / br.gain_dac_per_fc.iloc[0], 1e-9, "", LEDGER)
 print("\ngain x %.3f, sigma x %.3f, ENC x %.3f -- the sign and the size the capacitance argument"
-      % (bracket.iloc[2]["gain [DAC/fC]"], bracket.iloc[2]["sigma [DAC]"], bracket.iloc[2]["ENC [e-]"]))
+      % (bracket.iloc[2]["preamp gain [DAC/fC]"], bracket.iloc[2]["sigma [DAC]"], bracket.iloc[2]["ENC [e-]"]))
 print("predicts, free of every confound that limits the bare-versus-hybrid comparison.")
 print("\nIt also settles, by measurement rather than by naming, that m25c_v10 was NOT at 0 V --")
 print("the only handle anywhere on the bias state of the -25 C series.")
@@ -1151,7 +1168,7 @@ print("the only handle anywhere on the bias state of the -25 C series.")
 # **What the tag does and does not mean.** `HV_off_CablePluggedIn` means the bias supply was set
 # to 0 V with the sensor cable still connected. The LGAD is therefore still bonded and still
 # loading the input: this is a depletion bracket, **not** a disconnection bracket. It is not
-# equivalent to a bare die, and the 0.89 gain step must not be extrapolated to the 0.63
+# equivalent to a bare die, and the 0.89 preamp gain step must not be extrapolated to the 0.63
 # bare-versus-hybrid step.
 
 # %%
@@ -1179,7 +1196,7 @@ ax.set_xticks([0, 1])
 ax.set_xticklabels(lbl, fontsize=12)
 ax.set_ylabel("preamp gain  [DAC LSB / fC]")
 ax.set_ylim(0, 8.5)
-ax.text(0.5, 7.6, f"ratio {bracket.iloc[2]['gain [DAC/fC]']:.2f}", ha="center", fontsize=15)
+ax.text(0.5, 7.6, f"ratio {bracket.iloc[2]['preamp gain [DAC/fC]']:.2f}", ha="center", fontsize=15)
 ax.set_title("bias bracket: −25 °C, same 9 pixels, same day", loc="left", fontsize=13)
 
 ax = axs[1]
@@ -1234,9 +1251,9 @@ plt.show()
 # %% [markdown]
 # ### An open discrepancy, stated rather than smoothed over
 #
-# **The gain rises on cooling here — about +24 % from +22 to −25 °C — while the bare die went the
+# **The preamp gain rises on cooling here — about +24 % from +22 to −25 °C — while the bare die went the
 # other way, −7.7 % on cooling from +12 to −25 °C.** The two data sets disagree on the sign of
-# the temperature coefficient of gain, and this analysis cannot resolve it. The hybrid's −25 °C
+# the temperature coefficient of preamp gain, and this analysis cannot resolve it. The hybrid's −25 °C
 # point has a bias state that is `not recorded`, and the bare chip's −25 °C point came from
 # turn-off files only. It is recorded here as an open discrepancy.
 #
@@ -1246,7 +1263,7 @@ plt.show()
 # above the new baseline**, which is what the beam pipeline does with `threshold = BL + 20`.
 
 # %%
-# Is the hybrid's rising-on-cooling gain a configuration artefact? The one check the data allow:
+# Is the hybrid's rising-on-cooling preamp gain a configuration artefact? The one check the data allow:
 # at 0 C the campaign has BOTH an untagged configuration and a fully tagged one (HV 210 V,
 # highpower), and at 22 C an untagged one and a tagged one. If the untagged -25 C configurations
 # were in a different power state, the untagged/tagged pairs should disagree.
@@ -1276,7 +1293,7 @@ DIFFS = pd.DataFrame([
          matters="the point of the comparison, but also a chip-to-chip difference"),
     dict(quantity="chip revision", bare="ET2.01", hybrid="ET2.01", matters="same — good"),
     dict(quantity="temperature", bare="+12 °C", hybrid="0 °C",
-         matters="differs; the two sets disagree on the sign of the gain coefficient (section 11)"),
+         matters="differs; the two sets disagree on the sign of the preamp gain coefficient (section 11)"),
     dict(quantity="sensor bias", bare="no sensor", hybrid="210 V",
          matters="differs by construction"),
     dict(quantity="pixel set", bare="rows 0,1,3,12", hybrid="rows 2,8,14",
@@ -1285,7 +1302,7 @@ DIFFS = pd.DataFrame([
     dict(quantity="power mode", bare="not recorded", hybrid="highpower (a tag, see section 5)",
          matters="differs by an unknown amount"),
     dict(quantity="RFSel", bare="not recorded", hybrid="not recorded",
-         matters="the largest unquantified systematic; sets gain AND TOT"),
+         matters="the largest unquantified systematic; sets preamp gain AND TOT"),
     dict(quantity="TID history", bare="0 MRad (explicitly pre-irradiation)", hybrid="not recorded",
          matters="whether Bar4 had seen dose is unknown"),
 ])
@@ -1299,29 +1316,29 @@ def add(rows, quantity, unit, bare, hybrid, sens, note):
 
 
 cmp_rows = []
-add(cmp_rows, "Preamplifier gain, 8–27 fC", "DAC/fC", B["gain_dac_per_fc"], gain,
-    "LOW — expected to transfer", "it did not: the sensor costs 37 % of the gain")
+add(cmp_rows, "Preamplifier gain, 9–28 fC", "DAC/fC", B["gain_dac_per_fc"], gain,
+    "LOW — expected to transfer", "it did not: the sensor costs 37 % of the preamp gain")
 add(cmp_rows, "Preamplifier gain", "mV/fC", B["gain_mv_per_fc"], gain * Q.LSB_MV,
     "LOW — expected to transfer", "the same statement in volts")
 add(cmp_rows, "S-curve width sigma (shared-sigma fit)", "DAC", B["sigma_dac"], sigma,
     "HIGH — expected to grow", "it did not move: ratio 1.01")
-add(cmp_rows, "ENC = sigma / gain", "electrons", B["enc_e"], enc,
-    "HIGH — expected to grow", "it grew — entirely through the gain, not the edge")
+add(cmp_rows, "ENC = sigma / (preamp gain)", "electrons", B["enc_e"], enc,
+    "HIGH — expected to grow", "it grew — entirely through the preamp gain, not the edge")
 add(cmp_rows, "Autocal noise width NW", "DAC", B["nw_dac"], nw["mean"],
     "HIGH — expected to grow", "it did grow, unlike sigma; NW is an accumulator measurement, not an edge")
-add(cmp_rows, "Turn-off above baseline at 15 fC", "DAC", B["turnoff_off_by_charge"]["15"],
-    float(tab.loc[15, "trig_turnoff_offset_mean"]), "LOW", "tracks the gain ratio, as it must")
-add(cmp_rows, "TOT at BL+20, 15 fC", "code", B["tot_off20_by_charge"]["15"],
-    float(t20.loc[15, "tot_code_mean"]), "LOW — expected to transfer",
+add(cmp_rows, "Turn-off above baseline at 16 fC", "DAC", B["turnoff_off_by_charge"]["16"],
+    float(tab.loc[16, "trig_turnoff_offset_mean"]), "LOW", "tracks the preamp gain ratio, as it must")
+add(cmp_rows, "TOT at BL+20, 16 fC", "code", B["tot_off20_by_charge"]["16"],
+    float(t20.loc[16, "tot_code_mean"]), "LOW — expected to transfer",
     "it did not: RFSel unrecorded on both sides is the likely cause")
-add(cmp_rows, "TOA jitter at BL+20, 8 fC", "ps", B["jitter_off20_by_charge"]["8"],
-    float(j20.loc[8, "mean"]), "HIGH", "above the floor on both sides — the useful jitter number")
-add(cmp_rows, "TOA jitter at BL+20, 15 fC", "ps", B["jitter_off20_by_charge"]["15"],
-    float(j20.loc[15, "mean"]), "HIGH", "both at the quantisation floor — a limit, not a resolution")
+add(cmp_rows, "TOA jitter at BL+20, 9 fC", "ps", B["jitter_off20_by_charge"]["9"],
+    float(j20.loc[9, "mean"]), "HIGH", "above the floor on both sides — the useful jitter number")
+add(cmp_rows, "TOA jitter at BL+20, 16 fC", "ps", B["jitter_off20_by_charge"]["16"],
+    float(j20.loc[16, "mean"]), "HIGH", "both at the quantisation floor — a limit, not a resolution")
 add(cmp_rows, "Minimum charge reaching BL+20", "fC", B["Qmin_at_off20_fC"], pq["mean"],
-    "LOW", "higher, as the lower gain requires")
-add(cmp_rows, "Walk with charge, 5→27 fC at BL+20", "ps", B["walk_charge_5to27_at_off20_ps"],
-    float(w20_mean[27] - w20_mean[5]), "MEDIUM", "much larger on the hybrid")
+    "LOW", "higher, as the lower preamp gain requires")
+add(cmp_rows, "Walk with charge, 6→28 fC at BL+20", "ps", B["walk_charge_6to28_at_off20_ps"],
+    float(w20_mean[28] - w20_mean[6]), "MEDIUM", "much larger on the hybrid")
 add(cmp_rows, "TDC quantisation floor", "ps", B["quantisation_floor_ps"], floor_ps,
     "none", "a property of the TDC and CAL, not of the front end")
 CMP = pd.DataFrame(cmp_rows)
@@ -1329,7 +1346,7 @@ CMP.to_csv(Q.OUTDIR / "bare_vs_hybrid.csv", index=False)
 print(CMP[["quantity", "unit", "bare", "hybrid", "ratio", "capacitance_sensitivity"]]
       .round(3).to_string(index=False))
 print()
-Q.check("gain ratio hybrid / bare", gain / B["gain_dac_per_fc"], 0.632, 0.006, "", LEDGER)
+Q.check("preamp gain ratio hybrid / bare", gain / B["gain_dac_per_fc"], 0.632, 0.006, "", LEDGER)
 Q.check("sigma ratio hybrid / bare", sigma / B["sigma_dac"], 1.011, 0.006, "", LEDGER)
 Q.check("ENC ratio hybrid / bare (same estimator)", enc / B["enc_e"], 1.60, 0.01, "", LEDGER)
 print("ENC against the bare study's published 584 e-: x %.3f" % (enc / 584.0))
@@ -1350,7 +1367,7 @@ def two_bars(ax, vals, labels, title, ylabel, fmt="%.2f"):
 
 
 LBL = ["bare die\n+12 °C, no sensor", "hybrid\n0 °C, HV 210 V"]
-two_bars(axs[0], [B["gain_dac_per_fc"], gain], LBL, "gain", "gain  [DAC LSB / fC]")
+two_bars(axs[0], [B["gain_dac_per_fc"], gain], LBL, "gain", "preamp gain  [DAC LSB / fC]")
 two_bars(axs[1], [B["sigma_dac"], sigma], LBL, "S-curve width", "$\\sigma$  [DAC LSB]")
 two_bars(axs[2], [B["enc_e"], enc], LBL, "ENC", "ENC  [electrons]", fmt="%.0f")
 axs[2].axhline(584, color=Q.C_ORANGE, ls="--", lw=2.4)
@@ -1425,24 +1442,24 @@ plt.show()
 
 # %%
 SUMMARY = pd.DataFrame([
-    dict(n=1, quantity="Preamp gain (charge-to-threshold), 8–27 fC", value=f"{gain:.2f} ± {pg['sem']:.2f}",
+    dict(n=1, quantity="Preamp gain (charge-to-threshold), 9–28 fC", value=f"{gain:.2f} ± {pg['sem']:.2f}",
          unit="DAC/fC", pixel_rms=f"{pg['rms']:.2f}", label="DERIVED"),
     dict(n=2, quantity="the same in volts", value=f"{gain * Q.LSB_MV:.2f} ± {pg['sem'] * Q.LSB_MV:.2f}",
          unit="mV/fC", pixel_rms=f"{pg['rms'] * Q.LSB_MV:.2f}", label="DERIVED"),
-    dict(n=3, quantity="Turn-off above baseline at 15 fC",
-         value=f"{tab.loc[15, 'trig_turnoff_offset_mean']:.1f}", unit="DAC",
-         pixel_rms=f"{tab.loc[15, 'trig_pixel_rms']:.1f}", label="DERIVED from RAW FPGA counters"),
-    dict(n=4, quantity="TOT at BL+20, 15 fC", value=f"{t20.loc[15, 'tot_code_mean']:.1f}",
-         unit=f"code = {t20.loc[15, 'tot_ns_mean']:.2f} ns",
-         pixel_rms=f"{t20.loc[15, 'tot_code_pixel_rms']:.1f}", label="DERIVED"),
-    dict(n=5, quantity="TOA jitter at BL+20, 15 fC", value=f"{j20.loc[15, 'mean']:.1f}", unit="ps",
-         pixel_rms=f"{j20.loc[15, 'std']:.1f}", label="DERIVED — near the quantisation floor"),
-    dict(n=6, quantity="TOA jitter at BL+20, 8 fC", value=f"{j20.loc[8, 'mean']:.1f}", unit="ps",
-         pixel_rms=f"{j20.loc[8, 'std']:.1f}", label="DERIVED — above the floor, the useful one"),
+    dict(n=3, quantity="Turn-off above baseline at 16 fC",
+         value=f"{tab.loc[16, 'trig_turnoff_offset_mean']:.1f}", unit="DAC",
+         pixel_rms=f"{tab.loc[16, 'trig_pixel_rms']:.1f}", label="DERIVED from RAW FPGA counters"),
+    dict(n=4, quantity="TOT at BL+20, 16 fC", value=f"{t20.loc[16, 'tot_code_mean']:.1f}",
+         unit=f"code = {t20.loc[16, 'tot_ns_mean']:.2f} ns",
+         pixel_rms=f"{t20.loc[16, 'tot_code_pixel_rms']:.1f}", label="DERIVED"),
+    dict(n=5, quantity="TOA jitter at BL+20, 16 fC", value=f"{j20.loc[16, 'mean']:.1f}", unit="ps",
+         pixel_rms=f"{j20.loc[16, 'std']:.1f}", label="DERIVED — near the quantisation floor"),
+    dict(n=6, quantity="TOA jitter at BL+20, 9 fC", value=f"{j20.loc[9, 'mean']:.1f}", unit="ps",
+         pixel_rms=f"{j20.loc[9, 'std']:.1f}", label="DERIVED — above the floor, the useful one"),
     dict(n=7, quantity="S-curve width σ (54 curves, shared σ)",
          value=f"{sigma:.2f} ± {sigma_sd:.2f}", unit=f"DAC = {sigma * Q.LSB_MV:.3f} mV",
          pixel_rms="—", label="DERIVED"),
-    dict(n=8, quantity="ENC = σ / gain", value=f"{enc:.0f} ± {enc_err:.0f}", unit="electrons",
+    dict(n=8, quantity="ENC = σ / (preamp gain)", value=f"{enc:.0f} ± {enc_err:.0f}", unit="electrons",
          pixel_rms="—", label="DERIVED — the sensor-loaded number"),
     dict(n=9, quantity="Autocal noise width NW", value=f"{nw['mean']:.2f} ± {nw['sem']:.2f}",
          unit="DAC", pixel_rms=f"{nw['rms']:.2f}", label="RAW (NW_map)"),
@@ -1453,26 +1470,35 @@ SUMMARY = pd.DataFrame([
          unit=f"χ²/ndf {fits[20]['chi2_ndf']:.1f}", pixel_rms="—", label="DERIVED — a poor fit"),
     dict(n=12, quantity="TDC quantisation floor, LSB/√12", value=f"{floor_ps:.2f}", unit="ps",
          pixel_rms="—", label=f"DERIVED, TOA LSB {lsb_ps:.2f} ps"),
-    dict(n=13, quantity="Walk with charge, 5→27 fC at BL+20",
-         value=f"{w20_mean[27] - w20_mean[5]:+.0f}", unit="ps", pixel_rms="—", label="DERIVED"),
-    dict(n=14, quantity="Bias bracket, gain ratio HV nominal → 0 V (cable in)",
-         value=f"{bracket.iloc[2]['gain [DAC/fC]']:.2f}", unit="—", pixel_rms="—",
+    dict(n=13, quantity="Walk with charge, 6→28 fC at BL+20",
+         value=f"{w20_mean[28] - w20_mean[6]:+.0f}", unit="ps", pixel_rms="—", label="DERIVED"),
+    dict(n=14, quantity="Bias bracket, preamp gain ratio HV nominal → 0 V (cable in)",
+         value=f"{bracket.iloc[2]['preamp gain [DAC/fC]']:.2f}", unit="—", pixel_rms="—",
          label="DERIVED — the only confound-free capacitance handle"),
-    dict(n=15, quantity="Gain ratio hybrid / bare", value=f"{gain / B['gain_dac_per_fc']:.2f}",
+    dict(n=15, quantity="Preamp gain ratio hybrid / bare", value=f"{gain / B['gain_dac_per_fc']:.2f}",
          unit="—", pixel_rms="—", label="DERIVED — conditions differ, section 12"),
     dict(n=16, quantity="ENC ratio hybrid / bare", value=f"{enc / B['enc_e']:.2f}", unit="—",
-         pixel_rms="—", label="DERIVED — entirely through the gain"),
+         pixel_rms="—", label="DERIVED — entirely through the preamp gain"),
 ])
 SUMMARY.to_csv(Q.OUTDIR / "hybrid_summary_numbers.csv", index=False)
 print(SUMMARY.to_string(index=False))
 
 # %% [markdown]
 # ## 14. Reproduction ledger
+#
+# Every headline number above was compared, in the cell that computed it, against the value
+# previously published for this data set (`summary_numbers.json`).
+#
+# Rows are named by physical charge, (QSel + 1) fC. The published side was quoted at the QSel label,
+# charge − 1, which the `published_label_fC` column gives for each row that names a charge. Rows
+# marked "QSel-label axis" convert the recomputed value back to that axis before comparing: the fit
+# intercept as physical + (preamp gain) × 1 fC, `Q_min` as physical − 1 fC, and the TOT log law
+# refitted against the label.
 
 # %%
 LED = pd.DataFrame(LEDGER)
 LED["|diff|"] = LED["diff"].abs()
-print(LED[["quantity", "recomputed", "published", "|diff|", "tol", "unit", "agrees"]]
+print(LED[["quantity", "recomputed", "published", "published_label_fC", "|diff|", "tol", "unit", "agrees"]]
       .round(4).to_string(index=False))
 LED.to_csv(Q.OUTDIR / "hybrid_reproduction_ledger.csv", index=False)
 n_ok = int(LED.agrees.sum())
@@ -1490,10 +1516,10 @@ if n_ok < len(LED):
 # the next one above it. The interpolated point is sub-LSB and it is the estimator the bare-die
 # tables were built with, so using it is what makes the two campaigns comparable — but it lands
 # about half a probe step higher, which is why every turn-off offset here reads a few tenths of
-# a DAC above the published value, and why the low-charge gain cross-check, the fit intercept
+# a DAC above the published value, and why the low-charge preamp gain cross-check, the fit intercept
 # and `Q_min` shift slightly with it.
 #
-# The cell below quantifies the shift so it can be seen rather than argued about. The gain
+# The cell below quantifies the shift so it can be seen rather than argued about. The preamp gain
 # itself is a *slope* and is almost untouched, which is why the headline number reproduces.
 
 # %%
@@ -1515,7 +1541,7 @@ for (r, c), g in alt.merge(BLC[BLC.config == PRIMARY][["row", "col", "BL_dac"]],
 alt_gain = Q.pooled(pd.DataFrame(gf_alt).gain_dac_per_fc)
 print("\ngain with the published estimator: %.3f +- %.3f DAC/fC  (published %.3f)"
       % (alt_gain["mean"], alt_gain["sem"], SN["gain"]["dac_per_fc"]))
-print("gain with this notebook's estimator: %.3f +- %.3f DAC/fC" % (gain, pg["sem"]))
+print("preamp gain with this notebook's estimator: %.3f +- %.3f DAC/fC" % (gain, pg["sem"]))
 print("difference %.3f DAC/fC, i.e. %.2f %% -- far inside the %.0f %% pixel spread."
       % (abs(gain - alt_gain["mean"]), 100 * abs(gain - alt_gain["mean"]) / gain,
          100 * pg["rms"] / gain))
@@ -1533,7 +1559,7 @@ print("difference %.3f DAC/fC, i.e. %.2f %% -- far inside the %.0f %% pixel spre
 # 3. **`highpower` is a directory tag, not a measurement.** Both flagship configurations carry
 #    it, yet their logged analog currents differ by about half (section 5). Unresolved.
 # 4. **RFSel is not recorded** — on this campaign or on the bare-die one. It sets the feedback
-#    resistance and therefore directly affects gain and TOT. This is the single largest
+#    resistance and therefore directly affects preamp gain and TOT. This is the single largest
 #    unquantified systematic here, and the most likely explanation of the ×1.7 TOT difference.
 # 5. **Power mode is not recorded on the bare-die side at all**, so the bare-versus-hybrid
 #    comparison differs in power mode by an unknown amount as well.
@@ -1545,7 +1571,7 @@ print("difference %.3f DAC/fC, i.e. %.2f %% -- far inside the %.0f %% pixel spre
 # **About the comparison**
 #
 # 8. **The bare and hybrid pixel sets do not overlap** for the flagship configurations. Given
-#    the 18–33 % pixel-to-pixel gain spread, part of the 0.63 gain ratio could be pixel
+#    the 18–33 % pixel-to-pixel preamp gain spread, part of the 0.63 preamp gain ratio could be pixel
 #    selection. Nine and twelve pixels are small samples.
 # 9. **Chip, temperature, bias and pixel set all differ at once** (the table in section 12). The
 #    internal bias bracket exists precisely because this comparison cannot be clean.
@@ -1556,7 +1582,7 @@ print("difference %.3f DAC/fC, i.e. %.2f %% -- far inside the %.0f %% pixel spre
 #     published 0.88 DAC where the shared-σ fit gives 0.92; every σ, ENC and NW comparison here
 #     uses the 0.92, i.e. both sides on the same estimator. Against the published 584 e⁻ the ENC
 #     ratio would read 1.67 instead of 1.60.
-# 12. **The two campaigns disagree on the sign of the temperature coefficient of gain**
+# 12. **The two campaigns disagree on the sign of the temperature coefficient of preamp gain**
 #     (section 11). Open, not resolved.
 #
 # **About the points themselves**
@@ -1567,5 +1593,5 @@ print("difference %.3f DAC/fC, i.e. %.2f %% -- far inside the %.0f %% pixel spre
 #     directory census distinguishes the two, which is how the censoring flag is computed.
 # 15. **No cut is applied at any stage.** `cal_rms > 2 codes` is written as a flag, not a filter;
 #     3.5 % of primary-configuration points carry it and they sit within a few DAC of turn-off.
-#     What varies is coverage: at BL+20 only 5 of 9 pixels have a 5 fC point and 8 of 9 a 6 fC
+#     What varies is coverage: at BL+20 only 5 of 9 pixels have a 6 fC point and 8 of 9 a 7 fC
 #     point, so those pooled numbers average fewer pixels. Every pooled table carries its `n`.

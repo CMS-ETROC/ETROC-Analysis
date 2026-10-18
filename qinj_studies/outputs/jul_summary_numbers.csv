@@ -1,13 +1,13 @@
 n,quantity,value,unit,label
-1,"pixel (0,14) 8-27 fC chord relative to the other pixels, all campaigns",0.30 (range 0.16-0.48),ratio,"DERIVED; six dies, two revisions; a compressive response, not a scale (k 0.67 at 8 fC -> 0.41 at 27 fC)"
+1,"pixel (0,14) 9-28 fC chord relative to the other pixels, all campaigns",0.30 (range 0.16-0.48),ratio,"DERIVED; six dies, two revisions; a compressive response, not a scale (median k 0.71 at 9 fC -> 0.44 at 28 fC; 2 of the 9 fC values are upper bounds)"
 2,"(0,14) noise: NW over array mean (four maps); FWHM over the column-14 control; S-curve sigma over the other pixels",0.96; 0.68; 0.52,ratios,RAW maps exclude a 3x small-signal deficit only; FWHM and sigma say the front end's operating point differs
-3,"bias of a six-pixel pooled gain from including (0,14)",x 1.132,factor (excl/incl),DERIVED; applies to notebook 03's absolute gains; cause of the pixel's behaviour unresolved
+3,"bias of a six-pixel pooled preamp gain from including (0,14)",x 1.132,factor (excl/incl),DERIVED; applies to notebook 03's absolute gains; cause of the pixel's behaviour unresolved
 4,"preamp gain, v2.03 dies (BARE1, BARE4, BARE9), five pixels","10.8, 11.4, 9.8",DAC/fC,DERIVED; die-to-die spread 8 %
 5,"preamp gain, v2.01 die (BARE10), five pixels",11.2 ± 0.4,DAC/fC,DERIVED
-6,"gain ratio v2.01 / v2.03, same bench",1.05 ± 0.09,ratio,"DERIVED; 0.86-0.89 if the DAC scale follows VRef, 1.00 if not; 1.2 sigma (Student-t, 2 dof) from the former, or 67 mV of unrecorded rail"
+6,"preamp gain ratio v2.01 / v2.03, same bench",1.05 ± 0.09,ratio,"DERIVED; 0.86-0.89 if the DAC scale follows VRef, 1.00 if not; 1.2 sigma (Student-t, 2 dof) from the former, or 67 mV of unrecorded rail"
 7,"S-curve sigma and noise FWHM, v2.01 / v2.03","0.97, 0.88",ratios,"DERIVED; same two predictions; sigma near 1.0, FWHM on the VRef prediction"
 8,"ENC, v2.03 dies / v2.01 die","613, 700, 671 / 612",e,DERIVED; under the assumed LSB the ratio is LSB-free
-9,"BARE9 8-15 fC chord, CERN 08-03 / bench 07-30, five pixels",1.019 (pixel spread 0.072),ratio,DERIVED; on the one chord the two ladders share; the die's response survived the move
+9,"BARE9 9-16 fC chord, CERN 08-03 / bench 07-30, five pixels",1.019 (pixel spread 0.072),ratio,DERIVED; on the one chord the two ladders share; the die's response survived the move
 10,"BARE9 baseline steps, 07-29 -> 07-30 -> CERN 08-03","+240, +236",DAC,"RAW; from the rail this would need ~0.6 V and a x5 slope change — not the rail; cause unknown, no register read-back"
-11,"TOA jitter at BL+20, 15 fC, per die (BARE1, BARE4, BARE10, BARE9 x2)","7.4, 8.1, 5.8, 6.6, 6.6",ps,DERIVED; 1.1-1.5 x the 5.3 ps floor; at the floor from 22 fC
+11,"TOA jitter at BL+20, 16 fC, per die (BARE1, BARE4, BARE10, BARE9 x2)","7.4, 8.1, 5.8, 6.6, 6.6",ps,DERIVED; 1.1-1.5 x the 5.3 ps floor; at the floor from 23 fC
 12,"BARE4 map baseline gradient, row 0 -> 15 and col 0 -> 15","+20, +21",DAC,RAW; noise width flat

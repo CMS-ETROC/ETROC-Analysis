@@ -2,7 +2,7 @@
 
 Every notebook in this folder imports this module. `01_bare_et2p01_tid_jan2024.ipynb` (the bare
 ET2.01 die) and `02_hybrid_et2p01_cc_jan2024.ipynb` (the ET2.01+LGAD hybrid) go through
-*identical* code paths: the same turn-off estimator, the same weighted gain fit, the same
+*identical* code paths: the same turn-off estimator, the same weighted preamp-gain fit, the same
 shared-sigma S-curve fit, the same TOT log law and the same quantisation floor. Any difference
 between the two sets of results is then a difference in the data, not a difference in the
 analysis. `00_census_and_aux_data.ipynb` uses the loaders in the census section at the foot of
@@ -17,6 +17,11 @@ Conventions used everywhere:
   and because the absolute DAC-to-mV scale is chip-revision dependent.
 * No cuts are applied at any stage. Coverage varies (a low charge simply turns off below
   BL+20 on some pixels); every pooled quantity therefore carries its own `n`.
+* **Every charge is the physical injected charge, `QSel + 1` fC** (ETROC2 Reference Manual
+  rev 0.60, section 3.1.4 and Table 14 row 6, QSel[4:0]; bit position in Table 15). The staged
+  tables carry the QSel register value under their `charge`/`charge_fC` names; the loaders
+  below add `QSEL_LABEL_OFFSET_FC` to every such column, so nothing downstream ever sees the
+  register value. Corrected 2026-10-18.
 
 Nothing in this module touches a remote system: it reads only the staged files under `data/`.
 """
@@ -25,6 +30,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import tarfile
 from pathlib import Path
 
@@ -50,9 +56,47 @@ OUTDIR.mkdir(exist_ok=True)
 LSB_MV = 400.0 / 1024          # 0.390625 mV per threshold-DAC LSB
 CLK_NS = 3.125                 # TDC reference clock period, ns
 E_PER_FC = 6241.509            # electrons per fC
-QINJ_RANGE_FC = (1, 32)        # the internal injector's integer range
+QINJ_RANGE_FC = (1, 32)        # the injector's physical range: QSel 0..31 gives 1..32 fC. This is
+                               # already in physical charge and selects no data, so the 2026-10-18
+                               # label correction below leaves it unchanged.
 
-CHARGES = [5, 6, 8, 15, 22, 27]   # the six injected charges present in both campaigns
+# ---------------------------------------------------------------- QSel label -> physical charge
+# ETROC2 Reference Manual rev 0.60, section 3.1.4 and Table 14 row 6 (QSel[4:0], "from 1 fC
+# (5'b00000) to 32 fC (5'b11111)"; bit position in Table 15): the injected charge is **(QSel + 1)
+# fC**, 1 fC at QSel 0 to 32 fC at QSel 31, with up to +-15 % error. Every 2024 campaign in this
+# folder (bare ET2.01 Jan 2024, hybrid ET2.01 climate chamber Jan 2024, ET2.03 Jul/Aug 2024, the
+# July two-revision bench) was taken with the old i2c_gui scripts, which wrote the QSel register
+# with the raw label value: a `QInj_<N>` directory is QSel = N, so its physical charge is N + 1 fC.
+# (tamalero's `set_QInj` writes `QSel = C - 1`, the manual's convention.) The staged tables keep the
+# label N under their `charge`/`charge_fC` names and stay byte-identical as provenance; every loader
+# in this module adds this offset, so every charge a notebook sees is the physical one. Applied
+# 2026-10-18; before that date the notebooks read N as fC and every charge axis was 1 fC low.
+#
+# What the shift does and does not move: a straight line in Q keeps its slope (the preamp gain in
+# DAC/fC, and therefore the ENC, are unchanged), its zero-charge intercept moves by -slope DAC, and
+# any charge read off it (`Qmin_at_off_fC`) moves by +1 fC. Laws that are not linear in Q (the TOT
+# log law in ln Q) are genuinely re-fitted on the physical axis and their parameters change.
+QSEL_LABEL_OFFSET_FC = 1
+
+
+def qsel_label_to_fc(label):
+    """Physical injected charge in fC for a QSel label N written by the 2024 i2c_gui scripts:
+    N + `QSEL_LABEL_OFFSET_FC` (ETROC2 Reference Manual rev 0.60, §3.1.4 and Table 14 row 6,
+    QSel[4:0]; bit position in Table 15). Works on scalars, arrays and pandas Series."""
+    return label + QSEL_LABEL_OFFSET_FC
+
+
+def _to_fc(df, *cols):
+    """Add `QSEL_LABEL_OFFSET_FC` to every named charge column present in `df`, in place."""
+    for c in cols:
+        if c in df:
+            df[c] = qsel_label_to_fc(df[c])
+    return df
+
+
+# Every charge below is PHYSICAL (QSel + 1). The six QSel labels of the January campaigns were
+# 5, 6, 8, 15, 22, 27; the same scan points are the physical charges 6, 7, 9, 16, 23, 28 fC.
+CHARGES = [6, 7, 9, 16, 23, 28]  # the six injected charges present in both campaigns
 OFFS = [10, 15, 20]               # threshold offsets above baseline that are tabulated
 BL_OFFSET = 5                     # `full_scurve_scan` starts the sweep at BL + 5
 OP_OFFSET = 20                    # the beam pipeline's operating point, threshold = BL + 20
@@ -70,8 +114,8 @@ BYTES_PER_HIT = 72.46
 # Six fixed categorical slots for charge (ascending), an ordinal blue ramp for threshold
 # offset, and marker shape repeating the same identity so the figures survive colour-vision
 # deficiency and greyscale printing.
-CCOL = {5: "#2a78d6", 6: "#eb6834", 8: "#1baf7a", 15: "#eda100", 22: "#e87ba4", 27: "#008300"}
-CMK = {5: "o", 6: "s", 8: "^", 15: "D", 22: "v", 27: "P"}
+CCOL = {6: "#2a78d6", 7: "#eb6834", 9: "#1baf7a", 16: "#eda100", 23: "#e87ba4", 28: "#008300"}
+CMK = {6: "o", 7: "s", 9: "^", 16: "D", 23: "v", 28: "P"}
 OCOL = {10: "#86b6ef", 15: "#3987e5", 20: "#184f95"}
 OMK = {10: "^", 15: "s", 20: "o"}
 C_BLUE, C_ORANGE, C_AQUA = "#2a78d6", "#eb6834", "#1baf7a"
@@ -167,8 +211,9 @@ def quantisation_floor_ps(cal_code):
 # ---------------------------------------------------------------- loaders: bare campaign
 def load_bare_summary():
     """RAW: `ET2p01_W36_6_TDC_summary_allMRad.feather`, one row per
-    (dose, temp, pixel, charge, threshold). 22 055 x 12, all RAW columns."""
-    return pd.read_feather(BARE_DIR / "ET2p01_W36_6_TDC_summary_allMRad.feather")
+    (dose, temp, pixel, charge, threshold). 22 055 x 12, all RAW columns except `charge`, which
+    is converted from the staged QSel label to the physical charge (+`QSEL_LABEL_OFFSET_FC`)."""
+    return _to_fc(pd.read_feather(BARE_DIR / "ET2p01_W36_6_TDC_summary_allMRad.feather"), "charge")
 
 
 def load_bare_probes():
@@ -177,9 +222,10 @@ def load_bare_probes():
 
     Column map, verified against the search's own behaviour: index 3 = TDC-hit counter,
     index 4 = `header_max` (the L1A denominator, ~11 223), index 5 = trigger-bit counter,
-    index 6 = the threshold DAC. Adds the DERIVED efficiency fractions.
+    index 6 = the threshold DAC. Adds the DERIVED efficiency fractions. `charge` is the physical
+    charge (staged QSel label + `QSEL_LABEL_OFFSET_FC`).
     """
-    p = pd.read_csv(BARE_DIR / "fpga_turnoff_probes.csv")
+    p = _to_fc(pd.read_csv(BARE_DIR / "fpga_turnoff_probes.csv"), "charge")
     p["frac"] = p.trig_count / p.header_max
     p["frac_tdc"] = p.tdc_count / p.header_max
     p["frac_c"] = p.frac.clip(upper=1.0)
@@ -192,7 +238,9 @@ def load_bare_probes_from_raw_tar():
     """Re-parse the probes straight from the staged raw `FPGA_Data.dat` bytes.
 
     Used once in notebook 01 to prove that `fpga_turnoff_probes.csv` is a faithful
-    transcription of the raw files rather than something that has to be taken on trust.
+    transcription of the raw files rather than something that has to be taken on trust. The
+    `QInj_<N>` in each file name is the QSel label; `charge` is returned as the physical N + 1 fC,
+    exactly as `load_bare_probes` returns it, so the two stay comparable row for row.
     """
     import io
     import re
@@ -207,15 +255,17 @@ def load_bare_probes_from_raw_tar():
             a = np.loadtxt(io.BytesIO(tf.extractfile(m).read()), delimiter=",", ndmin=2)
             for r in a:
                 rows.append((day, row, col, q, int(r[3]), int(r[4]), int(r[5]), int(r[6])))
-    return pd.DataFrame(rows, columns=["day", "row", "col", "charge",
-                                       "tdc_count", "header_max", "trig_count", "dac"])
+    return _to_fc(pd.DataFrame(rows, columns=["day", "row", "col", "charge",
+                                              "tdc_count", "header_max", "trig_count", "dac"]),
+                  "charge")
 
 
 def load_bare_sweep_dirs():
     """RAW: one row per scanned sweep point directory (day, pixel, charge, DAC, size in
     bytes), from a single `xrdfs ls -l` per day directory. 23 416 rows. The size is what makes
-    the hit count and the censoring flag recoverable without touching the 16 GB of `.nem`."""
-    d = pd.read_csv(BARE_DIR / "sweep_point_dirs.csv.gz")
+    the hit count and the censoring flag recoverable without touching the 16 GB of `.nem`.
+    `charge` is the physical charge (staged QSel label + `QSEL_LABEL_OFFSET_FC`)."""
+    d = _to_fc(pd.read_csv(BARE_DIR / "sweep_point_dirs.csv.gz"), "charge")
     d["dose"] = d.day.map(lambda x: BARE_DAY_BLOCK[x]["dose"])
     d["temp"] = d.day.map(lambda x: BARE_DAY_BLOCK[x]["temp"])
     d["nhit_est"] = (d.dir_bytes / BYTES_PER_HIT).round().astype(int)
@@ -231,13 +281,15 @@ def load_bare_blnw():
 # ---------------------------------------------------------------- loaders: hybrid campaign
 def load_hybrid_points():
     """RAW + DERIVED: one row per (config, pixel, charge, threshold) of the climate-chamber
-    campaign, 13 281 x 22, with the per-point TOA/TOT/CAL mean and std in raw codes."""
-    return pd.read_feather(HYB_DIR / "cc_points.feather")
+    campaign, 13 281 x 22, with the per-point TOA/TOT/CAL mean and std in raw codes.
+    `charge_fC` is the physical charge (staged QSel label + `QSEL_LABEL_OFFSET_FC`)."""
+    return _to_fc(pd.read_feather(HYB_DIR / "cc_points.feather"), "charge_fC")
 
 
 def load_hybrid_probes():
-    """RAW: every probe point of the hybrid binary searches, same columns as the bare set."""
-    p = pd.read_csv(HYB_DIR / "cc_fpga_probes.csv.gz")
+    """RAW: every probe point of the hybrid binary searches, same columns as the bare set.
+    `charge_fC` is the physical charge (staged QSel label + `QSEL_LABEL_OFFSET_FC`)."""
+    p = _to_fc(pd.read_csv(HYB_DIR / "cc_fpga_probes.csv.gz"), "charge_fC")
     p = p[(p.kind == "TurnOff") & (p.dac >= 0)].copy()
     p["frac"] = p.trig_count / p.header_max
     p["frac_tdc"] = p.tdc_count / p.header_max
@@ -246,11 +298,19 @@ def load_hybrid_probes():
 
 
 def load_hybrid_turnoff():
-    return pd.read_csv(HYB_DIR / "cc_turnoff.csv")
+    """DERIVED (the reduction's own turn-off). `charge_fC` is physical (label + 1)."""
+    return _to_fc(pd.read_csv(HYB_DIR / "cc_turnoff.csv"), "charge_fC")
 
 
 def load_hybrid_configs():
-    return pd.read_csv(HYB_DIR / "cc_configs.csv").set_index("config")
+    """Configuration inventory. The `charges_fC` list (`5;6;8;...` on disk, QSel labels) is
+    returned as physical charges (`6;7;9;...`)."""
+    d = pd.read_csv(HYB_DIR / "cc_configs.csv").set_index("config")
+    if "charges_fC" in d:
+        d["charges_fC"] = d.charges_fC.map(
+            lambda s: ";".join(str(qsel_label_to_fc(int(x))) for x in str(s).split(";"))
+            if isinstance(s, str) and s.strip() else s)
+    return d
 
 
 def load_hybrid_blnw():
@@ -262,7 +322,8 @@ def load_hybrid_noiseonly():
 
 
 def load_hybrid_tdc_dirs():
-    return pd.read_csv(HYB_DIR / "cc_tdc_dirs.csv.gz")
+    """RAW: one row per scanned point directory. `charge_fC` is physical (label + 1)."""
+    return _to_fc(pd.read_csv(HYB_DIR / "cc_tdc_dirs.csv.gz"), "charge_fC")
 
 
 def load_hybrid_aux_power():
@@ -270,6 +331,13 @@ def load_hybrid_aux_power():
 
 
 def load_hybrid_summary_numbers():
+    """DERIVED, published: the hybrid reduction's headline numbers, a cross-check target only.
+
+    Returned exactly as published, **in QSel-label units**: its per-charge keys (`"5"` ... `"27"`)
+    are labels, its `Qmin` is a label-axis charge, and its preamp-gain-fit `intercept` and TOT log law
+    were fitted against the label. Notebook 02 converts at each comparison (key + 1, `Qmin` - 1
+    on the recomputed side, the TOT law refitted on the label axis for the ledger only) so that
+    the ledger still checks reproduction of what was published."""
     import json
     with open(HYB_DIR / "summary_numbers.json") as fh:
         return json.load(fh)
@@ -313,7 +381,7 @@ def turnoff_table(probes, keys, method="interp"):
     """Both turn-off estimators for every (…, pixel, charge) group of a probe table.
 
     Returns `trig_turnoff_dac` (the discriminator / trigger-bit 50 % point -- a proper
-    efficiency, but it saturates at a charge-independent floor below 8 fC on both campaigns)
+    efficiency, but it saturates at a charge-independent floor below 9 fC on both campaigns)
     and `tdc_bs_turnoff_dac` (the same crossing read off the TDC counter of the same search).
     """
     out = []
@@ -342,7 +410,7 @@ def wls(x, y, sy):
     return beta[0], beta[1], np.sqrt(cov[0, 0]), np.sqrt(cov[1, 1]), chi2, res
 
 
-def gain_fit(g, bl, q_lo=8, q_hi=27, sy=0.5, off_target=OP_OFFSET,
+def gain_fit(g, bl, q_lo=9, q_hi=28, sy=0.5, off_target=OP_OFFSET,
              turnoff_col="trig_turnoff_dac", charge_col="charge"):
     """The **preamp gain** of one pixel -- the charge-to-threshold response in DAC LSB per fC:
     a weighted straight line through discriminator turn-off DAC against injected charge over
@@ -356,8 +424,11 @@ def gain_fit(g, bl, q_lo=8, q_hi=27, sy=0.5, off_target=OP_OFFSET,
 
     y-error 0.5 DAC, because the binary search brackets the crossing to 1 DAC.
 
-    The fit range starts at 8 fC deliberately: below it the discriminator turn-off saturates
-    at a charge-independent floor on both campaigns, so its slope there is not a gain.
+    The fit range starts at 9 fC deliberately: below it the discriminator turn-off saturates
+    at a charge-independent floor on both campaigns, so its slope there is not a preamp gain. The default
+    window 9-28 fC is physical charge and selects exactly the scan points of the window that was
+    written 8-27 before the 2026-10-18 QSel correction (labels 8, 15, 22, 27 = 9, 16, 23, 28 fC):
+    the slope is unchanged by that correction, the intercept moves by -slope DAC and `Qmin` by +1 fC.
     Returns the slope in DAC/fC and mV/fC, the intercept referred to the baseline (a pure
     proportionality would put it at 0), chi2/ndf, and the charge that just reaches BL+`off_target`.
     """
@@ -450,7 +521,9 @@ def enc_electrons(sigma_dac, gain_dac_per_fc):
 def logfit(q, y, sy):
     """Weighted least squares of `TOT = a + b ln(Q/fC)`. Returns
     (a, b, a_err, b_err, chi2/ndf, residuals). A linear fit in ln Q, so it is exact, not
-    iterative. A large chi2/ndf here is a statement about the shape, not about convergence."""
+    iterative. A large chi2/ndf here is a statement about the shape, not about convergence.
+    `q` is the physical charge; ln Q is not invariant under the 2026-10-18 label-to-charge shift, so
+    a, b and chi2/ndf differ from the fits made on the QSel label before that date."""
     q = np.asarray(q, float)
     y = np.asarray(y, float)
     sy = np.asarray(sy, float)
@@ -480,11 +553,36 @@ def pooled_at_offsets(df, group_keys, value_cols, bl_col="BL", offsets=OFFS,
     return pd.DataFrame(rows)
 
 
+_CHARGE_IN_NAME = re.compile(r"(\d+)(\s*(?:->|→|–|-)\s*)?(\d+)?(\s*fC)")
+
+
+def published_label_fc(name):
+    """The charge label the published side of a ledger row was quoted at.
+
+    Ledger rows are named by physical charge, (QSel + 1) fC; the previously published numbers
+    were quoted at the QSel label, charge - 1. This returns the name's charge (or charge range)
+    on the label axis, e.g. "TOA jitter at BL+20, 6 fC" -> "5", "walk ..., 6->28 fC" -> "5->27".
+    Rows marked "QSel-label axis" already compare on the label axis (the recomputed value is
+    converted back) and return "label axis"; rows that name no charge return "".
+    """
+    if "QSel-label axis" in name:
+        return "label axis"
+    m = _CHARGE_IN_NAME.search(name)
+    if not m:
+        return ""
+    lo = int(m.group(1)) - QSEL_LABEL_OFFSET_FC
+    if m.group(3) is None:
+        return str(lo)
+    return "%d%s%d" % (lo, m.group(2).strip(), int(m.group(3)) - QSEL_LABEL_OFFSET_FC)
+
+
 def check(name, got, want, tol, unit="", store=None):
     """Compare a recomputed number against a published one and print the verdict.
 
     Every headline number in both notebooks goes through this, so a disagreement is visible in
-    the executed output rather than buried in prose.
+    the executed output rather than buried in prose. The stored row carries
+    `published_label_fC`, the QSel label the published side was quoted at (see
+    `published_label_fc`).
     """
     ok = (want is not None) and abs(got - want) <= tol
     mark = "OK  " if ok else "DIFF"
@@ -492,6 +590,7 @@ def check(name, got, want, tol, unit="", store=None):
           f"|d| {abs(got - want):8.4f} (tol {tol:g}) {unit}")
     if store is not None:
         store.append(dict(quantity=name, recomputed=got, published=want,
+                          published_label_fC=published_label_fc(name),
                           diff=got - want, tol=tol, unit=unit, agrees=bool(ok)))
     return ok
 
@@ -501,6 +600,7 @@ def charge_axis(ax, axis="x", charges=None):
 
     Matplotlib's default log locator adds minor labels such as `2 x 10^1` between the charge
     ticks; this removes them so the axis reads as the six values that were actually injected.
+    The default ticks are `CHARGES`, physical charge (QSel + 1).
     """
     import matplotlib.ticker as mt
     charges = charges or CHARGES
@@ -598,7 +698,12 @@ TID_LV_DAY = {
 def load_census():
     """The data-set census, one row per data set. A transcription of the two written census
     documents, with the columns the notebook plots. Every cell is a statement about what a
-    scan found; `unknown` means no evidence was found and is never a guess."""
+    scan found; `unknown` means no evidence was found and is never a guess.
+
+    `charges_fC` is free text transcribed from directory names and documents across campaigns of
+    different software generations, so it is returned **as recorded** and is NOT converted: for
+    the 2024 i2c_gui campaigns its numbers are QSel labels, whose physical charge is label + 1
+    (see `QSEL_LABEL_OFFSET_FC`); for later campaigns the convention is not established here."""
     d = pd.read_csv(CENSUS_DIR / "qinj_census.csv", dtype=str).fillna("")
     d["size_GB_num"] = pd.to_numeric(d.size_GB, errors="coerce")
     d["date_start_dt"] = pd.to_datetime(d.date_start)
@@ -676,12 +781,14 @@ ET2P03_CAMPAIGN = "CERN X-ray TID campaign, August 2024"
 XCAMP_CAMPAIGN = "ET2.01 and ET2.03, January and August 2024"
 
 # The five charges and the six pixels this campaign scanned, at every one of its conditions.
-ET2P03_CHARGES = [6, 8, 10, 15, 22]
+# Physical charge: QSel labels 6, 8, 10, 15, 22 are 7, 9, 11, 16, 23 fC.
+ET2P03_CHARGES = [7, 9, 11, 16, 23]
 ET2P03_PIXELS = [(0, 0), (0, 14), (3, 0), (3, 14), (12, 0), (12, 14)]
-# The gain fit range. 8 fC is the same lower edge notebooks 01 and 02 use, so the three campaigns'
-# gains are slopes over the same charges; 22 fC is simply the highest charge this campaign
-# injected (01 and 02 reach 27 fC).
-ET2P03_QLO, ET2P03_QHI = 8, 22
+# The preamp-gain fit range. 9 fC is the same lower edge notebooks 01 and 02 use, so the three campaigns'
+# gains are slopes over the same charges; 23 fC is simply the highest charge this campaign
+# injected (01 and 02 reach 28 fC). Physical charge; the same points as the 8-22 written before
+# the 2026-10-18 QSel correction.
+ET2P03_QLO, ET2P03_QHI = 9, 23
 
 # ---------------------------------------------------------------- ET2.03 rails: SUPPLY, not chip
 # `va_V` and `vd_V` in every ET2.03 table are the numbers set on the **bench power supply**, not
@@ -721,10 +828,10 @@ def va_label(va_supply, chip=True):
 # The four analog settings of this campaign, supply against approximate at-chip value.
 VA_SUPPLY_TABLE = [(0.85, 0.65), (1.00, 0.80), (1.20, 1.00), (1.40, 1.20)]
 
-# 10 fC exists only in this campaign, so it needs its own categorical slot. Adding a key to the
-# two palette dicts cannot affect notebooks 00-02: they index them, never iterate them.
-CCOL[10] = "#7b4fc9"
-CMK[10] = "X"
+# 11 fC (QSel label 10) exists only in this campaign, so it needs its own categorical slot. Adding
+# a key to the two palette dicts cannot affect notebooks 00-02: they index them, never iterate them.
+CCOL[11] = "#7b4fc9"
+CMK[11] = "X"
 
 
 def load_et2p03_points(union=True):
@@ -733,8 +840,8 @@ def load_et2p03_points(union=True):
     `union=True` (the default, and the only one any analysis should use for a dose comparison)
     reads `tid_et2p03_points_all.feather`, the union of the `TID_August` working copy and the
     `X9` master copy, 29 922 x 43 — the only table that carries the **200 and 400 MRad money
-    plots**. `union=False` reads the working copy alone, where the dosed data are the 10 fC rail
-    scans only; it is kept staged so that the difference between the two is demonstrable rather
+    plots**. `union=False` reads the working copy alone, where the dosed data are the 11 fC (QSel 10)
+    rail scans only; it is kept staged so that the difference between the two is demonstrable rather
     than asserted.
 
     **`va_V` and `vd_V` are POWER-SUPPLY settings, not voltages at the chip.** Nominal 1.2 V at the
@@ -752,9 +859,11 @@ def load_et2p03_points(union=True):
     per-hit CAL window `|CAL - cal_mode| <= CAL_WINDOW`, the repository test-beam pipeline's own
     criterion. Notebook 03 quotes the windowed set: one TOA code is 3.125 ns / CAL, so a hit with
     a wrong CAL carries a wrong TOA. See `DECODE_README.md` and notebook 03 section 4.4.
+
+    `charge_fC` is the physical charge (staged QSel label + `QSEL_LABEL_OFFSET_FC`).
     """
     name = "tid_et2p03_points_all.feather" if union else "tid_et2p03_points.feather"
-    return pd.read_feather(ET2P03_DIR / name)
+    return _to_fc(pd.read_feather(ET2P03_DIR / name), "charge_fC", "charge_tag_fC")
 
 
 def load_et2p03_turnoff(union=True):
@@ -762,10 +871,11 @@ def load_et2p03_turnoff(union=True):
 
     `turnoff_dac` is the campaign's own definition (the DAC on the last line of `FPGA_Data.dat`);
     `search_trace` is the whole search as `dac:triggerbits;...`, which is what lets the same
-    50 % estimator used in notebooks 01 and 02 be applied here.
+    50 % estimator used in notebooks 01 and 02 be applied here. `charge_fC` and `charge_tag_fC`
+    are physical charge (staged QSel label + `QSEL_LABEL_OFFSET_FC`).
     """
     name = "tid_et2p03_turnoff_all.csv" if union else "tid_et2p03_turnoff.csv"
-    return pd.read_csv(ET2P03_DIR / name)
+    return _to_fc(pd.read_csv(ET2P03_DIR / name), "charge_fC", "charge_tag_fC")
 
 
 def load_et2p03_noiseonly(union=True):
@@ -774,15 +884,18 @@ def load_et2p03_noiseonly(union=True):
     `scan_trace` is a *dense* one-DAC-step scan of the trigger-bit counter across the noise peak,
     so unlike the two January campaigns this one carries an in-configuration baseline and noise
     measurement at **every** condition, not only where an autocalibration map survived.
+    `charge_tag_fC` (empty here) would be physical charge, label + `QSEL_LABEL_OFFSET_FC`.
     """
     name = "tid_et2p03_noiseonly_all.csv" if union else "tid_et2p03_noiseonly.csv"
-    return pd.read_csv(ET2P03_DIR / name)
+    return _to_fc(pd.read_csv(ET2P03_DIR / name), "charge_tag_fC")
 
 
 def load_et2p03_configs(union=True):
-    """RAW + DERIVED: the conditions grid, one row per run or voltage-scan sub-run."""
+    """RAW + DERIVED: the conditions grid, one row per run or voltage-scan sub-run.
+    `charge_tag_fC` (the rail scans' fixed charge, label 10 on disk) is returned as physical
+    charge, 11 fC."""
     name = "tid_et2p03_configs_all.csv" if union else "tid_et2p03_configs.csv"
-    return pd.read_csv(ET2P03_DIR / name)
+    return _to_fc(pd.read_csv(ET2P03_DIR / name), "charge_tag_fC")
 
 
 def load_et2p03_tid_blnw():
@@ -959,7 +1072,7 @@ def load_x9_history_folders():
 # same definition as the ET2.03 tables above. Strictly additive: nothing above changed.
 JUL_DIR = DATA / "bench_jul2024"
 JUL_CAMPAIGN = "FNAL bench, July 2024"
-JUL_CHARGES = [5, 6, 8, 15, 22, 27]
+JUL_CHARGES = [6, 7, 9, 16, 23, 28]   # physical charge; QSel labels 5, 6, 8, 15, 22, 27
 JUL_PIXELS = [(0, 0), (0, 14), (3, 0), (3, 14), (12, 0), (12, 14)]
 # Which bench day carried which die. RAW: the chip name is the first token of every
 # scan-directory name and is re-derived from the tables in notebook 05.
@@ -968,11 +1081,14 @@ JUL_DAYS = {
     "2024-07-18": "ET2p03_BARE4", "2024-07-22": "ET2p01_BARE10", "2024-07-29": "ET2p03_BARE9",
     "2024-07-30": "ET2p03_BARE9",
 }
-JUL_QLO, JUL_QHI = 8, 27       # the gain-fit range of notebooks 01 and 02 (both reach 27 fC)
+JUL_QLO, JUL_QHI = 9, 28       # the preamp-gain-fit range of notebooks 01 and 02 (both reach 28 fC);
+                               # physical charge, the same points as the labels 8-27
 
 
 def _jul_day(df):
-    d = df.copy()
+    """Add the `date`/`acq` keys, and convert any charge column from the staged QSel label to the
+    physical charge (+`QSEL_LABEL_OFFSET_FC`)."""
+    d = _to_fc(df.copy(), "charge_fC", "charge_tag_fC")
     d["date"] = d.day.str[:10]
     d["acq"] = d.chip.str.replace("ET2p0", "v2.0", regex=False) + " " + d.date.str[5:]
     return d

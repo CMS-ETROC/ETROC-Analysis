@@ -1,17 +1,17 @@
 n,quantity,value,unit,pixel_rms,label
-1,"Preamp gain (charge-to-threshold), 8–27 fC",9.42 ± 0.89,DAC/fC,3.09,DERIVED
+1,"Preamp gain (charge-to-threshold), 9–28 fC",9.42 ± 0.89,DAC/fC,3.09,DERIVED
 2,the same in volts,3.68 ± 0.35,mV/fC,1.21,DERIVED
-3,Turn-off above baseline at 15 fC,116.0,DAC,37.2,DERIVED from RAW FPGA counters
-4,"TOT at BL+20, 15 fC",49.9,TOT code,2.2,DERIVED
-5,"TOA jitter at BL+20, 15 fC",6.4,ps,3.0,DERIVED — at the quantisation floor
-6,"TOA jitter at BL+20, 5 fC",23.9,ps,13.1,"DERIVED — above the floor, 9/12 pixels"
+3,Turn-off above baseline at 16 fC,116.0,DAC,37.2,DERIVED from RAW FPGA counters
+4,"TOT at BL+20, 16 fC",49.9,TOT code,2.2,DERIVED
+5,"TOA jitter at BL+20, 16 fC",6.4,ps,3.0,DERIVED — at the quantisation floor
+6,"TOA jitter at BL+20, 6 fC",23.9,ps,13.1,"DERIVED — above the floor, 9/12 pixels"
 7,"S-curve width σ (72 curves, shared σ)",0.92 ± 0.05,DAC = 0.359 mV,—,DERIVED
-8,ENC = σ / gain,610,electrons,—,"DERIVED — bare die, no input load"
+8,ENC = σ / (preamp gain),610,electrons,—,"DERIVED — bare die, no input load"
 9,Autocal noise width NW,3.17 ± 0.17,DAC,0.58,RAW (NW_map)
-10,Minimum charge reaching BL+20,4.3 ± 0.4,fC,1.5,"DERIVED, extrapolated"
-11,TOT-to-charge law at BL+20,TOT = 19.3 + 10.7 ln(Q/fC),χ²/ndf 5.6,—,"DERIVED, valid 8–27 fC"
+10,Minimum charge reaching BL+20,5.3 ± 0.4,fC,1.5,"DERIVED, extrapolated"
+11,TOT-to-charge law at BL+20,TOT = 16.6 + 11.4 ln(Q/fC),χ²/ndf 6.1,—,"DERIVED, valid 9–28 fC"
 12,"TDC quantisation floor, LSB/√12",5.37,ps,—,"DERIVED, TOA LSB 18.6 ps"
-13,"Walk with charge, 5→27 fC at BL+20",+493,ps,—,"DERIVED, median over pixels"
-14,Gain change on cooling +12 → −25 °C,-7.7,%,—,DERIVED
-15,"Gain change 0 → 400 MRad at −25 °C, ratio of pooled means",-5.5,%,—,DERIVED — carries no error; the pixel spread swamps the change
-16,"Gain change 0 → 400 MRad at −25 °C, paired per pixel",-6.5 ± 3.2,%,11.0,DERIVED — same 12 pixels at both doses; what notebook 04 compares
+13,"Walk with charge, 6→28 fC at BL+20",+493,ps,—,"DERIVED, median over pixels"
+14,Preamp gain change on cooling +12 → −25 °C,-7.7,%,—,DERIVED
+15,"Preamp gain change 0 → 400 MRad at −25 °C, ratio of pooled means",-5.5,%,—,DERIVED — carries no error; the pixel spread swamps the change
+16,"Preamp gain change 0 → 400 MRad at −25 °C, paired per pixel",-6.5 ± 3.2,%,11.0,DERIVED — same 12 pixels at both doses; what notebook 04 compares

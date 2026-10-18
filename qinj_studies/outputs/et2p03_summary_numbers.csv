@@ -1,20 +1,20 @@
 n,quantity,value,unit,pixel_rms,label
-1,"Preamp gain (charge-to-threshold), 8–22 fC, VA 1.20 V (supply), 0 MRad",8.26 ± 1.19,DAC/fC,2.91,DERIVED
+1,"Preamp gain (charge-to-threshold), 9–23 fC, VA 1.20 V (supply), 0 MRad",8.26 ± 1.19,DAC/fC,2.91,DERIVED
 2,"the same in volts, under the assumed LSB",3.22 ± 0.46,mV/fC,1.14,"DERIVED — LSB assumed, section 13"
 3,"Preamp gain over the analog rail, supply 0.85 → 1.40 V (~0.65 → ~1.20 V at chip), 200 MRad",3.11 → 8.69,DAC/fC,—,DERIVED
-4,"Turn-off above baseline at 15 fC, VA 1.20 V, 0 MRad",100.5,DAC,30.3,"RAW (the search's own converged DAC), referred to the noise-peak baseline"
-5,"TOT at BL+20, 15 fC, VA 1.20 V, 0 MRad",46.0,code = 1.55 ns,2.7,DERIVED
-6,"TOA jitter at BL+20, 15 fC, VA 1.20 V, 0 MRad",8.3  (median 8.4),ps,2.1,DERIVED — near the quantisation floor
-7,"TOA jitter at BL+20, 6 fC, VA 1.20 V, 0 MRad",22.7  (median 15.2),ps,12.4,"DERIVED — above the floor; the mean is pulled by the widest pixel, hence the median"
+4,"Turn-off above baseline at 16 fC, VA 1.20 V, 0 MRad",100.5,DAC,30.3,"RAW (the search's own converged DAC), referred to the noise-peak baseline"
+5,"TOT at BL+20, 16 fC, VA 1.20 V, 0 MRad",46.0,code = 1.55 ns,2.7,DERIVED
+6,"TOA jitter at BL+20, 16 fC, VA 1.20 V, 0 MRad",8.3  (median 8.4),ps,2.1,DERIVED — near the quantisation floor
+7,"TOA jitter at BL+20, 7 fC, VA 1.20 V, 0 MRad",22.7  (median 15.2),ps,12.4,"DERIVED — above the floor; the mean is pulled by the widest pixel, hence the median"
 8,"S-curve width σ (27 curves, shared σ)",1.12 ± 0.10,DAC = 0.438 mV,—,DERIVED
-9,"ENC = σ / gain, VA 1.20 V, 0 MRad",847,electrons,—,"DERIVED — bare die, no input load"
+9,"ENC = σ / (preamp gain), VA 1.20 V, 0 MRad",847,electrons,—,"DERIVED — bare die, no input load"
 10,"Noise-peak FWHM, VA 1.20 V, 0 MRad",2.99 ± 0.45,DAC,1.11,DERIVED; the autocal map gives NW 4.17 DAC
-11,"Minimum charge reaching BL+20, VA 1.20 V, 0 MRad",4.9 ± 0.8,fC,—,"DERIVED, extrapolated"
-12,"TOT-to-charge law at BL+20, VA 1.20 V, 0 MRad",TOT = 9.5 + 13.1 ln(Q/fC),χ²/ndf 1.7,—,"DERIVED, valid 6–22 fC"
+11,"Minimum charge reaching BL+20, VA 1.20 V, 0 MRad",5.9 ± 0.8,fC,—,"DERIVED, extrapolated"
+12,"TOT-to-charge law at BL+20, VA 1.20 V, 0 MRad",TOT = 5.9 + 14.1 ln(Q/fC),χ²/ndf 1.8,—,"DERIVED, valid 7–23 fC"
 13,"TDC quantisation floor, LSB/√12",4.88,ps,—,"DERIVED, TOA LSB 16.9 ps at CAL 185"
-14,"Walk with charge, 6→22 fC at BL+20",+518,ps,—,"DERIVED, median over pixels"
+14,"Walk with charge, 7→23 fC at BL+20",+518,ps,—,"DERIVED, median over pixels"
 15,"Baseline shift, 0 → 400 MRad at VA 1.20 V, BARE9",-65.5,DAC,—,DERIVED — sign opposite to ET2.01; section 15 attributes about half of it to the measured VRef rise
 17,"VRef (internal reference) change, 0 → 400 MRad, BARE9",+40.3 mV (+4.66 %),mV,—,"MEASURED from the campaign VRef log (section 15), constant plate temperature"
 20,"X-ray footprint: baseline shift 0 → 400 MRad, rows 0-4 (outside) vs rows 7-15 (inside)",-37.3 vs -104.2,DAC,—,DERIVED (section 15b) — outside-beam rows match the reference-only prediction -37.1; inside-beam front end -67.1
 18,"Preamp gain change, 0 → 400 MRad, BARE9, reference-corrected",-0.7,%,—,"DERIVED — measured DAC/fC change plus the VRef rise, assuming DAC full scale ∝ VRef"
-16,"Paired gain change, 0 → 400 MRad at VA 1.20 V",-5.4 ± 4.3,%,10.4,"DERIVED — same six pixels, paired ratio"
+16,"Paired preamp gain change, 0 → 400 MRad at VA 1.20 V",-5.4 ± 4.3,%,10.4,"DERIVED — same six pixels, paired ratio"

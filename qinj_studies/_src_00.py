@@ -1,6 +1,20 @@
 # %% [markdown]
 # # The ETROC2 charge-injection archive: what exists, where it lives, and what was monitored while it was taken
 #
+# > **Charge convention, corrected 2026-10-18.** The ETROC2 Reference Manual (rev 0.60, §3.1.4 and
+# > Table 14 row 6, QSel[4:0]; bit position in Table 15) gives the injected charge as
+# > **(QSel + 1) fC**, 1 to 32 fC, accurate to about ±15 %.
+# > Every 2024 campaign in this folder was taken with the original i2c_gui scripts, which name each
+# > point `QInj_<N>` with N the QSel register value, so the physical charge of a `QInj_N` point is
+# > **N + 1 fC**. Until 2026-10-18 these notebooks plotted N as the charge. The loaders in
+# > `qinj_common.py` now add the offset (`QSEL_LABEL_OFFSET_FC = 1`); the staged tables under `data/`
+# > are unchanged and keep the recorded labels. Fit windows and charge thresholds moved by +1 with
+# > the axis, so they select the same data points as before: preamp-gain (charge-to-threshold)
+# > slopes and ENC are unchanged, fit intercepts move by −(slope × 1 fC), the minimum charge reaching
+# > BL+20 (`Q_min`) moves by +1 fC, and the TOT-against-ln Q law, which is not shift-invariant, was
+# > refitted. Comparisons with earlier published numbers convert back to the label axis at the
+# > point of comparison.
+#
 # This notebook is the **inventory** for the rest of the folder. It does not fit anything. It
 # answers four questions, from staged tables and from auxiliary logs that no other notebook here
 # plots:
@@ -26,8 +40,9 @@
 # ## 1. What a charge-injection data set is
 #
 # Every ETROC2 pixel carries a small **injection capacitor at the preamplifier input**. Writing the
-# `QSel` field of the pixel configuration selects an integer charge from **1 to 32 fC**, and each
-# Level-1 accept then delivers exactly that charge step to the front end, with no sensor involved.
+# 5-bit `QSel` field of the pixel configuration selects a charge of **(QSel + 1) fC**, 1 to 32 fC
+# (manual §3.1.4), and each Level-1 accept then delivers that charge step to the front end, with
+# no sensor involved.
 # It is the only measurement in the ETROC programme where **the input charge is a number we set**
 # rather than whatever a sensor happened to produce.
 #
@@ -38,7 +53,7 @@
 # > response and record **TOA, TOT and CAL for every hit at every point.**
 #
 # Both axes have to be swept. Charge alone gives no threshold-edge width and therefore no noise
-# measurement; threshold alone gives no gain, because gain *is* the slope of the discriminator
+# measurement; threshold alone gives no preamp gain, because preamp gain *is* the slope of the discriminator
 # turn-off against charge. The per-point TOA standard deviation against threshold, one curve per
 # charge, is the figure the whole exercise is named after.
 #
@@ -46,12 +61,13 @@
 # per point, named
 #
 # ```
-# <chip>_VRef_SCurve_TDC_Pixel_C<col>_R<row>_QInj_<charge in fC>_Threshold_<dac>
+# <chip>_VRef_SCurve_TDC_Pixel_C<col>_R<row>_QInj_<QSel value N>_Threshold_<dac>
 # ```
 #
 # with sibling `..._BinarySearch_TurnOff_...` directories (the discriminator's own 50 %-efficiency
 # search, which carries a real Level-1-accept denominator) and `..._NoiseOnly_..._quietCB`
-# directories (the same search with no injection).
+# directories (the same search with no injection). For the 2024 campaigns N is the QSel register
+# value and the injected charge is N + 1 fC.
 #
 # **The `_VRef_` token in those names is a trap.** It labels the scan setup — the threshold DAC is
 # the pixel's reference voltage — and it is **not** a record of any VRef *setting*. No data set in
@@ -63,13 +79,17 @@
 # existence, is the **single-point run**: the injector is enabled at one charge, the threshold is
 # parked at one offset above the autocalibrated baseline, and one acquisition is taken. It is the
 # right tool for its job — checking that a module reads out before and after a test beam — and it
-# is useless for calibration, because with one charge there is no gain and with one threshold there
+# is useless for calibration, because with one charge there is no preamp gain and with one threshold there
 # is no edge.
 #
-# Row 17 below is 326 such runs, all at **30 fC** with the threshold at **baseline + 20 DAC**. Row 4
-# is one run at 30 fC recorded with a waveform sampler and no TDC data at all. Row 8 is 524
+# Row 17 below is 326 such runs, all at charge label **30** with the threshold at **baseline + 20 DAC**. Row 4
+# is one run at label 30 recorded with a waveform sampler and no TDC data at all. Row 8 is 524
 # probe-station runs whose charge is not recorded anywhere. None of the three can produce a money
-# plot, and the census says so in the `has_threshold_scan` column rather than in a footnote.
+# plot, and the census says so in the `has_threshold_scan` column rather than in a footnote. (The
+# label 30 of rows 4 and 17 is the recorded `QInj30` label of 2025–2026 software; whether those tools
+# write QSel or the charge is not established here, so it is left as recorded. Row 11, a 2025
+# configuration file rather than data, records the register outright as `30 (qsel 0x1e)`: QSel 30,
+# which is 31 fC by the manual. The census `charges_fC` column keeps every row's recorded label.)
 #
 # ## 2. Where ETROC data has lived
 #
@@ -113,7 +133,7 @@
 # * **RFSel is recorded nowhere.** Not in one of the ~120 000 scan-directory names, not in any
 #   configuration file, not in any acquisition script, on any of the six storage locations the
 #   census carries (the count is printed in cell 5.0). RFSel sets the
-#   preamplifier feedback resistance and therefore gain and TOT directly, so this is the single
+#   preamplifier feedback resistance and therefore preamp gain and TOT directly, so this is the single
 #   largest unquantified systematic in every notebook in this folder. `power_mode` and `gain_mode`
 #   *are* recorded, but only from June 2026 onward and only on `fermilab-etroc5`.
 # * **Two locations were not readable and are therefore not represented.** A colleague's CERN EOS
@@ -226,6 +246,9 @@ print(CEN[["id", "location", "campaign", "date_start", "date_end", "revision", "
 
 # %%
 # 5.1  The charges, thresholds and pixels of every row that carries a real threshold scan.
+#      `charges_fC` is the census text as recorded from directory names and documents: for the
+#      2024 campaigns these are QSel labels (physical charge = label + 1 fC); the later rows mix
+#      software generations and are left as recorded.
 scan = CEN[CEN.has_threshold_scan.str.startswith("yes")]
 print("%d of %d rows carry a charge x threshold scan.\n" % (len(scan), len(CEN)))
 print(scan[["id", "campaign", "revision", "device", "charges_fC", "dac_range", "pixels",
@@ -1501,7 +1524,7 @@ print("  money-plot run of the day before the register dump.)")
 # **ET2.01** board in one of the SEU trees is *not* evidence that ET2.01 used its internal
 # reference. The register dump proves the generator was **on**, not that it was **used**.
 #
-Beyond section 7.6 the only numerical VRef data in this census is in two places, both in SEU
+# Beyond section 7.6 the only numerical VRef data in this census is in two places, both in SEU
 # trees and both still unopened: a rendered `VRef.pdf` of a measured plot, and a per-reading `vref`
 # column in an ADC history table (rows 26 and 28). And the one campaign that logged VRef *through
 # an irradiation* is the ET2.03 dose series, whose log is the missing folder of section 7.7 — so

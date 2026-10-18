@@ -4,7 +4,7 @@
 # This notebook computes nothing from raw data. It reads the tables that notebooks 01, 02 and 03
 # wrote into `outputs/` and puts their results side by side, so that every number on both sides of
 # every comparison came out of the **same** functions in `qinj_common.py` — the same turn-off
-# estimator, the same weighted gain fit, the same shared-σ S-curve fit, the same TOT log law, the
+# estimator, the same weighted preamp gain fit, the same shared-σ S-curve fit, the same TOT log law, the
 # same quantisation floor.
 #
 # **Run 01, 02 and 03 first.** The next cell stops with a clear message if any of their outputs is
@@ -23,7 +23,7 @@
 # | temperature | +12 and −25 °C | −25, 0, +22 °C | −23.2 to −23.9 °C, not scanned |
 # | supply rails (POWER-SUPPLY settings) | not recorded | not recorded | **VA 0.85–1.40 V scanned** (~0.65–1.20 V at chip), VD 1.20 V (~1.15 V at chip) |
 # | pixels | 12 | 9 | 6 |
-# | charges | 5, 6, 8, 15, 22, 27 fC | 5, 6, 8, 15, 22, 27 fC | 6, 8, 10, 15, 22 fC |
+# | charges (QSel + 1, see notebook 00) | 6, 7, 9, 16, 23, 28 fC | 6, 7, 9, 16, 23, 28 fC | 7, 9, 11, 16, 23 fC |
 #
 # **Three ET2.03 dies, and only one of them is used here.** The August-2024 campaign used
 # three `ET2p03_*` bare dies, and they are easy to confuse:
@@ -72,13 +72,13 @@
 # therefore taken at VA 1.40 V (supply, nominal at the chip) wherever a 200 or 400 MRad value is
 # acceptable, with the column saying which setting each came from.
 #
-# What section 3 then shows on ET2.03 is that **the DAC-referred gain and the DAC-referred
-# baseline both move strongly with VA** — gain by about ×2.8 over 0.85 → 1.40 V, baseline by about
+# What section 3 then shows on ET2.03 is that **the DAC-referred preamp gain and the DAC-referred
+# baseline both move strongly with VA** — preamp gain by about ×2.8 over 0.85 → 1.40 V, baseline by about
 # 430 DAC/V. It does **not** show that the DAC *scale* moves. Two mechanisms produce that
 # signature and this data cannot separate them: the internal reference is powered from VA, so the
 # millivolts per DAC code may track VA; and the preamplifier bias currents are set from VA, so the
-# front-end gain may genuinely change. A ×2.8 change from the reference alone would need the
-# reference itself to move by ×2.8, which is not plausible, so a real front-end gain change is at
+# preamp gain may genuinely change. A ×2.8 change from the reference alone would need the
+# reference itself to move by ×2.8, which is not plausible, so a real preamp-gain change is at
 # least as likely a reading and probably the larger part. Separating them needs a threshold-DAC
 # transfer-function measurement against an external voltmeter, which is open question 1.
 #
@@ -362,9 +362,9 @@ plt.show()
 #    temperature cannot account for a 111 DAC difference between the two shifts.
 # 3. **Chip to chip.** Two dies, one of each revision. Notebook 03's three-rail comparison of BARE7's
 #    un-irradiated response against BARE9's (section 14, isolated numbers only) shows the chip-to-chip
-#    spread in absolute gain is not small; nothing tests the *sign* of the baseline shift on a second
+#    spread in absolute preamp gain is not small; nothing tests the *sign* of the baseline shift on a second
 #    die, because BARE7's dose is unknown.
-# 4. **Dose rate, facility and annealing history**, none of which is recorded on either campaign.
+# 4. **Dose rate, facility and cooling-down history**, none of which is recorded on either campaign.
 #
 # The one statement that survives all four is the operational one, and both campaigns reach it
 # independently: **referred to each condition's own baseline the turn-off curves coincide**, so
@@ -372,7 +372,7 @@ plt.show()
 # baseline moved. That is section 4.
 
 # %% [markdown]
-# ### 2b. The reference, measured: what the VRef log does to the ET2.03 baseline and gain
+# ### 2b. The reference, measured: what the VRef log does to the ET2.03 baseline and preamp gain
 #
 # Until the campaign's monitoring logs were located this subsection was an estimate under an
 # assumption. It is now built on a **measurement**: notebook 03 section 15 reads the VRef pin of
@@ -380,12 +380,12 @@ plt.show()
 # +40.3 mV (+4.66 %) after 400 MRad, at a plate temperature constant to better than 1 °C. One
 # assumption remains, and it is stated on every number: **the threshold DAC full scale is
 # proportional to the VRef pin voltage**, so a rise of $f$ in the reference lowers the code of an
-# unchanged analog level by the factor $1/(1+f)$ and makes a gain measured in DAC per fC read low by
+# unchanged analog level by the factor $1/(1+f)$ and makes a preamp gain measured in DAC per fC read low by
 # $f$. The DAC transfer function itself has never been measured (open question 1).
 #
 # On the **ET2.01** side the reference was external and fixed, so its +46 DAC baseline rise at −25 °C
 # is front-end drift alone. The cell below therefore compares *front end against front end* after
-# the ET2.03 number has had its reference part removed, and *intrinsic gain against intrinsic gain*.
+# the ET2.03 number has had its reference part removed, and *intrinsic preamp gain against intrinsic preamp gain*.
 # The temperature cross-check from `BARE4` (the never-irradiated sister die whose VRef was logged
 # against chamber temperature, notebook 00 section 7.6) is kept: it bounds how much of the ET2.03
 # VRef change could be temperature rather than dose.
@@ -416,7 +416,7 @@ print("  the same on the 256-pixel autocalibration maps      : measured %+.1f, r
 print("\n  So even after the measured reference rise is removed, the two front ends drift in OPPOSITE")
 print("  directions with dose (%+.0f DAC on the ET2.01 die, %+.0f DAC on the ET2.03 die). The sign" % (s01, six400.front_end_dac))
 print("  difference is not the reference. It remains a one-die-per-revision observation.")
-# gain
+# preamp gain
 g03m, g03e = float(pr03b.gain_change_pct), float(100 * pr03b.gain_ratio_sem)
 g01m, g01e = float(pr01.gain_change_pct), float(100 * pr01.gain_ratio_sem)
 print("\npreamp gain, 0 -> 400 MRad, paired per pixel:")
@@ -458,7 +458,7 @@ print("  256-pixel maps, rows inside each spot: ET2.01 %+.1f DAC at 200 MRad (40
          FR03[FR03.row >= 7].shift_0_200_dac.mean() - FR03.reference_only_prediction_0_200.iloc[0], FR03[FR03.row >= 7].shift_0_400_dac.mean() - FR03.reference_only_prediction_0_400.iloc[0]))
 print("  Front end against front end on the irradiated rows: ET2.01 UP, ET2.03 DOWN. The sign difference is real and")
 print("  larger than the mixed-pixel numbers suggested; it is still one die per revision.")
-print("  Gain inside each spot: ET2.01 %+.1f +- %.1f %% (%d px); ET2.03 %+.1f +- %.1f %% measured, %+.1f %% reference-corrected (%d px, too few)"
+print("  Preamp gain inside each spot: ET2.01 %+.1f +- %.1f %% (%d px); ET2.03 %+.1f +- %.1f %% measured, %+.1f %% reference-corrected (%d px, too few)"
       % (in01.gain_change_pct, in01.gain_change_sem_pct, in01.n_pixels, in03.gain_change_pct, in03.gain_change_sem_pct, in03.gain_intrinsic_pct, in03.n_pixels))
 RESULTS_2B_FOOTPRINT = dict(et2p01_inside_bl_0_400=float(in01.bl_shift_dac), et2p01_outside_bl_0_400=float(out01.bl_shift_dac),
                             et2p03_inside_bl_0_400=float(in03.bl_shift_dac), et2p03_inside_front_end_0_400=float(in03.front_end_dac),
@@ -523,11 +523,11 @@ plt.show()
 # −67 DAC (ET2.03, 400 MRad) — opposite signs, one die each.
 
 # %% [markdown]
-# ## 3. Gain against dose, and the rail axis that only ET2.03 has
+# ## 3. Preamp gain against dose, and the rail axis that only ET2.03 has
 #
-# Gain is the slope of turn-off against injected charge, `qinj_common.gain_fit` on all three data
-# sets, y-error 0.5 DAC, fitted from 8 fC upward on all three (to 27 fC on the January sets, to
-# 22 fC on the August one, which injected nothing higher).
+# Preamp gain is the slope of turn-off against injected charge, `qinj_common.gain_fit` on all three data
+# sets, y-error 0.5 DAC, fitted from 9 fC upward on all three (to 28 fC on the January sets, to
+# 23 fC on the August one, which injected nothing higher).
 
 # %%
 g01 = G01.set_index(["dose", "temp"])
@@ -577,12 +577,12 @@ print("   no error — the two differ by %.1f points, which is the pairing, not 
       % abs(f01 - pooled01))
 print("  ET2.03 200 -> 400 MRad steps, all four rails: %s %%"
       % [round(v, 1) for v in P03[(P03.dose_from == 200)].gain_change_pct])
-print("\nThe two revisions lose the same few per cent of gain over 400 MRad, while their baselines")
+print("\nThe two revisions lose the same few per cent of preamp gain over 400 MRad, while their baselines")
 print("moved in opposite directions by comparable amounts. The dose effect on the charge response")
 print("and the dose effect on the threshold reference are therefore not the same effect.")
 print("\nThe ET2.03 analog-rail axis, which neither January campaign has:")
 r200 = g03[g03.dose == 200].sort_values("va")
-print("  VA %s V -> gain %s DAC/fC (a factor %.2f over the range)"
+print("  VA %s V -> preamp gain %s DAC/fC (a factor %.2f over the range)"
       % ([f"{v:.2f}" for v in r200.va], [round(v, 2) for v in r200.gain_dac_per_fc],
          r200.gain_dac_per_fc.iloc[-1] / r200.gain_dac_per_fc.iloc[0]))
 print("  and the same 400 MRad dose costs %+.1f %% at VA 0.85 V against %+.1f %% at VA 1.20 V"
@@ -596,7 +596,7 @@ for ds, sub in GCMP.groupby("data_set"):
     ax.errorbar(sub.dose, sub.gain_dac_per_fc, yerr=sub.gain_sem, fmt="-", marker=SMK[ds], ms=12,
                 lw=2.6, color=SCOL[ds], capsize=6, label=DIE[ds])
 ax.set_xlabel("total ionising dose  [MRad]")
-ax.set_ylabel("gain  [DAC LSB / fC]")
+ax.set_ylabel("preamp gain  [DAC LSB / fC]")
 ax.set_ylim(0, 12)
 ax.legend(fontsize=12)
 ax.text(0.03, 0.06, "DAC units — the revisions' DAC scales\nare not demonstrably the same",
@@ -638,14 +638,14 @@ ax.axhspan(gh.loc[HYB_PRIMARY, "gain_dac_per_fc"] - gh.loc[HYB_PRIMARY, "gain_se
 ax.text(0.86, gh.loc[HYB_PRIMARY, "gain_dac_per_fc"] + 0.35, "ET2.01 + LGAD, 0 °C",
         fontsize=11, color=SCOL[K02])
 ax.set_xlabel("ET2.03 analog supply VA  [V]")
-ax.set_ylabel("gain  [DAC LSB / fC]")
+ax.set_ylabel("preamp gain  [DAC LSB / fC]")
 ax.set_ylim(0, 12)
 ax.legend(fontsize=11, loc="lower right")
 ax.set_title("where the January chips sit on the August rail axis", loc="left", fontsize=14)
 fig.tight_layout()
 Q.fig_header(fig, "Preamp gain against dose, and the analog-rail axis",
              tag="ET2p01_W36_6, ET2p01_Bar4 + LGAD, ET2p03_BARE9; "
-                 "all fitted by the same weighted least squares from 8 fC upward",
+                 "all fitted by the same weighted least squares from 9 fC upward",
              scale=0.62, campaign=Q.XCAMP_CAMPAIGN)
 Q.save_fig(fig, "xcamp_fig2_gain")
 plt.show()
@@ -656,7 +656,7 @@ plt.show()
 # rails were not recorded, their DAC scale is set by a different reference, and their pixel sets
 # and temperatures differ. What it does show is that **the entire spread between the three data
 # sets in DAC per fC — a factor of about 1.7 — is smaller than the range one chip covers when its
-# own analog supply is moved from 0.85 to 1.40 V.** Any comparison of absolute gain between
+# own analog supply is moved from 0.85 to 1.40 V.** Any comparison of absolute preamp gain between
 # campaigns that do not record their rails is therefore weakly constrained at best.
 #
 # ## 4. Turn-off referred to baseline, against charge
@@ -758,10 +758,10 @@ for c in common:
           % (c, t01.loc[c, "tot_code_mean"], t01.loc[c, "tot_ns_mean"],
              th.loc[c, "tot_code_mean"], th.loc[c, "tot_ns_mean"],
              t03.loc[c, "tot_code_mean"], t03.loc[c, "tot_ns_mean"]))
-print("\nIn nanoseconds the two bare dies agree to within about %.0f %% at 15 fC, while the hybrid"
-      % abs(100 * (t03.loc[15, "tot_ns_mean"] / t01.loc[15, "tot_ns_mean"] - 1)))
+print("\nIn nanoseconds the two bare dies agree to within about %.0f %% at 16 fC, while the hybrid"
+      % abs(100 * (t03.loc[16, "tot_ns_mean"] / t01.loc[16, "tot_ns_mean"] - 1)))
 print("sits %.1f times higher. TOT in *codes* is not comparable across data sets at all, because"
-      % (th.loc[15, "tot_code_mean"] / t01.loc[15, "tot_code_mean"]))
+      % (th.loc[16, "tot_code_mean"] / t01.loc[16, "tot_code_mean"]))
 print("one code is 3.125 ns / CAL and CAL differs: %.0f, %.0f and %.0f on the three."
       % (B01["cal_median"], CAL_HYB, B03["cal_median"]))
 
@@ -789,21 +789,21 @@ ax.set_title("in nanoseconds — the two bare dies nearly coincide", loc="left",
 
 ax = axs[2]
 labels = ["ET2.01\nbare", "ET2.01\n+ LGAD", "ET2.03\nbare"]
-vals = [t01.loc[15, "tot_ns_mean"], th.loc[15, "tot_ns_mean"], t03.loc[15, "tot_ns_mean"]]
-errs = [t01.loc[15, "tot_code_pixel_rms"] * t01.loc[15, "tot_ns_mean"] / t01.loc[15, "tot_code_mean"],
-        th.loc[15, "tot_code_pixel_rms"] * th.loc[15, "tot_ns_mean"] / th.loc[15, "tot_code_mean"],
-        t03.loc[15, "tot_code_pixel_rms"] * t03.loc[15, "tot_ns_mean"] / t03.loc[15, "tot_code_mean"]]
+vals = [t01.loc[16, "tot_ns_mean"], th.loc[16, "tot_ns_mean"], t03.loc[16, "tot_ns_mean"]]
+errs = [t01.loc[16, "tot_code_pixel_rms"] * t01.loc[16, "tot_ns_mean"] / t01.loc[16, "tot_code_mean"],
+        th.loc[16, "tot_code_pixel_rms"] * th.loc[16, "tot_ns_mean"] / th.loc[16, "tot_code_mean"],
+        t03.loc[16, "tot_code_pixel_rms"] * t03.loc[16, "tot_ns_mean"] / t03.loc[16, "tot_code_mean"]]
 ax.bar(range(3), vals, yerr=errs, capsize=8, color=[SCOL[K01], SCOL[K02], SCOL[K03]],
        edgecolor="black", lw=1.4)
 for i, v in enumerate(vals):
     ax.text(i, v + 0.12, f"{v:.2f} ns", ha="center", fontsize=15)
 ax.set_xticks(range(3))
 ax.set_xticklabels(labels, fontsize=13)
-ax.set_ylabel("TOT at BL+20, 15 fC  [ns]")
+ax.set_ylabel("TOT at BL+20, 16 fC  [ns]")
 ax.set_ylim(0, 4.2)
 ax.text(0.03, 0.93, "RFSel is not recorded on any of the three,\nand it is what fixes TOT",
         transform=ax.transAxes, fontsize=12)
-ax.set_title("15 fC at the operating point", loc="left", fontsize=15)
+ax.set_title("16 fC at the operating point", loc="left", fontsize=15)
 fig.tight_layout()
 Q.fig_header(fig, "TOT against charge at BL+20, across three data sets",
              tag="ET2p01_W36_6, ET2p01_Bar4 + LGAD, ET2p03_BARE9; error bar = pixel RMS; "
@@ -817,9 +817,9 @@ plt.show()
 #
 # The same warning as in every notebook of this folder, and it applies to all three data sets at
 # once: **the injection is synchronous with the clock and no sensor is generating the signal**, so
-# above about 8 fC the measured jitter closes on the TDC quantisation floor `LSB/√12` and is a
+# above about 9 fC the measured jitter closes on the TDC quantisation floor `LSB/√12` and is a
 # limit rather than a resolution. "Closes on" rather than "sits at": the `over_floor` column below
-# gives the ratio point by point, and at 15 fC it is 1.18, 2.02 and 1.69 on the three data sets —
+# gives the ratio point by point, and at 16 fC it is 1.18, 2.02 and 1.69 on the three data sets —
 # only the bare ET2.01 is really at its floor. None of these numbers may be compared with a beam per-board time
 # resolution. The physics is in the low-charge rise.
 #
@@ -853,7 +853,7 @@ JCMP = pd.DataFrame([
 JCMP.to_csv(Q.OUTDIR / "xcamp_jitter_at_bl20.csv", index=False)
 print()
 print(JCMP.round(2).to_string(index=False))
-print("\nNotebook 02 exports the hybrid's jitter at 8 and 15 fC only (through bare_vs_hybrid.csv),")
+print("\nNotebook 02 exports the hybrid's jitter at 9 and 16 fC only (through bare_vs_hybrid.csv),")
 print("so the hybrid contributes two points here rather than a curve. Notebook 03's six-pixel")
 print("means are pulled around by single pixels at low charge; its medians are")
 print("  %s ps" % {int(c): round(v, 1) for c, v in B03["jitter_off20_median_by_charge"].items()})
@@ -880,7 +880,7 @@ ax.set_ylim(3, 200)
 ax.set_xlabel("injected charge  [fC]")
 ax.set_ylabel("TOA jitter at BL+20  [ps]")
 ax.legend(fontsize=11)
-ax.set_title("all three approach their floors above ~10 fC", loc="left", fontsize=14)
+ax.set_title("all three approach their floors above ~9 fC", loc="left", fontsize=14)
 
 ax = axs[1]
 for ds, sub in JCMP.groupby("data_set"):
@@ -888,7 +888,7 @@ for ds, sub in JCMP.groupby("data_set"):
     ax.plot(sub.charge_fC, sub.over_floor, "-", marker=SMK[ds], ms=12, lw=2.6, color=SCOL[ds],
             label=DIE[ds])
 ax.axhline(1.0, color="black", lw=2)
-ax.text(5.2, 1.12, "the quantisation floor", fontsize=12)
+ax.text(0.02, 1.12, "the quantisation floor", fontsize=12, transform=ax.get_yaxis_transform())   # x in axes fraction, y in data
 Q.charge_axis(ax, charges=sorted(int(c) for c in set(list(j01.index) + list(j03.index))))
 ax.set_yscale("log")
 ax.set_xlabel("injected charge  [fC]")
@@ -913,7 +913,7 @@ plt.show()
 # * **NW**, the autocalibration noise width, is an *accumulator* measurement made by the chip
 #   itself, also in DAC. It is not the same definition as σ and the ratio between them is a data
 #   point, not a conversion.
-# * **ENC = σ / gain**, in electrons, is the only one of the three that is **free of the DAC
+# * **ENC = σ / (preamp gain)**, in electrons, is the only one of the three that is **free of the DAC
 #   scale**, because the scale appears in both numerator and denominator. It is therefore the
 #   right quantity to compare across chip revisions, and it is what this section leads with.
 #
@@ -929,9 +929,9 @@ s03 = S03[S03.config == CFG03].iloc[0]
 NOISE = pd.DataFrame([
     dict(quantity="S-curve width σ", unit="DAC", **{K01: B01["sigma_dac"], K02: sh.sigma_dac, K03: s03.sigma_dac},
          scale_free="no — DAC units"),
-    dict(quantity="gain", unit="DAC/fC", **{K01: B01["gain_dac_per_fc"], K02: sh.gain_dac_per_fc,
+    dict(quantity="preamp gain", unit="DAC/fC", **{K01: B01["gain_dac_per_fc"], K02: sh.gain_dac_per_fc,
                                             K03: s03.gain_dac_per_fc}, scale_free="no — DAC units"),
-    dict(quantity="ENC = σ / gain", unit="electrons", **{K01: B01["enc_e"], K02: sh.ENC_e, K03: s03.ENC_e},
+    dict(quantity="ENC = σ / (preamp gain)", unit="electrons", **{K01: B01["enc_e"], K02: sh.ENC_e, K03: s03.ENC_e},
          scale_free="YES — the DAC scale cancels"),
     dict(quantity="autocalibration NW (map)", unit="DAC",
          **{K01: B01["nw_dac"], K02: sh.NW_map, K03: B03["nw_map_dac"]}, scale_free="no — DAC units"),
@@ -947,7 +947,7 @@ print("\nENC ratios:  ET2.01+LGAD / ET2.01 bare  %.2f      ET2.03 bare / ET2.01 
       % (sh.ENC_e / B01["enc_e"], s03.ENC_e / B01["enc_e"]))
 print("sigma ratios: ET2.01+LGAD / ET2.01 bare  %.2f      ET2.03 bare / ET2.01 bare  %.2f"
       % (sh.sigma_dac / B01["sigma_dac"], s03.sigma_dac / B01["sigma_dac"]))
-print("gain ratios:  ET2.01+LGAD / ET2.01 bare  %.2f      ET2.03 bare / ET2.01 bare  %.2f"
+print("preamp gain ratios:  ET2.01+LGAD / ET2.01 bare  %.2f      ET2.03 bare / ET2.01 bare  %.2f"
       % (sh.gain_dac_per_fc / B01["gain_dac_per_fc"], s03.gain_dac_per_fc / B01["gain_dac_per_fc"]))
 enc03 = {int(k): round(v) for k, v in B03["enc_by_dose_va120"].items()}
 enc01 = dict(zip(S01[S01.temp == -25].dose.astype(int), S01[S01.temp == -25].enc.round(0)))
@@ -977,7 +977,7 @@ def three_bars(ax, vals, title, ylabel, fmt="%.2f", extra=None):
 three_bars(axs[0], [B01["sigma_dac"], sh.sigma_dac, s03.sigma_dac],
            "S-curve width $\\sigma$", "$\\sigma$  [DAC LSB]",
            extra="DAC units — not scale-free\nacross revisions")
-three_bars(axs[1], [B01["enc_e"], sh.ENC_e, s03.ENC_e], "ENC = $\\sigma$ / gain",
+three_bars(axs[1], [B01["enc_e"], sh.ENC_e, s03.ENC_e], "ENC = $\\sigma$ / (preamp gain)",
            "ENC  [electrons]", fmt="%.0f", extra="scale-free: the DAC scale\ncancels in the ratio")
 ax = axs[2]
 for ds, dd, vv in [(K01, sorted(enc01), [enc01[d] for d in sorted(enc01)]),
@@ -1011,15 +1011,15 @@ DIFFS = pd.DataFrame([
          et2p03_bare="internal generator, powered from VA; LOGGED through the irradiation (+4.7 % over 400 MRad)",
          why_it_matters="sets the DAC-to-mV scale; the ET2.03 reference was logged (notebook 03 §15), the transfer function was not, so absolute DAC comparisons remain unsafe"),
     dict(axis="die", et2p01_bare="W36_6", hybrid="Bar4", et2p03_bare="BARE9 (0/200/400 MRad); BARE7 quarantined (dose unknown)",
-         why_it_matters="notebook 03 measures a large gain difference between two ET2.03 dies at 0 MRad; no second die of either revision has a usable dose step, so every dose sign is a one-die statement"),
+         why_it_matters="notebook 03 measures a large preamp gain difference between two ET2.03 dies at 0 MRad; no second die of either revision has a usable dose step, so every dose sign is a one-die statement"),
     dict(axis="sensor", et2p01_bare="none", hybrid="LGAD, HV 210 V", et2p03_bare="none",
          why_it_matters="the hybrid's input capacitance is the point of notebook 02 and a confound everywhere else"),
     dict(axis="temperature", et2p01_bare="+12 °C (sweep), −25 °C (turn-off)", hybrid="0 °C",
          et2p03_bare="−23.6 °C, not scanned",
-         why_it_matters="the two January sets disagree on the SIGN of the gain temperature coefficient; notebook 02 shows the hybrid series is internally consistent (untagged and tagged 0 C configs agree to 0.4 %) while the bare -25 C point is a different scan type, so the weight is on the hybrid; August cannot arbitrate"),
+         why_it_matters="the two January sets disagree on the SIGN of the preamp gain temperature coefficient; notebook 02 shows the hybrid series is internally consistent (untagged and tagged 0 C configs agree to 0.4 %) while the bare -25 C point is a different scan type, so the weight is on the hybrid; August cannot arbitrate"),
     dict(axis="analog rail VA", et2p01_bare="not recorded", hybrid="not recorded",
          et2p03_bare="0.85 / 1.00 / 1.20 / 1.40 V",
-         why_it_matters="on ET2.03 the rail moves gain by ~2.8x — larger than every inter-campaign difference here"),
+         why_it_matters="on ET2.03 the rail moves preamp gain by ~2.8x — larger than every inter-campaign difference here"),
     dict(axis="digital rail VD", et2p01_bare="not recorded", hybrid="not recorded",
          et2p03_bare="1.20 V for every threshold scan; 0.90–1.45 V in the rail grid",
          why_it_matters="below 1.00 V the August chip produces no hits at all"),
@@ -1027,16 +1027,16 @@ DIFFS = pd.DataFrame([
          et2p03_bare="not recorded",
          why_it_matters="notebook 02 shows the tag does not correspond to a repeatable supply current"),
     dict(axis="RFSel", et2p01_bare="not recorded", hybrid="not recorded", et2p03_bare="not recorded",
-         why_it_matters="sets the feedback resistance and therefore gain AND TOT — the largest unquantified systematic in all three"),
+         why_it_matters="sets the feedback resistance and therefore preamp gain AND TOT — the largest unquantified systematic in all three"),
     dict(axis="pixels", et2p01_bare="12: rows 0,1,3,12 × cols 2,8,14", hybrid="9: rows 2,8,14 × cols 2,8,14",
          et2p03_bare="6: rows 0,3,12 × cols 0,14",
          why_it_matters="no pixel is common to all three; every comparison is set-to-set, never pixel-to-pixel"),
-    dict(axis="charges", et2p01_bare="5, 6, 8, 15, 22, 27 fC", hybrid="5, 6, 8, 15, 22, 27 fC",
-         et2p03_bare="6, 8, 10, 15, 22 fC",
-         why_it_matters="gain fits run 8–27 fC on the January sets and 8–22 fC on the August one"),
+    dict(axis="charges", et2p01_bare="6, 7, 9, 16, 23, 28 fC", hybrid="6, 7, 9, 16, 23, 28 fC",
+         et2p03_bare="7, 9, 11, 16, 23 fC",
+         why_it_matters="preamp gain fits run 9–28 fC on the January sets and 9–23 fC on the August one"),
     dict(axis="dates", et2p01_bare="2024-01-11 to 01-19", hybrid="2024-01-11 to 01-19",
          et2p03_bare="2024-08-03 to 08-21",
-         why_it_matters="seven months and a different facility; dose rate and annealing history are unrecorded on both"),
+         why_it_matters="seven months and a different facility; dose rate and cooling-down history are unrecorded on both"),
     dict(axis="turn-off estimator", et2p01_bare="interpolated 50 % of the trigger bit",
          hybrid="interpolated 50 % of the trigger bit",
          et2p03_bare="the search's own converged DAC — its binary search resolves a different feature",
@@ -1059,26 +1059,26 @@ for _, r in DIFFS.iterrows():
 OPEN = pd.DataFrame([
     dict(rank=1, question="What is the threshold-DAC LSB, in millivolts, on each revision — and on ET2.03 how does it move with VA?",
          settled_by="A DAC transfer-function measurement: sweep the threshold DAC against an external voltmeter on one pixel, at VA 0.85/1.00/1.20/1.40 V, on an ET2.01 (or 2.02) board and an ET2.03 board.",
-         what_it_removes="Everything in this notebook quoted in DAC becomes comparable across revisions: σ, NW, baseline shifts, gain in mV/fC. It is the single largest blocker."),
-    dict(rank=2, question="What was RFSel on each of the three data sets, and how much does it move gain and TOT?",
+         what_it_removes="Everything in this notebook quoted in DAC becomes comparable across revisions: σ, NW, baseline shifts, preamp gain in mV/fC. It is the single largest blocker."),
+    dict(rank=2, question="What was RFSel on each of the three data sets, and how much does it move preamp gain and TOT?",
          settled_by="Read RFSel back and scan it at fixed charge, recording TOT and turn-off at each setting.",
-         what_it_removes="The TOT comparison of section 5 and the gain comparison of section 3, both of which are currently upper bounds on real differences."),
+         what_it_removes="The TOT comparison of section 5 and the preamp gain comparison of section 3, both of which are currently upper bounds on real differences."),
     dict(rank=3, question="Does the baseline-versus-dose sign flip follow the reference, the revision or the die?",
          settled_by="Two dies of the same revision through the same dose steps, with the reference switchable between internal and external on the same board.",
          what_it_removes="The four-way confound of section 2. This is the one measurement that would turn the folder's most striking observation into a result."),
     dict(rank=4, question="What is the temperature coefficient of preamp gain, and what is its sign? (notebook 02 argues the hybrid's +24 % on cooling is probably real and the bare die's -7.7 % is a scan-type artefact; unproven)",
          settled_by="One chip, one pixel set, a temperature scan from −25 to +25 °C at a fixed rail and a fixed bias, with the on-chip VTemp actually read out.",
          what_it_removes="The open disagreement between notebooks 01 and 02, which the August campaign cannot arbitrate because it did not scan temperature."),
-    dict(rank=5, question="How much of the analog-rail dependence of gain is the front end and how much is the reference?",
+    dict(rank=5, question="How much of the analog-rail dependence of preamp gain is the front end and how much is the reference?",
          settled_by="The rail scan of notebook 03 repeated with an external reference, so that the DAC scale is fixed while VA moves.",
          what_it_removes="The ambiguity in section 13 of notebook 03, and with it the interpretation of the whole VA axis."),
-    dict(rank=6, question="Is the chip-to-chip spread really ~20 % in gain, and how many dies does it take to know?",
+    dict(rank=6, question="Is the chip-to-chip spread really ~20 % in preamp gain, and how many dies does it take to know?",
          settled_by="The same six-pixel, five-charge scan on five or more dies of one revision at one condition.",
          what_it_removes="The die confound in every cross-campaign comparison here, currently bounded only by BARE7's un-irradiated numbers against BARE9's."),
-    dict(rank=7, question="Does the ~5 % gain loss per 400 MRad hold below 8 fC, where the operating point actually lives?",
-         settled_by="Charges of 2–8 fC in 1 fC steps, which needs a threshold scan fine enough to resolve turn-offs 10 DAC apart.",
-         what_it_removes="The extrapolation in every `Q_min` number in this folder; no campaign has injected below 5 fC."),
-    dict(rank=8, question="Does the sensor really cost gain without widening the threshold edge?",
+    dict(rank=7, question="Does the ~5 % preamp gain loss per 400 MRad hold below 9 fC, where the operating point actually lives?",
+         settled_by="Charges of 2–9 fC in 1 fC steps, which needs a threshold scan fine enough to resolve turn-offs 10 DAC apart.",
+         what_it_removes="The extrapolation in every `Q_min` number in this folder; no campaign has injected below 6 fC."),
+    dict(rank=8, question="Does the sensor really cost preamp gain without widening the threshold edge?",
          settled_by="A bare-and-bonded pair from the same wafer, same pixels, same rails, same temperature — the comparison notebook 02 could only approximate.",
          what_it_removes="The chip, temperature and pixel-set confounds on notebook 02's headline result."),
 ])
@@ -1123,29 +1123,29 @@ SUM = pd.DataFrame([
          et2p03_bare=f"{s03.gain_dac_per_fc:.2f} ± {G03[G03.config == CFG03].gain_sem.iloc[0]:.2f}",
          et2p03_nominal_rail=f"{gn.gain_dac_per_fc:.2f} ± {gn.gain_sem:.2f}",
          comparable="NO — DAC scale differs between revisions"),
-    dict(n=2, quantity="Gain change, 0 → 400 MRad (paired per pixel)", unit="%",
+    dict(n=2, quantity="Preamp gain change, 0 → 400 MRad (paired per pixel)", unit="%",
          et2p01_bare=f"{f01:+.1f} ± {f01e:.1f} ({n01p} px)", hybrid="no dose series",
          et2p03_bare=f"{f03:+.1f} ± {f03e:.1f} ({n03p} px)",
          comparable="YES — a fractional change, same estimator on both"),
     dict(n=3, quantity="Baseline shift, 0 → 400 MRad", unit="DAC",
          et2p01_bare=f"{d01:+.1f} at −25 °C", hybrid="no dose series",
          et2p03_bare=f"{d03:+.1f} at VA 1.20 V", comparable="sign yes, magnitude no"),
-    dict(n=4, quantity="Turn-off above baseline at 15 fC", unit="DAC",
-         et2p01_bare=f"{o01.loc[15, 'mean']:.1f}", hybrid=f"{oh.loc[15, 'mean']:.1f}",
-         et2p03_bare=f"{o03.loc[15, 'mean']:.1f}", et2p03_nominal_rail=f"{on[15]:.1f}",
+    dict(n=4, quantity="Turn-off above baseline at 16 fC", unit="DAC",
+         et2p01_bare=f"{o01.loc[16, 'mean']:.1f}", hybrid=f"{oh.loc[16, 'mean']:.1f}",
+         et2p03_bare=f"{o03.loc[16, 'mean']:.1f}", et2p03_nominal_rail=f"{on[16]:.1f}",
          comparable="offset cancels, scale does not"),
-    dict(n=5, quantity="TOT at BL+20, 15 fC", unit="ns",
-         et2p01_bare=f"{t01.loc[15, 'tot_ns_mean']:.2f}", hybrid=f"{th.loc[15, 'tot_ns_mean']:.2f}",
-         et2p03_bare=f"{t03.loc[15, 'tot_ns_mean']:.2f}",
-         et2p03_nominal_rail=f"{float(tn.loc[15, 'tot_ns_mean']):.2f}",
+    dict(n=5, quantity="TOT at BL+20, 16 fC", unit="ns",
+         et2p01_bare=f"{t01.loc[16, 'tot_ns_mean']:.2f}", hybrid=f"{th.loc[16, 'tot_ns_mean']:.2f}",
+         et2p03_bare=f"{t03.loc[16, 'tot_ns_mean']:.2f}",
+         et2p03_nominal_rail=f"{float(tn.loc[16, 'tot_ns_mean']):.2f}",
          comparable="YES in ns — but RFSel unrecorded on all three"),
-    dict(n=6, quantity="TOA jitter at BL+20, 15 fC", unit="ps",
-         et2p01_bare=f"{j01.loc[15, 'mean']:.1f}", hybrid=f"{float(jh.loc[15, 'hybrid']):.1f}",
-         et2p03_bare=f"{j03.loc[15, 'jitter_mean']:.1f}",
-         et2p03_nominal_rail=f"{float(jn.loc[15, 'jitter_mean']):.1f}",
+    dict(n=6, quantity="TOA jitter at BL+20, 16 fC", unit="ps",
+         et2p01_bare=f"{j01.loc[16, 'mean']:.1f}", hybrid=f"{float(jh.loc[16, 'hybrid']):.1f}",
+         et2p03_bare=f"{j03.loc[16, 'jitter_mean']:.1f}",
+         et2p03_nominal_rail=f"{float(jn.loc[16, 'jitter_mean']):.1f}",
          comparable=("near the floor, ×%.2f / ×%.2f / ×%.2f of it — limits, not resolutions"
                      % tuple(JCMP.set_index(["data_set", "charge_fC"]).over_floor.loc[
-                         [(K01, 15.0), (K02, 15.0), (K03, 15.0)]]))),
+                         [(K01, 16.0), (K02, 16.0), (K03, 16.0)]]))),
     dict(n=7, quantity="TDC quantisation floor", unit="ps", et2p01_bare=f"{fl01:.2f}",
          hybrid=f"{flh:.2f}", et2p03_bare=f"{fl03:.2f}", comparable="a property of the TDC and CAL"),
     dict(n=8, quantity="S-curve width σ", unit="DAC", et2p01_bare=f"{B01['sigma_dac']:.2f}",
@@ -1160,7 +1160,7 @@ SUM = pd.DataFrame([
          hybrid=f"{sh.NW_map:.2f}", et2p03_bare=f"{B03['nw_map_dac']:.2f}",
          et2p03_nominal_rail="one map only, at 0 MRad",
          comparable="same definition, different DAC scale"),
-    dict(n=11, quantity="Gain range over the analog rail 0.85 → 1.40 V", unit="DAC/fC",
+    dict(n=11, quantity="Preamp gain range over the analog rail 0.85 → 1.40 V", unit="DAC/fC",
          et2p01_bare="not recorded", hybrid="not recorded",
          et2p03_bare="%.2f → %.2f" % (r200.gain_dac_per_fc.iloc[0], r200.gain_dac_per_fc.iloc[-1]),
          comparable="only ET2.03 measured it — and it dwarfs every other difference here"),
@@ -1185,7 +1185,7 @@ print(SUM.to_string(index=False))
 #    the reference correction and stays a one-die-per-revision result: BARE7, the only other
 #    irradiated die, has an unknown dose and is kept out. The ET2.03 preamp gain, corrected for the
 #    same scale change, is −0.7 ± 4.3 %, consistent with no loss.
-# 2. **In DAC units both revisions lose of order five per cent of gain per 400 MRad, and on ET2.03 the
+# 2. **In DAC units both revisions lose of order five per cent of preamp gain per 400 MRad, and on ET2.03 the
 #    second dose step repeats at every rail setting the campaign used** (the ET2.03 number is a
 #    DAC-scale artefact by item 1; the repeatability across rails still holds). The four 200 → 400 MRad steps
 #    come out at −5.25 ± 3.87, −5.39 ± 1.94, −5.34 ± 2.76 and −4.96 ± 2.04 % at VA 0.85, 1.00,
@@ -1202,9 +1202,9 @@ print(SUM.to_string(index=False))
 #    at the chip**: the scan runs from roughly half the nominal analog rail *up to* nominal and
 #    never above it, so this is a statement about **under-voltage sensitivity**, not about the
 #    chip's behaviour across a range around its operating point. Neither January campaign recorded
-#    its rails at all, so no absolute gain comparison between them is safe.
+#    its rails at all, so no absolute preamp gain comparison between them is safe.
 # 4. **ENC is the only noise number that survives the revision change**, because the DAC scale
-#    cancels in σ/gain: 610 e⁻ bare ET2.01, 974 e⁻ with an LGAD bonded, 847 e⁻ bare ET2.03. The
+#    cancels in σ/(preamp gain): 610 e⁻ bare ET2.01, 974 e⁻ with an LGAD bonded, 847 e⁻ bare ET2.03. The
 #    σ values themselves — 0.92, 0.93 and 1.12 DAC — cannot be compared across revisions at all
 #    without a DAC transfer-function measurement, which is open question 1.
 # 5. **Running the chip well below its nominal analog rail costs more than the dose does.** At
@@ -1225,16 +1225,16 @@ print(SUM.to_string(index=False))
 #    or 03. If one of those is re-run with a changed definition, this notebook must be re-run too;
 #    it has no independent access to the data.
 # 2. **The hybrid contributes a point, not a curve, in several places.** Notebook 02 exports its
-#    TOA jitter at BL+20 only at 8 and 15 fC (through `bare_vs_hybrid.csv`), and it has no dose
+#    TOA jitter at BL+20 only at 9 and 16 fC (through `bare_vs_hybrid.csv`), and it has no dose
 #    series at all, so sections 3, 6 and 7 carry it as a single marker rather than a line.
 # 3. **The reference conditions are not matched, and cannot be.** Notebook 01's reference is
 #    0 MRad at +12 °C, notebook 02's is 0 °C with an LGAD at 210 V, notebook 03's is 0 MRad at
 #    −23.5 °C and VA 1.20 V. Section 8 is the full list; every figure caption says which is which.
 # 4. **The two revisions' DAC scales are not known to be the same.** What ET2.03 demonstrably
-#    shows is that its DAC-referred **gain and baseline** move strongly with the analog rail — not
+#    shows is that its DAC-referred **preamp gain and baseline** move strongly with the analog rail — not
 #    that the DAC scale itself does. The internal reference is powered from VA (so the millivolts
-#    per code may track it) and so are the preamplifier bias currents (so the front-end gain may
-#    genuinely change); a ×2.8 gain swing would require a ×2.8 reference swing to be scale alone,
+#    per code may track it) and so are the preamplifier bias currents (so the preamp gain may
+#    genuinely change); a ×2.8 preamp gain swing would require a ×2.8 reference swing to be scale alone,
 #    which is not plausible, so a real front-end change is at least as likely. Nothing in this
 #    folder separates the two — that is open question 1, the DAC transfer function. Any comparison
 #    of an absolute DAC quantity here is labelled `NO` in the summary's `comparable` column and

@@ -1,38 +1,40 @@
 {
- "pixel_0_14_ratio_median": 0.29842526814892034,
+ "pixel_0_14_ratio_median": 0.29842526814893067,
  "pixel_0_14_n_dies": 6,
- "pixel_0_14_k_at_8": 0.673611111111111,
- "pixel_0_14_k_at_27": 0.41496880440449996,
+ "pixel_0_14_k_at_9": 0.7098765432098765,
+ "pixel_0_14_k_at_28": 0.4358627756757678,
+ "pixel_0_14_k_at_9_n_clamped": 2,
+ "pixel_0_14_k_at_28_n_clamped": 0,
  "pixel_0_14_fwhm_ratio_col14": 0.678819467990019,
  "pixel_0_14_sigma_ratio_median": 0.5208333333333333,
  "nw_maps_0_14_over_mean": 0.9600833368964004,
- "pooled_gain_bias_6px": 1.1324682346580164,
- "pooled_gain_bias_12px": 1.0704545291938137,
- "rev_gain_rail_equiv_mV": 66.8530796789424,
- "rev_gain_gauss_sigma_equiv": 1.197158742119082,
- "rev_v_per_fc_ratio_if_vref": 1.1810550189191116,
+ "pooled_gain_bias_6px": 1.1324682346580148,
+ "pooled_gain_bias_12px": 1.070454529193814,
+ "rev_gain_rail_equiv_mV": 66.85307967894447,
+ "rev_gain_gauss_sigma_equiv": 1.1971587421190817,
+ "rev_v_per_fc_ratio_if_vref": 1.1810550189191122,
  "rev_fwhm_ratio": 0.8752439196372999,
- "rev_gain_ratio": 1.0523200218569284,
- "rev_gain_ratio_err": 0.09489752922813828,
+ "rev_gain_ratio": 1.052320021856929,
+ "rev_gain_ratio_err": 0.09489752922813871,
  "rev_pred_ratio_vref": 0.891,
  "rev_sigma_ratio": 0.9734513274336283,
  "bare9_gain_cern_over_bench": 1.0188258027848822,
  "bare9_gain_cern_over_bench_spread": 0.07244271547260181,
  "bare9_gain_0729_over_0730": 1.0196041561923914,
  "bare9_rail_for_240_dac_V": 0.642857142857143,
- "bare9_gain_factor_for_that_rail": 4.953901031923597,
+ "bare9_gain_factor_for_that_rail": 4.953901031923378,
  "bare9_BL_shift_0730_minus_0729": 240.5,
  "bare9_BL_shift_cern_minus_0730": 235.83333333333334,
  "v203_gain_by_die": {
   "ET2p03_BARE1": 10.798058252427177,
-  "ET2p03_BARE4": 11.416019417475718,
-  "ET2p03_BARE9": 9.767961165048536
+  "ET2p03_BARE4": 11.41601941747573,
+  "ET2p03_BARE9": 9.76796116504854
  },
- "v201_gain": 11.218446601941741,
+ "v201_gain": 11.218446601941753,
  "enc_by_die": {
   "ET2p03_BARE1": 612.7027087034714,
-  "ET2p03_BARE4": 699.8382300731464,
-  "ET2p03_BARE9": 670.9534593883536
+  "ET2p03_BARE4": 699.8382300731457,
+  "ET2p03_BARE9": 670.9534593883534
  },
- "enc_v201": 611.997377498919
+ "enc_v201": 611.9973774989184
 }

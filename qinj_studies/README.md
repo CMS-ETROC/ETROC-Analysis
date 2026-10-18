@@ -19,7 +19,7 @@ does not carry. Quantities are labelled **RAW** (a column, or a direct byte, of 
 **DERIVED** (computed here), and where a campaign did not record something the text says
 `not recorded` — never a guess.
 
-Two conventions that decide how every number below should be read:
+Three conventions that decide how every number below should be read:
 
 * **"Gain" always means the preamp gain**, the charge-to-threshold response of the front end in
   DAC LSB per fC. **No sensor multiplication enters any measurement in this folder**, notebook
@@ -34,6 +34,10 @@ Two conventions that decide how every number below should be read:
   the chip**, and only VA 1.40 V (supply) is nominal. The drop is I·R and no rail current was
   logged, so the at-chip values are approximate to roughly ±50 mV; the supply setting is the RAW
   quantity every table carries.
+* **Every charge is the physical injected charge, (QSel + 1) fC.** The 2024 campaigns' directory
+  labels `QInj_<N>` are the QSel register value N, so a `QInj_N` point is N + 1 fC (ETROC2
+  Reference Manual rev 0.60, §3.1.4). Corrected on 2026-10-18; numbers published before then were
+  quoted on the label axis, 1 fC low. See the charge-convention note under Data provenance.
 
 ---
 
@@ -63,7 +67,7 @@ qinj_studies/
 
 `qinj_common.py` exists so that **the three measurement campaigns are analysed by literally the
 same functions**
-— the same turn-off estimator, the same weighted gain fit, the same shared-σ S-curve fit, the same
+— the same turn-off estimator, the same weighted preamp gain fit, the same shared-σ S-curve fit, the same
 TOT log law, the same quantisation floor. Any difference between the three sets of results is then
 a difference in the data, not a difference in the analysis. Notebook 03 needed exactly one
 addition to that path and it is measured rather than asserted: the August campaign's binary search
@@ -86,17 +90,17 @@ campaign in the header's right block without editing the style file.
 | # | notebook | one-line hook |
 |---|---|---|
 | 00 | `00_census_and_aux_data.ipynb` | **The census.** Every Q_inj data set that exists — 33 of them, positive and negative — what each can and cannot answer, where it lives, and what each campaign was monitoring while it took the data. Carries the auxiliary logs that the measurement notebooks do not. |
-| 01 | `01_bare_et2p01_tid_jan2024.ipynb` | **The bare-die reference.** `ET2p01_W36_6`, no sensor, through 0/200/400 MRad: gain, the noise-set threshold edge, ENC, TOT-versus-charge, the money plot, and the dose-versus-temperature confound resolved by a fourth measurement corner. |
+| 01 | `01_bare_et2p01_tid_jan2024.ipynb` | **The bare-die reference.** `ET2p01_W36_6`, no sensor, through 0/200/400 MRad: preamp gain, the noise-set threshold edge, ENC, TOT-versus-charge, the money plot, and the dose-versus-temperature confound resolved by a fourth measurement corner. |
 | 02 | `02_hybrid_et2p01_cc_jan2024.ipynb` | **What the sensor costs.** `ET2p01_Bar4` with an LGAD bonded, at −25/0/+22 °C and two bias states: the same measurements, the campaign's auxiliary logs, a confound-free bias bracket, and the bare-versus-hybrid comparison — where the answer inverts the usual expectation. |
-| 03 | `03_bare_et2p03_tid_aug2024.ipynb` | **The later revision, a supply-rail axis, and the campaign's own monitoring.** `ET2p03_BARE9`, no sensor, through 0/200/400 MRad at four analog-rail settings with an **internal** voltage reference that the campaign **logged**: gain, ENC, TOT, the money plot, baseline against dose, the VA × VD rail grid, VRef/VTemp/rail currents through the irradiation with the 256-pixel baseline maps and their annealing, and the reference-scale decomposition of the baseline fall. `ET2p03_BARE7` is characterised in isolation (its post-0 MRad dose is unknown: the X-ray failed). |
+| 03 | `03_bare_et2p03_tid_aug2024.ipynb` | **The later revision, a supply-rail axis, and the campaign's own monitoring.** `ET2p03_BARE9`, no sensor, through 0/200/400 MRad at four analog-rail settings with an **internal** voltage reference that the campaign **logged**: preamp gain, ENC, TOT, the money plot, baseline against dose, the VA × VD rail grid, VRef/VTemp/rail currents through the irradiation with the 256-pixel baseline maps and their recovery while cooling down, and the reference-scale decomposition of the baseline fall. `ET2p03_BARE7` is characterised in isolation (its post-0 MRad dose is unknown: the X-ray failed). |
 | 04 | `04_cross_campaign_synthesis.ipynb` | **The three on one axis.** Reads only the tables 01, 02 and 03 wrote. What survives the revision change, what does not, everything that differs between the three campaigns in one table, and eight open questions ranked by how much confounding each would remove. |
-| 05 | `05_bench_jul2024_two_revisions.ipynb` | **Four bare dies on one bench, July 2024.** `ET2p03_BARE1`, `ET2p03_BARE4`, `ET2p03_BARE9` and `ET2p01_BARE10`, one die per day, the six pixels of notebook 03 and the six charges of notebooks 01 and 02, no dose. The controlled v2.01-versus-v2.03 comparison (gain ratio 1.05 ± 0.09 against 0.86–0.89 if the DAC scale followed VRef — but 67 mV of unrecorded analog rail would close that gap, so it is a systematic, not a verdict); `BARE9` four days before its first day at CERN, reproducing notebook 03's reference chord slope to 2 % in the mean; and the finding that **pixel (0,14) has a compressive charge response on six dies of two revisions** — turn-off saturating at 80–100 DAC above baseline where the others reach 200–300 — which pulls every pooled gain in notebooks 01–03 low (×1.13 with six pixels, ×1.07 with twelve). Cause unresolved; the noise measurements point at the front end's operating point, not the injector. |
+| 05 | `05_bench_jul2024_two_revisions.ipynb` | **Four bare dies on one bench, July 2024.** `ET2p03_BARE1`, `ET2p03_BARE4`, `ET2p03_BARE9` and `ET2p01_BARE10`, one die per day, the six pixels of notebook 03 and the six charges of notebooks 01 and 02, no dose. The controlled v2.01-versus-v2.03 comparison (preamp gain ratio 1.05 ± 0.09 against 0.86–0.89 if the DAC scale followed VRef — but 67 mV of unrecorded analog rail would close that gap, so it is a systematic, not a verdict); `BARE9` four days before its first day at CERN, reproducing notebook 03's reference chord slope to 2 % in the mean; and the finding that **pixel (0,14) has a compressive charge response on six dies of two revisions** — turn-off saturating at 80–100 DAC above baseline where the others reach 200–300 — which pulls every pooled preamp gain in notebooks 01–03 low (×1.13 with six pixels, ×1.07 with twelve). Cause unresolved; the noise measurements point at the front end's operating point, not the injector. |
 
 **Notebook 00 is standalone** — it reads only `data/census/` and can be run first or last.
 **Run 01 before 02, and 01–03 before 04.** Notebook 01 writes `outputs/bare_*.csv` and
 `outputs/bare_results.json`, which notebook 02's bare-versus-hybrid section reads; notebook 03
 writes `outputs/et2p03_*`; notebook 04 reads all of them and **recomputes nothing**, so both sides
-of every comparison always went through the same code. Notebook 05 reads the per-pixel gain
+of every comparison always went through the same code. Notebook 05 reads the per-pixel preamp gain
 tables of 01, 02 and 03 (`outputs/*_gain_fits.csv`) for its pixel (0,14) section, so it runs after
 them too. Notebooks 02 and 04 stop with a clear message listing what is missing.
 
@@ -114,7 +118,7 @@ the last, which is its section 3 statement rather than a column tally.
 |---|---|
 | data sets with a real charge × threshold scan | **7** of 32 |
 | hybrid (sensor-loaded) threshold scans anywhere | **1** — the campaign of notebook 02 |
-| ET2.02 threshold scans anywhere | **0** — the ET2.02 data that exists is single-point, 30 fC at BL+20 |
+| ET2.02 threshold scans anywhere | **0** — the ET2.02 data that exists is single-point, recorded charge label 30, at BL+20 |
 | campaigns with a low-voltage supply log | 5 `yes`, 3 `partial` of 15 |
 | campaigns with on-chip VTemp | **2** of 15 |
 | campaigns with a sensor-bias log | **0** `yes`, 2 `partial` of 15 |
@@ -150,8 +154,8 @@ Four findings there are new rather than inventory, and all are in the notebook's
   2026-09-04. It now lives on LPC EOS under `cern_Aug2024_TID/ETROC-History/` (with a second
   climate-chamber set, `CERN_Aug_2024_CC_Spirale3`, under `cern_Aug2024_CC/ETROC-History/`).
   Notebook 03 section 15 analyses it: **VRef rose +4.7 % over 400 MRad**, the VTemp pin shifted
-  with dose, both rail currents fell a few per cent, and the baseline maps show a day of annealing
-  after each step. The aux matrix no longer carries a `logged-missing` cell.
+  with dose, both rail currents fell a few per cent, and the baseline maps show a day of recovery
+  while cooling down after each step. The aux matrix no longer carries a `logged-missing` cell.
 
 All values are recomputed by the notebooks. "Pixel RMS" is the pixel-to-pixel spread and is the
 dominant uncertainty throughout; the ± is the uncertainty on the mean over pixels.
@@ -160,21 +164,21 @@ dominant uncertainty throughout; the ± is the uncertainty on the mean over pixe
 
 | # | quantity | value | pixel RMS | label |
 |---|---|---|---|---|
-| 1 | Preamp gain (charge-to-threshold), 8–27 fC | **9.42 ± 0.89 DAC/fC** | 3.09 | DERIVED |
+| 1 | Preamp gain (charge-to-threshold), 9–28 fC | **9.42 ± 0.89 DAC/fC** | 3.09 | DERIVED |
 | 2 | the same in volts | 3.68 ± 0.35 mV/fC | 1.21 | DERIVED |
-| 3 | Turn-off above baseline at 15 fC | 116.0 DAC | 37.2 | DERIVED from RAW FPGA counters |
-| 4 | TOT at BL+20, 15 fC | 49.9 code (1.83 ns) | 2.2 | DERIVED |
-| 5 | TOA jitter at BL+20, 15 fC | 6.4 ps | 3.0 | DERIVED — **at the quantisation floor** |
-| 6 | TOA jitter at BL+20, 5 fC | 23.9 ps | 13.1 | DERIVED — above the floor, 9/12 pixels |
+| 3 | Turn-off above baseline at 16 fC | 116.0 DAC | 37.2 | DERIVED from RAW FPGA counters |
+| 4 | TOT at BL+20, 16 fC | 49.9 code (1.83 ns) | 2.2 | DERIVED |
+| 5 | TOA jitter at BL+20, 16 fC | 6.4 ps | 3.0 | DERIVED — **at the quantisation floor** |
+| 6 | TOA jitter at BL+20, 6 fC | 23.9 ps | 13.1 | DERIVED — above the floor, 9/12 pixels |
 | 7 | S-curve width σ (72 curves, shared σ) | **0.92 ± 0.05 DAC** = 0.359 mV | — | DERIVED |
-| 8 | ENC = σ / gain | **610 e⁻** | — | DERIVED — bare die, no input load |
+| 8 | ENC = σ / (preamp gain) | **610 e⁻** | — | DERIVED — bare die, no input load |
 | 9 | Autocal noise width NW | 3.17 ± 0.17 DAC | 0.58 | RAW (`NW_map`) |
-| 10 | Minimum charge reaching BL+20 | 4.3 ± 0.4 fC | 1.5 | DERIVED, extrapolated |
-| 11 | TOT-to-charge law at BL+20 | TOT = 19.3 + 10.7 ln(Q/fC), χ²/ndf 5.6 | — | DERIVED, valid 8–27 fC |
+| 10 | Minimum charge reaching BL+20 | 5.3 ± 0.4 fC | 1.5 | DERIVED, extrapolated |
+| 11 | TOT-to-charge law at BL+20 | TOT = 16.6 + 11.4 ln(Q/fC), χ²/ndf 6.1 | — | DERIVED, valid 9–28 fC |
 | 12 | TDC quantisation floor, LSB/√12 | 5.37 ps (TOA LSB 18.6 ps) | — | DERIVED |
-| 13 | Walk with charge, 5→27 fC at BL+20 | +493 ps | — | DERIVED |
-| 14 | Gain change on cooling +12 → −25 °C | −7.7 % | — | DERIVED |
-| 15 | Gain change 0 → 400 MRad at −25 °C, ratio of pooled means | −5.5 % | — | DERIVED — carries no error |
+| 13 | Walk with charge, 6→28 fC at BL+20 | +493 ps | — | DERIVED |
+| 14 | Preamp gain change on cooling +12 → −25 °C | −7.7 % | — | DERIVED |
+| 15 | Preamp gain change 0 → 400 MRad at −25 °C, ratio of pooled means | −5.5 % | — | DERIVED — carries no error |
 | 16 | the same, **paired per pixel** | **−6.5 ± 3.2 %** | 11.0 | DERIVED — same 12 pixels at both doses; what notebook 04 compares |
 
 Baseline shifts with dose: **+77 DAC** for the cooling, then **+25** and **+21 DAC** for the first
@@ -186,39 +190,39 @@ offset above the new baseline recovers essentially the same response.**
 
 | # | quantity | value | pixel RMS | label |
 |---|---|---|---|---|
-| 1 | Preamp gain (charge-to-threshold), 8–27 fC | **5.96 ± 0.37 DAC/fC** | 1.10 | DERIVED |
+| 1 | Preamp gain (charge-to-threshold), 9–28 fC | **5.96 ± 0.37 DAC/fC** | 1.10 | DERIVED |
 | 2 | the same in volts | 2.33 ± 0.14 mV/fC | 0.43 | DERIVED |
-| 3 | Turn-off above baseline at 15 fC | 72.9 DAC | 12.3 | DERIVED from RAW FPGA counters |
-| 4 | TOT at BL+20, 15 fC | 84.9 code (3.04 ns) | 6.4 | DERIVED |
-| 5 | TOA jitter at BL+20, 15 fC | 10.6 ps | 2.4 | DERIVED — near the quantisation floor |
-| 6 | TOA jitter at BL+20, **8 fC** | **27.7 ps** | 8.5 | DERIVED — **above the floor, the useful one** |
+| 3 | Turn-off above baseline at 16 fC | 72.9 DAC | 12.3 | DERIVED from RAW FPGA counters |
+| 4 | TOT at BL+20, 16 fC | 84.9 code (3.04 ns) | 6.4 | DERIVED |
+| 5 | TOA jitter at BL+20, 16 fC | 10.6 ps | 2.4 | DERIVED — near the quantisation floor |
+| 6 | TOA jitter at BL+20, **9 fC** | **27.7 ps** | 8.5 | DERIVED — **above the floor, the useful one** |
 | 7 | S-curve width σ (54 curves, shared σ) | **0.93 ± 0.07 DAC** = 0.363 mV | — | DERIVED |
-| 8 | ENC = σ / gain | **974 ± 97 e⁻** | — | DERIVED — the sensor-loaded number |
+| 8 | ENC = σ / (preamp gain) | **974 ± 97 e⁻** | — | DERIVED — the sensor-loaded number |
 | 9 | Autocal noise width NW | 4.44 ± 0.24 DAC | 0.73 | RAW (`NW_map`) |
-| 10 | Minimum charge reaching BL+20 | 5.5 ± 0.1 fC | 0.4 | DERIVED, extrapolated |
-| 11 | TOT-to-charge law at BL+20 | TOT = −40.3 + 43.4 ln(Q/fC), χ²/ndf 9.0 | — | DERIVED — **a poor fit** |
+| 10 | Minimum charge reaching BL+20 | 6.5 ± 0.1 fC | 0.4 | DERIVED, extrapolated |
+| 11 | TOT-to-charge law at BL+20 | TOT = −54.8 + 47.4 ln(Q/fC), χ²/ndf 10.5 | — | DERIVED — **a poor fit** |
 | 12 | TDC quantisation floor, LSB/√12 | 5.24 ps (TOA LSB 18.14 ps) | — | DERIVED |
-| 13 | Walk with charge, 5→27 fC at BL+20 | +1384 ps | — | DERIVED |
-| 14 | Bias bracket, gain ratio HV nominal → 0 V (cable in) | **0.89** | — | DERIVED — the only confound-free capacitance handle |
-| 15 | Gain ratio hybrid / bare | **0.63** | — | DERIVED — conditions differ, see notebook |
-| 16 | ENC ratio hybrid / bare | **1.60** | — | DERIVED — entirely through the gain |
+| 13 | Walk with charge, 6→28 fC at BL+20 | +1384 ps | — | DERIVED |
+| 14 | Bias bracket, preamp gain ratio HV nominal → 0 V (cable in) | **0.89** | — | DERIVED — the only confound-free capacitance handle |
+| 15 | Preamp gain ratio hybrid / bare | **0.63** | — | DERIVED — conditions differ, see notebook |
+| 16 | ENC ratio hybrid / bare | **1.60** | — | DERIVED — entirely through the preamp gain |
 
 ### 02 — the three things worth carrying away from the hybrid
 
-1. **The sensor costs gain, not edge width.** The threshold-edge width in DAC is unchanged
-   (0.93 against 0.92, ratio 1.01) while the gain falls to 63 %. ENC is the ratio of the two, so
-   it grows by 1.60 **entirely through the gain**. The usual capacitance argument predicts a wider
+1. **The sensor costs preamp gain, not edge width.** The threshold-edge width in DAC is unchanged
+   (0.93 against 0.92, ratio 1.01) while the preamp gain falls to 63 %. ENC is the ratio of the two, so
+   it grows by 1.60 **entirely through the preamp gain**. The usual capacitance argument predicts a wider
    edge; the edge did not move. Referred to charge the front end is noisier, referred to threshold
    DAC it is not.
 2. **The bias bracket reproduces that signature inside one day, on one chip.** At −25 °C on
    2024-01-16, the same nine pixels hours apart, turning the bias down to 0 V with the cable still
-   plugged in moves gain ×0.89, σ ×1.20, ENC ×1.34 — the sign and the size the capacitance
+   plugged in moves the preamp gain ×0.89, σ ×1.20, ENC ×1.34 — the sign and the size the capacitance
    argument predicts, free of the chip, temperature and pixel-set confounds that limit the
    bare-versus-hybrid comparison.
 3. **TOT is not transferable, and TOT-versus-charge is not a log law on a hybrid.** At BL+20 the
-   hybrid sits at 1.7–1.8× the bare TOT **above 8 fC** (at 5 fC the ratio inverts, to 0.90) and
-   the bare chip's well-behaved `19.3 + 10.7 ln Q` is
-   replaced by a steep, badly fitting law (χ²/ndf 9.0). **RFSel is not recorded on either data
+   hybrid sits at 1.7–1.8× the bare TOT **from 9 fC up** (at 6 fC the ratio inverts, to 0.90) and
+   the bare chip's well-behaved `16.6 + 11.4 ln(Q/fC)` is
+   replaced by a steep, badly fitting law (χ²/ndf 10.5). **RFSel is not recorded on either data
    set** and it sets the feedback resistance that fixes TOT, so this cannot be attributed to the
    sensor.
 
@@ -237,20 +241,20 @@ here rather than twelve, so it is a noisier estimate of the spread than notebook
 
 | # | quantity | value | pixel RMS | label |
 |---|---|---|---|---|
-| 1 | Preamp gain (charge-to-threshold), 8–22 fC | **8.26 ± 1.19 DAC/fC** | 2.91 | DERIVED |
+| 1 | Preamp gain (charge-to-threshold), 9–23 fC | **8.26 ± 1.19 DAC/fC** | 2.91 | DERIVED |
 | 2 | the same in volts, under the assumed LSB | 3.22 ± 0.46 mV/fC | 1.14 | DERIVED — the LSB is an assumption on this revision |
 | 3 | Preamp gain over the analog rail, supply 0.85 → 1.40 V (~0.65 → ~1.20 V at chip), at 200 MRad | **3.11 → 8.69 DAC/fC** | — | DERIVED |
-| 4 | Turn-off above baseline at 15 fC | 100.5 DAC | 30.3 | RAW search DAC, referred to the noise-peak baseline |
-| 5 | TOT at BL+20, 15 fC | 46.0 code (1.55 ns) | 2.7 | DERIVED |
-| 6 | TOA jitter at BL+20, 15 fC | 8.3 ps (median 8.4) | 2.1 | DERIVED — near the quantisation floor |
-| 7 | TOA jitter at BL+20, 6 fC | 22.7 ps (median 15.2) | 12.4 | DERIVED — above the floor; the mean is pulled by the widest pixel, hence the median |
+| 4 | Turn-off above baseline at 16 fC | 100.5 DAC | 30.3 | RAW search DAC, referred to the noise-peak baseline |
+| 5 | TOT at BL+20, 16 fC | 46.0 code (1.55 ns) | 2.7 | DERIVED |
+| 6 | TOA jitter at BL+20, 16 fC | 8.3 ps (median 8.4) | 2.1 | DERIVED — near the quantisation floor |
+| 7 | TOA jitter at BL+20, 7 fC | 22.7 ps (median 15.2) | 12.4 | DERIVED — above the floor; the mean is pulled by the widest pixel, hence the median |
 | 8 | S-curve width σ (27 curves, shared σ) | **1.12 ± 0.10 DAC** = 0.438 mV | — | DERIVED |
-| 9 | ENC = σ / gain | **847 e⁻** | — | DERIVED — bare die, no input load |
+| 9 | ENC = σ / (preamp gain) | **847 e⁻** | — | DERIVED — bare die, no input load |
 | 10 | Noise-peak FWHM | 2.99 ± 0.45 DAC | 1.11 | DERIVED; the one autocal map gives NW 4.17 DAC |
-| 11 | Minimum charge reaching BL+20 | 4.9 ± 0.8 fC | — | DERIVED, extrapolated |
-| 12 | TOT-to-charge law at BL+20 | TOT = 9.5 + 13.1 ln(Q/fC), χ²/ndf 1.7 | — | DERIVED, valid 6–22 fC |
+| 11 | Minimum charge reaching BL+20 | 5.9 ± 0.8 fC | — | DERIVED, extrapolated |
+| 12 | TOT-to-charge law at BL+20 | TOT = 5.9 + 14.1 ln(Q/fC), χ²/ndf 1.8 | — | DERIVED, valid 7–23 fC |
 | 13 | TDC quantisation floor, LSB/√12 | 4.88 ps (TOA LSB 16.9 ps at CAL 185) | — | DERIVED |
-| 14 | Walk with charge, 6→22 fC at BL+20 | +518 ps | — | DERIVED |
+| 14 | Walk with charge, 7→23 fC at BL+20 | +518 ps | — | DERIVED |
 | 15 | **Baseline shift, 0 → 400 MRad at VA 1.20 V (supply), `BARE9`** | **−65.5 DAC** (6-pixel in-config); **−80.1 DAC** on the 256-pixel autocal maps | — | DERIVED — sign opposite to ET2.01; row 17 attributes about half of it to the reference |
 | 16 | Paired preamp-gain change, 0 → 400 MRad at VA 1.20 V (supply) | **−5.4 ± 4.3 %** | 10.4 | DERIVED — same six pixels, paired ratio |
 | 16b | the same 200 → 400 MRad step at **VA 1.40 V (supply) = nominal at the chip** | **−4.96 ± 2.04 %**, baseline **−19.2 ± 8.2 DAC** | — | DERIVED — the nominal-rail version; no 0 MRad exists there |
@@ -267,7 +271,7 @@ codes against 0.4 to 2 once the bad hits are gone. The blocks land at different 
 different pixels, so the median over six pixels smears them into one broad charge-independent bump
 in the middle of the money plot. Every TOA and TOT number in this notebook is therefore taken over
 the CAL-windowed hits (`|CAL − cal_mode| ≤ 3`, 2.68 % of hits dropped); the raw moments are kept
-beside them and the before/after is drawn rather than asserted. Turn-off, gain, σ, the TOT law and
+beside them and the before/after is drawn rather than asserted. Turn-off, preamp gain, σ, the TOT law and
 the walk are untouched by it — they come from the binary searches and from points with
 `cal_std < 0.7` — and the number that moves is row 7 above.
 
@@ -280,7 +284,7 @@ Three further results are specific to this campaign because no other one has the
   the nominal analog rail *up to* nominal and never above it, so this is a statement about
   under-voltage sensitivity, not about a range around the operating point. That is *not* a demonstration that the DAC scale moves: the internal reference
   is powered from VA, so the millivolts per code may track it, but so are the preamplifier bias
-  currents, so the front-end gain may genuinely change. A ×2.8 swing from the reference alone
+  currents, so the preamp gain may genuinely change. A ×2.8 swing from the reference alone
   would need the reference itself to move by ×2.8, which is not plausible, so a real front-end
   change is at least as likely and probably the larger part. Separating them needs the
   threshold-DAC transfer function — open question 1.
@@ -305,7 +309,7 @@ Three further results are specific to this campaign because no other one has the
 * **Corrected for the reference, `BARE9`'s preamp gain did not measurably change**: −5.4 ± 4.3 % in
   DAC/fC becomes −0.7 ± 4.3 % in mV/fC. Its VTemp pin rose ~30 mV during the first step at
   constant plate temperature and stayed there — the temperature sensor shifts with dose — and both
-  rail currents fell by a few per cent. The baseline maps anneal back by several DAC in the day after
+  rail currents fell by a few per cent. The baseline maps climb back by several DAC while cooling down in the day after
   each step; the quoted dose numbers are taken ≥ 12 h after a step.
 * **Running well below the nominal analog rail costs more than the dose does.** At VA 0.85 V
   (supply) ≈ 0.65 V at the chip the same 400 MRad costs **−17.1 ± 4.8 %** of preamp gain against
@@ -330,14 +334,14 @@ in *both* rail and dose, so the nominal column is a companion, not a correction.
 | # | quantity | unit | ET2.01 bare | ET2.01 + LGAD | ET2.03 bare | comparable across the three? |
 |---|---|---|---|---|---|---|
 | 1 | Preamplifier gain at each reference condition | DAC/fC | 9.42 ± 0.89 | 5.96 ± 0.37 | 8.26 ± 1.19 | **no** — the DAC scale differs between revisions |
-| 2 | Gain change, 0 → 400 MRad, **paired per pixel** | % | −6.5 ± 3.2 (12 px) | no dose series | −5.4 ± 4.3 (6 px) in DAC/fC; **−0.7 ± 4.3 after the measured +4.7 % reference rise** | **yes** as a fractional change — but the ET2.03 value needs the reference correction |
+| 2 | Preamp gain change, 0 → 400 MRad, **paired per pixel** | % | −6.5 ± 3.2 (12 px) | no dose series | −5.4 ± 4.3 (6 px) in DAC/fC; **−0.7 ± 4.3 after the measured +4.7 % reference rise** | **yes** as a fractional change — but the ET2.03 value needs the reference correction |
 | 3 | Baseline shift, 0 → 400 MRad | DAC | +46.2 at −25 °C (front end; reference fixed) | no dose series | −65.5 at VA 1.20 V supply (`BARE9`): −37 reference scale (measured VRef +4.7 %) + −29 front end | front end against front end: **opposite signs**, one die per revision |
-| 4 | Turn-off above baseline at 15 fC | DAC | 116.0 | 72.9 | 100.5 | the offset cancels, the scale does not |
-| 5 | TOT at BL+20, 15 fC | ns | 1.83 | 3.04 | 1.55 | yes in ns — but RFSel is unrecorded on all three |
-| 6 | TOA jitter at BL+20, 15 fC | ps | 6.4 | 10.6 | 8.3 | near the floor, ×1.18 / ×2.02 / ×1.69 of it — limits, not resolutions |
+| 4 | Turn-off above baseline at 16 fC | DAC | 116.0 | 72.9 | 100.5 | the offset cancels, the scale does not |
+| 5 | TOT at BL+20, 16 fC | ns | 1.83 | 3.04 | 1.55 | yes in ns — but RFSel is unrecorded on all three |
+| 6 | TOA jitter at BL+20, 16 fC | ps | 6.4 | 10.6 | 8.3 | near the floor, ×1.18 / ×2.02 / ×1.69 of it — limits, not resolutions |
 | 7 | TDC quantisation floor | ps | 5.37 | 5.24 | 4.88 | a property of the TDC and CAL |
 | 8 | S-curve width σ | DAC | 0.92 | 0.93 | 1.12 | **no** — the DAC scale differs between revisions |
-| 9 | **ENC = σ / gain** | electrons | **610** | **974** | **847** | **yes** — the only scale-free noise number |
+| 9 | **ENC = σ / (preamp gain)** | electrons | **610** | **974** | **847** | **yes** — the only scale-free noise number |
 | 10 | Autocalibration NW (map) | DAC | 3.17 | 4.44 | 4.17 | same definition, different DAC scale |
 | 11 | Preamp gain range over VA 0.85 → 1.40 V (supply) ≈ 0.65 → 1.20 V at chip | DAC/fC | not recorded | not recorded | 3.11 → 8.69 | only ET2.03 measured it — and it is an under-voltage scan up to nominal |
 
@@ -355,7 +359,7 @@ in *both* rail and dose, so the nominal column is a companion, not a correction.
    test both dies pass, and the irradiated rows give front-end drifts of +33 DAC (ET2.01, 200 MRad) and
    −67 DAC (ET2.03, 400 MRad). No second die of either revision has a usable dose step (`BARE7`'s dose
    is unknown), so every sign here is a one-die statement. Notebook 04 section 2b.
-2. **In DAC units both revisions lose of order five per cent of gain per 400 MRad, and on ET2.03 the
+2. **In DAC units both revisions lose of order five per cent of preamp gain per 400 MRad, and on ET2.03 the
    second dose step repeats at every rail setting the campaign used** (on ET2.03 that is largely the
    reference-scale effect of item 1; the consistency across rails still holds). The four 200 → 400 MRad steps are
    −5.25 ± 3.87, −5.39 ± 1.94, −5.34 ± 2.76 and −4.96 ± 2.04 % at VA 0.85, 1.00, 1.20 and 1.40 V —
@@ -365,13 +369,13 @@ in *both* rail and dose, so the nominal column is a companion, not a correction.
    sample and their irradiation entirely. The ±0.7 % repeatability floor comes from the two
    independent 0 MRad acquisitions and bounds acquisition-to-acquisition scatter, nothing else.
 3. **Under-volting the analog rail is the largest lever in the folder.** One ET2.03 die's preamp
-   gain changes by ×2.8 across its own VA range — more than bare-versus-hybrid, more than the
+   preamp gain changes by ×2.8 across its own VA range — more than bare-versus-hybrid, more than the
    revision change, more than 400 MRad. That range is ~0.65 → ~1.20 V *at the chip*, i.e. from
    about half the nominal rail up to nominal, so it bounds under-voltage sensitivity rather than
    describing behaviour around the operating point. Neither January campaign recorded its rails at
-   all, so no absolute gain comparison between them is safe.
+   all, so no absolute preamp gain comparison between them is safe.
 4. **ENC is the only noise number that survives the revision change**, because the DAC scale
-   cancels in σ/gain. The σ values themselves cannot be compared across revisions at all until
+   cancels in σ/(preamp gain). The σ values themselves cannot be compared across revisions at all until
    someone measures the threshold-DAC transfer function, which is open question 1.
 5. **Referred to each condition's own baseline, the turn-off curves coincide on both revisions.**
    Whichever way the baseline moved, re-running autocalibration and working at `BL + 20` recovers
@@ -383,9 +387,9 @@ section 9 and in `outputs/xcamp_open_questions.csv`. The first three:
 
 1. **What is the threshold-DAC LSB in millivolts on each revision, and how does it move with VA on
    ET2.03?** A DAC transfer-function measurement against an external voltmeter. It is the single
-   largest blocker: it would make σ, NW, baseline shifts and gain-in-mV comparable across
+   largest blocker: it would make σ, NW, baseline shifts and preamp gain-in-mV comparable across
    revisions.
-2. **What was RFSel, and how much does it move gain and TOT?** Unrecorded on all three data sets,
+2. **What was RFSel, and how much does it move preamp gain and TOT?** Unrecorded on all three data sets,
    and it fixes TOT directly, so every TOT comparison here bounds a difference rather than
    measuring one.
 3. **Does the baseline-versus-dose sign flip follow the reference, the revision or the die?** Two
@@ -397,43 +401,43 @@ section 9 and in `outputs/xcamp_open_questions.csv`. The first three:
 The controlled comparison the census flagged (row 5): three v2.03 dies and one v2.01 die scanned
 one per day on the same bench, pixels and charges, with no dose, no rail setting, no temperature
 and no register read-back recorded. Everything below is printed by the notebook and written to
-`outputs/jul_*.csv`. Every "gain" is an 8–27 fC **chord slope**: the straight line is rejected on
-every pixel (χ²/ndf 10–250), the 15–27 fC chord is 10–20 % steeper than the 8–15 fC one, and
+`outputs/jul_*.csv`. Every "gain" is a 9–28 fC **chord slope**: the straight line is rejected on
+every pixel (χ²/ndf 10–250), the 16–28 fC chord is 10–20 % steeper than the 9–16 fC one, and
 slopes over different ranges are not interchangeable.
 
 | | v2.03 `BARE1` / `BARE4` / `BARE9` | v2.01 `BARE10` |
 |---|---|---|
-| preamp gain (chord), 8–27 fC, five pixels | 10.8 / 11.4 / 9.8 DAC/fC (die spread 8 %; day repeats to 0.1 %) | 11.2 ± 0.4 DAC/fC |
+| preamp gain (chord), 9–28 fC, five pixels | 10.8 / 11.4 / 9.8 DAC/fC (die spread 8 %; day repeats to 0.1 %) | 11.2 ± 0.4 DAC/fC |
 | shared S-curve σ | 1.06 / 1.28 / 1.05 DAC | 1.10 DAC |
 | noise-scan FWHM | 2.68 / 2.66 / 2.34 DAC | 2.24 DAC |
 | ENC | 613 / 700 / 671 e | 612 e |
-| TOA jitter at BL+20, 15 fC | 6.6–8.1 ps | 5.8 ps |
+| TOA jitter at BL+20, 16 fC | 6.6–8.1 ps | 5.8 ps |
 | quantisation floor (CAL ≈ 170) | 5.3 ps | 5.3 ps |
 
-* **Revision ratio v2.01 / v2.03: gain 1.05 ± 0.09, σ 0.97 ± 0.12, noise FWHM 0.88 ± 0.08,
+* **Revision ratio v2.01 / v2.03: preamp gain 1.05 ± 0.09, σ 0.97 ± 0.12, noise FWHM 0.88 ± 0.08,
   ENC 0.93 ± 0.07.** If the threshold-DAC scale followed the reference voltage (external 1.0 V
-  on v2.01, internal 0.86–0.89 V on v2.03) with identical front ends, gain, σ and FWHM would all
-  read 0.86–0.89. Gain and σ read near 1.0; FWHM reads 0.88, on the prediction. The observables
-  disagree with each other. The gain tension is 1.7 σ on a die spread from three dies — a
+  on v2.01, internal 0.86–0.89 V on v2.03) with identical front ends, preamp gain, σ and FWHM would all
+  read 0.86–0.89. Preamp gain and σ read near 1.0; FWHM reads 0.88, on the prediction. The observables
+  disagree with each other. The preamp gain tension is 1.7 σ on a die spread from three dies — a
   Student-t on two degrees of freedom, ~1.2 σ Gaussian — and, more to the point, **67 mV of
-  unrecorded analog supply** (d ln gain / dVA ≈ 2.5 /V from notebook 03's rail scan) would
+  unrecorded analog supply** (d ln preamp gain / dVA ≈ 2.5 /V from notebook 03's rail scan) would
   produce the whole gap. This comparison sizes the rail systematic; it does not resolve the
   DAC-scale question. The bench transfer-function measurement, with rail and registers read
   back, does.
 * **`BARE9` before its move.** Scanned on 29 and 30 July at FNAL and on 3 August at CERN
-  (notebook 03's untagged reference run, ladder 6–22 fC with three pixels at the DAC ceiling at
-  22 fC): on the one chord all three share, 8 → 15 fC, the five-pixel slope agrees in the mean to
+  (notebook 03's untagged reference run, ladder 7–23 fC with three pixels at the DAC ceiling at
+  23 fC): on the one chord all three share, 9 → 16 fC, the five-pixel slope agrees in the mean to
   2 % with a per-pixel spread of ±7 %, so notebook 03's "VA 1.20 V (supply)" reference condition
   reproduces the bench response. The baselines step by +240 and +236 DAC between the three at
   constant slope. From the rail that would need ~0.65 V and a ×5 slope change (notebook 03's
   scan: 373 DAC/V and e^2.5 per volt), so it is not the rail; with no register read-back it is
   not attributable. Between the two bench days the noise width also moved (ENC 626 → 716 e at
   constant slope), which is a front-end state change, not a DC offset.
-* **Pixel (0,14) has a compressive response, on six dies.** Its 8–27 fC chord is 0.16–0.48
+* **Pixel (0,14) has a compressive response, on six dies.** Its 9–28 fC chord is 0.16–0.48
   (median 0.30) of the other pixels' on every acquisition of every campaign in this folder —
   `W36_6`, `Bar4`, `BARE9` (twice), `BARE1`, `BARE4`, `BARE10` — but it is not a scaled copy: at
-  5–8 fC it sits close to the others, then saturates at 80–100 DAC above baseline where they
-  reach 200–300 (the implied charge scale drifts from ~0.7 at 8 fC to ~0.4 at 27 fC). Four
+  6–9 fC it sits close to the others, then saturates at 80–100 DAC above baseline where they
+  reach 200–300 (the implied charge scale drifts from ~0.7 at 9 fC to ~0.4 at 28 fC). Four
   256-pixel autocalibration maps exclude a 3× small-signal deficit at (0,14) and nothing finer
   (NW is an integer with a 20–30 % array RMS); the finer probes — noise-scan FWHM against the
   column-14 control (0.6–0.8) and S-curve σ against the other pixels (0.40–0.72) — say the front
@@ -450,7 +454,7 @@ slopes over different ranges are not interchangeable.
 
 ### Open discrepancies, stated rather than smoothed over
 
-* **The two campaigns disagree on the sign of the temperature coefficient of gain.** The hybrid
+* **The two campaigns disagree on the sign of the temperature coefficient of preamp gain.** The hybrid
   gains about +24 % on cooling from +22 to −25 °C; the bare die *loses* 7.7 % on cooling from +12
   to −25 °C. Neither data set can resolve it: the hybrid's −25 °C bias is `not recorded`, and the
   bare die's −25 °C point comes from turn-off files only.
@@ -465,8 +469,8 @@ slopes over different ranges are not interchangeable.
   took simply the highest probe at or above 50 %. The interpolated point is sub-LSB and is the
   estimator the bare-die tables were built with, so using it everywhere is what makes the two
   campaigns comparable — but it lands about 0.44 DAC higher, which shifts the hybrid's turn-off
-  offsets, low-charge gain cross-check, fit intercept and `Q_min` slightly. Notebook 02
-  quantifies the shift and shows that the gain itself, being a slope, is untouched (5.957 against
+  offsets, low-charge preamp gain cross-check, fit intercept and `Q_min` slightly. Notebook 02
+  quantifies the shift and shows that the preamp gain itself, being a slope, is untouched (5.957 against
   5.955 DAC/fC).
 * **`highpower` is a directory tag, not a measurement.** Both hybrid flagship configurations carry
   it, yet the logged median analog supply current on their two days differs by about half
@@ -482,7 +486,7 @@ slopes over different ranges are not interchangeable.
   cannot arbitrate because its upper bound was set to the search's answer — every sweep stops
   exactly one DAC short with the hit rate still on its plateau.
 * **Twenty of the 360 August searches ran into the 10-bit DAC ceiling** and are lower limits rather
-  than measurements. Notebook 03 quotes the gain fit both with and without them; at VA 1.40 V (supply),
+  than measurements. Notebook 03 quotes the preamp gain fit both with and without them; at VA 1.40 V (supply),
   where seven of thirty are censored, putting them back in drags the slope down by about a third.
 * **σ = 1.12 DAC on ET2.03 against 0.92 on ET2.01, and the folder cannot say what that means.**
   Both are the same estimator on the same kind of data. Whether the ET2.03 edge is really wider, or
@@ -492,12 +496,16 @@ slopes over different ranges are not interchangeable.
 ### Reproduction ledgers
 
 Every headline number is compared, in the cell that computes it, against the previously published
-value, and the comparison is collected into a ledger at the end of each notebook.
+value, and the comparison is collected into a ledger at the end of each notebook. The published
+values were computed on the QSel-label charge axis (see the charge convention under Data
+provenance), so a charge-dependent check converts back to that axis at the point of comparison:
+the intercept as physical + (preamp gain) × 1 fC, `Q_min` as physical − 1 fC, and the TOT log law refitted
+against the label.
 
 | notebook | checks | agree | disagree |
 |---|---|---|---|
 | 01 | 37 | 35 | S-curve σ (0.92 vs 0.88) and the ENC that follows — see above |
-| 02 | 38 | 35 | low-charge gain cross-check, fit intercept, `Q_min` — all the turn-off-estimator shift |
+| 02 | 38 | 35 | low-charge preamp gain cross-check, fit intercept, `Q_min` — all the turn-off-estimator shift |
 | 03 | 12 | 12 | — |
 | 05 | 12 | 12 | — (internal: per-day directory accounting, README totals, decode errors, the `BARE4` map against its noise scans) |
 
@@ -513,6 +521,33 @@ machine-readably. Notebook 05's set has no independent hand decode behind it, un
 ---
 
 ## Data provenance
+
+**Charge convention, corrected 2026-10-18.** The ETROC2 Reference Manual (rev 0.60, §3.1.4 and
+Table 14 row 6, QSel[4:0]; bit position in Table 15) gives the injected charge as **(QSel + 1) fC**,
+1 to 32 fC, accurate to about ±15 %.
+Every 2024 campaign staged here was taken with the original i2c_gui scripts, which name each point
+`QInj_<N>` with N the QSel register value, so a `QInj_N` point carries **N + 1 fC**. The staged
+tables keep the recorded labels (their `charge`, `charge_fC` and `charge_tag_fC` columns hold N, and
+they are byte-identical to what was staged); the loaders in `qinj_common.py` add
+`QSEL_LABEL_OFFSET_FC = 1` on read. Until 2026-10-18 the notebooks plotted N as the charge. Fit
+windows and charge thresholds moved by +1 with the axis, so every fit selects the same data points
+as before: preamp-gain (charge-to-threshold) slopes and ENC are unchanged, fit intercepts move by
+−(slope × 1 fC), the minimum charge reaching BL+20 (`Q_min`) moves by +1 fC, and the
+TOT-against-ln Q law, which is not shift-invariant, was refitted. The census free-text `charges_fC`
+column and the published hybrid summary JSON are left in recorded label units.
+
+The same names therefore carry two meanings in two places: every charge column in `outputs/`
+(`charge`, `charge_fC`) is the physical charge, while the same columns in the staged `data/` tables
+are QSel labels, so a join between the two on charge is off by 1 fC unless the label is converted.
+Output keys and columns named after a charge were renamed with it: `gain_6_22` → `gain_7_23`,
+`chord_8_15` / `chord_15_27` / `chord_8_22` → `chord_9_16` / `chord_16_28` / `chord_9_23`,
+`walk_charge_5to27_at_off20_ps` → `walk_charge_6to28_at_off20_ps` (and `6to22` → `7to23` for
+ET2.03), `pixel_0_14_k_at_8` / `_27` → `pixel_0_14_k_at_9` / `_28`, and the BARE7 columns
+`turnoff_off_15fC`, `tot_BL20_15fC`, `jitter_BL20_15fC_ps` → `..._16fC`. Their values are
+unchanged. Besides the intercepts, `Q_min` and the TOT law, one more derived number changed: the
+pixel (0,14) implied charge ratio *k* of notebook 05, whose median goes from 0.67 to 0.71 at the
+lowest fitted charge and from 0.41 to 0.44 at the highest, because *k* is a ratio of charges and is
+not shift-invariant.
 
 Full detail, including how each file was extracted and what was deliberately left out, is in
 `data/*/PROVENANCE.md`. Summary:
@@ -557,7 +592,7 @@ below in its section 1.
 | `tid_et2p03_turnoff_all.csv` | 186,895 | `482b9e457aae1d32a385fa23f3316e14` | RAW. The 450 discriminator binary searches, each written out in full as `search_trace`. |
 | `tid_et2p03_noiseonly_all.csv` | 44,762 | `e18213b72eed3cbd5d27ff793955cd6b` | RAW. The 90 `quietCB` noise scans — a dense threshold scan of the trigger-bit counter, taken inside every configuration. This is what gives a baseline at all fourteen conditions. |
 | `tid_et2p03_configs_all.csv` | 30,212 | `11a3cbc4035b63c6a6c42a11f7f3870e` | RAW + DERIVED. The conditions grid, one row per run or rail sub-run. |
-| `tid_et2p03_points.feather` | 610,234 | `11832f9bef784d13102d9625180c068d` | RAW + DERIVED. The `TID_August` working copy alone, where the dosed data are the 10 fC rail scans only. Staged so the difference between the two table families is demonstrable. |
+| `tid_et2p03_points.feather` | 610,234 | `11832f9bef784d13102d9625180c068d` | RAW + DERIVED. The `TID_August` working copy alone, where the dosed data are the `_10fC` (QSel 10, 11 fC) rail scans only. Staged so the difference between the two table families is demonstrable. |
 | `tid_et2p03_turnoff.csv` | 21,696 | `a0cf7d157ac24337bd223c57c0cc42ca` | RAW. The same, working copy only. |
 | `tid_et2p03_noiseonly.csv` | 5,411 | `99257c0ca258a409cf814da5a2ee80d3` | RAW. The same, working copy only. |
 | `tid_et2p03_configs.csv` | 24,809 | `d857637ee4f399ffab5353dd119ad860` | RAW + DERIVED. The same, working copy only. |
@@ -634,7 +669,7 @@ which the provenance note records.
 
 ## Not recorded by any of the three campaigns
 
-**RFSel** (sets the preamplifier feedback resistance, and therefore gain and TOT — the single
+**RFSel** (sets the preamplifier feedback resistance, and therefore preamp gain and TOT — the single
 largest unquantified systematic in all three notebooks), **power mode** on both bare-die sides,
 on-chip temperature (`VTemp`), any chamber temperature beyond a directory tag, sensor bias on the
 hybrid −25 °C series, injections per point, and — on the hybrid — the scan windows, because every
@@ -665,7 +700,7 @@ The notebooks need only `numpy`, `pandas`, `pyarrow`, `scipy`, `matplotlib` and 
 `jupyter`/`nbconvert` to run headless. They read only the files under `data/` — nothing in them
 touches EOS, AFS or any remote system.
 
-### On lxplus (the repo's own environment) — verified
+### On lxplus (the repo's own environment)
 
 ```bash
 cd /afs/cern.ch/user/m/musafdar/CMS_ETROC/ETROC-Analysis
@@ -682,9 +717,12 @@ jupyter nbconvert --to notebook --execute --inplace 05_bench_jul2024_two_revisio
 **Nothing needs installing.** The repo's prescribed environment (`load_python39.sh`, LCG_104d,
 Python 3.9.12) already provides every dependency — pandas 1.5.3, pyarrow 11.0.0, numpy 1.23.5,
 scipy 1.10.1, matplotlib 3.7.1, mplhep 0.3.12, nbformat 5.9.1, nbconvert 7.6.0, ipykernel 6.0.2.
-All five notebooks were executed end to end there on 2026-09-04, after the CAL-window
-re-reduction, in 28, 69, 96, 93 and 28 s: 00, 01, 02, 03, 04. Every ledger value and every quoted
-number matched the laptop run, despite the older pandas, numpy and mplhep. Two harmless
+On 2026-09-04, after the CAL-window re-reduction and before notebook 05 and the 2026-10-18 charge
+correction existed, notebooks 00 to 04 were executed end to end there, in 28, 69, 96, 93 and 28 s,
+and every ledger value and every number then quoted matched the laptop run of that date, despite
+the older pandas, numpy and mplhep. The current numbers (physical charge, six notebooks) were
+executed on the laptop only, on 2026-10-18 (pandas 2.3.3, numpy 2.0.2, mplhep 1.1.3); they have
+not been re-run on lxplus. Two harmless
 differences remain between the two platforms and neither is numerical: the rendered PNG/PDF bytes
 differ (matplotlib version), and `outputs/et2p03_tot_vs_charge_offsets.csv` comes out in a
 different **row order**, because `groupby` orders its groups differently in pandas 1.5.3 — sorted
@@ -734,6 +772,9 @@ there — the notebooks resolve `figures/` and `outputs/` relative to `qinj_comm
 
 ## Conventions
 
+* **Charges are physical, (QSel + 1) fC**, in every notebook, table and figure (the census
+  free-text `charges_fC` column excepted); the staged `data/` tables keep the recorded QSel labels
+  and the loaders add 1 fC on read (corrected 2026-10-18; see Data provenance).
 * Thresholds are plotted as **`offset = dac − BL`** everywhere. The beam operating point is
   `threshold = BL + 20`, and the offset axis survives a chip-revision change where absolute DAC
   does not. `DAC LSB = 400 mV / 2¹⁰ = 0.390625 mV`.
@@ -745,7 +786,7 @@ there — the notebooks resolve `figures/` and `outputs/` relative to `qinj_comm
   *coverage* — a low charge simply turns off below BL+20 on some pixels — so every pooled quantity
   reports its own `n`, and the figures annotate partial coverage. The one place a point is set
   aside is stated as such: notebook 03's twenty DAC-ceiling turn-offs are lower limits rather than
-  measurements, and its gain fits are quoted both with and without them.
+  measurements, and its preamp gain fits are quoted both with and without them.
 * **There is exactly one per-hit selection in the folder, and it is a data-integrity criterion.**
   The ET2.03 reduction carries a **CAL window**: a hit counts towards a point's moments only if
   `|CAL − cal_mode| ≤ 3` codes against that pixel's modal CAL at that point — the repository test
@@ -770,13 +811,13 @@ there — the notebooks resolve `figures/` and `outputs/` relative to `qinj_comm
   that campaign's staged table is per-point moments with the hits behind them not staged.
 * **The pixel-to-pixel spread is the dominant uncertainty** on every chip (33 % on the bare
   ET2.01, 18 % on the hybrid, 35 % on the bare ET2.03, on 12, 9 and 6 pixels). A single chip-level
-  gain is close to meaningless; the per-pixel values are in `outputs/*_gain_fits.csv`. Notebook 03
+  preamp gain is close to meaningless; the per-pixel values are in `outputs/*_gain_fits.csv`. Notebook 03
   is the only campaign that measured the **same six pixels at every condition**, which is what lets
-  it form a paired per-pixel ratio and a measured repeatability floor of ±0.7 % on the gain.
+  it form a paired per-pixel ratio and a measured repeatability floor of ±0.7 % on the preamp gain.
 * **The money plot's high-charge branch is a floor measurement, not a resolution.** The injection
   is synchronous with the clock and, bare or bonded, the sensor is not generating the signal, so
-  above about 8 fC the measured jitter closes on the TDC quantisation floor `LSB/√12` — within a
-  factor of 1.18, 2.02 and 1.69 of it at 15 fC on the three data sets, per
+  above about 9 fC the measured jitter closes on the TDC quantisation floor `LSB/√12` — within a
+  factor of 1.18, 2.02 and 1.69 of it at 16 fC on the three data sets, per
   `outputs/xcamp_jitter_at_bl20.csv`. It must not
   be compared with a beam per-board time resolution. The physics lives in the low-charge rise and
   in the threshold-edge width. The floor itself differs between the data sets, because one TOA code

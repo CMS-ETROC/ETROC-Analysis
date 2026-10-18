@@ -1,13 +1,13 @@
-quantity,recomputed,published,diff,tol,unit,agrees,|diff|
-"point directories accounted for, v2.03_BARE1 07-15",3712.0,3712,0.0,0,dirs,True,0.0
-"point directories accounted for, v2.03_BARE4 07-16",4099.0,4099,0.0,0,dirs,True,0.0
-"point directories accounted for, v2.03_BARE4 07-17",1143.0,1143,0.0,0,dirs,True,0.0
-"point directories accounted for, v2.03_BARE4 07-18",3210.0,3210,0.0,0,dirs,True,0.0
-"point directories accounted for, v2.01_BARE10 07-22",4155.0,4155,0.0,0,dirs,True,0.0
-"point directories accounted for, v2.03_BARE9 07-29",3441.0,3441,0.0,0,dirs,True,0.0
-"point directories accounted for, v2.03_BARE9 07-30",3290.0,3290,0.0,0,dirs,True,0.0
-"decoded points, all days",22756.0,22756,0.0,0,points,True,0.0
-"turn-off searches, all days",252.0,252,0.0,0,searches,True,0.0
-"noise scans, all days",42.0,42,0.0,0,scans,True,0.0
-decode errors,0.0,0,0.0,0,points,True,0.0
-"BARE4 map vs scan baseline, mean |diff| over six pixels",0.6666666666666666,0,0.6666666666666666,3,DAC,True,0.6666666666666666
+quantity,recomputed,published,published_label_fC,diff,tol,unit,agrees,|diff|
+"point directories accounted for, v2.03_BARE1 07-15",3712.0,3712,,0.0,0,dirs,True,0.0
+"point directories accounted for, v2.03_BARE4 07-16",4099.0,4099,,0.0,0,dirs,True,0.0
+"point directories accounted for, v2.03_BARE4 07-17",1143.0,1143,,0.0,0,dirs,True,0.0
+"point directories accounted for, v2.03_BARE4 07-18",3210.0,3210,,0.0,0,dirs,True,0.0
+"point directories accounted for, v2.01_BARE10 07-22",4155.0,4155,,0.0,0,dirs,True,0.0
+"point directories accounted for, v2.03_BARE9 07-29",3441.0,3441,,0.0,0,dirs,True,0.0
+"point directories accounted for, v2.03_BARE9 07-30",3290.0,3290,,0.0,0,dirs,True,0.0
+"decoded points, all days",22756.0,22756,,0.0,0,points,True,0.0
+"turn-off searches, all days",252.0,252,,0.0,0,searches,True,0.0
+"noise scans, all days",42.0,42,,0.0,0,scans,True,0.0
+decode errors,0.0,0,,0.0,0,points,True,0.0
+"BARE4 map vs scan baseline, mean |diff| over six pixels",0.6666666666666666,0,,0.6666666666666666,3,DAC,True,0.6666666666666666

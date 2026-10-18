@@ -14,13 +14,15 @@
 # on disk): 0, 200 and 400 MRad on `BARE9`; `BARE7` is treated separately in section 14.
 # **Temperature** −23.2 to −23.9 °C, from directory names only.
 # **Pixels** 6: (row, col) ∈ {(0,0), (0,14), (3,0), (3,14), (12,0), (12,14)}.
-# **Charges** 6, 8, 10, 15 and 22 fC. **Rails** VA 0.85–1.40 V at VD 1.20 V for the threshold
-# scans; a separate 94-point VA × VD grid at a fixed 10 fC. **Every VA and VD number in this
+# **Charges** 7, 9, 11, 16 and 23 fC (QSel 6, 8, 10, 15 and 22; the injected charge is QSel + 1 fC,
+# ETROC2 Reference Manual rev 0.60 §3.1.4, applied by the loaders since 2026-10-18; the directory
+# names carry the QSel value, e.g. `_10fC` is 11 fC). **Rails** VA 0.85–1.40 V at VD 1.20 V for the
+# threshold scans; a separate 94-point VA × VD grid at a fixed 11 fC. **Every VA and VD number in this
 # notebook is a power-supply setting, not a voltage at the chip** — see the section below.
 #
 # This is the third measurement notebook of the folder and the ET2.03 counterpart of
 # `01_bare_et2p01_tid_jan2024.ipynb`. It imports the same `qinj_common.py`, so the turn-off
-# estimator, the weighted gain fit, the shared-σ S-curve fit, the TOT log law and the
+# estimator, the weighted preamp gain fit, the shared-σ S-curve fit, the TOT log law and the
 # quantisation floor are the same functions that produced the two January-2024 results. Where
 # this campaign forces a departure from that path — and there is exactly one, over the turn-off
 # in section 5 — the departure is measured rather than asserted.
@@ -148,7 +150,7 @@ print("pixels scanned       %s" % Q.ET2P03_PIXELS)
 # | `tid_et2p03_configs_all.csv` | RAW + DERIVED | the conditions grid, one row per run or voltage-scan sub-run. |
 # | `tid_et2p03_blnw.csv` | RAW | the `ET2p03_BARE9` autocalibration baseline and noise-width maps of 2024-08-03, all 256 pixels. |
 # | `tid_et2p03_chipconfig.csv` | RAW, decoded | the three register read-backs, 135 decoded fields plus the raw `PeriCfg0..31` bytes. |
-# | `tid_et2p03_points.feather` and the three other non-`_all` tables | RAW + DERIVED | the `TID_August` working copy alone, where the dosed data are the 10 fC rail scans only. Staged so that the difference between the two families is demonstrable rather than asserted. |
+# | `tid_et2p03_points.feather` and the three other non-`_all` tables | RAW + DERIVED | the `TID_August` working copy alone, where the dosed data are the 11 fC (QSel 10) rail scans only. Staged so that the difference between the two families is demonstrable rather than asserted. |
 #
 # The two ET2.03 auxiliary tables are also staged under `data/census/` for notebook 00. They are
 # byte-identical; the cell below prints both md5s so that is checkable rather than claimed.
@@ -255,7 +257,7 @@ print("no VTemp value is stored anywhere in this campaign.")
 #
 # * **money plots** — a full threshold × charge scan at one pixel at a time, 29 828 points over
 #   fourteen conditions on two dies, at VD 1.20 V throughout;
-# * **rail scans** — 94 single acquisitions at a fixed 10 fC and a fixed but **unrecorded**
+# * **rail scans** — 94 single acquisitions at a fixed 11 fC and a fixed but **unrecorded**
 #   threshold, each pooling all sixteen enabled pixels, over a VA × VD grid. Section 13.
 
 # %%
@@ -297,7 +299,7 @@ print("temperatures seen      :", [float(t) for t in sorted(PTS.temperature_C.dr
 #   `dose_MRad = NaN` rather than guessing. By its position in the campaign it is the 0 MRad set,
 #   and it is a **separate acquisition** from the identically-conditioned `TID_August` run — the
 #   two are not byte-duplicates. It carries thirty turn-off searches and six noise scans but **no
-#   threshold sweep**, so it contributes a baseline and a gain and nothing else — and that is
+#   threshold sweep**, so it contributes a baseline and a preamp gain and nothing else — and that is
 #   exactly what makes it useful: it is an independent repeat of the 0 MRad, VA 1.20 V condition
 #   and therefore a **repeatability floor** against which the dose differences can be judged.
 # * **`BARE7` is quarantined.** Its 0 MRad day (`2024-08-14`, 8.88 GB) lived on the removable disk
@@ -450,7 +452,7 @@ print("\npoints with a baseline attached: %d of %d" % (M.BL.notna().sum(), len(M
 # %%
 # --- Explainer 1: one discriminator binary search, and the noise scan that sets its baseline.
 CFG0 = COND[(COND.chip == "ET2p03_BARE9") & (COND.dose == 0) & (COND.va == 1.20)].config.iloc[0]
-PX, QQ = (0, 0), 15.0
+PX, QQ = (0, 0), 16.0
 ex = TOF[(TOF.config == CFG0) & (TOF.row == PX[0]) & (TOF.col == PX[1]) & (TOF.charge_fC == QQ)].iloc[0]
 d_ex, v_ex = Q.parse_trace(ex.search_trace)
 f_ex = v_ex / ex.l1a_max
@@ -622,7 +624,7 @@ print(n20.to_string())
 # window removes the affected hits rather than the affected points, so no threshold point is lost.
 #
 # **The window does not remove everything.** A second, smaller artefact class survives it: points
-# whose CAL is clean *after* windowing and whose TOA is still corrupt. Pixel (3,0) at 22 fC,
+# whose CAL is clean *after* windowing and whose TOA is still corrupt. Pixel (3,0) at 23 fC,
 # 0 MRad, VA 1.20 V is the clearest example — at DAC 880–883 the window rejects only 0.5 % of the
 # hits and leaves `cal_std` at 0.38–0.50 codes, yet the windowed TOA spread is 10.9–16.5 codes,
 # i.e. 180–273 ps. Those are the isolated spikes still visible in figure 4. They are **flagged,
@@ -687,7 +689,7 @@ print("\nThe blocks land at different absolute DAC on different pixels, so on th
 print("pixels they smear into one broad, charge-independent bump in the middle of the money plot")
 print("that no front-end effect could produce.")
 
-PXB, QB = (0, 0), 15.0
+PXB, QB = (0, 0), 16.0
 dd = D0X[(D0X.row == PXB[0]) & (D0X.col == PXB[1]) & (D0X.charge_fC == QB)].sort_values("dac")
 fig, axs = plt.subplots(1, 3, figsize=(22, 6.2))
 ax = axs[0]
@@ -881,7 +883,7 @@ print("searches whose turn-off is at or above DAC 1018, i.e. against the 10-bit 
       % (int(TO.at_dac_ceiling.sum()), len(TO)))
 print(TO[TO.at_dac_ceiling].groupby(["label", "charge_fC"]).size().to_string())
 print("\nThose points are a lower limit on the turn-off, not a measurement of it. They are kept in")
-print("every table (no cuts), and the gain fit below is quoted both with and without them.")
+print("every table (no cuts), and the preamp gain fit below is quoted both with and without them.")
 
 # %%
 piv = (TO[TO.va == 1.20].pivot_table(index="charge_fC", columns="label",
@@ -894,20 +896,20 @@ piv2 = (TO[TO.chip == "ET2p03_BARE9"].dropna(subset=["dose"])
 print("BARE9, every dose and every rail:\n")
 print(piv2.round(1).to_string())
 ex0 = TO[(TO.config == CFG0) & (TO.row == 0) & (TO.col == 0)].set_index("charge_fC").turnoff_dac
-for ch, want in zip([6, 8, 10, 15, 22], [858, 877, 895, 950, 1019]):
+for ch, want in zip(Q.ET2P03_CHARGES, [858, 877, 895, 950, 1019]):   # published per QSel 6 ... 22
     Q.check(f"turn-off DAC, BARE9 0 MRad VA 1.20, pixel (0,0), {ch} fC", float(ex0[ch]), want, 0,
             "DAC", LEDGER)
 
 # %% [markdown]
 # ## 6. Preamp gain, against dose and against the analog rail
 #
-# The gain is the slope of turn-off DAC against injected charge, fitted per pixel by weighted
+# The preamp gain is the slope of turn-off DAC against injected charge, fitted per pixel by weighted
 # least squares with a y-error of 0.5 DAC — `qinj_common.gain_fit`, the same function notebooks
-# 01 and 02 use. The fit range is **8 to 22 fC**: 8 fC is the same lower edge as the two earlier
-# notebooks, and 22 fC is simply the highest charge this campaign injected.
+# 01 and 02 use. The fit range is **9 to 23 fC**: 9 fC is the same lower edge as the two earlier
+# notebooks, and 23 fC is simply the highest charge this campaign injected.
 #
-# Unlike ET2.01, the ET2.03 turn-off does **not** saturate below 8 fC — the 6 fC point sits on the
-# same line — so a 6–22 fC fit is also reported as a cross-check. And unlike either January
+# Unlike ET2.01, the ET2.03 turn-off does **not** saturate below 9 fC — the 7 fC point sits on the
+# same line — so a 7–23 fC fit is also reported as a cross-check. And unlike either January
 # campaign, the same six pixels were measured at every condition, so a **paired per-pixel ratio**
 # is available and is a far sharper test of a dose or rail effect than comparing two means whose
 # pixel-to-pixel spread is 30 %.
@@ -917,7 +919,7 @@ for ch, want in zip([6, 8, 10, 15, 22], [858, 877, 895, 950, 1019]):
 # fit with the limits put back in is printed alongside; it is identical wherever nothing is
 # censored and drags the slope down by up to a third where things are. The paired ratios go
 # further and refit **both** conditions of each pair over the charges that are uncensored in both,
-# so a censored point in one of them can never be read as a gain change.
+# so a censored point in one of them can never be read as a preamp gain change.
 
 # %%
 rows = []
@@ -929,9 +931,9 @@ for (cfg, r, c), g in TO.groupby(["config", "row", "col"]):
     fall = Q.gain_fit(g, bl, q_lo=Q.ET2P03_QLO, q_hi=Q.ET2P03_QHI,
                       turnoff_col="turnoff_dac", charge_col="charge_fC")
     rec["gain_with_ceiling_dac_per_fc"] = fall.get("gain_dac_per_fc", np.nan)
-    f6 = Q.gain_fit(g[~g.at_dac_ceiling], bl, q_lo=6, q_hi=Q.ET2P03_QHI,
+    f6 = Q.gain_fit(g[~g.at_dac_ceiling], bl, q_lo=7, q_hi=Q.ET2P03_QHI,
                     turnoff_col="turnoff_dac", charge_col="charge_fC")
-    rec["gain_6_22_dac_per_fc"] = f6.get("gain_dac_per_fc", np.nan)
+    rec["gain_7_23_dac_per_fc"] = f6.get("gain_dac_per_fc", np.nan)
     rec["charges_used"] = int(rec.get("npts", 0) or 0)
     rows.append(rec)
 GF = pd.DataFrame(rows).merge(COND[["config", "label", "chip", "dose", "va", "day"]], on="config")
@@ -941,7 +943,7 @@ gb = []
 for cfg, g in GF.groupby("config"):
     p = Q.pooled(g.gain_dac_per_fc)
     pn = Q.pooled(g.gain_with_ceiling_dac_per_fc)
-    p6 = Q.pooled(g.gain_6_22_dac_per_fc)
+    p6 = Q.pooled(g.gain_7_23_dac_per_fc)
     pi = Q.pooled(g.intercept_offset_dac)
     pq = Q.pooled(g.Qmin_at_off_fC)
     pc = Q.pooled(g.chi2_ndf)
@@ -950,7 +952,7 @@ for cfg, g in GF.groupby("config"):
                    n_pixels=p["n"], gain_dac_per_fc=p["mean"], gain_sem=p["sem"],
                    gain_pixel_rms=p["rms"], gain_mv_per_fc=p["mean"] * Q.LSB_MV,
                    gain_mv_sem=p["sem"] * Q.LSB_MV, gain_mv_pixel_rms=p["rms"] * Q.LSB_MV,
-                   gain_with_ceiling=pn["mean"], gain_6_22=p6["mean"], chi2_ndf=pc["mean"],
+                   gain_with_ceiling=pn["mean"], gain_7_23=p6["mean"], chi2_ndf=pc["mean"],
                    charges_used_min=int(g.charges_used.min()), charges_used_max=int(g.charges_used.max()),
                    intercept_offset_dac=pi["mean"], Qmin_at_off20_fC=pq["mean"],
                    Qmin_sem=pq["sem"], BL_mean=g.BL.mean(),
@@ -958,14 +960,14 @@ for cfg, g in GF.groupby("config"):
 GB = pd.DataFrame(gb).sort_values(["chip", "dose", "va"], na_position="last").reset_index(drop=True)
 GB.to_csv(Q.OUTDIR / "et2p03_gain_by_condition.csv", index=False)
 print(GB[["label", "n_pixels", "gain_dac_per_fc", "gain_sem", "gain_pixel_rms", "gain_mv_per_fc",
-          "gain_with_ceiling", "gain_6_22", "chi2_ndf", "intercept_offset_dac", "Qmin_at_off20_fC",
+          "gain_with_ceiling", "gain_7_23", "chi2_ndf", "intercept_offset_dac", "Qmin_at_off20_fC",
           "BL_mean", "n_at_ceiling", "charges_used_min", "charges_used_max"]].round(3).to_string(index=False))
-print("\n`gain_dac_per_fc` is the fit over the 8-22 fC charges whose turn-off was actually measured;")
+print("\n`gain_dac_per_fc` is the fit over the 9-23 fC charges whose turn-off was actually measured;")
 print("`gain_with_ceiling` is the same fit with the DAC-ceiling lower limits put back in, which")
 print("drags it down wherever there are any. `charges_used_*` is how many charges each pixel's fit had.")
 REF = GB[(GB.chip == "ET2p03_BARE9") & (GB.dose == 0) & (GB.va == 1.20)].iloc[0]
 print("\nreference condition: %s" % REF.label)
-print("  gain %.2f +- %.2f DAC/fC (pixel RMS %.2f, %.0f %%) = %.2f +- %.2f mV/fC under the assumed LSB"
+print("  preamp gain %.2f +- %.2f DAC/fC (pixel RMS %.2f, %.0f %%) = %.2f +- %.2f mV/fC under the assumed LSB"
       % (REF.gain_dac_per_fc, REF.gain_sem, REF.gain_pixel_rms,
          100 * REF.gain_pixel_rms / REF.gain_dac_per_fc, REF.gain_mv_per_fc, REF.gain_mv_sem))
 
@@ -974,10 +976,10 @@ print("  gain %.2f +- %.2f DAC/fC (pixel RMS %.2f, %.0f %%) = %.2f +- %.2f mV/fC
 
 # %%
 def paired(cfg_a, cfg_b):
-    """Per-pixel gain ratio between two conditions, **charge-matched**.
+    """Per-pixel preamp-gain ratio between two conditions, **charge-matched**.
 
     For each pixel both conditions are re-fitted over exactly the charges that are uncensored in
-    *both* of them, so a DAC-ceiling limit in one condition cannot masquerade as a gain change.
+    *both* of them, so a DAC-ceiling limit in one condition cannot masquerade as a preamp-gain change.
     The six pixels are the same at every condition, which is what makes the pairing possible at
     all — notebooks 01 and 02 have no such handle.
     """
@@ -1032,7 +1034,7 @@ for chip in ["ET2p03_BARE9"]:   # BARE7 has no dose step (section 14)
                               BL_shift_n_pixels=int(len(dbl))))
 PAIR = pd.DataFrame(pair_rows)
 PAIR.to_csv(Q.OUTDIR / "et2p03_paired_dose_ratios.csv", index=False)
-print("paired per-pixel gain ratio and baseline shift with dose, at fixed VA and fixed die\n")
+print("paired per-pixel preamp gain ratio and baseline shift with dose, at fixed VA and fixed die\n")
 print(PAIR.round(3).to_string(index=False))
 print("\nBARE7 does not appear in this table: its only dosed acquisition has an unknown dose")
 print("(section 14), so no paired dose step can be formed for it.")
@@ -1050,7 +1052,7 @@ print("(section 14), so no paired dose step can be formed for it.")
 #   of 4.3 %. On this chip how far below nominal the analog rail sits is the dominant variable,
 #   not the dose.
 # * **The paired test has a measured floor and the changes sit just above it.** Repeating the
-#   0 MRad, VA 1.20 V condition on a different day returns a paired gain ratio of
+#   0 MRad, VA 1.20 V condition on a different day returns a paired preamp gain ratio of
 #   **1.006 ± 0.007** and an identical mean baseline, so a real few-per-cent change is
 #   resolvable. Every 200 → 400 MRad step, at all four rails, comes out between −4.96 % and
 #   −5.39 % with a per-step standard error of 1.9–3.9 %. Read that as a consistency check and
@@ -1065,10 +1067,10 @@ print("(section 14), so no paired dose step can be formed for it.")
 #   more, and earlier, when it is run at the bottom of its supply range — which is the same place
 #   the rail scan of section 12 finds it failing outright.
 #
-# Two limits on all of that. The intercept of the fit lands about 20 DAC *below* the baseline at
-# VA 1.20 V, so `turn-off = BL + gain × Q` is the wrong model here exactly as it is on ET2.01, and
-# a gain estimated by drawing a line from the baseline through one measured point would read low.
-# And the pixel-to-pixel spread is 35 % on six pixels, so the *absolute* gain of a single chip is
+# Two limits on all of that. The intercept of the fit lands about 30 DAC *below* the baseline at
+# VA 1.20 V, so `turn-off = BL + (preamp gain) × Q` is the wrong model here exactly as it is on ET2.01, and
+# a preamp gain estimated by drawing a line from the baseline through one measured point would read low.
+# And the pixel-to-pixel spread is 35 % on six pixels, so the *absolute* preamp gain of a single chip is
 # a much weaker statement than any of the paired ratios above.
 
 # %%
@@ -1106,7 +1108,7 @@ for dose in [0.0, 200.0, 400.0]:
     ax.plot(hollow.va, hollow.gain_with_ceiling, marker=DMK[dose], ms=12, ls="", mfc="none",
             mec=DCOL[dose], mew=2.4)
 ax.set_xlabel("analog supply SETTING VA  [V]   (~VA − 0.20 V at the chip)")
-ax.set_ylabel("gain  [DAC LSB / fC]")
+ax.set_ylabel("preamp gain  [DAC LSB / fC]")
 ax.legend(fontsize=13)
 ax.text(0.03, 0.90, "filled: the charges actually measured\nhollow: the same fit with the DAC-ceiling\nlower limits put back in",
         transform=ax.transAxes, fontsize=11)
@@ -1126,7 +1128,7 @@ ax.set_ylabel("baseline  [DAC LSB]")
 ax.legend(fontsize=11)
 ax.set_title("and so does the baseline — both are DAC-scale sensitive", loc="left", fontsize=14)
 fig.tight_layout()
-Q.fig_header(fig, "Turn-off, gain and baseline against dose and analog rail",
+Q.fig_header(fig, "Turn-off, preamp gain and baseline against dose and analog rail",
              tag="ET2p03_BARE9, 6 pixels, VD 1.20 V (supply), −23.5 to −23.8 °C", scale=0.62,
              campaign=Q.ET2P03_CAMPAIGN)
 Q.save_fig(fig, "et2p03_fig1_turnoff_and_gain")
@@ -1310,7 +1312,7 @@ plt.show()
 # coarsely, is the fit describing an edge the search never probed? The cell below answers it by
 # refitting each condition on the well-bracketed subset alone and printing both widths.
 #
-# ENC follows as `σ / gain`, in electrons. It is a ratio of two measured quantities and on this
+# ENC follows as `σ / (preamp gain)`, in electrons. It is a ratio of two measured quantities and on this
 # revision **both** of them are in DAC units set by a reference that moves with the analog rail,
 # so the ENC is quoted per condition and its rail dependence is shown rather than averaged away.
 
@@ -1389,9 +1391,9 @@ for dose, mk in [(0.0, "o"), (200.0, "^"), (400.0, "D")]:
         continue
     ax.plot(s.va, s.ENC_e, "-", marker=mk, ms=12, lw=2.6, color=DCOL[dose], label=f"{int(dose)} MRad")
 ax.set_xlabel("analog supply SETTING VA  [V]   (~VA − 0.20 V at the chip)")
-ax.set_ylabel("ENC = $\\sigma$ / gain  [electrons]")
+ax.set_ylabel("ENC = $\\sigma$ / (preamp gain)  [electrons]")
 ax.legend(fontsize=13)
-ax.set_title("ENC: the rail moves it through the gain", loc="left", fontsize=15)
+ax.set_title("ENC: the rail moves it through the preamp gain", loc="left", fontsize=15)
 fig.tight_layout()
 Q.fig_header(fig, "The threshold edge, the width and the equivalent noise charge",
              tag="ET2p03 bare dies, shared-$\\sigma$ fit on well-bracketed searches only",
@@ -1409,7 +1411,7 @@ plt.show()
 # Whether that wider edge means a noisier front end or a finer DAC step is **not decidable from
 # this campaign**, and that is the whole difficulty with an internal reference: σ is measured in
 # DAC, and one DAC on ET2.03 is not demonstrably the same voltage as one DAC on ET2.01. The ENC
-# ratio σ/gain is the quantity that removes the DAC scale — both numerator and denominator carry
+# ratio σ/(preamp gain) is the quantity that removes the DAC scale — both numerator and denominator carry
 # it — and it is what notebook 04 compares across revisions.
 #
 # **One condition is an outlier and is flagged rather than smoothed over.** BARE9 at 400 MRad,
@@ -1469,7 +1471,7 @@ for off in Q.OFFS:
     s = TOT[(TOT.config == CFG0) & (TOT.offset == off)].sort_values("charge_fC")
     ax.errorbar(s.charge_fC, s.tot_code_mean, yerr=s.tot_code_pixel_rms, fmt="-", marker=Q.OMK[off],
                 ms=11, lw=2.4, color=Q.OCOL[off], capsize=5, label=f"BL+{off}")
-    qq = np.linspace(5.5, 23, 200)
+    qq = np.linspace(6.5, 24, 200)
     ff = fits.get((CFG0, off))
     if ff:
         ax.plot(qq, ff["a"] + ff["b"] * np.log(qq), ":", color=Q.OCOL[off], lw=2.2)
@@ -1505,7 +1507,7 @@ Q.charge_axis(ax, charges=Q.ET2P03_CHARGES)
 ax.set_xlabel("injected charge  [fC]")
 ax.set_ylabel("TOT at BL+20  [code]")
 ax.legend(fontsize=12, title="BARE9, 200 MRad", title_fontsize=12)
-ax.set_title("the analog rail does, and in the opposite sense to the gain",
+ax.set_title("the analog rail does, and in the opposite sense to the preamp gain",
              loc="left", fontsize=13)
 fig.tight_layout()
 Q.fig_header(fig, "TOT against injected charge", tag="ET2p03 bare dies, mean over 6 pixels",
@@ -1562,12 +1564,12 @@ WALK.to_csv(Q.OUTDIR / "et2p03_walk.csv", index=False)
 w20 = WALK[WALK.config == CFG0].set_index("charge_fC").toa_at_BL20_ps
 print("%s: median TOA at BL+20 against charge [ps]" % REF.label)
 print(w20.round(0).to_dict())
-walk_ref = float(w20[22] - w20[6])
-print("walk with charge, 6 -> 22 fC at BL+20: %+.0f ps" % walk_ref)
-RESULTS["walk_charge_6to22_at_off20_ps"] = walk_ref
+walk_ref = float(w20[23] - w20[7])
+print("walk with charge, 7 -> 23 fC at BL+20: %+.0f ps" % walk_ref)
+RESULTS["walk_charge_7to23_at_off20_ps"] = walk_ref
 print("\nthe same, every condition [ps]:")
 wtab = WALK.pivot_table(index="label", columns="charge_fC", values="toa_at_BL20_ps")
-wtab["walk 6->22"] = wtab[22.0] - wtab[6.0]
+wtab["walk 7->23"] = wtab[23.0] - wtab[7.0]
 print(wtab.round(0).to_string())
 
 D0 = M[(M.config == CFG0) & (M.scan_family == "money_plot")]
@@ -1748,7 +1750,8 @@ plt.show()
 # %% [markdown]
 # ## 12. The VA × VD rail scan
 #
-# Ninety-four single acquisitions at a fixed 10 fC, over VA 0.85–1.40 V × VD 0.90–1.45 V **on the
+# Ninety-four single acquisitions at a fixed 11 fC (QSel 10; the names say `_10fC`), over
+# VA 0.85–1.40 V × VD 0.90–1.45 V **on the
 # power supply** (~0.65–1.20 V and ~0.85–1.40 V at the chip), at all three doses. Three things have
 # to be said before any of it is read.
 #
@@ -1787,9 +1790,9 @@ print("fail 'even though pixels calibrate', with 'QInj events ... empty but at r
 print("Decoding those sub-runs blind returns exactly zero hits. The two agree.")
 print("Nominal on the digital rail is VD = 1.25 V on the supply, so those failures are ~0.30 and")
 print("~0.35 V below the nominal chip voltage, not ~0.25 and ~0.30 V as the supply labels suggest.")
-print("\ncharge tag missing on %d sub-runs (the name carries no _10fC token, so the column does not"
+print("\ncharge tag missing on %d sub-runs (the name carries no _10fC token, i.e. no QSel 10 = 11 fC, so the"
       % int(V2.charge_fC.isna().sum()))
-print("claim one, although the campaign almost certainly ran them at 10 fC like the rest).")
+print("column does not claim one, although the campaign almost certainly ran them at 11 fC like the rest).")
 
 # %%
 fig, axs = plt.subplots(1, 3, figsize=(22, 6.4))
@@ -1803,7 +1806,7 @@ for dose, lab in [(0.0, "0 MRad"), (200.0, "200 MRad"), (400.0, "400 MRad")]:
 ax.set_xlabel("analog supply SETTING VA  [V]   (~VA − 0.20 V at chip; VD setting fixed at 1.20 V)")
 ax.set_ylabel("decoded hits per sub-run  [$10^5$]")
 ax.legend(fontsize=12)
-ax.set_title("10 fC yield against the analog rail", loc="left", fontsize=15)
+ax.set_title("11 fC yield against the analog rail", loc="left", fontsize=15)
 
 ax = axs[1]
 s = V2[(V2.chip_s == "BARE9") & (V2.va_V == 1.20)]
@@ -1818,7 +1821,7 @@ ax.text(0.90, 0.55, "VD 0.90 / 0.95 V:\nzero hits", fontsize=12, color=Q.C_MAG,
 ax.set_xlabel("digital supply SETTING VD  [V]   (~VD − 0.05 V at chip; VA setting fixed at 1.20 V)")
 ax.set_ylabel("decoded hits per sub-run  [$10^5$]")
 ax.legend(fontsize=12)
-ax.set_title("10 fC yield against the digital rail", loc="left", fontsize=15)
+ax.set_title("11 fC yield against the digital rail", loc="left", fontsize=15)
 
 ax = axs[2]
 for chip, mk, ls in [("BARE9", "o", "-")]:
@@ -1839,7 +1842,7 @@ ax.legend(fontsize=11)
 ax.set_title("CAL follows both rails — the TDC power domain is split by column half",
              loc="left", fontsize=13)
 fig.tight_layout()
-Q.fig_header(fig, "The rail scan: where the chip works, at a fixed 10 fC",
+Q.fig_header(fig, "The rail scan: where the chip works, at a fixed 11 fC",
              tag="94 sub-runs, threshold not recorded, 16 pixels pooled", scale=0.62,
              campaign=Q.ET2P03_CAMPAIGN)
 Q.save_fig(fig, "et2p03_fig10_rail_scan")
@@ -1848,7 +1851,7 @@ plt.show()
 # %% [markdown]
 # ## 13. What the rail axis says about the DAC scale
 #
-# Both the baseline and the gain, in DAC units, move strongly with the analog rail. That is
+# Both the baseline and the preamp gain, in DAC units, move strongly with the analog rail. That is
 # exactly what a reference generator powered from that rail would do, and it is why no absolute
 # millivolt number in this notebook should be trusted at the few-per-cent level.
 #
@@ -1863,13 +1866,13 @@ SC = GB[(GB.chip == "ET2p03_BARE9") & GB.dose.notna()].copy()
 SC["gain_rel"] = SC.gain_dac_per_fc / SC.groupby("dose").gain_dac_per_fc.transform(
     lambda s: s.iloc[0] if len(s) else np.nan)
 tab = SC.pivot_table(index="va", columns="dose", values=["gain_dac_per_fc", "BL_mean"])
-print("gain [DAC/fC] and baseline [DAC] against the analog rail, per dose\n")
+print("preamp gain [DAC/fC] and baseline [DAC] against the analog rail, per dose\n")
 print(tab.round(2).to_string())
 b200 = SC[SC.dose == 200].sort_values("va")
 sl, ic, sle, ice, _, _ = Q.wls(b200.va.values, b200.BL_mean.values, np.full(len(b200), 1.0))
 print("\nbaseline against VA at 200 MRad: %.0f +- %.0f DAC/V = %.0f mV/V under the assumed LSB"
       % (sl, sle, sl * Q.LSB_MV))
-print("gain against VA at 200 MRad: %.2f -> %.2f DAC/fC over 0.85 -> 1.40 V, a factor %.2f"
+print("preamp gain against VA at 200 MRad: %.2f -> %.2f DAC/fC over 0.85 -> 1.40 V, a factor %.2f"
       % (b200.gain_dac_per_fc.iloc[0], b200.gain_dac_per_fc.iloc[-1],
          b200.gain_dac_per_fc.iloc[-1] / b200.gain_dac_per_fc.iloc[0]))
 print("baseline over the same range: %.0f -> %.0f DAC, a factor %.2f"
@@ -1921,9 +1924,9 @@ for _, cnd in B7C.iterrows():
                          sigma_dac=float(sg.sigma_dac.iloc[0]) if len(sg) else np.nan,
                          ENC_e=float(sg.ENC_e.iloc[0]) if len(sg) else np.nan,
                          NW_fwhm=float(sg.NW_fwhm.iloc[0]) if len(sg) else np.nan,
-                         turnoff_off_15fC=float(to.get(15, np.nan)),
-                         tot_BL20_15fC=float(tt.tot_code_mean.get(15, np.nan)) if len(tt) else np.nan,
-                         jitter_BL20_15fC_ps=float(jj.jitter_mean.get(15, np.nan)) if len(jj) else np.nan,
+                         turnoff_off_16fC=float(to.get(16, np.nan)),
+                         tot_BL20_16fC=float(tt.tot_code_mean.get(16, np.nan)) if len(tt) else np.nan,
+                         jitter_BL20_16fC_ps=float(jj.jitter_mean.get(16, np.nan)) if len(jj) else np.nan,
                          cal_median=float(M[M.config == cfg].cal_mean.median())))
 B7ISO = pd.DataFrame(iso_rows)
 B7ISO.to_csv(Q.OUTDIR / "et2p03_bare7_isolated.csv", index=False)
@@ -1987,7 +1990,7 @@ if len(s7d):
 ax.set_xlabel("supply SETTING  [V]   (~−0.20 V analog, ~−0.05 V digital at the chip)")
 ax.set_ylabel("decoded hits per sub-run  [$10^5$]")
 ax.legend(fontsize=11)
-ax.set_title("BARE7: 10 fC yield against each rail, 0 MRad", loc="left", fontsize=13)
+ax.set_title("BARE7: 11 fC yield against each rail, 0 MRad", loc="left", fontsize=13)
 fig.tight_layout()
 Q.fig_header(fig, "BARE7 on its own",
              tag="ET2p03_BARE7, 6 pixels, VD 1.20 V (supply); the post-0 MRad dose is UNKNOWN (X-ray failure) "
@@ -2011,7 +2014,7 @@ plt.show()
 #
 # Two things this section can do that nothing else in the folder can: it **measures** how the internal
 # reference moved with dose, instead of inferring it, and it puts the dose steps on a common time axis
-# with the baseline, the currents and a temperature proxy — so the annealing after each step is
+# with the baseline, the currents and a temperature proxy — so the cooling down after each step is
 # visible.
 
 # %%
@@ -2069,17 +2072,17 @@ RESULTS["vref_change_0_to_400_pct"] = 100 * f400
 #
 # 1. the baseline **code** of an unchanged analog baseline would fall by $\mathrm{BL}_0\,f/(1+f)$;
 #    whatever the measured fall exceeds that by is the front end's own drift, in DAC;
-# 2. the preamp gain in **DAC per fC** would read low by $f$, so the intrinsic (millivolt) gain change
+# 2. the preamp gain in **DAC per fC** would read low by $f$, so the intrinsic (millivolt) preamp gain change
 #    is the measured one plus $f$.
 
 # %%
 def parse_note(n):
     m = re.match(r"\s*([+-]?[\d.]+)\s*C,\s*(\d+)\s*MRad(?:\s*\+\s*(\d+)h\s*(\d+)m)?[^,]*,\s*A:\s*([\d.]+)V,\s*D:\s*([\d.]+)V", str(n))
     if not m:
-        return pd.Series(dict(plate_C=np.nan, dose_MRad=np.nan, anneal_h=np.nan, A_V=np.nan, D_V=np.nan))
+        return pd.Series(dict(plate_C=np.nan, dose_MRad=np.nan, hours_after_step=np.nan, A_V=np.nan, D_V=np.nan))
     T_, d, hh, mm, A_, D_ = m.groups()
     return pd.Series(dict(plate_C=float(T_), dose_MRad=float(d),
-                          anneal_h=(float(hh) + float(mm) / 60.0) if hh is not None else (0.0 if d != "0" else np.nan),
+                          hours_after_step=(float(hh) + float(mm) / 60.0) if hh is not None else (0.0 if d != "0" else np.nan),
                           A_V=float(A_), D_V=float(D_)))
 
 
@@ -2089,11 +2092,11 @@ M9 = MP[(MP.chip_name == "ET2p03_BARE9") & (MP.n_pix >= 200)].copy()
 NOM = M9[(M9.A_V == 1.2) & (M9.D_V == 1.2)]
 cold = NOM[NOM.plate_C < -20]
 bl_pre = cold[(cold.dose_MRad == 0) & (cold.t_first > pd.Timestamp("2024-08-04 22:00"))].bl_mean.mean()
-bl200 = cold[(cold.dose_MRad == 200) & (cold.anneal_h >= 12)].bl_mean.mean()
-bl400 = cold[(cold.dose_MRad == 400) & (cold.anneal_h >= 12)].bl_mean.mean()
+bl200 = cold[(cold.dose_MRad == 200) & (cold.hours_after_step >= 12)].bl_mean.mean()
+bl400 = cold[(cold.dose_MRad == 400) & (cold.hours_after_step >= 12)].bl_mean.mean()
 nw_pre = cold[(cold.dose_MRad == 0) & (cold.t_first > pd.Timestamp("2024-08-04 22:00"))].nw_mean.mean()
-nw200 = cold[(cold.dose_MRad == 200) & (cold.anneal_h >= 12)].nw_mean.mean()
-nw400 = cold[(cold.dose_MRad == 400) & (cold.anneal_h >= 12)].nw_mean.mean()
+nw200 = cold[(cold.dose_MRad == 200) & (cold.hours_after_step >= 12)].nw_mean.mean()
+nw400 = cold[(cold.dose_MRad == 400) & (cold.hours_after_step >= 12)].nw_mean.mean()
 print("BARE9 256-pixel autocalibration maps, A 1.2 V / D 1.2 V (supply), plate −23 to −24 °C, ≥ 12 h after each step:")
 print("  baseline  0 MRad %.1f   200 MRad %.1f (%+.1f)   400 MRad %.1f (%+.1f)   [DAC, mean over the map]"
       % (bl_pre, bl200, bl200 - bl_pre, bl400, bl400 - bl_pre))
@@ -2177,9 +2180,9 @@ plt.show()
 fig, axs = plt.subplots(1, 3, figsize=(22, 6.4))
 ax = axs[0]
 for dose, cc in ((200, Q.C_ORANGE), (400, Q.C_MAG)):
-    a = cold[(cold.dose_MRad == dose) & cold.anneal_h.notna()].sort_values("anneal_h")
+    a = cold[(cold.dose_MRad == dose) & cold.hours_after_step.notna()].sort_values("hours_after_step")
     if len(a):
-        ax.plot(a.anneal_h, a.bl_mean, "-o", ms=9, lw=2.2, color=cc, label=f"after the step to {dose} MRad")
+        ax.plot(a.hours_after_step, a.bl_mean, "-o", ms=9, lw=2.2, color=cc, label=f"after the step to {dose} MRad")
 ax.axhline(bl_pre, color=Q.GREY, ls="--", lw=2, label="0 MRad, cold")
 ax.set_xlabel("time since the dose step  [h]")
 ax.set_ylabel("256-pixel map baseline  [DAC LSB]")
@@ -2187,9 +2190,9 @@ ax.legend(fontsize=11)
 ax.set_title("the baseline recovers a few DAC in the first day after each step", loc="left", fontsize=13)
 ax = axs[1]
 for dose, cc in ((200, Q.C_ORANGE), (400, Q.C_MAG)):
-    a = cold[(cold.dose_MRad == dose) & cold.anneal_h.notna()].sort_values("anneal_h")
+    a = cold[(cold.dose_MRad == dose) & cold.hours_after_step.notna()].sort_values("hours_after_step")
     if len(a):
-        ax.plot(a.anneal_h, a.nw_mean, "-o", ms=9, lw=2.2, color=cc, label=f"after the step to {dose} MRad")
+        ax.plot(a.hours_after_step, a.nw_mean, "-o", ms=9, lw=2.2, color=cc, label=f"after the step to {dose} MRad")
 ax.axhline(nw_pre, color=Q.GREY, ls="--", lw=2, label="0 MRad, cold")
 ax.set_xlabel("time since the dose step  [h]")
 ax.set_ylabel("256-pixel map noise width  [DAC LSB]")
@@ -2206,10 +2209,10 @@ ax.axhline(0, color="black", lw=1.6)
 ax.set_ylabel("baseline code shift, 0 → 400 MRad  [DAC LSB]")
 ax.set_title(f"VRef rose {100 * f400:+.1f} %: it explains part of the fall, not all of it", loc="left", fontsize=13)
 fig.tight_layout()
-Q.fig_header(fig, "Annealing after each dose step, and the reference-scale decomposition",
+Q.fig_header(fig, "Cooling down after each dose step, and the reference-scale decomposition",
              tag="ET2p03_BARE9, 256-pixel autocalibration maps at A 1.2 / D 1.2 V (supply), plate −23 to −24 °C; "
                  "decomposition assumes DAC full scale proportional to VRef", scale=0.62, campaign=Q.ET2P03_CAMPAIGN)
-Q.save_fig(fig, "et2p03_fig13_annealing_and_scale")
+Q.save_fig(fig, "et2p03_fig13_cooling_down_and_scale")
 plt.show()
 
 # %% [markdown]
@@ -2226,14 +2229,14 @@ BF = BF[(BF.chip_name == "ET2p03_BARE9") & BF.save_notes.str.contains("A: 1.2V, 
 BF = pd.concat([BF, BF.save_notes.apply(parse_note)], axis=1)
 BFc = BF[BF.plate_C < -20]
 pre_px = BFc[(BFc.dose_MRad == 0) & (BFc.timestamp > pd.Timestamp("2024-08-04 22:00"))].groupby(["row", "col"]).baseline.mean()
-d200_px = BFc[(BFc.dose_MRad == 200) & (BFc.anneal_h >= 12)].groupby(["row", "col"]).baseline.mean()
-d400_px = BFc[(BFc.dose_MRad == 400) & (BFc.anneal_h >= 12)].groupby(["row", "col"]).baseline.mean()
+d200_px = BFc[(BFc.dose_MRad == 200) & (BFc.hours_after_step >= 12)].groupby(["row", "col"]).baseline.mean()
+d400_px = BFc[(BFc.dose_MRad == 400) & (BFc.hours_after_step >= 12)].groupby(["row", "col"]).baseline.mean()
 sh200 = (d200_px - pre_px).groupby(level="row").agg(["mean", "std"])
 sh400 = (d400_px - pre_px).groupby(level="row").agg(["mean", "std"])
 FOOT = pd.DataFrame({"row": sh200.index, "shift_0_200_dac": sh200["mean"].values, "shift_0_200_col_rms": sh200["std"].values,
                      "shift_0_400_dac": sh400["mean"].values, "shift_0_400_col_rms": sh400["std"].values,
                      "nw_0MRad": BFc[(BFc.dose_MRad == 0) & (BFc.timestamp > pd.Timestamp("2024-08-04 22:00"))].groupby("row").noise_width.mean().values,
-                     "nw_400MRad": BFc[(BFc.dose_MRad == 400) & (BFc.anneal_h >= 12)].groupby("row").noise_width.mean().values})
+                     "nw_400MRad": BFc[(BFc.dose_MRad == 400) & (BFc.hours_after_step >= 12)].groupby("row").noise_width.mean().values})
 FOOT["reference_only_prediction_0_400"] = scale400
 FOOT["reference_only_prediction_0_200"] = scale200
 FOOT.to_csv(Q.OUTDIR / "et2p03_footprint_by_row.csv", index=False)
@@ -2286,10 +2289,10 @@ for grp, rows_ in (("outside the beam (rows 0, 3)", [0, 3]), ("inside the beam (
 SPLIT = pd.DataFrame(split_rows)
 SPLIT["front_end_dac"] = SPLIT.bl_shift_dac - SPLIT.reference_scale_dac
 SPLIT.to_csv(Q.OUTDIR / "et2p03_footprint_split.csv", index=False)
-print("\nthe six money-plot pixels, split by where they sit (in-configuration baselines, per-pixel gain fits, VA 1.20 V supply):\n")
+print("\nthe six money-plot pixels, split by where they sit (in-configuration baselines, per-pixel preamp gain fits, VA 1.20 V supply):\n")
 print(SPLIT.round(2).to_string(index=False))
 print("\n  Every 'six-pixel' dose number in this notebook is therefore a mixture of four un-irradiated and two")
-print("  irradiated pixels. The baseline split above reproduces the map footprint; the per-pixel gain")
+print("  irradiated pixels. The baseline split above reproduces the map footprint; the per-pixel preamp gain")
 print("  changes are too noisy (two pixels inside the beam) to resolve a footprint in the preamp gain.")
 
 # %%
@@ -2349,7 +2352,7 @@ plt.show()
 #   **VTemp on an irradiated ETROC2 is not a thermometer without recalibration**.
 # * **The rail currents fell** by a few per cent over the campaign, analog and digital alike, and the
 #   autocal noise width widened by about 0.5 DAC after the first step and stayed wide.
-# * **Annealing** is visible in the maps: the baseline climbs back by several DAC in the first day after
+# * **Cooling down** is visible in the maps: the baseline climbs back by several DAC in the first day after
 #   each step and then flattens. The 200 MRad and 400 MRad numbers quoted in this notebook are taken at
 #   least twelve hours after the step for that reason.
 #
@@ -2373,7 +2376,7 @@ to_r = TO[TO.config == CFG0].groupby("charge_fC").turnoff_offset.agg(["mean", "s
 p400 = PAIR[(PAIR.va == 1.20) & (PAIR.dose_from == 0) & (PAIR.dose_to == 400)]
 p400 = p400.iloc[0] if len(p400) else None
 SUMMARY = pd.DataFrame([
-    dict(n=1, quantity="Preamp gain (charge-to-threshold), 8–22 fC, VA 1.20 V (supply), 0 MRad",
+    dict(n=1, quantity="Preamp gain (charge-to-threshold), 9–23 fC, VA 1.20 V (supply), 0 MRad",
          value=f"{REF.gain_dac_per_fc:.2f} ± {REF.gain_sem:.2f}", unit="DAC/fC",
          pixel_rms=f"{REF.gain_pixel_rms:.2f}", label="DERIVED"),
     dict(n=2, quantity="the same in volts, under the assumed LSB",
@@ -2382,25 +2385,25 @@ SUMMARY = pd.DataFrame([
     dict(n=3, quantity="Preamp gain over the analog rail, supply 0.85 → 1.40 V (~0.65 → ~1.20 V at chip), 200 MRad",
          value="%.2f → %.2f" % (b200.gain_dac_per_fc.iloc[0], b200.gain_dac_per_fc.iloc[-1]),
          unit="DAC/fC", pixel_rms="—", label="DERIVED"),
-    dict(n=4, quantity="Turn-off above baseline at 15 fC, VA 1.20 V, 0 MRad",
-         value=f"{to_r.loc[15, 'mean']:.1f}", unit="DAC", pixel_rms=f"{to_r.loc[15, 'std']:.1f}",
+    dict(n=4, quantity="Turn-off above baseline at 16 fC, VA 1.20 V, 0 MRad",
+         value=f"{to_r.loc[16, 'mean']:.1f}", unit="DAC", pixel_rms=f"{to_r.loc[16, 'std']:.1f}",
          label="RAW (the search's own converged DAC), referred to the noise-peak baseline"),
-    dict(n=5, quantity="TOT at BL+20, 15 fC, VA 1.20 V, 0 MRad",
-         value=f"{t20r.loc[15, 'tot_code_mean']:.1f}",
-         unit=f"code = {t20r.loc[15, 'tot_ns_mean']:.2f} ns",
-         pixel_rms=f"{t20r.loc[15, 'tot_code_pixel_rms']:.1f}", label="DERIVED"),
-    dict(n=6, quantity="TOA jitter at BL+20, 15 fC, VA 1.20 V, 0 MRad",
-         value=f"{j20r.loc[15, 'jitter_mean']:.1f}  (median {j20r.loc[15, 'jitter_median']:.1f})",
-         unit="ps", pixel_rms=f"{j20r.loc[15, 'jitter_pixel_rms']:.1f}",
+    dict(n=5, quantity="TOT at BL+20, 16 fC, VA 1.20 V, 0 MRad",
+         value=f"{t20r.loc[16, 'tot_code_mean']:.1f}",
+         unit=f"code = {t20r.loc[16, 'tot_ns_mean']:.2f} ns",
+         pixel_rms=f"{t20r.loc[16, 'tot_code_pixel_rms']:.1f}", label="DERIVED"),
+    dict(n=6, quantity="TOA jitter at BL+20, 16 fC, VA 1.20 V, 0 MRad",
+         value=f"{j20r.loc[16, 'jitter_mean']:.1f}  (median {j20r.loc[16, 'jitter_median']:.1f})",
+         unit="ps", pixel_rms=f"{j20r.loc[16, 'jitter_pixel_rms']:.1f}",
          label="DERIVED — near the quantisation floor"),
-    dict(n=7, quantity="TOA jitter at BL+20, 6 fC, VA 1.20 V, 0 MRad",
-         value=f"{j20r.loc[6, 'jitter_mean']:.1f}  (median {j20r.loc[6, 'jitter_median']:.1f})",
-         unit="ps", pixel_rms=f"{j20r.loc[6, 'jitter_pixel_rms']:.1f}",
+    dict(n=7, quantity="TOA jitter at BL+20, 7 fC, VA 1.20 V, 0 MRad",
+         value=f"{j20r.loc[7, 'jitter_mean']:.1f}  (median {j20r.loc[7, 'jitter_median']:.1f})",
+         unit="ps", pixel_rms=f"{j20r.loc[7, 'jitter_pixel_rms']:.1f}",
          label="DERIVED — above the floor; the mean is pulled by the widest pixel, hence the median"),
     dict(n=8, quantity=f"S-curve width σ ({int(SREF.n_curves)} curves, shared σ)",
          value=f"{SREF.sigma_dac:.2f} ± {SREF.sigma_sd:.2f}",
          unit=f"DAC = {SREF.sigma_mv:.3f} mV", pixel_rms="—", label="DERIVED"),
-    dict(n=9, quantity="ENC = σ / gain, VA 1.20 V, 0 MRad", value=f"{SREF.ENC_e:.0f}",
+    dict(n=9, quantity="ENC = σ / (preamp gain), VA 1.20 V, 0 MRad", value=f"{SREF.ENC_e:.0f}",
          unit="electrons", pixel_rms="—", label="DERIVED — bare die, no input load"),
     dict(n=10, quantity="Noise-peak FWHM, VA 1.20 V, 0 MRad",
          value=f"{SREF.NW_fwhm:.2f} ± {SREF.NW_fwhm_rms / np.sqrt(6):.2f}", unit="DAC",
@@ -2411,10 +2414,10 @@ SUMMARY = pd.DataFrame([
          label="DERIVED, extrapolated"),
     dict(n=12, quantity="TOT-to-charge law at BL+20, VA 1.20 V, 0 MRad",
          value=f"TOT = {f20['a']:.1f} + {f20['b']:.1f} ln(Q/fC)",
-         unit=f"χ²/ndf {f20['chi2_ndf']:.1f}", pixel_rms="—", label="DERIVED, valid 6–22 fC"),
+         unit=f"χ²/ndf {f20['chi2_ndf']:.1f}", pixel_rms="—", label="DERIVED, valid 7–23 fC"),
     dict(n=13, quantity="TDC quantisation floor, LSB/√12", value=f"{floor_ref:.2f}", unit="ps",
          pixel_rms="—", label=f"DERIVED, TOA LSB {lsb_ref:.1f} ps at CAL {CAL_MED[CFG0]:.0f}"),
-    dict(n=14, quantity="Walk with charge, 6→22 fC at BL+20", value=f"{walk_ref:+.0f}", unit="ps",
+    dict(n=14, quantity="Walk with charge, 7→23 fC at BL+20", value=f"{walk_ref:+.0f}", unit="ps",
          pixel_rms="—", label="DERIVED, median over pixels"),
     dict(n=15, quantity="Baseline shift, 0 → 400 MRad at VA 1.20 V, BARE9",
          value=f"{bl4 - bl0:+.1f}", unit="DAC", pixel_rms="—",
@@ -2428,7 +2431,7 @@ SUMMARY = pd.DataFrame([
     dict(n=18, quantity="Preamp gain change, 0 → 400 MRad, BARE9, reference-corrected",
          value=f"{RESULTS.get('gain_change_0_to_400_intrinsic_pct', float('nan')):+.1f}", unit="%", pixel_rms="—",
          label="DERIVED — measured DAC/fC change plus the VRef rise, assuming DAC full scale ∝ VRef"),
-    dict(n=16, quantity="Paired gain change, 0 → 400 MRad at VA 1.20 V",
+    dict(n=16, quantity="Paired preamp gain change, 0 → 400 MRad at VA 1.20 V",
          value=("%+.1f ± %.1f" % (p400.gain_change_pct, 100 * p400.gain_ratio_sem)) if p400 is not None else "—",
          unit="%", pixel_rms=f"{100 * p400.gain_ratio_pixel_rms:.1f}" if p400 is not None else "—",
          label="DERIVED — same six pixels, paired ratio"),
@@ -2478,11 +2481,16 @@ for p in sorted(Q.OUTDIR.glob("et2p03_*")):
 # hit counts, the autocalibration baselines, and the money-plot turn-off DACs of one pixel at one
 # rail. Every one of them is recomputed above from the staged files and compared here, so that a
 # reader can see the notebook and the reduction agree rather than take it on trust.
+#
+# Rows are named by physical charge, (QSel + 1) fC. The reduction quoted its turn-off DACs at the
+# QSel label, charge − 1, which the `published_label_fC` column gives for each row that names a
+# charge; no row here needs a value converted back, because a turn-off DAC does not depend on how
+# the charge axis is labelled.
 
 # %%
 LED = pd.DataFrame(LEDGER)
 LED["|diff|"] = LED["diff"].abs()
-print(LED[["quantity", "recomputed", "published", "|diff|", "tol", "unit", "agrees"]]
+print(LED[["quantity", "recomputed", "published", "published_label_fC", "|diff|", "tol", "unit", "agrees"]]
       .round(4).to_string(index=False))
 LED.to_csv(Q.OUTDIR / "et2p03_reproduction_ledger.csv", index=False)
 n_ok = int(LED.agrees.sum())
@@ -2521,10 +2529,10 @@ if n_ok < len(LED):
 #    plots are shown as medians with an inter-quartile band.
 # 6. **RFSel is not recorded** — not in a directory name, not in the reduction, and the register
 #    dumps that survive are peripheral configuration, not per-pixel. RFSel sets the preamplifier
-#    feedback resistance and therefore both gain and TOT, so it remains the single largest
+#    feedback resistance and therefore both preamp gain and TOT, so it remains the single largest
 #    unquantified systematic here, exactly as in notebooks 01 and 02.
 # 7. **The DAC-to-millivolt scale is assumed, and section 13 shows it moves.** Both the baseline
-#    and the gain in DAC units depend strongly on the analog rail, which is what a reference
+#    and the preamp gain in DAC units depend strongly on the analog rail, which is what a reference
 #    generator powered from that rail would do. No reference read-back and no external voltage
 #    calibration exists in this campaign, so no millivolt number here is better than indicative.
 # 8. **The internal-reference statement is an inference from wiring, not a register read.**
@@ -2535,7 +2543,7 @@ if n_ok < len(LED):
 #    search's own answer. The turn-off carried here is the campaign's own definition, which agrees
 #    with notebook 01's estimator to well under one DAC wherever the comparison is possible.
 # 10. **Twenty searches ran into the 10-bit DAC ceiling** and are lower limits rather than
-#     measurements. They are kept in every table and the gain fit is quoted both with and without
+#     measurements. They are kept in every table and the preamp gain fit is quoted both with and without
 #     them.
 # 11. **The 94 rail sub-runs have no recorded threshold and pool sixteen pixels**, so they are a
 #     yield-and-CAL measurement, never a threshold-scan point, and the two families are never

@@ -1,9 +1,10 @@
 # %% [markdown]
-# # Charge injection on a bare ETROC2 die: gain, noise, TOT and TOA jitter through 400 MRad
+# # Charge injection on a bare ETROC2 die: preamp gain, noise, TOT and TOA jitter through 400 MRad
 #
 # **Chip** `ET2p01_W36_6` — an ETROC2 **version 2.01 bare die, with no LGAD bonded to it.**
 # **Campaign** CERN, January 2024, total-ionising-dose (TID) test: 0, 200 and 400 MRad.
-# **Pixels** 12, rows {0, 1, 3, 12} × columns {2, 8, 14}. **Charges** 5, 6, 8, 15, 22 and 27 fC.
+# **Pixels** 12, rows {0, 1, 3, 12} × columns {2, 8, 14}. **Charges** 6, 7, 9, 16, 23 and 28 fC
+# (QSel 5, 6, 8, 15, 22 and 27; the charge is QSel + 1 fC, see below).
 #
 # This notebook re-derives, from the staged source files, every number that the bare-die
 # charge-injection study quotes: the preamplifier gain in DAC per fC, the discriminator
@@ -22,9 +23,13 @@
 # ## What charge injection is, and why it is the cleanest handle we have
 #
 # Every ETROC2 pixel contains a small **internal injection capacitor at the preamplifier
-# input**. Writing `QSel` to the pixel configuration selects an integer charge from **1 to
-# 32 fC**, and each Level-1 accept then delivers exactly that charge step to the front end,
-# with no sensor involved. This matters because it is the only measurement in the whole ETROC
+# input**. Writing `QSel` to the pixel configuration selects an integer charge of
+# **(QSel + 1) fC, 1 to 32 fC** (ETROC2 Reference Manual rev 0.60, §3.1.4 and Table 14 row 6,
+# QSel[4:0]; bit position in Table 15; up to ±15 %), and each Level-1 accept then delivers
+# exactly that charge step to the front end, with no sensor involved. This campaign's scan directories are named `QInj_<N>` with N the QSel
+# value its scripts wrote, so a `QInj_15` point is **16 fC**; the loaders in `qinj_common.py` add
+# that 1 fC, and every charge in this notebook is the physical one (corrected 2026-10-18; before
+# that every charge axis here was 1 fC low). This matters because it is the only measurement in the whole ETROC
 # programme where **the input charge is known**. In beam data the charge is whatever the
 # sensor happened to produce for that particle; here it is a number we set.
 #
@@ -145,12 +150,12 @@ assert len(m) == len(raw) == len(csv)
 # converges on a genuine **50 % efficiency point**, not on "the last threshold that saw a hit".
 #
 # Which counter it thresholds is a settable option. In this campaign the search trajectories
-# are only consistent with the **trigger-bit** column: at 5 fC the TDC counter is identically
+# are only consistent with the **trigger-bit** column: at 6 fC the TDC counter is identically
 # zero while the search still walks upward. The cell below shows one such trajectory.
 
 # %%
-ex = csv[(csv.day == "2024-01-11") & (csv.row == 0) & (csv.col == 2) & (csv.charge == 5)]
-print("one binary-search trajectory — pixel (0, 2), 5 fC, 0 MRad, +12 °C\n")
+ex = csv[(csv.day == "2024-01-11") & (csv.row == 0) & (csv.col == 2) & (csv.charge == 6)]
+print("one binary-search trajectory — pixel (0, 2), 6 fC, 0 MRad, +12 °C\n")
 print(ex[["dac", "trig_count", "tdc_count", "header_max", "frac", "frac_tdc"]]
       .sort_values("dac").to_string(index=False))
 print("\nTDC counter identically zero over the whole search:", bool((ex.tdc_count == 0).all()))
@@ -163,7 +168,7 @@ print("median denominator (L1A per probe): %.0f" % csv.header_max.median())
 # irradiated blocks were taken at −25 °C**, so the feather on its own cannot separate a dose
 # effect from a temperature effect. What breaks that degeneracy is a fourth set of files: the
 # `2024-01-12` binary-search turn-offs, taken at **0 MRad and −25 °C**. There is no full
-# threshold sweep at that condition, so it contributes turn-off and gain but no TOT, no jitter
+# threshold sweep at that condition, so it contributes turn-off and preamp gain but no TOT, no jitter
 # and no S-curve from a sweep.
 
 # %%
@@ -307,7 +312,7 @@ print("hit-count calibration: %.2f bytes per hit; median estimated hits per poin
 
 # %%
 # --- Explainer 1: one discriminator S-curve, with its width and its 50 % point marked.
-g = csv[(csv.day == "2024-01-11") & (csv.row == 1) & (csv.col == 8) & (csv.charge == 15)].sort_values("dac")
+g = csv[(csv.day == "2024-01-11") & (csv.row == 1) & (csv.col == 8) & (csv.charge == 16)].sort_values("dac")
 bl_ex = float(BL[(BL.dose == 0) & (BL.temp == 12) & (BL.row == 1) & (BL.col == 8)].BL.iloc[0])
 cv_ex, _ = Q.curves_from(g, keys=("row", "col", "charge"))
 sig_ex, _, mu_ex, _ = Q.scurve_sigma(cv_ex, boot=0)
@@ -353,13 +358,13 @@ ax.legend(loc="center left", fontsize=12)
 ax.set_title("zoom on the edge: only ~2 DAC wide", loc="left", fontsize=14)
 fig.tight_layout()
 Q.fig_header(fig, "Explainer: one discriminator S-curve",
-       tag="pixel (row 1, col 8), 15 fC, bare ET2.01, 0 MRad, +12 °C", scale=0.62, campaign=Q.BARE_CAMPAIGN)
+       tag="pixel (row 1, col 8), 16 fC, bare ET2.01, 0 MRad, +12 °C", scale=0.62, campaign=Q.BARE_CAMPAIGN)
 Q.save_fig(fig, "bare_expl1_scurve")
 plt.show()
 
 # %%
 # --- Explainer 2: what one threshold sweep records — TOA, TOT and CAL against threshold.
-pix, qq = (1, 8), 15
+pix, qq = (1, 8), 16
 d = D0[(D0.row == pix[0]) & (D0.col == pix[1]) & (D0.charge == qq)].sort_values("offset")
 fig, axs = plt.subplots(1, 4, figsize=(22, 5.4))
 for ax, (col, lab, col_c) in zip(axs, [("toa_ns", "TOA  [ns]", Q.C_BLUE),
@@ -439,10 +444,10 @@ plt.show()
 print("pixels with a point exactly at BL+20, by charge:", n20.to_dict())
 
 # %% [markdown]
-# The right-hand panel is the first real caveat of the analysis: **5 fC reaches the beam
+# The right-hand panel is the first real caveat of the analysis: **6 fC reaches the beam
 # operating point on only 9 of the 12 pixels.** No cut is applied anywhere in this notebook, so
-# nothing is thrown away — but a pooled number at 5 fC is an average over fewer pixels than a
-# pooled number at 15 fC, and every pooled table below carries its own `n` for that reason.
+# nothing is thrown away — but a pooled number at 6 fC is an average over fewer pixels than a
+# pooled number at 16 fC, and every pooled table below carries its own `n` for that reason.
 #
 # ## 5. Two turn-offs, and why they disagree
 #
@@ -450,17 +455,17 @@ print("pixels with a point exactly at BL+20, by charge:", n20.to_dict())
 #
 # * The **discriminator turn-off** is the 50 % point of the binary search, from the trigger-bit
 #   counter, which has a real denominator (`header_max` ≈ 11 223 L1A). It is a genuine
-#   efficiency. **Below 8 fC it saturates** at a charge-independent floor, i.e. the trigger bit
+#   efficiency. **Below 9 fC it saturates** at a charge-independent floor, i.e. the trigger bit
 #   is responding to something that does not scale with the injected charge, so its slope there
-#   is not a gain.
+#   is not a preamp gain.
 # * The **TDC-readout turn-off** is the highest threshold at which the sweep still wrote hits.
-#   It *is* linear in charge down to 5 fC. **But above 8 fC it is censored**, because the
+#   It *is* linear in charge down to 6 fC. **But above 9 fC it is censored**, because the
 #   sweep's own upper bound was set to the binary search's answer: the scan stops while hits are
-#   still being recorded. Its apparent agreement with the discriminator turn-off above 8 fC is
+#   still being recorded. Its apparent agreement with the discriminator turn-off above 9 fC is
 #   therefore partly by construction and is not an independent check.
 #
-# So the gain fit below uses the **discriminator turn-off over 8–27 fC only**, and the TDC
-# turn-off over 5–8 fC is carried separately as a low-charge cross-check. The censoring flag is
+# So the preamp gain fit below uses the **discriminator turn-off over 9–28 fC only**, and the TDC
+# turn-off over 6–9 fC is carried separately as a low-charge cross-check. The censoring flag is
 # computed, not assumed: the sweep's last scanned threshold comes from the directory census.
 
 # %%
@@ -488,12 +493,13 @@ tab = pd.DataFrame({
 }).round(2)
 print("0 MRad, +12 °C — both turn-off estimators, pooled over 12 pixels\n")
 print(tab.to_string())
-print("\nThe discriminator turn-off is flat from 5 to 8 fC (%.1f -> %.1f -> %.1f DAC): that is the"
-      % tuple(tab.trig_turnoff_offset_mean[[5, 6, 8]]))
+print("\nThe discriminator turn-off is flat from 6 to 9 fC (%.1f -> %.1f -> %.1f DAC): that is the"
+      % tuple(tab.trig_turnoff_offset_mean[[6, 7, 9]]))
 print("saturation described above. The TDC turn-off over the same charges rises %.1f -> %.1f -> %.1f."
-      % tuple(tab.tdc_turnoff_offset_mean[[5, 6, 8]]))
+      % tuple(tab.tdc_turnoff_offset_mean[[6, 7, 9]]))
 
-for ch, want in zip([5, 6, 8, 15, 22, 27], [45.9, 47.3, 55.2, 116.0, 187.8, 232.1]):
+# Published per charge on the QSel label 5, 6, 8, 15, 22, 27; the same points are 6 ... 28 fC.
+for ch, want in zip(Q.CHARGES, [45.9, 47.3, 55.2, 116.0, 187.8, 232.1]):
     Q.check(f"discriminator turn-off above BL at {ch} fC", tab.trig_turnoff_offset_mean[ch],
             want, 0.15, "DAC", LEDGER)
 
@@ -520,8 +526,8 @@ print("  mean %+.3f DAC, median %+.3f DAC, range %+.3f to %+.3f DAC"
 # %% [markdown]
 # ## 6. Preamp gain
 #
-# The gain is the slope of discriminator turn-off against injected charge, fitted per pixel by
-# weighted least squares over **8–27 fC** with a y-error of 0.5 DAC (the binary search brackets
+# The preamp gain is the slope of discriminator turn-off against injected charge, fitted per pixel by
+# weighted least squares over **9–28 fC** with a y-error of 0.5 DAC (the binary search brackets
 # the crossing to 1 DAC). The result is quoted both in DAC per fC and, through the 0.390625 mV
 # LSB, in millivolts per fC.
 
@@ -530,7 +536,7 @@ rows = []
 for (dose, temp, r, c), g in TO.groupby(["dose", "temp", "row", "col"]):
     rec = dict(dose=dose, temp=temp, row=r, col=c, BL=g.BL.iloc[0])
     rec.update(Q.gain_fit(g, g.BL.iloc[0]))
-    lo = g[(g.charge <= 8) & g.tdc_turnoff_dac.notna() & (~g.tdc_turnoff_censored.fillna(False))]
+    lo = g[(g.charge <= 9) & g.tdc_turnoff_dac.notna() & (~g.tdc_turnoff_censored.fillna(False))]
     lo = lo.sort_values("charge")
     if len(lo) >= 2:
         s2, *_ = Q.wls(lo.charge, lo.tdc_turnoff_dac, np.full(len(lo), 0.5))
@@ -559,25 +565,33 @@ print(GB.round(3).to_string(index=False))
 
 ref = GB[(GB.dose == 0) & (GB.temp == 12)].iloc[0]
 print()
-Q.check("gain, 0 MRad +12 °C", ref.gain_dac_per_fc, 9.42, 0.02, "DAC/fC", LEDGER)
-Q.check("gain uncertainty on the mean", ref.gain_sem, 0.89, 0.02, "DAC/fC", LEDGER)
-Q.check("gain pixel RMS", ref.gain_pixel_rms, 3.09, 0.02, "DAC/fC", LEDGER)
-Q.check("gain in volts", ref.gain_mv_per_fc, 3.68, 0.01, "mV/fC", LEDGER)
-Q.check("low-charge cross-check (TDC turn-off, 5-8 fC)", ref.gain_lowQ_tdc, 7.42, 0.02, "DAC/fC", LEDGER)
-Q.check("fit intercept referred to the baseline", ref.intercept_offset_dac, -21.7, 0.1, "DAC", LEDGER)
-Q.check("minimum charge reaching BL+20", ref.Qmin_at_off20_fC, 4.3, 0.06, "fC", LEDGER)
-print("\nper-pixel gain spread: %.2f to %.2f DAC/fC, i.e. %.0f %% pixel RMS on a 12-pixel sample"
+Q.check("preamp gain, 0 MRad +12 °C", ref.gain_dac_per_fc, 9.42, 0.02, "DAC/fC", LEDGER)
+Q.check("preamp gain uncertainty on the mean", ref.gain_sem, 0.89, 0.02, "DAC/fC", LEDGER)
+Q.check("preamp gain pixel RMS", ref.gain_pixel_rms, 3.09, 0.02, "DAC/fC", LEDGER)
+Q.check("preamp gain in volts", ref.gain_mv_per_fc, 3.68, 0.01, "mV/fC", LEDGER)
+Q.check("low-charge cross-check (TDC turn-off, 6-9 fC)", ref.gain_lowQ_tdc, 7.42, 0.02, "DAC/fC", LEDGER)
+# The intercept and Q_min were published on the QSel-label axis (charge 1 fC low). A slope is
+# unchanged by that shift; the label-axis intercept is the physical one plus (preamp gain) x 1 fC, and the
+# label-axis Q_min is the physical one minus 1 fC. Converted back here so the ledger still checks
+# reproduction of what was published; the physical values are what this notebook quotes.
+Q.check("fit intercept referred to the baseline, QSel-label axis",
+        ref.intercept_offset_dac + ref.gain_dac_per_fc * Q.QSEL_LABEL_OFFSET_FC, -21.7, 0.1, "DAC", LEDGER)
+Q.check("minimum charge reaching BL+20, QSel-label axis",
+        ref.Qmin_at_off20_fC - Q.QSEL_LABEL_OFFSET_FC, 4.3, 0.06, "fC", LEDGER)
+print("\nphysical charge: intercept %+.1f DAC relative to the baseline, Q_min at BL+20 %.2f fC"
+      % (ref.intercept_offset_dac, ref.Qmin_at_off20_fC))
+print("\nper-pixel preamp gain spread: %.2f to %.2f DAC/fC, i.e. %.0f %% pixel RMS on a 12-pixel sample"
       % (ref.gain_min, ref.gain_max, 100 * ref.gain_pixel_rms / ref.gain_dac_per_fc))
 
 # %% [markdown]
 # **The intercept is not the baseline, and that matters operationally.** Extrapolated to zero
-# charge the fitted turn-off does not land on the baseline; it lands about 22 DAC *below* it.
-# A pure proportionality would put it at 0. So `turn-off = BL + gain × Q` is the wrong model,
-# and estimating a gain by drawing a line from the baseline through one measured
+# charge the fitted turn-off does not land on the baseline; it lands about 31 DAC *below* it.
+# A pure proportionality would put it at 0. So `turn-off = BL + (preamp gain) × Q` is the wrong model,
+# and estimating a preamp gain by drawing a line from the baseline through one measured
 # (charge, turn-off) pair gives the wrong slope — it will read low.
 #
 # **The pixel-to-pixel spread is the dominant uncertainty.** A 33 % RMS across 12 pixels means
-# a single chip-level "gain" is close to meaningless; the per-pixel numbers are what should be
+# a single chip-level "preamp gain" is close to meaningless; the per-pixel numbers are what should be
 # carried forward, and they are in `outputs/bare_gain_fits.csv`.
 
 # %%
@@ -593,12 +607,12 @@ ax.errorbar(po.index, po.trig, yerr=po.trig_r, fmt="o-", ms=11, lw=2.6, color=Q.
             capsize=5, label="discriminator (trigger bit) 50 %", zorder=6)
 ax.errorbar(po.index, po.tdc, yerr=po.tdc_r, fmt="s--", ms=10, lw=2.4, color=Q.C_ORANGE,
             capsize=5, label="TDC readout (highest threshold with hits)", zorder=6)
-xf = np.linspace(0, 29, 50)
+xf = np.linspace(0, 30, 50)
 ax.plot(xf, ref.gain_dac_per_fc * xf + ref.intercept_offset_dac, ":", color=Q.C_GREEN, lw=2.6,
-        label=f"fit 8–27 fC: {ref.gain_dac_per_fc:.2f} DAC/fC, intercept {ref.intercept_offset_dac:+.1f} DAC")
+        label=f"fit 9–28 fC: {ref.gain_dac_per_fc:.2f} DAC/fC, intercept {ref.intercept_offset_dac:+.1f} DAC")
 ax.axhline(Q.OP_OFFSET, color=Q.C_MAG, ls="-.", lw=2, label="BL+20 operating point")
-ax.axvspan(4.5, 8.5, color=Q.GREY, alpha=0.12, lw=0)
-ax.text(5.0, 300, "discriminator\nturn-off saturates", fontsize=12, color=Q.GREY)
+ax.axvspan(5.5, 9.5, color=Q.GREY, alpha=0.12, lw=0)
+ax.text(6.0, 300, "discriminator\nturn-off saturates", fontsize=12, color=Q.GREY)
 ax.set_xlabel("injected charge  [fC]")
 ax.set_ylabel("turn-off above baseline  [DAC LSB]")
 ax.legend(fontsize=12, loc="upper left")
@@ -606,7 +620,7 @@ ax.set_title("both estimators, thin lines = single pixels", loc="left", fontsize
 
 ax = axs[1]
 for (r, c), g in t0.groupby(["row", "col"]):
-    h = g[(g.charge >= 8)].sort_values("charge")
+    h = g[(g.charge >= 9)].sort_values("charge")
     f = GF[(GF.dose == 0) & (GF.temp == 12) & (GF.row == r) & (GF.col == c)]
     if not len(f) or pd.isna(f.gain_dac_per_fc.iloc[0]):
         continue
@@ -616,7 +630,7 @@ ax.axhline(0, color="black", lw=1.6)
 ax.axhspan(-0.5, 0.5, color=Q.GREY, alpha=0.2, lw=0)
 ax.set_xlabel("injected charge  [fC]")
 ax.set_ylabel("fit residual  [DAC LSB]")
-ax.set_title("per-pixel residuals of the 8–27 fC fit (band = 0.5 DAC y-error)", loc="left", fontsize=14)
+ax.set_title("per-pixel residuals of the 9–28 fC fit (band = 0.5 DAC y-error)", loc="left", fontsize=14)
 
 ax = axs[2]
 g12 = GF[(GF.dose == 0) & (GF.temp == 12)].gain_dac_per_fc.dropna()
@@ -624,7 +638,7 @@ ax.hist(g12, bins=np.arange(0, 16.1, 1.0), color=Q.C_BLUE, edgecolor="black", lw
 ax.axvline(g12.mean(), color=Q.C_ORANGE, lw=3, label=f"mean {g12.mean():.2f} DAC/fC")
 ax.axvspan(g12.mean() - g12.std(), g12.mean() + g12.std(), color=Q.C_ORANGE, alpha=0.15, lw=0,
            label=f"pixel RMS {g12.std():.2f}")
-ax.set_xlabel("per-pixel gain  [DAC LSB / fC]")
+ax.set_xlabel("per-pixel preamp gain  [DAC LSB / fC]")
 ax.set_ylabel("pixels")
 ax.legend(fontsize=13)
 ax.set_title("12 pixels: a 33 % spread", loc="left", fontsize=15)
@@ -714,10 +728,10 @@ for ch, want in zip(Q.CHARGES, [23.9, 22.1, 10.8, 6.4, 7.4, 6.6]):
     Q.check(f"TOA jitter at BL+20, {ch} fC", j20.loc[ch, "mean"], want, 0.06, "ps", LEDGER)
 
 # %% [markdown]
-# **Read this before quoting anything off that figure.** For 8 fC and above the measured jitter
+# **Read this before quoting anything off that figure.** For 9 fC and above the measured jitter
 # is within a factor of about 1.3 of the quantisation floor, and `TOA_std` is roughly a third of
 # one TOA code: nearly every hit lands in one or two TDC bins. Those points are **limits, not
-# resolutions**. Only the 5 and 6 fC points rise clearly above the floor and carry information
+# resolutions**. Only the 6 and 7 fC points rise clearly above the floor and carry information
 # about the front end.
 #
 # There are two reasons this is expected rather than a mistake. The injection is synchronous
@@ -768,7 +782,7 @@ plt.show()
 # same function fits the hybrid campaign in the companion notebook, so the two cannot differ
 # through this choice.
 #
-# From σ and the gain follows the **equivalent noise charge**, `ENC = σ / gain`, expressed in
+# From σ and the preamp gain follows the **equivalent noise charge**, `ENC = σ / (preamp gain)`, expressed in
 # electrons. It is a ratio of two measured quantities, so whenever it moves it is worth saying
 # which of the two moved.
 
@@ -782,8 +796,8 @@ nw0 = Q.pooled(BL[(BL.dose == 0) & (BL.temp == 12)].NW)
 
 print("S-curves fitted            %d  (12 pixels x 6 charges)" % len(curves))
 print("shared-sigma fit           sigma = %.3f +- %.3f DAC = %.4f mV" % (sigma, sigma_sd, sigma * Q.LSB_MV))
-print("gain                       %.3f DAC/fC" % gain0)
-print("ENC = sigma / gain         %.0f electrons" % enc)
+print("preamp gain                       %.3f DAC/fC" % gain0)
+print("ENC = sigma / (preamp gain)         %.0f electrons" % enc)
 print("autocal noise width NW     %.3f +- %.3f DAC (pixel RMS %.3f)" % (nw0["mean"], nw0["sem"], nw0["rms"]))
 print("NW / sigma                 %.2f" % (nw0["mean"] / sigma))
 Q.check("autocal noise width NW", nw0["mean"], 3.17, 0.01, "DAC", LEDGER)
@@ -816,7 +830,7 @@ SIGT = pd.DataFrame(sig_by_cond).T.rename_axis(["dose", "temp"]).reset_index()
 SIGT.to_csv(Q.OUTDIR / "bare_scurve_sigma_by_condition.csv", index=False)
 print(SIGT.round(3).to_string(index=False))
 print("\nThe edge width is flat across dose and temperature within its bootstrap error;")
-print("what moves the ENC between conditions is the gain, not the edge.")
+print("what moves the ENC between conditions is the preamp gain, not the edge.")
 
 # %%
 fig, axs = plt.subplots(1, 2, figsize=(19, 6.4))
@@ -902,20 +916,26 @@ for off in Q.OFFS:
                      res=dict(zip(s.charge_fC.astype(int), res.round(2))))
     print("\nBL+%d:  TOT = %.2f + %.2f ln(Q/fC),  chi2/ndf %.2f" % (off, a, b, c2))
     print("        residuals [code]:", fits[off]["res"])
-Q.check("TOT at BL+20, 15 fC", TOT[(TOT.offset == 20) & (TOT.charge_fC == 15)].tot_code_mean.iloc[0],
+Q.check("TOT at BL+20, 16 fC", TOT[(TOT.offset == 20) & (TOT.charge_fC == 16)].tot_code_mean.iloc[0],
         49.9, 0.06, "code", LEDGER)
-Q.check("TOT log law intercept a at BL+20", fits[20]["a"], 19.3, 0.06, "code", LEDGER)
-Q.check("TOT log law slope b at BL+20", fits[20]["b"], 10.7, 0.06, "code", LEDGER)
-Q.check("TOT log law chi2/ndf at BL+20", fits[20]["chi2_ndf"], 5.6, 0.06, "", LEDGER)
+# The published log law was fitted in ln of the QSel label. ln Q is not shift-invariant, so the
+# physical-charge law above differs from it; the ledger refits on the label axis to check that
+# the published numbers still reproduce, and the physical law is the one this notebook quotes.
+s20 = TOT[TOT.offset == 20].sort_values("charge_fC")
+a_l, b_l, _, _, c2_l, _ = Q.logfit(s20.charge_fC - Q.QSEL_LABEL_OFFSET_FC, s20.tot_code_mean, s20.tot_code_sem)
+print("\nBL+20 on the QSel-label axis (as published): TOT = %.2f + %.2f ln(label), chi2/ndf %.2f" % (a_l, b_l, c2_l))
+Q.check("TOT log law intercept a at BL+20, QSel-label axis", a_l, 19.3, 0.06, "code", LEDGER)
+Q.check("TOT log law slope b at BL+20, QSel-label axis", b_l, 10.7, 0.06, "code", LEDGER)
+Q.check("TOT log law chi2/ndf at BL+20, QSel-label axis", c2_l, 5.6, 0.06, "", LEDGER)
 RESULTS["tot_fit_off20"] = {k: (v if not isinstance(v, dict) else {str(kk): float(vv) for kk, vv in v.items()})
                             for k, v in fits[20].items()}
 
 # %% [markdown]
-# The response saturates hard: between 15 and 27 fC — nearly a factor two in charge — TOT moves
-# by only about 3.5 codes. The logarithmic law describes the data above 8 fC to within ±1.6
+# The response saturates hard: between 16 and 28 fC — nearly a factor two in charge — TOT moves
+# by only about 3.5 codes. The logarithmic law describes the data from 9 fC up to within ±1.7
 # codes but fails badly at the bottom of the range, which is exactly where the operating point
 # makes the measurement most interesting. **The fit should be read as a description of the
-# 8–27 fC region, not as a calibration valid down to threshold.**
+# 9–28 fC region, not as a calibration valid down to threshold.**
 
 # %%
 fig, axs = plt.subplots(1, 3, figsize=(21.5, 6.4))
@@ -924,7 +944,7 @@ for off in Q.OFFS:
     s = TOT[TOT.offset == off].sort_values("charge_fC")
     ax.errorbar(s.charge_fC, s.tot_code_mean, yerr=s.tot_code_pixel_rms, fmt="-",
                 marker=Q.OMK[off], ms=11, lw=2.4, color=Q.OCOL[off], capsize=5, label=f"BL+{off}")
-    qq = np.linspace(4.6, 28, 200)
+    qq = np.linspace(5.6, 29, 200)
     ax.plot(qq, fits[off]["a"] + fits[off]["b"] * np.log(qq), ":", color=Q.OCOL[off], lw=2.2)
 for ch in Q.CHARGES:
     n = TOT[(TOT.offset == 20) & (TOT.charge_fC == ch)].n_pixels.iloc[0]
@@ -943,12 +963,12 @@ for off in Q.OFFS:
     ax.plot(s.charge_fC, list(fits[off]["res"].values()), "-", marker=Q.OMK[off], ms=10, lw=2.2,
             color=Q.OCOL[off], label=f"BL+{off}, $\\chi^2$/ndf {fits[off]['chi2_ndf']:.1f}")
 ax.axhline(0, color="black", lw=1.6)
-ax.axhspan(-1.6, 1.6, color=Q.GREY, alpha=0.18, lw=0)
+ax.axhspan(-1.7, 1.7, color=Q.GREY, alpha=0.18, lw=0)
 Q.charge_axis(ax)
 ax.set_xlabel("injected charge  [fC]")
 ax.set_ylabel("residual  [TOT code]")
 ax.legend(fontsize=12)
-ax.set_title("the log law fails below 8 fC", loc="left", fontsize=14)
+ax.set_title("the log law fails below 9 fC", loc="left", fontsize=14)
 
 ax = axs[2]
 for off in Q.OFFS:
@@ -1017,15 +1037,15 @@ print(WALK.round(1).to_string(index=False))
 
 t20 = D0[D0.offset == 20].groupby("charge").toa_ns.median() * 1e3
 print("\nmedian TOA at BL+20 against charge [ps]:", t20.round(0).to_dict())
-print("walk with charge, 5 -> 27 fC at BL+20:  %+.0f ps" % (t20[27] - t20[5]))
-Q.check("walk with charge, 5->27 fC at BL+20", t20[27] - t20[5], 493, 3, "ps", LEDGER)
-Q.check("median TOA at BL+20, 5 fC", t20[5], 4093, 3, "ps", LEDGER)
-Q.check("median TOA at BL+20, 27 fC", t20[27], 4587, 3, "ps", LEDGER)
+print("walk with charge, 6 -> 28 fC at BL+20:  %+.0f ps" % (t20[28] - t20[6]))
+Q.check("walk with charge, 6->28 fC at BL+20", t20[28] - t20[6], 493, 3, "ps", LEDGER)
+Q.check("median TOA at BL+20, 6 fC", t20[6], 4093, 3, "ps", LEDGER)
+Q.check("median TOA at BL+20, 28 fC", t20[28], 4587, 3, "ps", LEDGER)
 print("\nwalk with threshold over BL+5 -> BL+20, per charge [ps]:",
       dict(zip(WALK.charge_fC, WALK.walk_5to20_ps.round(0))))
 print("walk with threshold over the full sweep, per charge [ps]:",
       dict(zip(WALK.charge_fC, WALK.walk_full_ps.round(0))))
-RESULTS["walk_charge_5to27_at_off20_ps"] = float(t20[27] - t20[5])
+RESULTS["walk_charge_6to28_at_off20_ps"] = float(t20[28] - t20[6])
 
 # %%
 cal_med_rms = D0.cal_std.median()
@@ -1083,7 +1103,7 @@ plt.show()
 #
 # The 0 MRad sweep is at +12 °C and both irradiated sweeps are at −25 °C, so the summary alone
 # cannot say whether a change is dose or temperature. The `2024-01-12` turn-off files supply the
-# missing corner, 0 MRad at −25 °C, and with the same 8–27 fC fit throughout the two effects
+# missing corner, 0 MRad at −25 °C, and with the same 9–28 fC fit throughout the two effects
 # separate.
 
 # %%
@@ -1098,26 +1118,26 @@ g_0_12 = float(tid[(tid.dose == 0) & (tid.temp == 12)].gain_dac_per_fc.iloc[0])
 g_0_m25 = float(tid[(tid.dose == 0) & (tid.temp == -25)].gain_dac_per_fc.iloc[0])
 g_400 = float(tid[(tid.dose == 400)].gain_dac_per_fc.iloc[0])
 b = tid.set_index(["dose", "temp"]).BL_mean
-print("\ncooling +12 -> -25 °C at 0 MRad      : gain x %.4f  (%+.1f %%)"
+print("\ncooling +12 -> -25 °C at 0 MRad      : preamp gain x %.4f  (%+.1f %%)"
       % (g_0_m25 / g_0_12, 100 * (g_0_m25 / g_0_12 - 1)))
-print("0 -> 400 MRad at a fixed -25 °C      : gain x %.4f  (%+.1f %%)"
+print("0 -> 400 MRad at a fixed -25 °C      : preamp gain x %.4f  (%+.1f %%)"
       % (g_400 / g_0_m25, 100 * (g_400 / g_0_m25 - 1)))
 print("\nbaseline shifts [DAC]:")
 print("  cooling +12 -> -25 °C : %+.1f" % (b[(0, -25)] - b[(0, 12)]))
 print("  0 -> 200 MRad         : %+.1f" % (b[(200, -25)] - b[(0, -25)]))
 print("  200 -> 400 MRad       : %+.1f" % (b[(400, -25)] - b[(200, -25)]))
 print("  baseline vs temperature at 0 MRad: %.2f DAC/°C" % ((b[(0, 12)] - b[(0, -25)]) / (12 - -25)))
-Q.check("gain change on cooling +12 -> -25 °C", 100 * (g_0_m25 / g_0_12 - 1), -7.7, 0.15, "%", LEDGER)
-Q.check("gain change 0 -> 400 MRad at -25 °C", 100 * (g_400 / g_0_m25 - 1), -5.4, 0.15, "%", LEDGER)
+Q.check("preamp gain change on cooling +12 -> -25 °C", 100 * (g_0_m25 / g_0_12 - 1), -7.7, 0.15, "%", LEDGER)
+Q.check("preamp gain change 0 -> 400 MRad at -25 °C", 100 * (g_400 / g_0_m25 - 1), -5.4, 0.15, "%", LEDGER)
 Q.check("baseline shift on cooling", b[(0, -25)] - b[(0, 12)], 77, 1.0, "DAC", LEDGER)
 Q.check("baseline shift 0 -> 200 MRad", b[(200, -25)] - b[(0, -25)], 25, 1.0, "DAC", LEDGER)
 Q.check("baseline shift 200 -> 400 MRad", b[(400, -25)] - b[(200, -25)], 21, 1.0, "DAC", LEDGER)
 RESULTS["bl_per_degC_at_0MRad"] = float((b[(0, 12)] - b[(0, -25)]) / (12 - -25))
 
 # %% [markdown]
-# ### 12.1 The same dose steps as a **paired per-pixel** ratio
+# ### 11.1 The same dose steps as a **paired per-pixel** ratio
 #
-# The numbers above are ratios of the *pooled* gain — one condition's mean over pixels divided by
+# The numbers above are ratios of the *pooled* preamp gain — one condition's mean over pixels divided by
 # another's — which carries no error at all, because the pixel-to-pixel spread (33 % here) swamps
 # the change being measured. The same twelve pixels were fitted at every condition, so the ratio
 # can instead be formed **pixel by pixel and then averaged**, which cancels the pixel spread
@@ -1149,7 +1169,7 @@ for d0, d1 in [(0, 200), (200, 400), (0, 400)]:
                           BL_shift_n_pixels=int(len(dbl))))
 PAIR01 = pd.DataFrame(pair_rows)
 PAIR01.to_csv(Q.OUTDIR / "bare_paired_dose_ratios.csv", index=False)
-print("paired per-pixel gain ratio with dose, at a fixed -25 °C, same 12 pixels throughout\n")
+print("paired per-pixel preamp gain ratio with dose, at a fixed -25 °C, same 12 pixels throughout\n")
 print(PAIR01.round(4).to_string(index=False))
 p400 = PAIR01[(PAIR01.dose_from == 0) & (PAIR01.dose_to == 400)].iloc[0]
 print("\n0 -> 400 MRad at -25 °C, %d pixels:" % p400.n_pixels)
@@ -1187,11 +1207,11 @@ for x, v, e in zip(xs, vals, errs):
     ax.text(x, v + e + 0.12, f"{v:.2f}", ha="center", fontsize=14)
 ax.set_xticks(xs)
 ax.set_xticklabels([Q.cond_label(*k).replace(", ", "\n") for k in Q.BARE_CONDITIONS], fontsize=12)
-ax.set_ylabel("gain  [DAC LSB / fC]")
+ax.set_ylabel("preamp gain  [DAC LSB / fC]")
 ax.set_ylim(0, 12.5)
 ax.text(0.03, 0.93, "error bar = uncertainty on the mean;\npixel RMS is ~3x larger",
         transform=ax.transAxes, fontsize=12)
-ax.set_title("gain: cooling costs more than 400 MRad", loc="left", fontsize=15)
+ax.set_title("preamp gain: cooling costs more than 400 MRad", loc="left", fontsize=15)
 
 ax = axs[2]
 ax.bar(xs, [float(b[k]) for k in Q.BARE_CONDITIONS],
@@ -1213,7 +1233,7 @@ plt.show()
 # %% [markdown]
 # ### The confound, stated plainly
 #
-# Cooling from +12 to −25 °C costs about 8 % of gain; a further 400 MRad at fixed −25 °C costs
+# Cooling from +12 to −25 °C costs about 8 % of preamp gain; a further 400 MRad at fixed −25 °C costs
 # about 5 %. Both are well inside the 33 % pixel-to-pixel spread, so neither is a large effect
 # on this chip. What dose does move, unambiguously, is the **baseline**: +77 DAC for the
 # cooling, then +25 and +21 DAC for the first and second 200 MRad.
@@ -1224,9 +1244,9 @@ plt.show()
 # same response** — which is exactly what the beam pipeline does with `threshold = BL + 20`.
 #
 # Two limits on that statement. The 0 MRad / −25 °C corner has turn-off files only, so it
-# contributes gain and baseline but nothing about TOT or jitter; the temperature effect is
+# contributes preamp gain and baseline but nothing about TOT or jitter; the temperature effect is
 # bounded here only through the turn-off. And the 200 and 400 MRad blocks are the same die after
-# irradiation, with an annealing history that is not recorded anywhere in this data set.
+# irradiation, with a cooling-down history that is not recorded anywhere in this data set.
 
 # %% [markdown]
 # ### 11.2 The X-ray footprint on W36_6
@@ -1268,7 +1288,7 @@ for grp, rows_ in (("inside the spot (rows 0, 1, 3)", [0, 1, 3]), ("outside the 
                                gain_change_sem_pct=100 * r.std(ddof=1) / np.sqrt(len(r)) if len(r) > 1 else np.nan))
 SPLIT01 = pd.DataFrame(split_rows)
 SPLIT01.to_csv(Q.OUTDIR / "bare_footprint_split.csv", index=False)
-print("\nthe twelve pixels split by where they sit (in-configuration baselines and per-pixel gain fits, -25 C):\n")
+print("\nthe twelve pixels split by where they sit (in-configuration baselines and per-pixel preamp gain fits, -25 C):\n")
 print(SPLIT01.round(2).to_string(index=False))
 print("\nEvery 'twelve-pixel' dose number above is therefore a 9:3 mixture. The inside-spot rows give the front-end")
 print("drift on this die; row 12 is a null.")
@@ -1305,25 +1325,25 @@ plt.show()
 
 # %%
 SUMMARY = pd.DataFrame([
-    dict(n=1, quantity="Preamp gain (charge-to-threshold), 8–27 fC", value=f"{ref.gain_dac_per_fc:.2f} ± {ref.gain_sem:.2f}",
+    dict(n=1, quantity="Preamp gain (charge-to-threshold), 9–28 fC", value=f"{ref.gain_dac_per_fc:.2f} ± {ref.gain_sem:.2f}",
          unit="DAC/fC", pixel_rms=f"{ref.gain_pixel_rms:.2f}", label="DERIVED"),
     dict(n=2, quantity="the same in volts", value=f"{ref.gain_mv_per_fc:.2f} ± {ref.gain_mv_sem:.2f}",
          unit="mV/fC", pixel_rms=f"{ref.gain_mv_pixel_rms:.2f}", label="DERIVED"),
-    dict(n=3, quantity="Turn-off above baseline at 15 fC",
-         value=f"{tab.trig_turnoff_offset_mean[15]:.1f}", unit="DAC",
-         pixel_rms=f"{tab.trig_pixel_rms[15]:.1f}", label="DERIVED from RAW FPGA counters"),
-    dict(n=4, quantity="TOT at BL+20, 15 fC",
-         value=f"{TOT[(TOT.offset == 20) & (TOT.charge_fC == 15)].tot_code_mean.iloc[0]:.1f}",
-         unit="TOT code", pixel_rms=f"{TOT[(TOT.offset == 20) & (TOT.charge_fC == 15)].tot_code_pixel_rms.iloc[0]:.1f}",
+    dict(n=3, quantity="Turn-off above baseline at 16 fC",
+         value=f"{tab.trig_turnoff_offset_mean[16]:.1f}", unit="DAC",
+         pixel_rms=f"{tab.trig_pixel_rms[16]:.1f}", label="DERIVED from RAW FPGA counters"),
+    dict(n=4, quantity="TOT at BL+20, 16 fC",
+         value=f"{TOT[(TOT.offset == 20) & (TOT.charge_fC == 16)].tot_code_mean.iloc[0]:.1f}",
+         unit="TOT code", pixel_rms=f"{TOT[(TOT.offset == 20) & (TOT.charge_fC == 16)].tot_code_pixel_rms.iloc[0]:.1f}",
          label="DERIVED"),
-    dict(n=5, quantity="TOA jitter at BL+20, 15 fC", value=f"{j20.loc[15, 'mean']:.1f}", unit="ps",
-         pixel_rms=f"{j20.loc[15, 'std']:.1f}", label="DERIVED — at the quantisation floor"),
-    dict(n=6, quantity="TOA jitter at BL+20, 5 fC", value=f"{j20.loc[5, 'mean']:.1f}", unit="ps",
-         pixel_rms=f"{j20.loc[5, 'std']:.1f}", label="DERIVED — above the floor, 9/12 pixels"),
+    dict(n=5, quantity="TOA jitter at BL+20, 16 fC", value=f"{j20.loc[16, 'mean']:.1f}", unit="ps",
+         pixel_rms=f"{j20.loc[16, 'std']:.1f}", label="DERIVED — at the quantisation floor"),
+    dict(n=6, quantity="TOA jitter at BL+20, 6 fC", value=f"{j20.loc[6, 'mean']:.1f}", unit="ps",
+         pixel_rms=f"{j20.loc[6, 'std']:.1f}", label="DERIVED — above the floor, 9/12 pixels"),
     dict(n=7, quantity="S-curve width σ (72 curves, shared σ)",
          value=f"{sigma:.2f} ± {sigma_sd:.2f}", unit=f"DAC = {sigma * Q.LSB_MV:.3f} mV",
          pixel_rms="—", label="DERIVED"),
-    dict(n=8, quantity="ENC = σ / gain", value=f"{enc:.0f}", unit="electrons", pixel_rms="—",
+    dict(n=8, quantity="ENC = σ / (preamp gain)", value=f"{enc:.0f}", unit="electrons", pixel_rms="—",
          label="DERIVED — bare die, no input load"),
     dict(n=9, quantity="Autocal noise width NW", value=f"{nw0['mean']:.2f} ± {nw0['sem']:.2f}",
          unit="DAC", pixel_rms=f"{nw0['rms']:.2f}", label="RAW (NW_map)"),
@@ -1332,17 +1352,17 @@ SUMMARY = pd.DataFrame([
          pixel_rms=f"{ref.Qmin_pixel_rms:.1f}", label="DERIVED, extrapolated"),
     dict(n=11, quantity="TOT-to-charge law at BL+20",
          value=f"TOT = {fits[20]['a']:.1f} + {fits[20]['b']:.1f} ln(Q/fC)",
-         unit=f"χ²/ndf {fits[20]['chi2_ndf']:.1f}", pixel_rms="—", label="DERIVED, valid 8–27 fC"),
+         unit=f"χ²/ndf {fits[20]['chi2_ndf']:.1f}", pixel_rms="—", label="DERIVED, valid 9–28 fC"),
     dict(n=12, quantity="TDC quantisation floor, LSB/√12", value=f"{floor_ps:.2f}", unit="ps",
          pixel_rms="—", label=f"DERIVED, TOA LSB {lsb_ps:.1f} ps"),
-    dict(n=13, quantity="Walk with charge, 5→27 fC at BL+20", value=f"{t20[27] - t20[5]:+.0f}",
+    dict(n=13, quantity="Walk with charge, 6→28 fC at BL+20", value=f"{t20[28] - t20[6]:+.0f}",
          unit="ps", pixel_rms="—", label="DERIVED, median over pixels"),
-    dict(n=14, quantity="Gain change on cooling +12 → −25 °C",
+    dict(n=14, quantity="Preamp gain change on cooling +12 → −25 °C",
          value=f"{100 * (g_0_m25 / g_0_12 - 1):+.1f}", unit="%", pixel_rms="—", label="DERIVED"),
-    dict(n=15, quantity="Gain change 0 → 400 MRad at −25 °C, ratio of pooled means",
+    dict(n=15, quantity="Preamp gain change 0 → 400 MRad at −25 °C, ratio of pooled means",
          value=f"{100 * (g_400 / g_0_m25 - 1):+.1f}", unit="%", pixel_rms="—",
          label="DERIVED — carries no error; the pixel spread swamps the change"),
-    dict(n=16, quantity="Gain change 0 → 400 MRad at −25 °C, paired per pixel",
+    dict(n=16, quantity="Preamp gain change 0 → 400 MRad at −25 °C, paired per pixel",
          value=f"{p400.gain_change_pct:+.1f} ± {100 * p400.gain_ratio_sem:.1f}", unit="%",
          pixel_rms=f"{100 * p400.gain_ratio_pixel_rms:.1f}",
          label=f"DERIVED — same {int(p400.n_pixels)} pixels at both doses; what notebook 04 compares"),
@@ -1385,11 +1405,17 @@ for p in sorted(Q.OUTDIR.glob("bare_*")):
 # Every headline number above was compared, in the cell that computed it, against the value
 # previously published for this data set. The ledger is collected here so a reader can see at a
 # glance what reproduces and what does not.
+#
+# Rows are named by physical charge, (QSel + 1) fC. The published side was quoted at the QSel label,
+# charge − 1, which the `published_label_fC` column gives for each row that names a charge. Rows
+# marked "QSel-label axis" convert the recomputed value back to that axis before comparing: the fit
+# intercept as physical + (preamp gain) × 1 fC, `Q_min` as physical − 1 fC, and the TOT log law
+# refitted against the label.
 
 # %%
 LED = pd.DataFrame(LEDGER)
 LED["|diff|"] = LED["diff"].abs()
-print(LED[["quantity", "recomputed", "published", "|diff|", "tol", "unit", "agrees"]]
+print(LED[["quantity", "recomputed", "published", "published_label_fC", "|diff|", "tol", "unit", "agrees"]]
       .round(4).to_string(index=False))
 LED.to_csv(Q.OUTDIR / "bare_reproduction_ledger.csv", index=False)
 n_ok = int(LED.agrees.sum())
@@ -1419,7 +1445,7 @@ if n_ok < len(LED):
 # published values.
 #
 # Since ENC is quoted from a ratio, note also which half moved: σ here is a property of the
-# noise edge, and the gain is a property of the charge response. When the ENC is compared with
+# noise edge, and the preamp gain is a property of the charge response. When the ENC is compared with
 # the sensor-loaded hybrid in the companion notebook, it is worth asking every time which of the
 # two did the moving.
 #
@@ -1432,20 +1458,20 @@ if n_ok < len(LED):
 #
 # 1. **RFSel is not recorded** — not in a directory name, not in the summary, not in the
 #    autocalibration pickles. RFSel sets the preamplifier feedback resistance and therefore
-#    directly affects both gain and TOT. Every number here is at an unknown RFSel. This is the
+#    directly affects both preamp gain and TOT. Every number here is at an unknown RFSel. This is the
 #    single largest unquantified systematic in this notebook.
 # 2. **Power mode is not recorded either.**
 # 3. **Chip revision.** This is ET2.01. The 2.01 → 2.02 revision fixed the on-chip voltage
 #    reference, which was about 167 mV low on 2.01, so the absolute DAC-to-millivolt scale is
 #    not guaranteed to carry to later hardware. That is a second reason every figure here uses
 #    offset above baseline rather than absolute DAC.
-# 4. **No charge below 5 fC.** The region near the operating point where noise matters most is
-#    sampled by two points, and 5 fC reaches BL+20 on only 9 of 12 pixels.
+# 4. **No charge below 6 fC.** The region near the operating point where noise matters most is
+#    sampled by two points, and 6 fC reaches BL+20 on only 9 of 12 pixels.
 # 5. **The only full sweep is at +12 °C**, not at an operational −25 °C. The temperature effect
-#    on gain is bounded here at about 8 % — but only through the turn-off, not through TOT or
+#    on preamp gain is bounded here at about 8 % — but only through the turn-off, not through TOT or
 #    through jitter.
 # 6. **TID history.** The 200 and 400 MRad blocks are the same die after irradiation; the
-#    annealing history is not recorded in this data set.
+#    cooling-down history is not recorded in this data set.
 # 7. **The hit count is not an efficiency.** The sweep acquires for a fixed *time*, not for a
 #    fixed number of Level-1 accepts, and DAQ start/stop overhead varies, so the plateau
 #    scatters by roughly ±50 %. The hit count is used here only for error bars and for locating
