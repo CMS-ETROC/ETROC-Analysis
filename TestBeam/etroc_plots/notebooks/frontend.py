@@ -556,10 +556,13 @@ for k, tel in enumerate(TELS):
 # two corridors of 1,675 and 1,669 events give medians of 3.01 and 2.02 ns (the other four
 # corridors of that pixel 2.28-2.97 ns). The board statistics barely move with the rule: ranking
 # each pixel's triples by file size instead (`--rank bytes`, the rule of the CERN IRRAD 2026 talk
-# figures) changes the triple of 554 of 22,472 pixels (2.5 %) and moves the board values of
-# fe07-fe09 by at most 0.0135 ns (median of the pixel medians) and 0.0029 ns (pooled median) over
-# 88 boards, and the most frequent TOT of one board by one 0.1 ns bin (comparison of the two
-# rebuilds, 2026-10-02). fe07 and fe08 state this in their footers.
+# figures) changes the triple of 733 of the 30,623 pixels of the tables (2.4 %; 661 of the 28,267
+# that count) and moves the board values of fe07-fe09 by at most 0.0135 ns (median of the pixel
+# medians) and 0.0029 ns (pooled median) over the 120 boards of the 30 runs. The most frequent TOT
+# (0.1 ns bins) moves on two boards: by one bin on July F1 run 9 board 3, the one board of the 56
+# that fe08 draws, and by two bins on July F1 run 52 board 1, which neither fe07 nor fe08 draws
+# (the published tables of 2026-10-09 against a rebuild ranked by file size, 2026-10-18). fe07
+# and fe08 state this in their footers.
 #
 # * TOT: the time over threshold of every event of that triple, in ns, as reconstructed.
 # * dTOA: the TOA difference of two boards of one triple after the time-walk correction solved
@@ -592,8 +595,11 @@ PIXEL_HISTS = dict(list(pd.read_csv(campaign.PIXEL_HISTS_CSV)
 july_pref = tables.preferred_runs(campaign.DISPLAY_RUNS_JUL_CSV, **SETTINGS)
 NBOARDS = {t: len(campaign.TELESCOPE_CHIPS[t]) for t in TELS}
 # The largest change of a board statistic when each pixel's triple is its largest file instead of
-# its most populated one (the two rebuilds of 2026-10-02 compared over 88 boards; markdown above).
-RANK_SHIFT = dict(pixmed_median_ns=0.01349, median_ns=0.00290, mode_boards_moved=1, boards=88)
+# its most populated one: the published tables (2026-10-09) against a rebuild ranked by file size
+# (2026-10-18), markdown above. The medians over all 120 boards of the tables (the largest change,
+# July F1 run 14 board 3, is a board fe07 draws); the most frequent TOT over the 56 boards fe08
+# draws, the population its footer names (of all 120 boards, 2 move: run 52 board 1 by two bins).
+RANK_SHIFT = dict(pixmed_median_ns=0.01349, median_ns=0.00290, mode_boards_moved=1, boards=56)
 RANK_SHIFT_TEXT = "%.3f ns" % (np.ceil(RANK_SHIFT["pixmed_median_ns"] * 1e3) / 1e3)  # at most
 CORRIDOR_TEXT = (u"A pixel's TOT depends on which of its triples is read: the partner pixels fix "
                  u"where the 60 deg track crosses it, and corridors grazing the pixel read a lower "
@@ -736,7 +742,9 @@ save(fig, "fe07_tot_median_vs_fluence",
           triple_rule="one triple per pixel, the most populated; a pixel's TOT median depends on "
                       "the triple (track corridor) read, the board statistic barely: rank_shift "
                       "is the largest change of a board value when the triple is the largest "
-                      "file instead (two rebuilds of 2026-10-02 compared)",
+                      "file instead (the published tables of 2026-10-09 against a rebuild by "
+                      "file size, 2026-10-18; the medians over all 120 boards, mode_boards_moved "
+                      "and boards over the 56 boards fe08 draws)",
           times="run start (tables/run_times.csv) minus RAD_STOP_UTC of the step, hours",
           rfsel="July runs at RFSel %d by the display-run list (the extra run, H1 19, repeats run "
                 "18 at its settings); March runs record no RFSel and ran at RFSel %d"
