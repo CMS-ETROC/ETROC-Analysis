@@ -44,6 +44,7 @@ HIST_LABEL_PT = 9.4               # both axis labels of a histogram
 MU = u"\N{GREEK SMALL LETTER MU}"
 SIGMA = u"\N{GREEK SMALL LETTER SIGMA}"
 PM = u"\N{PLUS-MINUS SIGN}"
+FRAME_TEXT = u"chip frame, pixel (0, 0) at the bottom right"   # the frame of draw_map, in words
 
 
 # ---------------------------------------------------------------------------- data
@@ -62,9 +63,11 @@ def pixel_grids(px):
     return grids
 
 
-def saturated_cells(grid):
+def saturated_cells(grid, vmin=VMIN, vmax=VMAX):
+    """[(row, col), ...] of the pixels with a value outside the colour scale vmin-vmax (default
+    the resolution maps' VMIN-VMAX)."""
     return [(r, c) for r in range(NPIX) for c in range(NPIX)
-            if np.isfinite(grid[r, c]) and not (VMIN <= grid[r, c] <= VMAX)]
+            if np.isfinite(grid[r, c]) and not (vmin <= grid[r, c] <= vmax)]
 
 
 def run_boards(bt, grids, rs, campaign, telescope, run, variant, floor, band=False):
