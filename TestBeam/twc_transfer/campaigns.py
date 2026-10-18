@@ -10,7 +10,8 @@ The only paths outside the repository live here, each behind an environment vari
   ETROC_TWC_OUT               the write root. It has no default: write_root() refuses to run
                               without it, and refuses the read root and every data root
 
-JOB_LISTS names the study's seven job lists with the output root each one wrote into.
+JOB_LISTS names the study's seven job lists with the output root each one wrote into, and
+CELL_VERSIONS the cell code each wave ran and whether cell.py reproduces it.
 
 This module does not import the pipeline core.
 """
@@ -66,6 +67,25 @@ CELLS_CORE_SHA1 = {
     "bootstrap.py": "0e0b891ec6261749760955895c9b36655014c58e",
     "io_utils.py": "a737972dc0adea61c94c9da39f875be95eedff32",
 }
+
+# The cell code each wave of the study ran (the sha256 prefix of its tt.py, as in the wave's run
+# manifest) and whether cell.py reproduces that wave's tables. Every wave imported the core of
+# CELLS_CORE_SHA1. cell.py is the guardfix version; the stage-3 version differs from it only by
+# the --lpo-fallback flag, whose default ("sibling") is the stage-3 behaviour. A reproducible
+# wave's commands, run with ETROC_TWC_CORE at a core of those hashes, give its tables back
+# except the ts column. The earlier waves ran an older cell (round 1 also an older column set):
+# their commands parse and run here but give the current columns and estimators, a rerun and
+# not a reproduction. cells_v2w1.tsv is not among the job lists in jobs/.
+# (wave, job list, tt.py sha256 prefix, reproducible)
+CELL_VERSIONS = (
+    ("round1", "cells.tsv", "258cb1f8", False),
+    ("stage1", "cells_stage1.tsv", "05793488", False),
+    ("stage2", "cells_stage2.tsv", "05793488", False),
+    ("stage3", "cells_stage3.tsv", "698f72f9", True),
+    ("rerun_seeded", "cells_rerun.tsv", "698f72f9", True),
+    ("guardfix", "cells_guardfix_rerun.tsv", "e83f71c1", True),
+    ("v2w1", "cells_v2w1.tsv", "e83f71c1", True),
+)
 
 
 def transfer_root():

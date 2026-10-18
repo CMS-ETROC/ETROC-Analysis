@@ -20,7 +20,10 @@ from twc_transfer import jobs as J        # noqa: E402
 WRITING = [["index", "--campaign", "mar", "--run", "no_such_run"],
            ["bank", "--campaign", "mar", "--run", "no_such_run"],
            ["fit", "--campaign", "mar", "--run", "no_such_run"],
-           ["tier0", "--bank", "bank/no_such_bank.parquet", "--tag", "t"]]
+           ["tier0", "--bank", "bank/no_such_bank.parquet", "--tag", "t"],
+           ["cell", "--cell", "x", "--mode", "a", "--campaign", "mar", "--run", "no_such_run"],
+           ["transfer", "--cell", "x", "--mode", "a", "--campaign", "mar", "--run",
+            "no_such_run"]]
 
 
 @pytest.mark.parametrize("argv", WRITING, ids=lambda a: a[0])
