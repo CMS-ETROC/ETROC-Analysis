@@ -19,7 +19,7 @@ DAQ writes the rail there, not baseline + offset. `match` says how well the maps
 mismatch), near_exact (1 to 3 pixels, a failed single-pixel autocalibration), nearest (no scan
 agrees; the closest scan before the run is used) or none (no scan before the run).
 
-Statistics, both kept (the user's choice): over all 256 pixels (`*_allpix`; a railed or dead
+Statistics, both kept: over all 256 pixels (`*_allpix`; a railed or dead
 pixel counted as it was stored, a missing noise width as 0) and over the pixels with a real
 value: for BL the pixels with 50 < baseline < 1020 DAC and not railed in the run metadata, for NW
 the pixels with a noise width above 0; `n_pixels_bl` and `n_pixels_nw` count them. Mean and

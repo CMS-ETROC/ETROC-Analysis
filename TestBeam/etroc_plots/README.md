@@ -33,6 +33,42 @@ lists, chips, fluence steps, input locations). No data lives in the repository.
 | `lv_log.py` | the July LV power log: its file-spans table builder, the LV-off periods and the LV-on time before a run |
 | `CONVENTIONS.md` | the rules every figure follows |
 
+## Data quality: the IRRAD 2026 readout was saturated
+
+The IRRAD 2026 beam loops (H1 and F1 telescopes, March and July campaigns) were recorded with the
+KCU105 readout saturated. Measured on the raw loop files in October 2026: 47 to 81 % of the ETROC2
+packets reached disk without their header, the DAQ FIFO reported `global_full` on 14 to 23 % of
+the records, and 5 to 14 % of the packets that kept their header fail their CRC. The decoding step
+discards every headerless hit, so the hit tables behind every IRRAD figure drawn from readout hits
+hold roughly a quarter to a half of the hits the chips sent, selected by the state of the readout
+buffers at the time. Three loops are exceptions (H1 March run 21, clean; F1 July run 59 and H1
+July run 51, 8 and 17 % of the packets without their header); the DESY May and August 2026 data
+are clean.
+
+What this means for the figures here:
+
+- Time-resolution, time-walk, TOT, TOA and CAL figures are measurements on the surviving hits.
+  The TDC values of those hits are not corrupted: every complete packet of the clean files passes
+  its CRC (the decoding does not check it, so the IRRAD packets that fail it are kept). Whether
+  the selection by buffer state biases the resolution, the TOT or the time walk is open and needs
+  a dedicated comparison (resolution against the headerless share per loop); until it runs, read
+  these results as valid for the surviving hits with the selection bias unquantified.
+- Anything count-, rate- or efficiency-like on the IRRAD 2026 data (hit counts, occupancy, events
+  per pixel, the `n_pixels` of a board fit when it is limited by hits) measures DAQ loss, not the
+  sensor. No figure in this package quotes an efficiency; the pixel counts it prints are
+  populations of the surviving sample.
+- The baseline and noise width come from the autocalibration scans, not from readout hits, and
+  are unaffected; so are the IV scans, the bias currents and V_gl.
+
+Every frontend figure drawn from readout hits (fe03-fe16: the TDC codes and CAL maps from the
+merged hits, the TOT and TOA difference from the track files) ends its footer with the line
+"Hits and pixel counts are the surviving readout sample, selected by buffer state; see README,
+Data quality." (`READOUT_FOOTER` in the campaign module). Figures fe01-fe02 do not carry it: they
+are drawn from the autocalibration scans, not from event readout.
+
+The per-loop census and the readout mechanism are documented with the DAQ work and will be
+published with it.
+
 ## Running a notebook
 
     cd TestBeam/etroc_plots/notebooks

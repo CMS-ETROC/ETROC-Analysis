@@ -638,6 +638,13 @@ FRONTEND_RUNS = {
                           | {r for pair in RFSEL_TOT_PAIRS[("july", "f1")] for r in pair}
                           | {r for g in TOT_TIME_CONTROL[("july", "f1")] for r in g})},
 }
+# The IRRAD 2026 loops were recorded with the KCU105 readout saturated (the package README, "Data
+# quality"): the decoding drops every hit whose packet lost its header, so the merged hits and the
+# track files hold the hits that survived, selected by the state of the readout buffers. Every
+# figure drawn from those hits ends its footer with this line; the autocalibration scans are not
+# readout hits and their figures do not carry it.
+READOUT_FOOTER = (u"Hits and pixel counts are the surviving readout sample, selected by buffer "
+                  u"state; see README, Data quality.")
 # Jongho's merged hits, one folder of loop_<N>.feather files per run (columns evt, bcid,
 # l1a_counter, ea, row, col, toa, tot, cal, board). Read only by `python -m
 # etroc_plots.frontend.rebuild` (its TDC part), never by a notebook. Read-only.

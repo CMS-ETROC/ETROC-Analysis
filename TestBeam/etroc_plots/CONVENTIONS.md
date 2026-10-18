@@ -121,3 +121,10 @@ rest are for whoever writes the next figure.
 Next to every figure, `<stem>_values.json` holds the numbers drawn, the input files, the commit of
 the code, a conventions block (units, binning, selection) and the audit findings. A figure is only
 as reproducible as this file: when a number shown on the figure is not in it, add it.
+
+## Data quality
+
+- A figure drawn from IRRAD 2026 readout hits (merged hits, track files) ends its footer with
+  the campaign's `READOUT_FOOTER`, which sends the reader to the README's "Data quality"
+  section; a figure drawn from autocalibration scans, from IV or slow-control logs, or from
+  DESY data only does not carry it.

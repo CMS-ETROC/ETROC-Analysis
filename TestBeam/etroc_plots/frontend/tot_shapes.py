@@ -5,8 +5,9 @@ The track files (ANALYSIS_DIRS in the campaign module) hold, per run and per com
 boards, one parquet file per pixel triple (one pixel on each board): every event in it is a
 three-board track through that triple. A file is named after the boards' roles in that run,
 track_<role initial>-R<row>C<col>_..._.parquet (d dut, r ref, e extra, t trig), and carries per
-board the columns tot_<role>, toa_<role> and cal_<role>: TOT and TOA in ps after the per-event
-CAL conversion, CAL in codes. A combo folder is named by the roles at its board indices in the
+board the columns tot_<role>, toa_<role> and cal_<role>: TOT and TOA in ps, converted with one
+bin per loop file (3.125 ns over the mean CAL of that file's events, the pipeline's
+core/apply_tdc_cuts.convert_to_time), CAL in codes per event. A combo folder is named by the roles at its board indices in the
 run's config yaml (extra0-dut1-ref2; the role at an index changes between runs, the chip does
 not), so the chip of a board is always TELESCOPE_CHIPS[telescope][board index].
 

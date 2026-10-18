@@ -41,6 +41,19 @@ without read permission. To check a copy of the tables by hand:
 
     cd $ETROC_INPUTS && md5sum -c /path/to/TestBeam/etroc_plots/campaigns/irrad_2026_inputs.md5
 
+## Data quality
+
+The IRRAD 2026 loops were recorded with the KCU105 readout saturated: 47 to 81 % of the ETROC2
+packets reached disk without their header, and the decoding drops those hits. Every table here
+built from readout hits (the TDC tables of `frontend/`, from the merged hits; its track tables and
+the test-beam result tables of `tables/`, from the reconstructed tracks) therefore holds the hits
+that survived, selected by the state of the readout buffers: its hit, event and pixel counts are
+populations of that sample, not of the sensor, and whether the selection biases the TOT, the
+time walk or the resolution is open. The autocalibration tables (`frontend/blnw_by_run.csv`,
+`frontend/blnw_by_pixel.csv.gz`), the IV, bias-current, HV-monitor and LV tables and the run lists
+are not readout hits and are unaffected. The package README, "Data quality", gives the numbers,
+the loops that are exceptions and what this means per figure type.
+
 ## Curated by hand
 
 Edit these to change what the figures show.
