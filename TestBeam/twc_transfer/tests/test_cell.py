@@ -1,5 +1,6 @@
-"""Tests of the cell command (cell.py): the self_transfer flag, the role-map refusal of the
-modes without a named source, resuming a cell table, the dry run, and the table's columns.
+"""Tests of the cell command (cell.py): the self_transfer flag, the line naming a self-transfer
+target's in-sample arms, the role-map refusal of the modes without a named source, resuming a
+cell table, the dry run, a relative --out, and the table's columns.
 
 The toy is a campaign of two runs with the same three pixel triples, each a quadratic walk per
 board plus noise, written as step-10 track files under tmp_path. The width estimator is
@@ -181,6 +182,16 @@ def test_a_relative_out_is_taken_in_the_write_root(env, capsys, monkeypatch, tmp
     cli.main(_cell(env, "rel", "--mode", "a", "--src-run", "r2", "--out",
                    os.path.join("sub", "rel.csv"), "--dry-run"))
     assert "writes %s " % os.path.join(env["out"], "sub", "rel.csv") in capsys.readouterr().out
+
+
+def test_a_self_transfer_target_names_its_in_sample_arms(env, capsys):
+    cli.main(_cell(env, "c_ext", "--mode", "c", "--src-triple", A_NAME, "--src-k", "1",
+                   "--arms", "ext", "--xfer-lin"))
+    lines = [ln for ln in capsys.readouterr().out.splitlines() if "self-transfer target" in ln]
+    assert len(lines) == 1 and A_NAME in lines[0]
+    assert lines[0].endswith("in-sample: xfer_1b:dut, xfer_1b:ref, xfer_1b:trig, xfer_lin")
+    t = _table(env, "c_ext")
+    assert set(t[t.self_transfer == 1].tgt_triple) == {A_NAME}
 
 
 def test_cell_table_columns_are_the_fifty_of_the_study(env):
