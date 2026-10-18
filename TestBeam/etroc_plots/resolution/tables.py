@@ -23,6 +23,11 @@ variant is how a pixel's tracks are combined: "top" (the most-populated track th
 "central" or "average". floor is the minimum number of events per track, read as text ("none",
 "100", "300"). A merged run's `run` is the merge's name, merge_name(telescope, runs).
 
+The good-run list (the campaign's GOOD_RUNS_CSV; good_list) marks single runs and merges good or
+not. A figure draws a merge only when both verdicts pass: the merged board table accepts it and
+the good-run list marks it good (good_merges). That is the one merge verdict of every figure;
+where a figure draws a merge is its own rule.
+
 runs_summary.csv (the campaign's RUNS_SUMMARY_CSV) holds one row per run (campaign, telescope,
 run) with, per board i, the chip, bias, bookkeeping fluence, threshold offset and RFSel in the
 columns board<i>_chip, board<i>_hv, board<i>_irrad, board<i>_offset, board<i>_rfsel:
@@ -36,6 +41,7 @@ board_cost_official_ps (the same difference on the board values) and n_pixels_co
 import re
 from collections import namedtuple
 
+import numpy as np
 import pandas as pd
 from matplotlib.patches import Rectangle
 
@@ -94,6 +100,46 @@ def accepted_merges(bt, campaign=None):
         if verdict.pop() == "true":
             out.setdefault(tel, []).append(runs)
     return {tel: sorted(v) for tel, v in out.items()}
+
+
+def _good_flag(value, where):
+    if isinstance(value, (bool, np.bool_)):
+        return bool(value)
+    if str(value).strip() in ("True", "False"):
+        return str(value).strip() == "True"
+    raise ValueError("%s: good = %r is not True or False" % (where, value))
+
+
+def good_list(camp, telescope, path=None):
+    """{label: (good, reason)} of the good-run list (GOOD_RUNS_CSV) for one campaign ("march" /
+    "july") and telescope, single runs ("12") and merges ("3+4") alike."""
+    path = path or _campaign.GOOD_RUNS_CSV
+    df = pd.read_csv(path, dtype={"run": str})
+    name = {"march": _campaign.GOOD_RUNS_CAMPAIGN_MARCH, "july": _campaign.GOOD_RUNS_CAMPAIGN}[camp]
+    df = df[(df["campaign"] == name) & (df["telescope"] == _campaign.GOOD_RUNS_TEL[telescope])]
+    out = {}
+    for _, row in df.iterrows():
+        label = "+".join(str(int(r)) for r in str(row["run"]).split("+"))
+        if label in out:
+            raise ValueError("%s: %s %s run %s is listed twice" % (path, name, telescope, label))
+        out[label] = (_good_flag(row["good"], "%s, %s run %s" % (path, telescope, label)),
+                      row["reason"])
+    return out
+
+
+def good_merges(bt, camp, path=None):
+    """{telescope: [runs, ...]}: the merges of campaign `camp` ("march" / "july") a figure may
+    draw, by the one merge verdict: the merged board table `bt` accepts the merge
+    (accepted_merges) and the good-run list (good_list, at `path`) marks it good. Where a figure
+    draws one is its own rule (classes_at_step: in place of its runs, when they are all runs of
+    one settings class)."""
+    out = {}
+    for tel, merges in accepted_merges(bt, _campaign.TABLE_CAMPAIGN[camp]).items():
+        good = good_list(camp, tel, path)
+        keep = [m for m in merges if good.get("+".join(map(str, m)), (False, None))[0]]
+        if keep:
+            out[tel] = keep
+    return out
 
 
 def combo_chips(combo, telescope):

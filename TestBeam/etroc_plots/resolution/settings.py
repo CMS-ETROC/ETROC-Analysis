@@ -7,9 +7,11 @@ display-run list (resolution.tables.classes_at_step). Its offset is the list's t
 "8/10" for runs whose boards sit at different offsets; each board's own offset comes from
 runs_summary (tables.run_settings). Every board of every run is drawn as a band (tables.band; the
 step is one of BAND_STEPS). Given the merged runs' board table, class_points draws a class's
-accepted merge (tables.classes_at_step) in place of its runs: one band per board from the merged
-table, the point's run the merge's name and its runs in p["runs"]; pixel_x_over_nw gives the
-merge's x_B over the pooled pixels of its runs' scans.
+merge in place of its runs when the merge passes the one merge verdict (tables.good_merges:
+accepted in the merged table and good on the good-run list) and its runs are all runs of the
+class (tables.classes_at_step): one band per board from the merged table, the point's run the
+merge's name and its runs in p["runs"]; pixel_x_over_nw gives the merge's x_B over the pooled
+pixels of its runs' scans.
 
 Figures, the words on them passed in by the notebook:
 
@@ -39,6 +41,7 @@ records.
 """
 import numpy as np
 import pandas as pd
+from matplotlib.collections import LineCollection
 from matplotlib.lines import Line2D
 
 from ..campaigns import active as campaign, check_required
@@ -72,16 +75,17 @@ def class_points(bt, rs, display, fluence, variant, floor, bt_merged=None):
     class's preferred run) and band (tables.band of the board table `bt` at `variant`, `floor`).
     Ordered by telescope (TELESCOPE_CHIPS), class (classes_at_step), run and board.
 
-    With the merged runs' board table `bt_merged`, a class's accepted merges
-    (tables.accepted_merges, tables.classes_at_step) stand in place of their runs: run is the
-    merge's name (tables.merge_name), runs its runs, rfsel and offset the runs' common ones
+    With the merged runs' board table `bt_merged`, a class's merges stand in place of their
+    runs: every merge accepted in `bt_merged` and good on the good-run list (tables.good_merges)
+    whose runs are all runs of the class (tables.classes_at_step). Its run is the merge's name
+    (tables.merge_name), runs its runs, rfsel and offset the runs' common ones
     (tables.common_settings, which also stops on a chip or bias that differs between the runs),
     preferred when it holds the class's preferred run, band from `bt_merged` by the same rule."""
     if not any(_close(fluence, f) for f in campaign.BAND_STEPS):
         raise ValueError("%g is not one of BAND_STEPS %s: the settings figures draw every board "
                          "as a band" % (fluence, campaign.BAND_STEPS))
     tc = campaign.TABLE_CAMPAIGN[CAMP]
-    merges = None if bt_merged is None else tables.accepted_merges(bt_merged, tc)
+    merges = None if bt_merged is None else tables.good_merges(bt_merged, CAMP)
     classes = tables.classes_at_step(display, fluence, merges)
     out = []
     for tel, chips in campaign.TELESCOPE_CHIPS.items():
@@ -672,11 +676,36 @@ def res_vs_x(pts, *, tel_titles, xlabel, xlim, ylim, legend_title, tag, data, fo
 
 
 # ------------------------------------------------------------------------- layout audit
-def layout_boxes(fig, dpi=200):
+def _data_box(artist, H):
+    """The pixel box [x0, y0, x1, y1] (PNG coordinates, figure height `H`) of an artist's data:
+    a line's points without the half marker its window extent adds, a line collection's
+    segments (the bars), any other artist's window extent; None without a finite point."""
+    if isinstance(artist, Line2D):
+        xy = artist.get_transform().transform(np.asarray(artist.get_xydata(), dtype=float))
+    elif isinstance(artist, LineCollection):
+        segs = [np.asarray(s, dtype=float) for s in artist.get_segments() if len(s)]
+        if not segs:
+            return None
+        xy = artist.get_transform().transform(np.concatenate(segs))
+    else:
+        bb = artist.get_window_extent()
+        xy = np.array([[bb.x0, bb.y0], [bb.x1, bb.y1]])
+    xy = xy[np.isfinite(xy).all(axis=1)]
+    if not len(xy):
+        return None
+    return [round(float(xy[:, 0].min()), 1), round(H - float(xy[:, 1].max()), 1),
+            round(float(xy[:, 0].max()), 1), round(H - float(xy[:, 1].min()), 1)]
+
+
+def layout_boxes(fig, dpi=200, outside_pad=1.0):
     """The pixel boxes [x0, y0, x1, y1] (PNG coordinates at `dpi`: origin top left) that
     layout_problems compares: the canvas, and per axes its frame, tick labels, legends, in-axes
     labels and data marks (band boxes, markers, bars and caps); plus every other text of the
-    figure. Call it after style.save_figure, which lowers the footer."""
+    figure. A point mark the axes clip (a band box, a marker, a bar) whose data (_data_box)
+    reaches more than `outside_pad` pixels past the frame is a point the figure does not show: it
+    is listed under the key "outside" (axes index and box), which a figure with every point inside
+    does not have. A line without markers (a curve, the line joining a series) may run past the
+    frame: the view crops it. Call it after style.save_figure, which lowers the footer."""
     fig.set_dpi(dpi)
     fig.canvas.draw()
     r = fig.canvas.get_renderer()
@@ -712,6 +741,13 @@ def layout_boxes(fig, dpi=200):
                          if t is not None and t.get_visible() and str(t.get_text()).strip()]
         marks = [a for a in list(ax.patches) + list(ax.lines) + list(ax.collections)
                  if a.get_gid() != DIVIDER_GID and a.get_visible()]
+        for a in marks:
+            curve = isinstance(a, Line2D) and a.get_marker() in (None, "None", "", " ")
+            d = _data_box(a, H) if a.get_clip_on() and not curve else None
+            if d is not None and (d[0] < frame[0] - outside_pad or d[1] < frame[1] - outside_pad
+                                  or d[2] > frame[2] + outside_pad
+                                  or d[3] > frame[3] + outside_pad):
+                out.setdefault("outside", []).append(dict(axes=len(out["axes"]), box=d))
         out["axes"].append(dict(
             frame=frame, ticklabels=ticks,
             legends=[box(lg) for lg in axes_legends(ax)],
@@ -726,12 +762,13 @@ def _hit(a, b, pad):
 
 
 def layout_problems(boxes, pad=2.0):
-    """What layout_boxes shows touching, as a list of strings: a tick label or in-axes label off
-    the canvas, a tick label touching its axes frame, another tick label or any other text, a
-    legend touching data or an in-axes label, an in-axes label touching data or another in-axes
-    label. `pad` pixels count as touching."""
+    """What layout_boxes shows touching, as a list of strings: data outside its axes (the
+    "outside" boxes), a tick label or in-axes label off the canvas, a tick label touching its axes
+    frame, another tick label or any other text, a legend touching data or an in-axes label, an
+    in-axes label touching data or another in-axes label. `pad` pixels count as touching."""
     W, H = boxes["canvas"]
-    probs = []
+    probs = ["axes %d: data outside the axes %s" % (o["axes"], o["box"])
+             for o in boxes.get("outside", [])]
     every_tick = [(i, t) for i, a in enumerate(boxes["axes"]) for t in a["ticklabels"]]
     for i, a in enumerate(boxes["axes"]):
         for t in a["ticklabels"] + a["labels"]:

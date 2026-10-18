@@ -99,19 +99,21 @@ rest are for whoever writes the next figure.
   and the notebook say so.
 - Nothing is drawn unless `settings.settings_guard` passes: the display list, `runs_summary.csv`
   and the autocalibration scan before the run agree on every board's RFSel and on the offsets.
-- A class whose runs on a telescope include every run of an accepted merge (the merged runs'
-  board table: `runs_merged`, `accepted`) draws the merge in place of those runs on the
-  resolution-against-class and x_B figures (st02, st04, st05): one band per board from the merged
-  table by the rule of the single runs, labelled with its runs joined by "+"
+- One merge verdict for every figure (`tables.good_merges`): a merge is drawn only when the
+  merged runs' board table accepts it (`runs_merged`, `accepted`) and the good-run list marks it
+  good. A class whose runs on a telescope include every run of such a merge draws the merge in
+  place of those runs on the resolution-against-class and x_B figures (st02, st04, st05): one
+  band per board from the merged table by the rule of the single runs, labelled with its runs
+  joined by "+"
   (`tables.classes_at_step`, `settings.class_points`). Its runs each had their own
   autocalibration scan: its x_B and bar pool the pixels of its runs' scans before the median and
   the percentiles, a scan the runs share once (`settings.pixel_x_over_nw`). The figures of one
   scan per run (st06) keep the runs and say so in the footer.
 - A board whose resolution comes from fewer than `tables.LOW_PIXELS` pixels (128, half the chip:
   the board table's `n_pixels` of the anointed combination, `settings.low_pixels`) is a small
-  open marker on st02, st04 and st05, where the notebook sets `p["low"]`; the footer gives the
-  rule, how many boards and each one's count. On st04 no band stands behind the marker, so its
-  edge keeps the RFSel colour.
+  open marker on st01 to st05, where the notebook sets `p["low"]`; the footer gives the rule, how
+  many boards and each one's count, and that the counts are those of the surviving readout
+  sample. On st04 no band stands behind the marker, so its edge keeps the RFSel colour.
 - The threshold over the noise of board B in a run is x_B = offset / median noise width: its
   threshold offset over the median noise width of its live pixels (noise width above 0, the
   pixels of `n_pixels_nw`) from the autocalibration scan before the run, both in DAC codes
