@@ -2,7 +2,8 @@
 
 What the package computes and the rules it keeps. Sections 0, 1, 2, 4 and 5 define the library
 in this directory; section 3 the transfer operations of the cell command (cell.py), its modes
-and the two pixel-to-board protocols; sections 6 and 7 the commands and the tables they write.
+and the two pixel-to-board protocols; sections 6 and 7 the commands and the tables they write;
+section 8 the aggregation of the cell tables (agg.py).
 The code cites sections as "SPEC 1", "SPEC 5.1" and so on.
 
 ## 0. Layout and invariants
@@ -436,6 +437,10 @@ unchanged.
            [--chunk k/N] [--nmin 600] [--nmin-src 1000] [--nmin-fold 250] [--cap 6000]
            [--max-triples N] [--timebudget S] [--flush 2] [--fast] [--overwrite] [--dry-run]
            -> cells/<ID>.csv                          (alias: transfer)
+    agg    --cells PATTERN [PATTERN ...] [--baseline self_cf]
+           [--f-inflate F | --f-cal C [--f-precision agg|full]] [--nmin-eval 600]
+           [--tier0 FILE] [--out DIR]
+           -> tables/{delta_by_triple,agg_by_cell,calibration}.csv   (section 8)
 
 - `--combo` absent means every combo of the run that has a `time/` folder. `--ntrip` takes the
   largest track files of each combo (file size as the proxy for event count); `bank` skips a
@@ -443,13 +448,13 @@ unchanged.
   those files from the k-th on.
 - The study's banks were written with `fit --campaign C --run R --ntrip 40 --folds both
   --placebo`, the remaining options at their defaults.
-- **The write root.** `index`, `bank`, `tier0` and `cell` need `ETROC_TWC_OUT` and write under
+- **The write root.** `index`, `bank`, `tier0`, `cell` and `agg` need `ETROC_TWC_OUT` and write under
   it (the arrows above are relative to it); `--out` names another output file. They refuse to
   start when it is unset, when it is the read root `ETROC_TWC_TRANSFER_ROOT`, and when it is the
   step-10 root of a campaign, so no run writes into the study's tree or among the track files.
   Only these subcommands create the output folders, and `cell --dry-run` creates none.
-- **Inputs.** `tier0 --bank` and `cell --src-bank` are read from the read root when the path is
-  relative.
+- **Inputs.** `tier0 --bank`, `cell --src-bank`, `agg --cells` and `agg --tier0` are read from
+  the read root when the path is relative.
 - **Cell targets.** `--ntrip` takes the largest track files of the target combo (`all`: every
   one); `--triples` names them instead (track names without `.parquet`, in the target combo's
   `time/` folder; a name with no file is dropped); `--chunk k/N` then keeps every N-th from the
@@ -524,3 +529,125 @@ unchanged.
   (Python 3.9.12) these are the seeds of the study's cells; other Python versions are not
   verified. A bank source's placebo was seeded when the bank was made (section 2) and does not
   depend on it.
+
+## 8. Aggregation
+
+`python -m twc_transfer agg` (`agg.py`) turns the cell tables of one group of cells into three
+tables: the paired difference of every triple against the baseline arm, the aggregate per
+(cell, arm, quantity) and the error calibration. `aggregate()` does it in memory and writes
+nothing; `cmd_agg` reads and writes.
+
+**Inputs.** The cell tables (section 7) matched by `--cells`, a list of paths or glob patterns
+(relative ones in the read root), sorted by path and stacked (`read_cells`). A file without the
+columns `arm`, `kind`, `name` and `value` is skipped with a line; a table with another column
+set (the 43-column tables of round 1) is aggregated on the shared columns, the missing ones NaN.
+The side-car of a cell run with `--lpo-fallback own` is merged in memory as a column
+`lpo_shape`, the JSON text of its entry for the row's `tgt_triple`. The study aggregated the
+cells of one `group` of a job list together (smoke and Tier-0 rows left out), every table of
+each cell (chunks included), once per f.
+
+**The error inflation f** (section 4, errors 3), `f_inflate_for`, in this order:
+
+1. `--f-inflate F`.
+2. `--f-cal C`: `campaigns.F_CAL[C]` at `--f-precision`. `agg` (the default) is the value the
+   study's aggregation ran with, four decimals: 0.8153 (desy), 0.8979 (aug), 0.9524 (mar),
+   0.9259 (jul); with it the study's numbers come back. `full` is the bootstrap's
+   value: 0.8152579445510614, 0.8979111975615606, 0.9524 (known to four decimals only),
+   0.925913381797006; the round-1 recomputation of the verdicts used these.
+3. Neither: the `f_cal` of `<read root>/tables/f_cal.json` (in the study's tree the DESY May
+   run26 bootstrap), whatever the campaign of the cells; without that file 1.0, the uninflated
+   half-split error, with a warning.
+
+The study passed every f with `--f-inflate` (its four-decimal values, and 1.0 and 0.8153 for the
+sensitivity runs of DESY May and August). The value is written into `f_inflate` and its origin
+into `calibration.csv`'s `f_source`: `explicit` for `--f-inflate`, `f_cal <campaign>, as
+aggregated` or `f_cal <campaign>, full precision` for `--f-cal`. The study's tables therefore
+read `explicit`, and only `--f-inflate` gives them back byte for byte.
+
+**Rules**, applied in this order, each a function of `agg.py`:
+
+1. `drop_below_nmin_eval`: every row of a (cell, run, combo, tgt_triple) one of whose board
+   rows has `n` below `--nmin-eval` (600, the n_eval floor of section 5; 0 disables).
+2. `censor_degenerate`: a (cell, run, combo, tgt_triple, kind, name) whose `value` is not
+   finite, or whose `neg_radicand` is 1, in any arm leaves every arm (section 5.6). The arms that
+   triggered it are counted and printed.
+3. The one-board identical-pair drop, with the `self_cf` baseline only (`xfer_board_by_cell`,
+   `identical_pair_mask`, `drop_identical_pairs`). A cell whose rows name exactly one non-blank
+   `xfer_board` is a one-board cell (a cell naming two is left alone, with a line). Its pair rows
+   whose pair does not contain that board, in `placebo`, `notwc_1b` and every arm whose name
+   starts with `xfer` except `xfer_lpo` (`is_one_board_arm`), are dropped: they are identical to
+   `self_cf` by construction (section 3b) and would read delta = 0 and d_f0 - d_f1 = 0 exactly.
+   Against another baseline that pair's delta is a measurement, and nothing is dropped.
+4. `deltas`: every arm but the baseline inner-joined to the baseline on (cell, mode, run,
+   combo, tgt_triple, kind, name), the first baseline row of a key: `value_b`, `v_f0_b`,
+   `v_f1_b`, `n_b`; `delta = value - value_b`, `d_f0 = v_f0 - v_f0_b`, `d_f1 = v_f1 - v_f1_b`,
+   `scale = value_b / sqrt(max(n_b, 1))`. No row with a baseline stops the command.
+5. `same_pixel_mask`: a row of an `xfer*` arm with `same_pixel = 1`, `src_run = run` and
+   `src_combo = combo` is a refit of the board against itself filed as a transfer. It leaves
+   every aggregate and the k_cal pool and stays in `delta_by_triple.csv`. Across runs or angles
+   the same pixel is the comparison itself, so the rule is restricted to the same run and combo.
+6. The k_cal pool (`kcal_exclusion_mask`, `kcal_by_group`). `k_cal` is `stats.kcal_from_cells`
+   per (cell, run, arm, kind) over the group's rows except the rule-5 rows and the rows of a
+   non-self arm with `self_transfer = 1` (the source triple is one of the cell's targets, where
+   `xfer` is `self_cf`); a self arm (`agg.SELF_ARMS`) has no source and is never excluded on the
+   flag. A group with no row left uses all of its rows and is named in a line. Every row gets its
+   group's `k_cal`, `se = f * k_cal * scale` and `se_halfraw = |d_f0 - d_f1| / 2`.
+7. `structural_zero_census`: the rows in the pool with delta == 0 and d_f0 - d_f1 == 0 exactly
+   are counted, with their groups, and those outside it beside them. One such row in a pair group
+   of an `is_one_board_arm` arm of a one-board cell stops the command (`StructuralZeroError`)
+   before any file is written: it would pull the group's median down. The usual cause is an older
+   cell table with its own source triple among its targets and no `self_transfer` flag.
+8. `retention_gain`: `G = value(notwc) - value(baseline)` per (cell, run, combo, tgt_triple,
+   kind, name), `value(notwc_1b) - value(baseline)` where the cell has `notwc_1b` (a one-board
+   cell, where `notwc` would add the two boards that keep their own fit); `R = 1 - delta / G`.
+9. The aggregate, per (cell, mode, arm, kind, name, self_transfer, extrapolation family), over
+   the rows rule 5 keeps, with `self_transfer` set to 0 on the self arms (`delta_by_triple.csv`
+   keeps each row's own flag): `stats.random_effects` and `stats.source_random_effect` on
+   (delta, se, src_triple); `se = sqrt(se_within^2 + se_src^2)`; `sigma_base` the median
+   `value_b`, `margin = stats.margin_for(sigma_base)`, `stats.tost(mu, se, margin)`.
+10. The guard (`guard_verdict`, `tost_label`), per (cell, kind, name) from the mean delta of
+    `xfer` (xf), `xfer_lpo` (xl) and `self_cf_lpo` (sl) over the rows rule 5 keeps:
+    `has_xfer_lpo`, `cheat_stat = (xf - xl) + sl` (section 5.1, NaN unless all three exist),
+    `self_lpo_cost = sl`, and `guard_verdict` = `absent` without xl, `uninformative` when |sl|
+    exceeds the row's margin, `ok` otherwise. `tost` is `NA-unguarded` on an `xfer*` row whose
+    guard is not `ok` and whose `self_transfer` is 0, the TOST verdict otherwise; `tost_raw` is
+    always the TOST verdict.
+11. `primary_flag`: 1 on pair rows, 0 on board rows, and 0 on the `xfer_lpo` row of the pair of
+    a one-board cell without the transferred board (identical to the `self_cf_lpo` control, it
+    cannot fail; the row is kept).
+12. `holm_board_fails`: Holm's step-down (`stats.holm`) on `p_nonequiv` over each cell's board
+    rows with `tost = FAIL` gives `p_ne_holm` and `fail_holm` (NaN and 0 on every other row).
+
+**Outputs**, in `--out` (default `<write root>/tables/`):
+
+- `delta_by_triple.csv`: one row per (arm other than the baseline, triple, quantity) that rules
+  1 to 3 keep, rule-5 rows included. Columns: (cell, mode, run, combo, tgt_triple, kind, name),
+  the other cell-table columns in their order, `lpo_shape` when the group has side-cars, then
+  `agg.DELTA_COLUMNS`: `value_b`, `v_f0_b`, `v_f1_b`, `n_b`, `delta`, `d_f0`, `d_f1`, `scale`,
+  `k_cal`, `f_inflate`, `se`, `se_halfraw`.
+- `agg_by_cell.csv`: one row per aggregate (rule 9), sorted by cell, kind, arm, name; columns
+  `agg.AGG_COLUMNS`, with `lpo_shape` (the distinct non-empty shape texts of the (cell, kind,
+  name), joined by ";") before `p_ne_holm` when the group has side-cars. `extrap_family` is
+  `interp`, `extrap` or `na` (no `extrap` flag); `n_pix` the rows with a finite delta and a
+  positive se, `n_tgt` the distinct target triples, `n_src` the distinct sources; `mu`, `se`,
+  `se_within`, `tau`, `median`, `p95`, `chi2_red` (per degree of freedom), `mu_fe`, `se_fe`
+  from the random-effects fit; `mu_src_spread`, `se_src` from the source term; `ci_lo`,
+  `ci_hi` the 90 % interval; `has_placebo`, `has_self_in_rep` whether the (cell, kind, name)
+  has such rows; `placebo_minus_notwc1b_ps` = mean delta of `placebo` minus that of `notwc_1b`
+  (the one-board placebo control of section 5.2; NaN without `notwc_1b`); `frac_over_margin` the
+  share of |delta| above the margin; `R_median`, `gate_fail` (share with `accepted = 0`),
+  `k_cal`, `src_file_overlap`, `n_pool_excluded`, `lever_X_all` medians over the rows.
+- `calibration.csv`: one row per k_cal group, `agg.CALIBRATION_COLUMNS`: cell, run, arm, kind,
+  `k_cal`, `f_inflate`, `f_source`.
+- With `--tier0 FILE` (a tier0 table, section 7): `tier0_calibration.csv`, the least-squares
+  line of delta on `P_exc` over the rows matched on (run, combo, target, source, kind, name)
+  with both finite (`n`, `slope`, `intercept`, `resid_rms`, `corr`; at least 4 rows), and
+  `tier0_vs_tier2.csv`, those rows.
+
+**Versions of the study's aggregation.** Stages 1 and 2 (`tt.py` 05793488) and stage 3
+(698f72f9) ran this code less the side-car merge, which acts only where a side-car exists; the
+guardfix wave (e83f71c1) ran this code. Round 1 (258cb1f8) had rules 1, 2, 4, 5 (in the
+aggregate only), 9, 10, the plain primary flag and rule 12; it had no rule 3, 7, the k_cal
+exclusions of rule 6, the `notwc_1b` retention gain G of rule 8, the `xfer_lpo` primary rule,
+or the column `placebo_minus_notwc1b_ps` (45 columns), and its cell tables lack the seven
+protocol columns.

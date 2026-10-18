@@ -15,7 +15,7 @@ source, applied to another, the target, and the time resolution that costs. The 
 event cut and the width are the pipeline's own (`condor_at_lxplus/core/twc_solver.py` and
 `bootstrap.py`, imported unmodified); this package adds the bookkeeping around them: frozen
 evaluation folds, per-event leakage checks, a coefficient bank, the arms, the analytic Tier-0
-screen, the transfer cell and the statistics. `SPEC.md` beside this file defines all of it.
+screen, the transfer cell, the statistics and the aggregation of cells. `SPEC.md` beside this file defines all of it.
 
 ## Environment variables
 
@@ -44,6 +44,7 @@ screen, the transfer cell and the statistics. `SPEC.md` beside this file defines
 | `tier0` | `tier0_delta`, the analytic change of RMS^2 per pair and board |
 | `stats` | `kcal_from_cells`, `random_effects`, `tost`, `margin_for`, `source_random_effect`, `holm`, `p_nonequiv` |
 | `cell` | the transfer cell: the source of each mode, the board-identity checks, the pixel-to-board protocols, `cmd_cell`, the cell table `CELL_COLUMNS` |
+| `agg` | the aggregation of cell tables: one function per rule, `aggregate` (in memory), `cmd_agg`, the table columns `DELTA_COLUMNS`, `AGG_COLUMNS`, `CALIBRATION_COLUMNS` |
 | `cli`, `__main__` | the command line, `python -m twc_transfer` (below) |
 | `jobs` | the job lists: reader, root expansion, `--dry-run`; the study's seven lists are in `jobs/` |
 
@@ -72,7 +73,7 @@ here writes a file. A caller that writes passes `ensure_dirs(campaigns.write_roo
 ## Command line
 
 From `TestBeam/`, with a folder of your own as the write root. The recipe is index, then bank
-(and the Tier-0 screen of it), then cells:
+(and the Tier-0 screen of it), then cells, then their aggregation:
 
     export ETROC_TWC_OUT=/path/to/your/output
     python -m twc_transfer index --campaign mar --run h1_run1 --combo extra0-ref1-dut2
@@ -80,6 +81,8 @@ From `TestBeam/`, with a folder of your own as the write root. The recipe is ind
     python -m twc_transfer tier0 --bank $ETROC_TWC_OUT/bank/coeffs_mar_f1_run12.parquet --tag f1_run12
     python -m twc_transfer cell --cell jul_51to48 --mode a --campaign jul --run h1_run48 \
         --combo dut1-ref2-trig3 --src-run h1_run51 --ntrip 5 --lpo --lpo-fallback own --dry-run
+    python -m twc_transfer agg --cells 'cells_guardfix/J?_h1_*/*.csv' --f-inflate 0.9259 \
+        --out $ETROC_TWC_OUT/tables/agg_J_jul_guardfix_f0p9259
     python -m twc_transfer jobs --list cells.tsv --dry-run
 
 `index` lists a run's track files with their event counts (`bank/index_<campaign>_<run>.parquet`),
@@ -92,13 +95,20 @@ line above prints its plan (the study's smoke job of `cells_guardfix_rerun.tsv` 
 name: five July H1 triples of run 48 corrected with run 51's coefficients), and without
 `--dry-run` it runs in about two minutes. `--src-bank` takes a source's coefficients from a bank file instead
 of refitting them (modes a, b, c, cb and f). A cell that stops can be started again with the
-same command: the target triples already in its table are skipped. `jobs --dry-run` prints
-every command of a job list with its roots filled in and checks that it parses. `SPEC.md`
-sections 3, 6 and 7 list every mode, every option and every output column.
+same command: the target triples already in its table are skipped. `agg` aggregates a group of
+cell tables into `delta_by_triple.csv`, `agg_by_cell.csv` and `calibration.csv` (default
+`$ETROC_TWC_OUT/tables/`); a relative `--cells` pattern is taken in the read root, so the line
+above re-aggregates the four cells of the study's group `J_jul_guardfix` as its driver did.
+`--f-cal jul` gives the same f from `campaigns.F_CAL` (with
+`--f-precision full`, the bootstrap's full value) and records that in `f_source`; the study
+passed f with `--f-inflate`, so only that gives its tables back byte for byte. `jobs --dry-run`
+prints every command of a job list with its roots filled in and checks that it parses.
+`SPEC.md` sections 3, 6, 7 and 8 list every mode, every option, every rule of the aggregation
+and every output column.
 
 What refuses to run, and why:
 
-- A writing subcommand (`index`, `bank`/`fit`, `tier0`, `cell`/`transfer`) without
+- A writing subcommand (`index`, `bank`/`fit`, `tier0`, `cell`/`transfer`, `agg`) without
   `ETROC_TWC_OUT`: there is no default output folder, so nothing lands in the study's own tree
   by accident.
 - `ETROC_TWC_OUT` equal to the read root (`ETROC_TWC_TRANSFER_ROOT`) or to a campaign's
@@ -110,6 +120,8 @@ What refuses to run, and why:
   without both `--src-role` and `--xfer-board`, `--xfer-lin` on a one-board cell or without
   `--arms ext`, `--src-parity-contrast` with a source in another run.
 - Resuming a cell table whose columns are not `cell.CELL_COLUMNS`.
+- An aggregation whose k_cal pool of a one-board pair holds a row identical to the baseline
+  (SPEC.md 8, rule 7): it would pull the error scale down; nothing is written.
 
 `python -m twc_transfer` pins the thread pools to one thread and, if `PYTHONHASHSEED` is not
 0, restarts itself once with `PYTHONHASHSEED=0` and says so: the placebo of a cell whose source
@@ -131,7 +143,7 @@ checks the digests). 247 rows: 236 cell jobs (6 of them smoke tests) and 11 Tier
     cd TestBeam && python -m pytest twc_transfer/tests -q
 
 Synthetic data only: the tests read no data file but the package's own job lists and the toy
-track files the cell tests write under pytest's temporary folder; they touch nothing under
+track files and cell tables the tests write under pytest's temporary folder; they touch nothing under
 `/eos` and need no network.
 
 ## Parity with the study's toolkit
@@ -161,6 +173,23 @@ The cell was checked on two cells of the study, against their tables, with `PYTH
   the study's stage-3 toolkit on the same node except `ts`. Both differ from the study's
   table, which was made on a batch node, in `ks_d` (13 entries, at most 2e-16) and `ks_p` (12
   entries, at most 1.5e-14).
+
+The aggregation was checked by re-aggregating groups of the study's cell tables, read from the
+read root, with the f its driver passed (`--f-inflate`), and comparing the three files with the
+study's `tables/agg_<tag>/`:
+
+- `J_jul_guardfix_f0p9259` (four cells with side-cars): `delta_by_triple.csv` (14280 rows, 63
+  columns), `agg_by_cell.csv` (214 rows, 47 columns, `lpo_shape` included) and
+  `calibration.csv` (56 rows) are byte for byte the study's. The study's guardfix toolkit, run
+  on the same node on the same files, gives the same three files.
+- Stage 1 `J_jul_f0p9259` (7 cells; 23316, 369 and 98 rows) and `I_mar_f0p9524` (99000, 393, 90
+  rows), stage 3 `G_desy_f0p8153` (21330, 434, 128 rows): byte for byte the study's.
+- Round 1 is re-derived, not reproduced (Versions, below). On `agg_mar_f0p9524` the rows and
+  every shared column are equal; the port adds `placebo_minus_notwc1b_ps` to `agg_by_cell.csv`
+  and the seven protocol columns, empty, to `delta_by_triple.csv`, since the round-1 cell tables
+  have 43 columns. On `agg_desy_f0p8153` the k_cal exclusions (215 same-pixel and 234
+  self-transfer rows, absent in round 1) change `k_cal` in 30 of 302 groups, by up to 15 %, and
+  with it `mu`, `se` and the interval: `tost` changes on 2 rows and `fail_holm` on 1.
 
 ## Versions
 
@@ -192,5 +221,24 @@ sha256 prefix of its `tt.py`), all on the core above:
 `cell.py` is the guardfix version; the stage-3 version differs from it only by
 `--lpo-fallback`, whose default is the stage-3 behaviour. "Reproduces" means the same command
 on a core of the hashes above gives the same table except `ts`; "reruns" means the command runs
-but computes with the current cell. `cells_v2w1.tsv` is not among the lists in `jobs/`. The
-aggregation command is not part of this version.
+but computes with the current cell. `cells_v2w1.tsv` is not among the lists in `jobs/`.
+
+The study's aggregation tables (`tables/agg_<tag>/`, one per group and f) were written by four
+versions of its `agg`:
+
+| wave | tags | tt.py | this package |
+|---|---|---|---|
+| round 1 | `agg_desy_*`, `agg_aug_*`, `agg_mar_f0p9524`, `agg_jul_f0p9259` | 258cb1f8 | re-derives them (later rules, more columns) |
+| stage 1, stage 2 | the groups of `cells_stage1.tsv`, `cells_stage2.tsv` | 05793488 | reproduces them |
+| stage 3 | the groups of `cells_stage3.tsv` | 698f72f9 | reproduces them |
+| guardfix | `agg_*_guardfix_*` | e83f71c1 | reproduces them |
+
+`agg.py` is the guardfix version; stages 1 to 3 lack only its merge of the `lpo_shape`
+side-cars, which acts only on cells that have one. Round 1 lacks the one-board identical-pair
+drop, the k_cal exclusions, the structural-zero stop, the `notwc_1b` retention gain, the
+`xfer_lpo` primary rule and the column `placebo_minus_notwc1b_ps`: its tables are read as they
+are, and re-aggregating its cells changes the DESY May numbers (Parity, above). "Reproduces"
+means byte for byte on the tags compared above. The tables of the seeded rerun's tree and the
+tags `agg_A_r2_desy_*`, `agg_dt_*` and `agg_V2_*` were not compared. Which cells form a group,
+and the f of each tag, were the study's drivers' choice (the group column of the job list; the
+f named by the tag's suffix); `agg` takes the patterns and the f as arguments.

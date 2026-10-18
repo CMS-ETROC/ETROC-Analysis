@@ -10,8 +10,9 @@ The only paths outside the repository live here, each behind an environment vari
   ETROC_TWC_OUT               the write root. It has no default: write_root() refuses to run
                               without it, and refuses the read root and every data root
 
-JOB_LISTS names the study's seven job lists with the output root each one wrote into, and
-CELL_VERSIONS the cell code each wave ran and whether cell.py reproduces it.
+JOB_LISTS names the study's seven job lists with the output root each one wrote into,
+CELL_VERSIONS the cell code each wave ran and whether cell.py reproduces it, and F_CAL the
+error inflation of the aggregation per campaign, at the two precisions the study used.
 
 This module does not import the pipeline core.
 """
@@ -86,6 +87,28 @@ CELL_VERSIONS = (
     ("guardfix", "cells_guardfix_rerun.tsv", "e83f71c1", True),
     ("v2w1", "cells_v2w1.tsv", "e83f71c1", True),
 )
+
+
+# The error inflation f of the aggregation (SPEC 4 errors, 3), per campaign: the ratio of a
+# block-bootstrap error to the half-split error, measured by the study's bootstrap on one
+# anchor run (the bootstrap is not part of this package; its outputs are tables/f_cal_*.json
+# in the read root). The study's aggregation was run with four decimals: the numbers written
+# into its drivers for DESY May, March and July, the measured August value formatted "%.4f".
+# The round-1 recomputation of the verdicts used the full values. agg --f-cal <campaign> takes
+# the four-decimal value, which reproduces the aggregated tables; --f-precision full the other.
+# DESY May and August were also aggregated at f = 1.0, and August at the DESY value 0.8153 (its
+# pre-registered fallback); those runs pass the number with --f-inflate.
+# (four decimals, full value, provenance)
+F_CAL = {
+    "desy": (0.8153, 0.8152579445510614,
+             "bootstrap of desy run26 ref1-trig2-dut3, tables/f_cal_desy_run26.json"),
+    "aug": (0.8979, 0.8979111975615606,
+            "bootstrap of aug run23 dut0-trig1-ref2, tables/f_cal_aug_run23.json (gate PASS)"),
+    "mar": (0.9524, 0.9524,
+            "the March H1 run h1_run1 cross-check; recorded to four decimals only"),
+    "jul": (0.9259, 0.925913381797006,
+            "bootstrap of jul h1_run10 extra0-dut1-ref2, tables/f_cal_jul_h1_run10.json"),
+}
 
 
 def transfer_root():
