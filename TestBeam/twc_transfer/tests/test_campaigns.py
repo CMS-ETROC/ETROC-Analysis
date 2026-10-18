@@ -1,5 +1,6 @@
-"""Tests of the campaign facts: the write root (never unset, never the read root, never a data
-root), f per campaign, the thin rule, the levels, the axis descriptions and the version tables.
+"""Tests of the campaign facts: the write root (never unset, never inside the read root, a data
+root, the study's trees or the checkout, always absolute), f per campaign, the thin rule, the
+levels, the axis descriptions and the version tables.
 
 Run from TestBeam/:  python -m pytest twc_transfer/tests
 """
@@ -35,6 +36,37 @@ def test_write_root_refuses_unset_read_root_and_data_roots(monkeypatch, tmp_path
             C.write_root()
     monkeypatch.setenv("ETROC_TWC_OUT", str(tmp_path / "out"))
     assert C.write_root() == str(tmp_path / "out")
+
+
+def test_write_root_refuses_a_folder_inside_a_protected_root_by_its_real_path(monkeypatch,
+                                                                              tmp_path):
+    home = tmp_path / "eos" / "home-m"
+    (home / "T").mkdir(parents=True)
+    alias = tmp_path / "user"                 # a second name of the same tree, as /eos/user/m
+    alias.symlink_to(home)
+    monkeypatch.setenv("ETROC_TWC_TRANSFER_ROOT", str(alias / "T"))
+    monkeypatch.setitem(C.CAMPAIGNS, "mar", str(tmp_path / "data"))
+    monkeypatch.setattr(C, "_RERUN_SEEDED_ROOT", str(tmp_path / "seeded"))
+    checkout = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(C.__file__))))
+    refused = ((home / "T", "is the read root"), (home / "T" / "sub", "inside the read root"),
+               (alias / "T" / "sub", "inside the read root"),
+               (tmp_path / "data" / "tracks_run1", "inside the step-10 data root"),
+               (tmp_path / "seeded" / "cells", "inside an output tree of the study's job lists"),
+               (os.path.join(checkout, "TestBeam", "out"), "inside this package's checkout"))
+    for out, why in refused:
+        monkeypatch.setenv("ETROC_TWC_OUT", str(out))
+        with pytest.raises(RuntimeError, match=why):
+            C.write_root()
+    monkeypatch.setenv("ETROC_TWC_OUT", str(home / "T2"))          # a sibling of the read root
+    assert C.write_root() == str(home / "T2")
+    assert sorted(os.listdir(home)) == ["T"]
+
+
+def test_a_relative_write_root_is_made_absolute(monkeypatch, tmp_path):
+    monkeypatch.setenv("ETROC_TWC_TRANSFER_ROOT", str(tmp_path / "T"))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("ETROC_TWC_OUT", os.path.join("rel", "out"))
+    assert C.write_root() == os.path.join(os.getcwd(), "rel", "out")
 
 
 def test_f_cal_keys_gate_and_agg_f():

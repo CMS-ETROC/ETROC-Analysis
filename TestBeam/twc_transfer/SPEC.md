@@ -29,8 +29,9 @@ A step-10 track file (`time/track_*.parquet`) has the columns `tot_<role>`, `toa
 has four leave-one-out combos; on March H1 each holds about 1090 to 1210 triples per run.
 
 Nothing in the library writes a file. A caller that writes, the command line of section 6
-included, uses `campaigns.write_root()` (the folder `ETROC_TWC_OUT`, which has no default and
-may be neither the read root nor a data root) and `naming.ensure_dirs(root)`.
+included, uses `campaigns.write_root()` (the folder `ETROC_TWC_OUT`, which has no default,
+is made absolute and may be neither inside the read root, the study's output trees, a data root
+nor this checkout) and `naming.ensure_dirs(root)`.
 
 ## 1. Data model
 
@@ -458,10 +459,15 @@ unchanged.
 - The study's banks were written with `fit --campaign C --run R --ntrip 40 --folds both
   --placebo`, the remaining options at their defaults.
 - **The write root.** `index`, `bank`, `tier0`, `cell`, `agg`, `master` and `axes` need
-  `ETROC_TWC_OUT` and write under it (the arrows above are relative to it); `--out` names
-  another output file or folder. They refuse to start when it is unset, when it is the read
-  root `ETROC_TWC_TRANSFER_ROOT`, and when it is the step-10 root of a campaign, so no run
-  writes into the study's tree or among the track files.
+  `ETROC_TWC_OUT` and write under it (the arrows above are relative to it; a relative
+  `ETROC_TWC_OUT` is made absolute); `--out` names another output file or folder, a relative
+  one taken in the write root. They refuse to start when it is unset, and when it is, or lies
+  inside, one of `campaigns.protected_roots()`: the read root `ETROC_TWC_TRANSFER_ROOT`, the
+  output trees of the study's job lists (`campaigns.JOB_LISTS`), the step-10 root of a
+  campaign and this package's checkout, each compared by its real path (`os.path.realpath`,
+  containment by `os.path.commonpath`). Every output path, `--out` included, passes the same
+  check (`campaigns.output_path`) before anything is made or removed, so no run writes into
+  the study's tree or among the track files.
   Only these subcommands create the output folders, and `cell --dry-run` creates none.
 - **Inputs.** `tier0 --bank`, `cell --src-bank`, `agg --cells` and `agg --tier0` are read from
   the read root when the path is relative. `master` and `axes` read only the read root and the
@@ -485,7 +491,7 @@ unchanged.
   `${ETROC_TWC_ROOT_<CAMPAIGN>}` stands for a campaign's step-10 root and `${TT_OUT}` for the
   study's tree: under an input flag (`--bank`, `--src-bank`, `--root`, `--src-root`, `--cells`,
   `--tier0`) it becomes the read root, under `--out` the write root, and anywhere else it is
-  refused, as is a write root equal to the read root. Expanded with the default roots and
+  refused, as is a write root inside the read root. Expanded with the default roots and
   `${TT_OUT}` left in place, the lists reproduce the study's commands byte for byte.
   `jobs --dry-run` prints every command expanded and parses it with the parser above; a cell
   command must name its row's `cell_id` in `--cell`. `jobs` takes exactly one of its four
@@ -497,8 +503,8 @@ unchanged.
 submits nothing. A job list in, a DAG out; the layout is the study's.
 
 - **Where.** DIR is taken in the write root when relative and must lie inside it when
-  absolute; a DIR that holds `<dag>.dag` already is refused (DAGMan keeps its rescue files
-  beside a DAG). The write root is required, as for every writing subcommand.
+  absolute, and never inside one of `campaigns.protected_roots()`; a DIR that holds `<dag>.dag`
+  already is refused (DAGMan keeps its rescue files beside a DAG). The write root is required, as for every writing subcommand.
 - **Checks before anything is written.** Every command is expanded (`${TT_OUT}` per flag,
   `${ETROC_TWC_ROOT_<CAMPAIGN>}` from `campaigns.CAMPAIGNS`) and parsed, and a cell command
   names its row's `cell_id`; the list holds exactly one row of level `smoke`; no other row uses

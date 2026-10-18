@@ -592,9 +592,10 @@ def _in_read_root(path, read_root):
 
 def cmd_agg(a, root):
     """`agg`: aggregate the cell tables matched by --cells into <write root>/tables/ (or
-    --out): delta_by_triple.csv, agg_by_cell.csv, calibration.csv, and with --tier0
+    --out, a relative one in the write root): delta_by_triple.csv, agg_by_cell.csv, calibration.csv, and with --tier0
     tier0_calibration.csv and tier0_vs_tier2.csv."""
     read_root = campaigns.transfer_root()
+    outdir = campaigns.output_path(a.out, root, "tables")
     files = sorted(sum([glob.glob(_in_read_root(x, read_root)) for x in a.cells], []))
     if not files:
         sys.exit("agg: no cell CSVs matched")
@@ -606,7 +607,6 @@ def cmd_agg(a, root):
                         f_source=f_src, nmin_eval=a.nmin_eval)
     except AggregationError as e:
         sys.exit(str(e))
-    outdir = a.out or os.path.join(root, "tables")
     os.makedirs(outdir, exist_ok=True)
     res["delta_by_triple"].to_csv(os.path.join(outdir, "delta_by_triple.csv"), index=False)
     agg = res["agg_by_cell"]

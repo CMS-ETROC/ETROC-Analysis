@@ -312,8 +312,9 @@ def build(read_root, outdir, axes=None, guardfix=False):
 
 
 def cmd_axes(a, root):
-    """`axes`: the axis tables from the read root into the write root (or --out)."""
-    outdir = a.out or root
+    """`axes`: the axis tables from the read root into the write root (or --out, a relative one
+    in the write root)."""
+    outdir = campaigns.output_path(a.out, root)
     try:
         build(campaigns.transfer_root(), outdir, axes=a.axis, guardfix=a.guardfix)
     except AxesError as e:

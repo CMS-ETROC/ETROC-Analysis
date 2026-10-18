@@ -25,7 +25,7 @@ table of the level cells and the axis tables. `SPEC.md` beside this file defines
 | `ETROC_TWC_CORE` | the pipeline core directory to import `bootstrap` and `twc_solver` from; a core of the hashes of `campaigns.CELLS_CORE_SHA1` reproduces the study's cells, another reruns them (Versions) | this repository's `TestBeam/condor_at_lxplus/core` |
 | `ETROC_TWC_ROOT_<CAMPAIGN>` | the step-10 analysis root of a campaign (`MAR`, `JUL`, `DESY`, `AUG`); track files are `<root>/tracks_<run>/<combo>/time/track_*.parquet` | the campaign trees in `campaigns.py` |
 | `ETROC_TWC_TRANSFER_ROOT` | the read root: the study's outputs (bank, cells, tables), never written; the same variable and default as `etroc_plots` | the study's output tree in `campaigns.py` |
-| `ETROC_TWC_OUT` | the write root | none: `campaigns.write_root()` raises when it is unset, or when it is the read root or a data root |
+| `ETROC_TWC_OUT` | the write root; a relative one is made absolute | none: `campaigns.write_root()` raises when it is unset, or when it is or lies inside the read root, an output tree of the study's job lists, a data root or this checkout (`campaigns.protected_roots()`, real paths compared) |
 
 `ETROC_TWC_CORE` is read once, at the first import of the package; the others are read when
 `campaigns` is first imported (the roots) or when `transfer_root()` / `write_root()` is called.
@@ -134,10 +134,15 @@ What refuses to run, and why:
 - A writing subcommand (`index`, `bank`/`fit`, `tier0`, `cell`/`transfer`, `agg`, `master`,
   `axes`) without `ETROC_TWC_OUT`: there is no default output folder, so nothing lands in the
   study's own tree by accident.
-- `ETROC_TWC_OUT` equal to the read root (`ETROC_TWC_TRANSFER_ROOT`) or to a campaign's
-  step-10 root: outputs would mix with the inputs.
+- `ETROC_TWC_OUT` that is, or lies inside, the read root (`ETROC_TWC_TRANSFER_ROOT`), one of
+  the study's output trees (`campaigns.JOB_LISTS`, the seeded rerun's included), a campaign's
+  step-10 root or this checkout, compared by real path (`/eos/user/m/<user>` and
+  `/eos/home-m/<user>` are one folder): outputs would mix with the inputs.
+- An output path inside one of those folders, `--out` included, on every writing subcommand;
+  nothing is made or removed first. A relative `--out` is taken in the write root, never in
+  the working folder.
 - In a job list, `${TT_OUT}` under a flag that is neither an input nor `--out`, an unknown
-  placeholder, or a write root equal to the read root.
+  placeholder, or a write root inside the read root.
 - A cell whose flags would change its meaning without saying so (SPEC.md 3): a source board that
   is not the target's board without a `--role-map`, `--role-map` in modes e and inrun, mode cb
   without both `--src-role` and `--xfer-board`, `--xfer-lin` on a one-board cell or without
@@ -149,9 +154,10 @@ What refuses to run, and why:
   (`campaigns.ROUND1_AGG_TAGS`).
 - An axis-F cell table whose labels do not name the level-F cells of `cells_stage3.tsv` one to
   one, and `axes --guardfix` with an axis other than E, J or K.
-- `jobs --write-dag` into a folder outside the write root or one that holds the DAG already, on a
-  list without exactly one smoke row, with a job id named SMOKE, PREP or AGG on another row, or
-  with a group that names no campaign (its cells would be aggregated with another campaign's f).
+- `jobs --write-dag` into a folder outside the write root or inside one of those folders, or
+  one that holds the DAG already, on a list without exactly one smoke row, with a job id named
+  SMOKE, PREP or AGG on another row, or with a group that names no campaign (its cells would be
+  aggregated with another campaign's f).
 
 `python -m twc_transfer` pins the thread pools to one thread and, if `PYTHONHASHSEED` is not
 0, restarts itself once with `PYTHONHASHSEED=0` and says so: the placebo of a cell whose source

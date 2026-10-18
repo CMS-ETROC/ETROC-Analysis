@@ -17,7 +17,7 @@ The commands carry two kinds of placeholder:
   ${TT_OUT}                     the study's output tree, replaced per flag: an input flag
                                 (--bank, --src-bank and the other READ_FLAGS) gets the read
                                 root, --out gets the write root. A ${TT_OUT} under any other
-                                flag is refused, and so is a write root equal to the read root.
+                                flag is refused, and so is a write root inside the read root.
 
 The seven lists of the study are in jobs/ beside this file (campaigns.JOB_LISTS gives their
 order and the output root each wrote into). They are the study's own tables with their
@@ -39,6 +39,8 @@ import shlex
 import stat
 import sys
 import time
+
+from . import campaigns
 
 FIELDS = ("job_id", "cell_id", "level", "group", "est_min", "mem_mb", "command")
 PKG_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -95,20 +97,17 @@ def by_cell(jobs):
     return out
 
 
-def _same(a, b):
-    return os.path.normpath(os.path.abspath(a)) == os.path.normpath(os.path.abspath(b))
-
-
 def expand(command, campaign_roots, read_root, write_root):
     """`command` with its placeholders replaced, spacing kept.
 
     campaign_roots  {campaign: step-10 root}, e.g. campaigns.CAMPAIGNS
     read_root       replaces ${TT_OUT} under an input flag (READ_FLAGS)
     write_root      replaces ${TT_OUT} under --out
-    A root given as None leaves its ${TT_OUT} tokens as they are."""
-    if read_root is not None and write_root is not None and _same(read_root, write_root):
-        raise ValueError("the write root %s is the read root: outputs would land among the "
-                         "inputs" % write_root)
+    A root given as None leaves its ${TT_OUT} tokens as they are. Raises ValueError when the
+    write root is, or lies inside, the read root (by their real paths)."""
+    if read_root is not None and write_root is not None:
+        campaigns.refuse_inside(write_root, [("the read root", read_root)],
+                                "the write root %s" % write_root)
     out, flag, pos = [], None, 0
     for m in re.finditer(r"\S+", command):
         tok = m.group(0)
@@ -179,11 +178,6 @@ def dry_run(path, campaign_roots, read_root, write_root, parse, only=None, strea
 NODE_IDS = ("SMOKE", "PREP", "AGG")     # the DAG's own nodes; no job row of a list may use them
 CELL_COMMANDS = ("cell", "transfer")
 REPO_CORE = os.path.join(REPO_DIR, "TestBeam", "condor_at_lxplus", "core")
-
-
-def _inside(path, root):
-    path, root = os.path.abspath(path), os.path.abspath(root)
-    return os.path.commonpath([path, root]) == root
 
 
 def expanded_jobs(path, campaign_roots, read_root, write_root, parse):
@@ -525,8 +519,9 @@ def write_dag(path, dag_dir, campaign_roots, read_root, write_root, parse, dag_n
     if not os.path.isabs(dag_dir):
         dag_dir = os.path.join(write_root, dag_dir)
     dag_dir = os.path.abspath(dag_dir)
-    if not _inside(dag_dir, write_root):
+    if not campaigns.inside(dag_dir, write_root):
         raise ValueError("%s is not inside the write root %s" % (dag_dir, write_root))
+    campaigns.refuse_inside(dag_dir, campaigns.protected_roots(), "the DAG folder %s" % dag_dir)
     jobs = expanded_jobs(path, campaign_roots, read_root, write_root, parse)
     smoke = [j for j in jobs if j["level"] == "smoke"]
     cells = [j for j in jobs if j["level"] != "smoke"]
