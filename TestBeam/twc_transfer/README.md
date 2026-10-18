@@ -112,7 +112,11 @@ cell tables into `delta_by_triple.csv`, `agg_by_cell.csv` and `calibration.csv` 
 above re-aggregates the four cells of the study's group `J_jul_guardfix` as its driver did.
 `--f-cal jul` gives the same f from `campaigns.F_CAL` (with
 `--f-precision full`, the bootstrap's full value) and records that in `f_source`; the study
-passed f with `--f-inflate`, so only that gives its tables back byte for byte. `jobs --dry-run`
+passed f with `--f-inflate`, so only that gives its tables back byte for byte. Without either,
+`agg` takes the f of the read root's `tables/f_cal.json` only when that file names its
+campaign (`"campaign"`) and every cell aggregated is of that campaign; it refuses a file that
+names none or another, and the study's file (the DESY May run26 bootstrap) names none, so in
+the study's tree `agg` needs `--f-cal` or `--f-inflate`. `jobs --dry-run`
 prints every command of a job list with its roots filled in and checks that it parses;
 `jobs --write-dag` writes the condor DAG of a list and submits nothing (Condor, below).
 

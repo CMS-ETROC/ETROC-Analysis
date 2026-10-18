@@ -157,7 +157,9 @@ def build_parser(raising=False):
     fq = q.add_mutually_exclusive_group()
     fq.add_argument("--f-inflate", dest="f_inflate", type=float, default=None,
                     help="the error inflation f (SPEC.md 4). Default: the read root's "
-                    "tables/f_cal.json, else 1.0 with a warning")
+                    "tables/f_cal.json when it names the campaign of every cell (refused when "
+                    "it names none or another; the study's names none), else 1.0 with a "
+                    "warning")
     fq.add_argument("--f-cal", dest="f_cal", default=None, choices=sorted(campaigns.F_CAL),
                     help="f of this campaign (campaigns.F_CAL), at --f-precision")
     q.add_argument("--f-precision", dest="f_precision", default="agg", choices=["agg", "full"],

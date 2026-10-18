@@ -639,14 +639,18 @@ each cell (chunks included), once per f.
    0.9259 (jul); with it the study's numbers come back. `full` is the bootstrap's
    value: 0.8152579445510614, 0.8979111975615606, 0.9524 (known to four decimals only),
    0.925913381797006; the round-1 recomputation of the verdicts used these.
-3. Neither: the `f_cal` of `<read root>/tables/f_cal.json` (in the study's tree the DESY May
-   run26 bootstrap), whatever the campaign of the cells; without that file 1.0, the uninflated
+3. Neither: the `f_cal` of `<read root>/tables/f_cal.json`, when the file names its campaign
+   (`"campaign"`) and that is the campaign of every cell aggregated (the cell tables'
+   `campaign` column); a file that cannot be read, names no campaign or another is refused
+   before anything is written, the message naming `--f-cal` and `--f-inflate`. The study's file
+   (the DESY May run26 bootstrap) names no campaign. Without the file, 1.0, the uninflated
    half-split error, with a warning.
 
 The study passed every f with `--f-inflate` (its four-decimal values, and 1.0 and 0.8153 for the
 sensitivity runs of DESY May and August). The value is written into `f_inflate` and its origin
 into `calibration.csv`'s `f_source`: `explicit` for `--f-inflate`, `f_cal <campaign>, as
-aggregated` or `f_cal <campaign>, full precision` for `--f-cal`. The study's tables therefore
+aggregated` or `f_cal <campaign>, full precision` for `--f-cal`, `tables/f_cal.json (<campaign>
+<run>, ref=<ref>)` for the file. The study's tables therefore
 read `explicit`, and only `--f-inflate` gives them back byte for byte.
 
 **Rules**, applied in this order, each a function of `agg.py`:
