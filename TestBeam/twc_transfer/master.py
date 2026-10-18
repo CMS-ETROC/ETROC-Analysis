@@ -931,8 +931,9 @@ def run(read_root, job_list, outdir):
 
 
 def cmd_master(a, root):
-    """`master`: the round-1 chain from the read root into <write root>/master/ (or --out)."""
-    outdir = a.out or os.path.join(root, "master")
+    """`master`: the round-1 chain from the read root into <write root>/master/ (or --out, a
+    relative one in the write root)."""
+    outdir = campaigns.output_path(a.out, root, "master")
     try:
         run(campaigns.transfer_root(), joblists.list_path(a.jobs), outdir)
     except MasterError as e:

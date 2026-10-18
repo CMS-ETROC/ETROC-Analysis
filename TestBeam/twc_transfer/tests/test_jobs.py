@@ -92,6 +92,19 @@ def test_expand_never_puts_an_output_in_the_read_root():
         J.expand("cell --root ${HOME}/x", ROOTS, "/read/T", "/work/out")
 
 
+def test_expand_refuses_a_write_root_inside_the_read_root_under_any_name(tmp_path):
+    (tmp_path / "home" / "T").mkdir(parents=True)
+    (tmp_path / "alias").symlink_to(tmp_path / "home")
+    cmd = "cell --cell x --out ${TT_OUT}/cells/x/x.csv"
+    read = str(tmp_path / "alias" / "T")
+    for write in (tmp_path / "home" / "T", tmp_path / "home" / "T" / "sub",
+                  tmp_path / "alias" / "T" / "sub"):
+        with pytest.raises(ValueError, match="read root"):
+            J.expand(cmd, ROOTS, read, str(write))
+    assert J.expand(cmd, ROOTS, read, str(tmp_path / "home" / "T2")).endswith(
+        "--out %s/cells/x/x.csv" % (tmp_path / "home" / "T2"))
+
+
 def _rows(name, roots):
     out = []
     for j in J.read_jobs(J.list_path(name)):

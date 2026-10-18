@@ -1234,8 +1234,9 @@ def _source_text(a):
 
 def cmd_cell(a, root):
     """`cell` (alias `transfer`): one transfer cell, every arm, one CSV row per
-    (triple, arm, quantity). The table goes to `--out`, else <root>/cells/<cell>.csv, where
-    `root` is the write root; `--dry-run` prints the plan and writes nothing."""
+    (triple, arm, quantity). The table goes to `--out` (a relative one in the write root), else
+    <root>/cells/<cell>.csv, where `root` is the write root; an output inside a protected root
+    is refused (campaigns.output_path). `--dry-run` prints the plan and writes nothing."""
     # --role-map has no meaning in the two modes with no named source: mode (e) builds its
     # source by pooling the target's own board across pixels and mode `inrun` splits the
     # target itself, so there is no second role -> board convention to reconcile.
@@ -1296,7 +1297,7 @@ def cmd_cell(a, root):
             "effective.  Effective ladder self_cf/xfer_lin/xfer = 2/1/0; a TOST "
             "verdict against self_cf compares a 2-effective-dof baseline, against "
             "xfer a 0-dof one." % (ORDER + 1, ORDER))
-    dest = a.out or os.path.join(root, "cells", "%s.csv" % a.cell)
+    dest = campaigns.output_path(a.out, root, "cells", "%s.csv" % a.cell)
     done = set()
     if os.path.exists(dest) and not a.overwrite:
         # Whether appending would mis-align the columns is knowable from the header alone,

@@ -21,12 +21,16 @@
           nothing; --check-inputs and --agg are the DAG's PREP and AGG nodes (SPEC.md 6a)
 
 Argument names, defaults and types are those of the study's own command line, so the
-commands of its job lists parse unchanged. `--out` overrides an output file name.
+commands of its job lists parse unchanged. `--out` overrides an output file name (a folder
+for agg, master and axes); a relative one is taken in the write root.
 
 Every subcommand that writes needs the write root, ETROC_TWC_OUT (campaigns.write_root()):
-there is no default, and the read root and the step-10 data roots are refused, so nothing is
-ever written into the study's own tree or among the track files. Only those subcommands make
-the output folders under it, and a cell's --dry-run makes none. `tier0 --bank`,
+there is no default, and it is made absolute. It may not be, or lie inside, the read root,
+the study's output trees, a step-10 data root or this checkout (campaigns.protected_roots(),
+compared by real path), and no output path, --out included, may lie inside one of them
+(campaigns.output_path()), so nothing is ever written into the study's own tree or among the
+track files. Only those subcommands make the output folders under it, and a cell's --dry-run
+makes none. `tier0 --bank`,
 `cell --src-bank`, `agg --cells` and `agg --tier0` are read from the read root when they are
 relative paths; `master` and `axes` read only the read root and the job lists in jobs/.
 python -m twc_transfer (__main__.py) also pins the thread pools to one thread and fixes
@@ -229,6 +233,7 @@ def cmd_index(a, root):
     import pandas as pd
     import pyarrow.parquet as pq
     from . import naming
+    dest = campaigns.output_path(a.out, root, "bank", "index_%s_%s.parquet" % (a.campaign, a.run))
     rows = []
     for combo in (a.combo.split(",") if a.combo else naming.combos_in(a.campaign, a.run, a.root)):
         for p in naming.top_triples(a.campaign, a.run, combo, a.ntrip, a.root):
@@ -238,7 +243,6 @@ def cmd_index(a, root):
                              triple=naming.triple_key(naming.parse_pixels(p)),
                              bytes=os.path.getsize(p)))
     df = pd.DataFrame(rows).sort_values("nevt", ascending=False)
-    dest = a.out or os.path.join(root, "bank", "index_%s_%s.parquet" % (a.campaign, a.run))
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     df.to_parquet(dest, index=False)
     print(df.head(15).to_string(index=False))
@@ -249,7 +253,7 @@ def cmd_bank(a, root):
     """`fit`: extract per-triple coefficients into the bank (SPEC 2)."""
     import pandas as pd
     from . import bank, events, naming
-    dest = a.out or os.path.join(root, "bank", "coeffs_%s_%s.parquet" % (a.campaign, a.run))
+    dest = campaigns.output_path(a.out, root, "bank", "coeffs_%s_%s.parquet" % (a.campaign, a.run))
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     combos = a.combo.split(",") if a.combo else naming.combos_in(a.campaign, a.run, a.root)
     guards = tuple(a.guards.split(","))
@@ -288,9 +292,9 @@ def cmd_tier0(a, root):
     import numpy as np
     import pandas as pd
     from . import tier0
+    dest = campaigns.output_path(a.out, root, "tier0", "transfer_%s.parquet" % a.tag)
     path = a.bank if os.path.isabs(a.bank) else os.path.join(campaigns.transfer_root(), a.bank)
     df = tier0.bank_screen(pd.read_parquet(path), max_src=a.max_src)
-    dest = a.out or os.path.join(root, "tier0", "transfer_%s.parquet" % a.tag)
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     df.to_parquet(dest, index=False)
     print("tier0: %d rows -> %s" % (len(df), dest))
@@ -372,6 +376,8 @@ def main(argv=None):
     root = None
     if a.cmd in WRITING:
         root = _write_root()
+        if getattr(a, "out", None):
+            campaigns.output_path(a.out, root)       # refused before any folder is made
         if not getattr(a, "dry_run", False):
             from .naming import ensure_dirs
             ensure_dirs(root)

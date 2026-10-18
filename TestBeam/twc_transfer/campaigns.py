@@ -8,7 +8,10 @@ The only paths outside the repository live here, each behind an environment vari
   ETROC_TWC_TRANSFER_ROOT     the read root: the study's outputs (coefficient bank, cells, tables),
                               read-only here; the same variable and default as etroc_plots uses
   ETROC_TWC_OUT               the write root. It has no default: write_root() refuses to run
-                              without it, and refuses the read root and every data root
+                              without it, and refuses it when it is, or lies inside, one of
+                              protected_roots() (the read root, the study's output trees, the
+                              data roots, this checkout; real paths compared); output_path()
+                              applies the same rule to every output path, --out included
   ETROC_TWC_CORE              the pipeline core directory (read by _core, not here; default this
                               repository's TestBeam/condor_at_lxplus/core). A core of the hashes
                               of CELLS_CORE_SHA1 reproduces the study's cells; another reruns them
@@ -526,23 +529,66 @@ def transfer_root():
     return os.environ.get("ETROC_TWC_TRANSFER_ROOT") or _DEFAULT_TRANSFER_ROOT
 
 
-def _same(a, b):
-    return os.path.normpath(os.path.abspath(a)) == os.path.normpath(os.path.abspath(b))
+# the repository this package is part of
+_CHECKOUT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def inside(path, root):
+    """Whether `path` is `root` or lies inside it, both taken by their real paths (symbolic
+    links resolved, so /eos/user/m/x and /eos/home-m/x are one folder)."""
+    path, root = os.path.realpath(path), os.path.realpath(root)
+    return os.path.commonpath([path, root]) == root
+
+
+def protected_roots():
+    """[(what, root)] that nothing of this package writes into: the read root, the output trees
+    of the study's job lists (JOB_LISTS, the seeded rerun's included), the step-10 data root of
+    every campaign and this package's checkout."""
+    roots = [("the read root (ETROC_TWC_TRANSFER_ROOT)", transfer_root())]
+    roots += [("an output tree of the study's job lists (campaigns.JOB_LISTS)", r)
+              for r in (_DEFAULT_TRANSFER_ROOT, _RERUN_SEEDED_ROOT)]
+    roots += [("the step-10 data root of campaign %r" % c, r) for c, r in CAMPAIGNS.items()]
+    roots.append(("this package's checkout", _CHECKOUT))
+    return roots
+
+
+def refuse_inside(path, roots, name=None):
+    """Raise ValueError when `path` is, or lies inside, one of `roots` ([(what, root)]); the
+    message calls the path `name` (default: the path itself)."""
+    name = name or path
+    for what, root in roots:
+        if inside(path, root):
+            same = os.path.realpath(path) == os.path.realpath(root)
+            raise ValueError("%s %s %s (%s); write somewhere else."
+                             % (name, "is" if same else "lies inside", what, root))
 
 
 def write_root():
-    """The write root, ETROC_TWC_OUT. Raises when it is unset, or when it is the read root or the
-    step-10 root of a campaign."""
+    """The write root, ETROC_TWC_OUT, made absolute. Raises RuntimeError when it is unset, or
+    when it is or lies inside one of protected_roots()."""
     out = os.environ.get("ETROC_TWC_OUT")
     if not out:
         raise RuntimeError("ETROC_TWC_OUT is not set. Set it to the folder this run writes into; "
                            "there is no default, so nothing is ever written into the study's "
                            "own output tree (%s) by accident." % transfer_root())
-    if _same(out, transfer_root()):
-        raise RuntimeError("ETROC_TWC_OUT=%s is the read root (ETROC_TWC_TRANSFER_ROOT); "
-                           "write somewhere else." % out)
-    for c, root in CAMPAIGNS.items():
-        if _same(out, root):
-            raise RuntimeError("ETROC_TWC_OUT=%s is the step-10 data root of campaign %r; "
-                               "write somewhere else." % (out, c))
-    return out
+    try:
+        refuse_inside(out, protected_roots(), "ETROC_TWC_OUT=%s" % out)
+    except ValueError as e:
+        raise RuntimeError(str(e))
+    return os.path.abspath(out)
+
+
+def output_path(out, root, *default):
+    """The file or folder a writing command writes: `out` (its --out) when given, a relative one
+    taken in the write root `root`, else os.path.join(root, *default). Exits (SystemExit, as the
+    commands do) when it is or lies inside one of protected_roots(), before anything is made or
+    removed."""
+    path = out or os.path.join(root, *default)
+    if not os.path.isabs(path):
+        path = os.path.join(root, path)
+    path = os.path.abspath(path)
+    try:
+        refuse_inside(path, protected_roots(), "the output %s" % path)
+    except ValueError as e:
+        raise SystemExit("twc_transfer: %s" % e)
+    return path

@@ -46,6 +46,33 @@ def test_writing_subcommands_refuse_a_missing_or_forbidden_write_root(argv, monk
     assert not os.listdir(tmp_path)
 
 
+@pytest.mark.parametrize("argv", WRITING, ids=lambda a: a[0])
+def test_an_out_inside_the_read_root_or_a_data_root_is_refused_before_anything_runs(
+        argv, monkeypatch, tmp_path):
+    monkeypatch.setenv("ETROC_TWC_TRANSFER_ROOT", str(tmp_path / "T"))
+    monkeypatch.setitem(C.CAMPAIGNS, "mar", str(tmp_path / "data"))
+    monkeypatch.setenv("ETROC_TWC_OUT", str(tmp_path / "out"))
+    extra = ["--overwrite", "--dry-run"] if argv[0] in ("cell", "transfer") else []
+    for out, why in ((tmp_path / "T" / "cells_x" / "x.csv", "inside the read root"),
+                     (tmp_path / "data" / "x.csv", "inside the step-10 data root")):
+        with pytest.raises(SystemExit, match=why):
+            cli.main(argv + extra + ["--out", str(out)])
+    assert not (tmp_path / "T").exists() and not (tmp_path / "data").exists()
+
+
+def test_jobs_dry_run_with_a_relative_write_root_prints_absolute_outputs(monkeypatch, tmp_path,
+                                                                        capsys):
+    toy = tmp_path / "toy.tsv"
+    toy.write_text("a\ta\ta\tdesy\t1\t2000\tcell --cell a --mode a --run r --root "
+                   "${ETROC_TWC_ROOT_DESY} --out ${TT_OUT}/cells/a/a.csv\n")
+    monkeypatch.setenv("ETROC_TWC_TRANSFER_ROOT", str(tmp_path / "T"))
+    monkeypatch.setitem(C.CAMPAIGNS, "desy", "/data/desy")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("ETROC_TWC_OUT", "rel")
+    assert cli.main(["jobs", "--list", str(toy), "--dry-run"]) == 0
+    assert "--out %s/cells/a/a.csv" % os.path.join(os.getcwd(), "rel") in capsys.readouterr().out
+
+
 def test_jobs_dry_run_expands_and_parses_and_writes_nothing(monkeypatch, tmp_path, capsys):
     toy = tmp_path / "toy.tsv"
     toy.write_text(

@@ -176,6 +176,13 @@ def test_dry_run_prints_the_plan_and_writes_nothing(env, capsys):
     assert os.path.getsize(dest) == size
 
 
+def test_a_relative_out_is_taken_in_the_write_root(env, capsys, monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    cli.main(_cell(env, "rel", "--mode", "a", "--src-run", "r2", "--out",
+                   os.path.join("sub", "rel.csv"), "--dry-run"))
+    assert "writes %s " % os.path.join(env["out"], "sub", "rel.csv") in capsys.readouterr().out
+
+
 def test_cell_table_columns_are_the_fifty_of_the_study(env):
     assert CL.CELL_COLUMNS == STUDY_COLUMNS
     assert len(STUDY_COLUMNS) == 50 and len(set(STUDY_COLUMNS)) == 50
