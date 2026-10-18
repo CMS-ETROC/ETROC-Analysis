@@ -18,7 +18,7 @@ def log(msg):
 
 def ensure_dirs(root):
     """Make the output folders under `root`, the write root (campaigns.write_root())."""
-    for d in ("bank", "tier0", "cells", "toys", "quote", "figs", "logs", "tables"):
+    for d in ("bank", "tier0", "cells", "logs", "tables"):
         os.makedirs(os.path.join(root, d), exist_ok=True)
     return root
 

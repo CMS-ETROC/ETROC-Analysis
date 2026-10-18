@@ -41,4 +41,4 @@ def test_ensure_dirs_needs_an_explicit_root(tmp_path):
         N.ensure_dirs()
     assert N.ensure_dirs(str(tmp_path)) == str(tmp_path)
     assert sorted(os.listdir(tmp_path)) == sorted(
-        ["bank", "tier0", "cells", "toys", "quote", "figs", "logs", "tables"])
+        ["bank", "tier0", "cells", "logs", "tables"])
