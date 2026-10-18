@@ -11,6 +11,11 @@
           plan (targets, sources, the output file and the write root) and writes nothing
   agg     the aggregation of a group of cell tables (agg.py, SPEC.md 8)
           -> <write root>/tables/{delta_by_triple,agg_by_cell,calibration}.csv
+  master  the round-1 chain from the round-1 aggregation and cell tables (master.py,
+          SPEC.md 9) -> <write root>/master/master_cells.csv and its intermediate tables
+  axes    the axis tables from the aggregation tables (axes.py, SPEC.md 10)
+          -> <write root>/results_r2/axis_<X>.csv, results_r3/axis_F{,_long}.csv and
+          summary_F.md; --guardfix -> results_r3/guardfix/axis_<E,J,K>_gf.csv
   jobs    a job list (jobs.py): with --dry-run, every command expanded and parsed
 
 Argument names, defaults and types are those of the study's own command line, so the
@@ -21,7 +26,7 @@ there is no default, and the read root and the step-10 data roots are refused, s
 ever written into the study's own tree or among the track files. Only those subcommands make
 the output folders under it, and a cell's --dry-run makes none. `tier0 --bank`,
 `cell --src-bank`, `agg --cells` and `agg --tier0` are read from the read root when they are
-relative paths.
+relative paths; `master` and `axes` read only the read root and the job lists in jobs/.
 python -m twc_transfer (__main__.py) also pins the thread pools to one thread and fixes
 PYTHONHASHSEED=0, which the cell placebo seeds need (cell.py); main() called from Python
 does neither.
@@ -32,7 +37,7 @@ import time
 
 from . import campaigns
 
-WRITING = ("index", "bank", "fit", "tier0", "cell", "transfer", "agg")
+WRITING = ("index", "bank", "fit", "tier0", "cell", "transfer", "agg", "master", "axes")
 CELL_MODES = ["a", "b", "c", "cb", "d", "e", "f", "inrun"]
 
 
@@ -160,6 +165,23 @@ def build_parser(raising=False):
     q.add_argument("--out", default=None, help="the output folder (default <write root>/tables)")
     q.set_defaults(func=cmd_agg)
 
+    q = sub.add_parser("master", help="the round-1 chain to master_cells.csv (SPEC.md 9)")
+    q.add_argument("--jobs", default="cells.tsv",
+                   help="the round-1 job list: a file, or the name of one in jobs/")
+    q.add_argument("--out", default=None, help="the output folder (default <write root>/master)")
+    q.set_defaults(func=cmd_master)
+
+    q = sub.add_parser("axes", help="the axis tables (SPEC.md 10)")
+    q.add_argument("--axis", action="append", default=None,
+                   choices=sorted(set(campaigns.AXIS_TAGS) | set(campaigns.GUARDFIX_AXIS_TAGS)),
+                   help="only this axis (repeatable; default every axis, or E, J and K with "
+                   "--guardfix)")
+    q.add_argument("--guardfix", action="store_true",
+                   help="the guardfix tables of axes E, J and K instead")
+    q.add_argument("--out", default=None,
+                   help="the output folder (default the write root): results_r2/, results_r3/")
+    q.set_defaults(func=cmd_axes)
+
     q = sub.add_parser("jobs", help="check a job list")
     q.add_argument("--list", required=True, dest="job_list",
                    help="a job list file, or the name of one in jobs/")
@@ -271,6 +293,19 @@ def cmd_cell(a, root):
 def cmd_agg(a, root):
     from . import agg
     agg.cmd_agg(a, root)
+
+
+def cmd_master(a, root):
+    from . import master
+    master.cmd_master(a, root)
+
+
+def cmd_axes(a, root):
+    from . import axes
+    if a.guardfix and a.axis and set(a.axis) - set(campaigns.GUARDFIX_AXIS_TAGS):
+        raise SystemExit("twc_transfer axes: --guardfix has the axes %s only"
+                         % ", ".join(sorted(campaigns.GUARDFIX_AXIS_TAGS)))
+    axes.cmd_axes(a, root)
 
 
 def cmd_jobs(a, root):

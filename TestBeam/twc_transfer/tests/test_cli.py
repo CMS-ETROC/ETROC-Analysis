@@ -24,7 +24,9 @@ WRITING = [["index", "--campaign", "mar", "--run", "no_such_run"],
            ["cell", "--cell", "x", "--mode", "a", "--campaign", "mar", "--run", "no_such_run"],
            ["transfer", "--cell", "x", "--mode", "a", "--campaign", "mar", "--run",
             "no_such_run"],
-           ["agg", "--cells", "cells/no_such_cell/*.csv"]]
+           ["agg", "--cells", "cells/no_such_cell/*.csv"],
+           ["master"],
+           ["axes", "--axis", "D"]]
 
 
 @pytest.mark.parametrize("argv", WRITING, ids=lambda a: a[0])
