@@ -106,7 +106,10 @@ line above prints its plan (the study's smoke job of `cells_guardfix_rerun.tsv` 
 name: five July H1 triples of run 48 corrected with run 51's coefficients), and without
 `--dry-run` it runs in about two minutes. `--src-bank` takes a source's coefficients from a bank file instead
 of refitting them (modes a, b, c, cb and f). A cell that stops can be started again with the
-same command: the target triples already in its table are skipped. `agg` aggregates a group of
+same command: the target triples already in its table are skipped. A target that is its own
+source (`self_transfer` 1) gets one log line naming the arms of its rows that are in-sample:
+`xfer_1b:<board>` and `xfer_lin`, which take the source's fit on all its events (Limits).
+`agg` aggregates a group of
 cell tables into `delta_by_triple.csv`, `agg_by_cell.csv` and `calibration.csv` (default
 `$ETROC_TWC_OUT/tables/`); a relative `--cells` pattern is taken in the read root, so the line
 above re-aggregates the four cells of the study's group `J_jul_guardfix` as its driver did.
@@ -497,6 +500,11 @@ What was run against what, on lxplus under LCG_104d with `PYTHONHASHSEED=0`:
   holds two rows of an arm that only the flag tells apart: 208 rows of axis A (cells A4 to A7),
   12 of axis I (I3), 552 of axis F (F1, F2, F3). The flag is in the tag's `agg_by_cell.csv`,
   which the universality reduction joins; `axis_F.csv` carries it per arm.
+- On a self-transfer target (`self_transfer` 1: the source triple is the target) the arms
+  `xfer_1b:<board>` (`--arms ext`) and `xfer_lin` (`--xfer-lin`) evaluate the target's own fit
+  on all its events, in-sample; only `xfer`, `placebo`, `xfer_lpo` and the variants of `xfer`
+  take the fold-matched fits (SPEC 3). The cell names those arms in a log line per target and
+  writes the rows with their flag; nothing else marks them.
 - The f_cal bootstrap is not part of this package: f is a campaign fact (`campaigns.F_CAL`).
 - The condor driver's DAG was compared with the study's by its files; no DAG written by this
   package has been submitted.

@@ -1858,6 +1858,14 @@ def cmd_cell(a, root):
                             % (tri.name, sname,
                                sorted(set(tri.roles) - set(xfer_c or {}))))
 
+            if info.get("self_transfer"):
+                # SPEC 3: xfer_1b:<board> and xfer_lin take the source's coefficients as they
+                # are, which for a self-transfer target are its own fit on all its events
+                ins = sorted(k for k in arms if k == "xfer_lin" or k.startswith("xfer_1b:"))
+                log("%s: self-transfer target (its source triple is itself); %s"
+                    % (tri.name, "in-sample: " + ", ".join(ins) if ins
+                       else "no arm is in-sample"))
+
             ov = {}
             if src_stats:
                 if xb is not None:
