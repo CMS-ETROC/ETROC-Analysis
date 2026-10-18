@@ -1,14 +1,15 @@
 """Reduce the TWC-transfer study's outputs to the six tables the universality notebook reads.
 
-    python -m etroc_plots.universality.reduce --out DIR --results-root S [--twc-root R]
+    python -m etroc_plots.universality.reduce --out DIR [--results-root S] [--twc-root R]
                                               [--part cells|master|axes|bank ...]
 
 run from TestBeam/ where the study's outputs can be read (lxplus: EOS and AFS), writes into DIR
 (copy the files into the universality/ folder of the inputs and update the checksum list to use
 them). The study asked whether a time-walk correction (TWC) fitted on one source (a run, a board,
 a pixel) can be applied to another target without losing time resolution; each comparison it ran
-is a "cell". S is the study's folder (also ETROC_TWC_RESULTS_ROOT; no default), which must hold
-condor/ (the seven job lists below), the axis tables campaign.UNIV_AXIS_SOURCES names
+is a "cell". S is the study's folder (default TWC_RESULTS_ROOT: the copy of these files in
+universality/results/ of the inputs, or ETROC_TWC_RESULTS_ROOT), which must hold condor/ (the
+seven job lists below), the axis tables campaign.UNIV_AXIS_SOURCES names
 (results_r2/axis_{A,B,C,D,E,I,J,K}.csv and results_r3/guardfix/axis_{E,J,K}_gf.csv) and
 results_r3/ (axis_F.csv, axis_F_long.csv, summary_F.md). R (default TWC_TRANSFER_ROOT) holds the
 coefficient bank, bank/coeffs_<campaign>_<run>.parquet, the round-1 table of the level cells,
@@ -473,7 +474,7 @@ def main(argv=None):
     ap.add_argument("--out", required=True, help="folder the tables are written to")
     ap.add_argument("--results-root", default=campaign.TWC_RESULTS_ROOT,
                     help="the study's folder (condor/, results_r2/, results_r3/); default "
-                         "ETROC_TWC_RESULTS_ROOT")
+                         "TWC_RESULTS_ROOT, universality/results/ of the inputs")
     ap.add_argument("--twc-root", default=campaign.TWC_TRANSFER_ROOT,
                     help="the folder of bank/, figs/ and tables/ (default TWC_TRANSFER_ROOT)")
     ap.add_argument("--part", action="append", choices=PARTS,

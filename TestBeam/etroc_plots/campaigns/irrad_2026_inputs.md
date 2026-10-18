@@ -24,8 +24,8 @@ tables of `frontend/`; the merged hits (`DECODED_ROOT`, the same area) for the t
 of `frontend/`; the reconstructed tracks (`ANALYSIS_ROOT`, the personal area of the tables) for the
 eight track tables of `frontend/`; and the autocalibration scan histories (`BLNW_ROOT`, a group
 area on the LPC EOS) for the two BL/NW tables of `frontend/`; the TWC-transfer study's coefficient bank
-(`TWC_TRANSFER_ROOT`, the personal area of the tables) and its own folder (`TWC_RESULTS_ROOT`, no
-default) for `universality/`. Each needs a share from its owner. To work from your own copy,
+(`TWC_TRANSFER_ROOT`, the personal area of the tables) and its own folder (`TWC_RESULTS_ROOT`, by
+default the copy in `universality/results/`) for `universality/`. Each needs a share from its owner. To work from your own copy,
 copy the folders and point `ETROC_INPUTS` and `ETROC_IV_EOS_MARCH` at them (all the variables
 are in the table at the end):
 
@@ -54,8 +54,10 @@ that survived, selected by the state of the readout buffers: its hit, event and 
 populations of that sample, not of the sensor, and whether the selection biases the TOT, the
 time walk or the resolution is open. The autocalibration tables (`frontend/blnw_by_run.csv`,
 `frontend/blnw_by_pixel.csv.gz`), the IV, bias-current, HV-monitor and LV tables and the run lists
-are not readout hits and are unaffected. The package README, "Data quality", gives the numbers,
-the loops that are exceptions and what this means per figure type.
+are not readout hits and are unaffected. In `universality/` the fits and pair penalties of the
+IRRAD runs are measured on the surviving hits in the same way; its DESY 2026 rows come from clean
+readout and are unaffected. The package README, "Data quality", gives the numbers, the loops that
+are exceptions and what this means per figure type.
 
 ## Curated by hand
 
@@ -379,7 +381,7 @@ target is an arm, compared with the baseline `self_cf` (the target's own correct
 other half of its events). The study's code (its toolkit) and its specification (dated 2026-09-09)
 are not in this repository. The six tables are made by
 
-    python -m etroc_plots.universality.reduce --out DIR --results-root S [--twc-root R] [--part cells|master|axes|bank ...]
+    python -m etroc_plots.universality.reduce --out DIR [--results-root S] [--twc-root R] [--part cells|master|axes|bank ...]
 
 run from `TestBeam/` on lxplus (`../universality/reduce.py`; copy the files into `universality/`
 and update the checksum lines to use them). R is `TWC_TRANSFER_ROOT` (default
@@ -387,7 +389,8 @@ and update the checksum lines to use them). R is `TWC_TRANSFER_ROOT` (default
 `bank/coeffs_<campaign>_<run>.parquet`, the round-1 report's inputs,
 `figs/transfer_2026-09-04/inputs/master_cells.csv`, and the aggregation tables the axis tables
 were built from, `tables/agg_<agg_tag>/agg_by_cell.csv`. S is the study's own folder
-(`TWC_RESULTS_ROOT`, no default; the command stops without it): `condor/` (the seven job lists),
+(`TWC_RESULTS_ROOT`, by default the copy in `universality/results/`, below): `condor/` (the seven
+job lists),
 the axis tables `UNIV_AXIS_SOURCES` names (`results_r2/axis_{A,B,C,D,E,I,J,K}.csv` and
 `results_r3/guardfix/axis_{E,J,K}_gf.csv`) and `results_r3/` (`axis_F.csv`, `axis_F_long.csv`,
 `summary_F.md`). On one lxplus core the cells, master and axes parts take 3 s together and the
@@ -403,6 +406,14 @@ are kept as `universality/superseded/<file>_2026-10-02.csv`):
 | `univ_axis_F_wide.csv` | 167 | 51 | `911efb7d856178f24e60a87b5203a755` |
 | `univ_axis_F_long.csv` | 2863 | 25 | `51302099b643b24014141af7d860a059` |
 | `twc_bank_best.csv` | 18414 | 20 | `001872b9be344ec9d9aa252bf1b9a011` |
+
+The files the reduction reads are copied unchanged, at their relative paths, to
+`universality/results/` (108 files, 114 MB, copied 2026-10-18; checksums in
+`universality/results/files.md5`): the study folder's `condor/`, `results_r2/` and `results_r3/`
+(with `guardfix/`), and from `TWC_TRANSFER_ROOT` the bank files, the round-1 table of the level
+cells and the aggregation tables. `TWC_RESULTS_ROOT` points there by default, and `--twc-root`
+can point there too: run on that copy for both roots, the reduction remakes the six tables above
+with the checksums listed.
 
 The study's words, used in every table:
 
@@ -432,7 +443,7 @@ The study's words, used in every table:
   row whose leave-pair-out guard is absent or uninformative reads `NA-unguarded`. No claim is made
   below 0.45 ps.
 * Retention R = 1 - difference / (`notwc` width - `self_cf` width): the share of the correction's
-  gain the transfer keeps.
+  improvement the transfer keeps.
 
 `universality/univ_cells.csv`, 131 rows. One row = one cell, from the job lists that ran it, read
 in the order `cells.tsv`, `cells_stage1.tsv`, `cells_stage2.tsv`, `cells_stage2_held.tsv`,
@@ -575,5 +586,5 @@ Every variable the package and the notebooks read. Set them before the notebook'
 | `ETROC_DECODED_ROOT` | `/eos/user/j/jongho` | the merged hits (`DECODED_DIRS`), read only by the TDC part of `frontend.rebuild` |
 | `ETROC_ANALYSIS_ROOT` | `/eos/user/m/musafdar` | the reconstructed tracks (`ANALYSIS_DIRS`), read only by the tracks part of `frontend.rebuild` |
 | `ETROC_TWC_TRANSFER_ROOT` | `/eos/user/m/musafdar/DESY_May2026/analysis/twc_transfer` | the TWC-transfer study's coefficient bank and round-1 report inputs (`TWC_TRANSFER_ROOT`), read only by `universality.reduce` (its bank and master parts, and the cells part's check against the master table) |
-| `ETROC_TWC_RESULTS_ROOT` | none | the TWC-transfer study's own folder (`TWC_RESULTS_ROOT`: its job lists and axis tables), read only by the cells and axes parts of `universality.reduce`, which stop without it (or `--results-root`) |
+| `ETROC_TWC_RESULTS_ROOT` | `$ETROC_INPUTS/universality/results` | the TWC-transfer study's own folder (`TWC_RESULTS_ROOT`: its job lists and axis tables; by default the copy of the files the reduction reads), read only by the cells and axes parts of `universality.reduce` (or `--results-root`) |
 | `ETROC_FIGURES` | `figures` (next to the notebook) | where the notebooks write; figures go to `$ETROC_FIGURES/<notebook>/`, such as `$ETROC_FIGURES/iv/` |

@@ -87,7 +87,9 @@ def refit_rows(axis_f):
 def family_bars(rows, cells):
     """Per cell of `cells` (in order) and family (interp, then extrap): the pixel-weighted mean
     penalty of its rows, mu = sum(n mu) / sum(n), and se = sqrt(sum(n se^2) / sum(n)), with n
-    the row's n_pix. A family without rows gives no bar."""
+    the row's n_pix. That se is about the value for fully correlated rows (it is at least their
+    weighted mean se); independent rows would give the smaller sqrt(sum(n^2 se^2)) / sum(n).
+    A family without rows gives no bar."""
     out = []
     for cell in cells:
         for fam in ("interp", "extrap"):

@@ -1,7 +1,8 @@
 """Tests of the universality readers: the study's verdict override on the level cells, the axis
 tables the reduction composes (a rerun's file replacing the rows of its cells), the
 self-transfer flag (the reduction's join that recovers it, the rows the notebook leaves out by
-it), and the axis-F pair rows the linear-refit figure draws.
+it), the axis-F pair rows the linear-refit figure draws, the DESY beam of a set of runs, and
+the reduction's default study folder.
 
 Run from TestBeam/:  python -m pytest etroc_plots/tests
 """
@@ -18,6 +19,7 @@ if not os.environ.get("ETROC_CAMPAIGN"):
     os.environ["ETROC_CAMPAIGN"] = "irrad_2026"
 
 from etroc_plots.campaigns import active as campaign            # noqa: E402
+from etroc_plots.campaigns import desy_2026                    # noqa: E402
 from etroc_plots.universality import levels, reduce, transfer  # noqa: E402
 
 
@@ -178,3 +180,29 @@ def test_axis_f_pair_rows_with_both_arms():
     assert not rows.duplicated(["cell", "kind", "board_or_role", "family"]).any()
     assert rows.margin_ps.notna().all()
     assert rows.base_cell.notna().all()
+
+
+def test_beam_text_follows_the_august_3gev_runs():
+    assert desy_2026.beam_gev("aug", 21) == 3 and desy_2026.beam_gev("aug", "run22") == 4
+    assert desy_2026.beam_gev("desy", "run26") == 4          # the bank's code of DESY May
+    assert desy_2026.beam_text("may", [9, 26, 44]) == "4 GeV electrons"
+    assert desy_2026.beam_text("aug", ["run19", "run21"]) == "3 GeV electrons"      # E13
+    assert desy_2026.beam_text("aug", [18, 23]) == "3 GeV electrons"                # E14
+    assert desy_2026.beam_text("aug", [5, 8]) == "3 and 4 GeV electrons (run 5 at 4 GeV)"
+    assert (desy_2026.beam_text("aug", [23, 18, 8, 5]) ==
+            "3 and 4 GeV electrons (run 5 at 4 GeV)")                                # e1-e4
+    assert (desy_2026.beam_text("aug", [5, 6, 22, 7]) ==
+            "3 and 4 GeV electrons (runs 5, 6 and 22 at 4 GeV)")
+    with pytest.raises(ValueError):
+        desy_2026.beam_gev("aug", 3)            # no beam energy recorded for that run
+
+
+def test_reduction_reads_its_study_files_from_the_inputs_by_default():
+    if os.environ.get("ETROC_TWC_RESULTS_ROOT"):
+        pytest.skip("ETROC_TWC_RESULTS_ROOT moves the study folder")
+    root = campaign.TWC_RESULTS_ROOT
+    assert root == os.path.join(campaign.INPUTS_UNIVERSALITY, "results")
+    if not os.path.isdir(root):
+        pytest.skip("the universality inputs are not reachable")
+    paths = reduce._results_paths(root)       # exits naming every file it lacks
+    assert len(paths) == len(reduce.TSVS) + 3 + len(campaign.UNIV_AXIS_SOURCES)

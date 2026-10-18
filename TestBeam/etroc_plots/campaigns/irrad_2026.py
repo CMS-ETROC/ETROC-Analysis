@@ -722,8 +722,8 @@ UNIV_AXIS_F_WIDE_CSV = os.path.join(INPUTS_UNIVERSALITY, "univ_axis_F_wide.csv")
 UNIV_AXIS_F_LONG_CSV = os.path.join(INPUTS_UNIVERSALITY, "univ_axis_F_long.csv")
 TWC_BANK_BEST_CSV = os.path.join(INPUTS_UNIVERSALITY, "twc_bank_best.csv")        # per pixel fit
 # The fluence steps the universality figures leave out: no comparison with an IRRAD run at 2e15
-# or 3.5e15 is drawn (user decision of 2026-09-17). The study's cells at these steps are the July
-# threshold-offset and RFSel steps and the cooling-down cells, all at 3.5e15.
+# or 3.5e15 is drawn. The study's cells at these steps are the July threshold-offset and RFSel
+# steps and the cooling-down cells, all at 3.5e15.
 UNIV_EXCLUDED_STEPS = (2e15, 3.5e15)
 # The study's own outputs, read only by the reduction, never by a notebook. Read-only.
 # TWC_TRANSFER_ROOT holds the coefficient bank (bank/coeffs_<campaign>_<run>.parquet), the
@@ -733,9 +733,11 @@ TWC_TRANSFER_ROOT = (os.environ.get("ETROC_TWC_TRANSFER_ROOT")
                      or "/eos/user/m/musafdar/DESY_May2026/analysis/twc_transfer")
 # TWC_RESULTS_ROOT is the study's own folder: results_r2/ (the axis tables), results_r3/ (axis F
 # and its summary; guardfix/, the rerun's axis tables) and condor/ (the job lists that name every
-# cell's runs). It has no default:
-# the reduction stops and asks for it (--results-root or ETROC_TWC_RESULTS_ROOT).
-TWC_RESULTS_ROOT = os.environ.get("ETROC_TWC_RESULTS_ROOT") or None
+# cell's runs). By default the copy of the files the reduction reads, universality/results/ of
+# INPUTS (irrad_2026_inputs.md lists it; it holds the TWC_TRANSFER_ROOT files too, so either root
+# can point at it); ETROC_TWC_RESULTS_ROOT or --results-root moves it.
+TWC_RESULTS_ROOT = (os.environ.get("ETROC_TWC_RESULTS_ROOT")
+                    or os.path.join(INPUTS_UNIVERSALITY, "results"))
 # The tables behind univ_axis_r2, per axis: files under TWC_RESULTS_ROOT, each later file
 # replacing every row of the cells it holds. First the round-2 table (results_r2/, toolkit tt.py
 # 057934883be9ad88, condor stages 1 and 2); for E, J and K then the guard-fix rerun of 2026-09-10

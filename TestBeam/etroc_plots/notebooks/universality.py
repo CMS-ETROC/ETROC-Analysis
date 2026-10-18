@@ -40,6 +40,14 @@
 # No comparison with an IRRAD run at 2e15 or 3.5e15 is drawn; the cell before un02 says what
 # that leaves out.
 #
+# Data quality. The IRRAD 2026 loops were recorded with the readout saturated: 47 to 81 % of the
+# ETROC2 packets lost their header and were dropped at decoding, so every fit and penalty of an
+# IRRAD run is a measurement on the surviving hits, selected by the state of the readout buffers,
+# with the selection bias open. The figures with IRRAD runs (un01 to un04, un06) say so in a
+# footer line naming their IRRAD part; the DESY 2026 data are clean, so the DESY cells and
+# figure un05, DESY only, are unaffected. Details: the "Data quality" section of
+# `../README.md`.
+#
 # Every figure is saved as PNG (200 dpi) and PDF, with `<name>_values.json` beside it: every
 # number drawn, the input files read and the commit of the code.
 #
@@ -51,10 +59,11 @@
 #    `/eos/user/m/musafdar/ETROC_plot_inputs/irrad_2026`: the six tables of `universality/`,
 #    `tables/runs_summary.csv` and `july/good_runs.csv`. `../campaigns/irrad_2026_inputs.md`
 #    lists every table with where it came from. The `universality/` tables come from the
-#    TWC-transfer study (its specification of 2026-09-09): its coefficient bank, one file of
-#    fits per run, and its result tables; `python -m etroc_plots.universality.reduce` (run from
-#    `TestBeam/`) remakes them from those (15 s on one lxplus core). To read your
-#    own copy, copy that whole `irrad_2026` folder and point `ETROC_INPUTS` at the copy. The
+#    TWC-transfer study (its level cells, margins and verdict rule set before it ran): its
+#    coefficient bank, one file of fits per run, and its result tables;
+#    `python -m etroc_plots.universality.reduce` (run from `TestBeam/`) remakes them from those,
+#    read by default from their copy in `universality/results/` (15 s on one lxplus core). To
+#    read your own copy, copy that whole `irrad_2026` folder and point `ETROC_INPUTS` at it. The
 #    first code cell checks that every input exists and can be read, and stops with a list of
 #    all that cannot; a table whose checksum differs from the published list is named, and the
 #    run goes on.
@@ -85,7 +94,8 @@
 # draw), the drawing in `../universality/curves.py` and `levels.py`. This notebook holds the
 # choices made per figure: the runs, the colours and the words on each figure.
 # `../tests/test_universality.py` tests the verdict override, the self-transfer flag (its join in
-# the reduction and the rows left out here) and the axis-F rows.
+# the reduction and the rows left out here), the axis-F rows, the DESY beam of a set of runs and
+# the reduction's default study folder.
 #
 # `universality.ipynb` and `universality.py` are the same notebook, kept in step by jupytext.
 # Edit either one, then run `python3 -m jupytext --sync universality.ipynb` and
@@ -147,6 +157,13 @@ def show(stem):
     display(Image(filename=os.path.join(OUT, stem + ".png"), width=900))
 
 
+def from_hits(footer, part):
+    """The footer of a figure with IRRAD runs: `footer`, then a line naming its IRRAD `part` and
+    the saturated IRRAD 2026 readout (the campaign's READOUT_FOOTER)."""
+    note = campaign.READOUT_FOOTER
+    return footer + "\n" + part + ": " + note[0].lower() + note[1:]
+
+
 def save(fig, stem, payload, conventions, inputs=()):
     _, problems = style.save_figure(fig, OUT, stem)
     plt.close(fig)
@@ -183,8 +200,9 @@ BIAS_RUNS = {"h1": [7, 10, 11, 12, 14, 17, 19]}                # March runs
 FLUENCE_RUNS = campaign.MARCH_DISPLAY_RUNS["h1"]
 assert FLUENCE_RUNS == [7, 11, 14, 19], FLUENCE_RUNS
 MARCH_JULY_PAIRS = {"h1": (19, 3), "f1": (19, 5)}              # telescope -> (March, July) run
-HIST_MERGE = 2     # TOT histograms drawn at 2 x 25 ps = 50 ps, about one TOT code: 25 ps bins
-                   # show the comb of the TOT codes
+HIST_MERGE = 4     # TOT histograms drawn at 4 x 25 ps = 100 ps. One TOT code is 2 x 3.125 ns /
+                   # CAL (45.0 ps at CAL 139, 38.8 ps at CAL 161), so finer bins hold one or two
+                   # codes each and show the comb of the codes: native codes or >= 0.1 ns bins
 HIST_BIN_PS = HIST_MERGE * transfer.HIST_BIN_WIDTH_PS
 
 used = ([("mar", "h1_run%d" % r) for r in BIAS_RUNS["h1"] + FLUENCE_RUNS]
@@ -205,8 +223,9 @@ if drops:
 # carries it. Per run and pixel the table holds one fit, on the pixel's tracks over the whole
 # run, the one with the most events. Each curve is that fit over its own TOT range, minus its
 # mean over the source run's 5-95 % TOT range, so the curves compare in shape where the source
-# has its events; below, the TOT of the events each fit used, as a fraction per 50 ps bin (two
-# of the table's 25 ps bins summed, about one TOT code; 25 ps bins show the comb of the codes).
+# has its events; below, the TOT of the events each fit used, as a fraction per 100 ps bin
+# (four of the table's 25 ps bins summed; one TOT code is about 40 to 45 ps, and finer bins hold
+# one or two codes each and show the comb of the codes).
 
 # %%
 UN01_INPUTS = [campaign.TWC_BANK_BEST_CSV, campaign.RUNS_SUMMARY_CSV, campaign.GOOD_RUNS_CSV,
@@ -275,12 +294,13 @@ assert len(a_chip) == 1, a_chip
 a_chip = a_chip.pop()
 a_hv = {r: c["hv"] for r, c in a_cond.items()}
 a_hv_main = max(set(a_hv.values()), key=list(a_hv.values()).count)
+A_BEAM = desy_2026.beam_text("may", list(a_cond))
 a_hv_text = "%g V" % a_hv_main + "".join(", run %d at %g V" % (r, v) for r, v in a_hv.items()
                                          if v != a_hv_main)
 angle_panel = dict(
     subject="Angle: %s, pixel (%d, %d)" % (a_chip, a_pix[1], a_pix[2]),
     caption="\n".join(
-        ["%s, %s, runs %s" % (desy_2026.CAMPAIGN_TEXT["may"], desy_2026.BEAM_TEXT,
+        ["%s, %s, runs %s" % (desy_2026.CAMPAIGN_TEXT["may"], A_BEAM,
                               "/".join(str(r) for r in a_cond)),
          "%s at %s, board sensor at %s" % (a_chip, a_hv_text,
                                            values_text([c["temp"] for c in a_cond.values()],
@@ -409,9 +429,9 @@ UN01_FOOTER = (
 fig, top_axes, bot_axes, covered = curves.twc_curves(
     list(PANELS.values()), xlabel="TOT [ns]", ylabel_top="Time-walk correction [ps]",
     ylabel_bottom="Fraction / %g ps" % HIST_BIN_PS, band_label="Source TOT, 5-95 %",
-    line1="%s, %s; %s, %s" % (desy_2026.CAMPAIGN_TEXT["may"], desy_2026.BEAM_TEXT,
+    line1="%s, %s; %s, %s" % (desy_2026.CAMPAIGN_TEXT["may"], A_BEAM,
                               campaign.CAMPAIGN, campaign.BEAM_TEXT),
-    footer=UN01_FOOTER)
+    footer=from_hits(UN01_FOOTER, "IRRAD panels (bias, fluence, March to July)"))
 
 
 def curve_record(c, cond):
@@ -430,7 +450,7 @@ def pixel_record(pix, chip):
 
 
 un01 = dict(
-    angle=dict(subject=angle_panel["subject"], pixel=pixel_record(a_pix, a_chip),
+    angle=dict(subject=angle_panel["subject"], pixel=pixel_record(a_pix, a_chip), beam=A_BEAM,
                source=dict(campaign="desy", run="run%d" % ANGLE_RUNS[ANGLE_SOURCE],
                            q05=float(a_src.q05), q95=float(a_src.q95)),
                ranking=ranking_record(angle_rank), runs_without_pixel=a_missing,
@@ -466,10 +486,11 @@ save(fig, "un01_twc_curves", un01,
           mean_removed="each curve minus its mean over a uniform 500-point grid on the source "
                        "run's q05-q95 TOT range (5 and 95 % TOT quantiles of the source fit); "
                        "shaded: that range",
-          histograms="the fit's TOT histogram (the table's 25 ps bins from hist_lo, "
-                     "hist_counts_25ps) drawn in 50 ps bins from hist_lo, two bins summed "
-                     "(hist_counts; a last odd bin gets an empty partner), as the fraction of "
-                     "its events per bin",
+          histograms="the fit's TOT histogram (the table's %g ps bins from hist_lo, "
+                     "hist_counts_25ps) drawn in %g ps bins from hist_lo, %d bins summed "
+                     "(hist_counts; a last group short of %d bins is padded with empty ones), "
+                     "as the fraction of its events per bin"
+                     % (transfer.HIST_BIN_WIDTH_PS, HIST_BIN_PS, HIST_MERGE, HIST_MERGE),
           pixel="per panel the pixel fitted in the most runs of the panel, then the largest "
                 "n_fit summed over them; a tie keeps the order the pixels were met in",
           settings="IRRAD: chip, bias, fluence step, threshold offset and RFSel from "
@@ -570,18 +591,44 @@ def cell_runs(cells_):
 MONTH = {"desy": "May", "aug": "Aug", "mar": "March", "jul": "July"}
 
 
-def facility_line(codes):
-    """The campaigns drawn, e.g. 'DESY May and Aug 2026, 4 GeV electrons; CERN IRRAD March
-    2026, 24 GeV p+'."""
-    codes = set(codes)
-    desy = [MONTH[c] for c in ("desy", "aug") if c in codes]
-    irrad = [MONTH[c] for c in ("mar", "jul") if c in codes]
-    parts = []
-    if desy:
-        parts.append("DESY %s 2026, %s" % (" and ".join(desy), desy_2026.BEAM_TEXT))
+def facility_line(runs):
+    """The campaigns of the (campaign code, run) pairs `runs` with their beams, e.g. 'DESY May
+    2026, 4 GeV electrons; DESY Aug 2026, 3 GeV electrons; CERN IRRAD March 2026, 24 GeV p+'
+    (the DESY beam from the runs drawn, desy_2026.beam_text; May and Aug share one part when
+    their beams read the same)."""
+    by = {}
+    for code, run in runs:
+        by.setdefault(code, []).append(run)
+    desy = [(MONTH[c], desy_2026.beam_text(c, by[c])) for c in ("desy", "aug") if c in by]
+    irrad = [MONTH[c] for c in ("mar", "jul") if c in by]
+    if len({beam for _, beam in desy}) == 1:
+        parts = ["DESY %s 2026, %s" % (" and ".join(m for m, _ in desy), desy[0][1])]
+    else:
+        parts = ["DESY %s 2026, %s" % mb for mb in desy]
     if irrad:
         parts.append("CERN IRRAD %s 2026, %s" % (" and ".join(irrad), campaign.BEAM_TEXT))
     return "; ".join(parts)
+
+
+def cell_beams(cells_):
+    """Per cell of `cells_` with a DESY run, the beam of its DESY runs (desy_2026.beam_text), as
+    the values files record it."""
+    out = {}
+    for cell in sorted(set(cells_), key=transfer.natkey):
+        by = {}
+        for code, run in cell_runs([cell]):
+            if not transfer.is_irrad(code):
+                by.setdefault(code, []).append(run)
+        texts = ["%s: %s" % (MONTH[c], desy_2026.beam_text(c, by[c])) for c in ("desy", "aug")
+                 if c in by]
+        if texts:
+            out[cell] = texts[0].split(": ", 1)[1] if len(texts) == 1 else "; ".join(texts)
+    return out
+
+
+def irrad_cells(cells_):
+    """The cells of `cells_` with an IRRAD source or target run."""
+    return {c for c in set(cells_) if any(transfer.is_irrad(code) for code, _ in cell_runs([c]))}
 
 
 SETTINGS_NAME = {"desy": "DESY May", "aug": "DESY Aug", "mar": "IRRAD March",
@@ -664,26 +711,30 @@ assert not un02_drawn.duplicated(PAIR_KEY).any(), \
 assert_none_left_out(un02_cells, "un02")
 un02_irrad = good_run_check(un02_cells, "un02")
 un02_runs = cell_runs(un02_cells)
+UN02_IRRAD_AXES = sorted(set(un02_drawn[un02_drawn.cell.isin(irrad_cells(un02_drawn.cell))].axis))
+print("un02 axes with IRRAD rows:", UN02_IRRAD_AXES)
 
 fig, axes, drawn, covered = levels.un02_coverage_lever(
     extrap, band, axis_words=AXIS_WORDS, axis_markers=UN02_MARKERS,
     xlabels=("1 - coverage of the target TOT", "Lever beyond the source TOT range [ps]"),
     ylabel=PENALTY_LABEL, legend_title="Comparison axis",
     band_label="interpolating rows, 16-84 %", median_label="interpolating median, %.2f ps",
-    line1=facility_line(c for c, _ in un02_runs),
+    line1=facility_line(un02_runs),
     subjects=["Against the TOT coverage", "Against the lever"],
-    footer=("Extrapolating pair rows of the comparison axes (target TOT beyond the source's): "
-            "%d rows; marker area grows with the pixels pooled in the row. Grey band and dashed "
-            "line: the %d interpolating rows, 16-84 %% range and median.\n"
-            "Coverage: the share of the target's TOT inside the source's 0.5-99.5 %% TOT range. "
-            "Lever: the rms change of the correction when the target's TOT is clipped to that "
-            "range, over the target events outside it.\n"
-            "No IRRAD run at %s is drawn: %d extrapolating and %d interpolating rows "
-            "of axes E and J (July, 3.5e15) are left out; so are %d extrapolating rows of axis "
-            "%s whose source triple is the target triple (self transfer).\n%s"
-            % (len(extrap), band["n_values"], STEPS_TEXT.replace(" and ", " or "),
-               len(un02_out["extrap"]), len(un02_out["interp"]), len(self_extrap),
-               " and ".join(sorted(self_extrap.axis.unique())), settings_footer(un02_runs))))
+    footer=from_hits(
+        ("Extrapolating pair rows of the comparison axes (target TOT beyond the source's): "
+         "%d rows; marker area grows with the pixels pooled in the row. Grey band and dashed "
+         "line: the %d interpolating rows, 16-84 %% range and median.\n"
+         "Coverage: the share of the target's TOT inside the source's 0.5-99.5 %% TOT range. "
+         "Lever: the rms change of the correction when the target's TOT is clipped to that "
+         "range, over the target events outside it.\n"
+         "No IRRAD run at %s is drawn: %d extrapolating and %d interpolating rows "
+         "of axes E and J (July, 3.5e15) are left out; so are %d extrapolating rows of axis "
+         "%s whose source triple is the target triple (self transfer).\n%s"
+         % (len(extrap), band["n_values"], STEPS_TEXT.replace(" and ", " or "),
+            len(un02_out["extrap"]), len(un02_out["interp"]), len(self_extrap),
+            " and ".join(sorted(self_extrap.axis.unique())), settings_footer(un02_runs))),
+        "IRRAD rows (axes %s)" % " and ".join(UN02_IRRAD_AXES)))
 ROW_KEYS = ["axis", "cell", "board_or_role", "family", "n_pix", "cov_C", "lever_X", "mu_ps",
             "se_ps"]
 save(fig, "un02_coverage_lever",
@@ -699,12 +750,12 @@ save(fig, "un02_coverage_lever",
                         cells=sorted(set(pd.concat(un02_out.values()).cell), key=transfer.natkey),
                         interp_band_with_them=band_all),
           irrad_runs_checked=["%s %s" % k for k in un02_irrad], good_run_drops=[],
-          drawn=drawn,
+          irrad_axes=UN02_IRRAD_AXES, beam=cell_beams(un02_cells), drawn=drawn,
           legend_overlap_problems=(["the legend covers %d points" % covered] if covered else [])),
      dict(levels.CONVENTIONS, figure="x: 1 - cov_C (left), lever_X in ps (right); y: mu_ps of "
                                      "the extrap rows; band: median and 16-84 % percentiles of "
                                      "the interp rows' mu_ps (rows without mu left out)",
-          settings=SETTINGS_RULE),
+          settings=SETTINGS_RULE, fluence=campaign.FLUENCE_CONVENTION),
      inputs=UNIV_INPUTS)
 
 # %% [markdown]
@@ -738,11 +789,14 @@ LABEL = {
     "e1_pooled_aug_run23": "pooled, Aug run 23", "e2_pooled_aug_run18": "pooled, Aug run 18",
     "e3_pooled_aug_run8": "pooled, Aug run 8", "e4_pooled_aug_run5": "pooled, Aug run 5",
     "e5_pooled_may_run26": "pooled, May run 26 (control)",
-    "g1_h1_7to10": "H1 0 -> 3e14 (210 V)", "g2_h1_7to11": "H1 0 -> 3e14 (280 V, bias matched)",
-    "g4_h1_7to19": "H1 0 -> 1.5e15 (demonstrator)", "g5_h1_11to14": "H1 3e14 -> 9e14",
-    "g6_h1_14to19": "H1 9e14 -> 1.5e15", "g7_f1_2to10": "F1 0 -> 3e14 (190 V)",
-    "g8_f1_2to11": "F1 0 -> 3e14 (260 V, bias matched)", "g9_f1_2to19": "F1 0 -> 1.5e15",
-    "g10_f1_11to14": "F1 3e14 -> 9e14", "g11_f1_14to19": "F1 9e14 -> 1.5e15",
+    "g1_h1_7to10": "H1 0 -> 3e14 p/cm$^2$ (210 V)",
+    "g2_h1_7to11": "H1 0 -> 3e14 p/cm$^2$ (280 V, bias matched)",
+    "g4_h1_7to19": "H1 0 -> 1.5e15 p/cm$^2$ (demonstrator)",
+    "g5_h1_11to14": "H1 3e14 -> 9e14 p/cm$^2$", "g6_h1_14to19": "H1 9e14 -> 1.5e15 p/cm$^2$",
+    "g7_f1_2to10": "F1 0 -> 3e14 p/cm$^2$ (190 V)",
+    "g8_f1_2to11": "F1 0 -> 3e14 p/cm$^2$ (260 V, bias matched)",
+    "g9_f1_2to19": "F1 0 -> 1.5e15 p/cm$^2$", "g10_f1_11to14": "F1 3e14 -> 9e14 p/cm$^2$",
+    "g11_f1_14to19": "F1 9e14 -> 1.5e15 p/cm$^2$",
     "h1_mar19_to_jul3": "H1 Mar 470 V -> Jul 540 V (run 3, few events per pixel)",
     "h2_mar19_to_jul4": "H1 Mar 470 V -> Jul 540 V (run 4)",
     "h3_mar19_to_jul5": "H1 Mar 470 V -> Jul 540 V (run 5)",
@@ -754,25 +808,30 @@ LABEL = {
 }
 LEVTITLE = {"a": "(a) floor", "b": "(b) angle", "bp": "(b') angle, offset holder",
             "c": "(c) pixel to board", "d": "(d) board to board",
-            "e": "(e) pooled board correction", "g": "(g) fluence", "h": "(h) March to July"}
+            "e": "(e) pooled board correction", "g": "(g) bookkeeping fluence",
+            "h": "(h) March to July"}
 
 assert set(MASTER.cell) <= set(LABEL), sorted(set(MASTER.cell) - set(LABEL))
 assert_none_left_out(MASTER.cell, "un03")
 un03_irrad = good_run_check(MASTER.cell, "un03")
 un03_runs = cell_runs(MASTER.cell)
+UN03_IRRAD_LEVELS = list(MASTER[MASTER.cell.isin(irrad_cells(MASTER.cell))].level.drop_duplicates())
+print("un03 levels with IRRAD cells:", UN03_IRRAD_LEVELS)
 fig, axes, drawn, covered = levels.un03_penalty_per_cell(
     MASTER, labels=LABEL, level_titles=LEVTITLE,
     subjects=["Interpolating family, the registered claim", "All target triples, descriptive"],
     xlabel=PENALTY_LABEL, verdict_words=VERDICT_WORDS, margin_word=MARGIN_WORD,
     no_rows_text="no interpolating triple", share_fmt="%.0f %% interp.",
-    line1=facility_line(c for c, _ in un03_runs),
-    footer=("Per cell the inverse-variance mean of its primary pair rows with its 90 %% interval "
-            "(mu +- 1.645 se), marker and colour the cell's verdict; grey bar: the cell's own "
-            "margin. Left: the interpolating rows (target TOT within the source's), with the "
-            "share of the cell's differences in that family; right: every target triple, both "
-            "families pooled. %d cells, of %d DESY and %d IRRAD runs.\n%s"
-            % (len(MASTER), sum(1 for c, _ in un03_runs if not transfer.is_irrad(c)),
-               len(un03_irrad), settings_footer(un03_runs))))
+    line1=facility_line(un03_runs),
+    footer=from_hits(
+        ("Per cell the inverse-variance mean of its primary pair rows with its 90 %% interval "
+         "(mu +- 1.645 se), marker and colour the cell's verdict; grey bar: the cell's own "
+         "margin. Left: the interpolating rows (target TOT within the source's), with the "
+         "share of the cell's differences in that family; right: every target triple, both "
+         "families pooled. %d cells, of %d DESY and %d IRRAD runs.\n%s"
+         % (len(MASTER), sum(1 for c, _ in un03_runs if not transfer.is_irrad(c)),
+            len(un03_irrad), settings_footer(un03_runs))),
+        "IRRAD cells (levels %s)" % " and ".join(UN03_IRRAD_LEVELS)))
 M_KEYS = ["cell", "level", "mu_ivw", "se_ivw", "margin", "verdict_pair_interp", "all_ivw_mu",
           "all_ivw_se", "all_margin", "all_verdict", "n_interp", "n_extrap", "interp_pct",
           "guard_verdict", "final"]
@@ -780,14 +839,14 @@ save(fig, "un03_penalty_per_cell",
      dict(n_cells=int(len(MASTER)), levels=list(MASTER.level.drop_duplicates()),
           rows=[dict(r, label=LABEL[r["cell"]]) for r in MASTER[M_KEYS].to_dict("records")],
           irrad_runs_checked=["%s %s" % k for k in un03_irrad], good_run_drops=[],
-          drawn=drawn,
+          irrad_levels=UN03_IRRAD_LEVELS, beam=cell_beams(MASTER.cell), drawn=drawn,
           legend_overlap_problems=(["the legend covers %d points" % covered] if covered else [])),
      dict(levels.CONVENTIONS, figure="per cell: left mu_ivw +- Z90 se_ivw (interp family), margin, "
                                      "verdict_pair_interp, interp_pct = 100 n_interp / (n_interp "
                                      "+ n_extrap); right all_ivw_mu +- Z90 all_ivw_se, "
                                      "all_margin, all_verdict; a cell without interp rows has "
                                      "no mu_ivw and no margin (none drawn)",
-          settings=SETTINGS_RULE),
+          settings=SETTINGS_RULE, fluence=campaign.FLUENCE_CONVENTION),
      inputs=UNIV_INPUTS)
 
 # %% [markdown]
@@ -819,6 +878,8 @@ assert set(f_none) <= set(F_SELF.cell), f_none
 assert_none_left_out(f_cells, "un04")
 un04_irrad = good_run_check(f_cells, "un04")
 un04_runs = cell_runs(f_cells)
+UN04_IRRAD_F = sorted({c.split("_")[0] for c in irrad_cells(f_cells)}, key=transfer.natkey)
+print("un04 cells with IRRAD runs:", UN04_IRRAD_F)
 F_ROWS["chips"] = [transfer.pair_chips(RS, BANK, CELL.loc[c, "tgt_campaign"],
                                        CELL.loc[c, "tgt_run"], b)
                    for c, b in zip(F_ROWS.cell, F_ROWS.board_or_role)]
@@ -830,18 +891,20 @@ fig, axes, drawn, covered = levels.un04_linear_refit(
     xlabel=PENALTY_LABEL,
     legend_words=dict(xfer="source correction as is", xfer_lin="linear term refitted on target",
                       open="open: target TOT beyond the source's", margin="margin, max(1 ps, 2 %)"),
-    line1=facility_line(c for c, _ in un04_runs), subject="Before and after a linear TOT refit",
-    footer=("Per pair row of %d of the %d re-scored cells: the penalty with the source's "
-            "correction as is and with its quadratic term kept and its linear term refitted on "
-            "the target (fold-matched), 90 %% intervals; grey bar: the row's margin. %d rows: %d "
-            "interpolating, %d extrapolating. A pair is named by the chips of its two boards in "
-            "the target run.\nLeft out: %d extrapolating board-to-board rows whose source "
-            "triple is the target triple (self transfer; penalty exactly 0.0 before the "
-            "refit)%s.\n%s"
-            % (len(f_cells), AXIS_F_ALL.cell.nunique(), len(F_ROWS),
-               (F_ROWS.family == "interp").sum(), (F_ROWS.family == "extrap").sum(), len(F_SELF),
-               (", among them every row of %s" % " and ".join(c.split("_")[0] for c in f_none)
-                if f_none else ""), settings_footer(un04_runs))))
+    line1=facility_line(un04_runs), subject="Before and after a linear TOT refit",
+    footer=from_hits(
+        ("Per pair row of %d of the %d re-scored cells: the penalty with the source's "
+         "correction as is and with its quadratic term kept and its linear term refitted on "
+         "the target (fold-matched), 90 %% intervals; grey bar: the row's margin. %d rows: %d "
+         "interpolating, %d extrapolating. A pair is named by the chips of its two boards in "
+         "the target run.\nLeft out: %d extrapolating board-to-board rows whose source "
+         "triple is the target triple (self transfer; penalty exactly 0.0 before the "
+         "refit)%s.\n%s"
+         % (len(f_cells), AXIS_F_ALL.cell.nunique(), len(F_ROWS),
+            (F_ROWS.family == "interp").sum(), (F_ROWS.family == "extrap").sum(), len(F_SELF),
+            (", among them every row of %s" % " and ".join(c.split("_")[0] for c in f_none)
+             if f_none else ""), settings_footer(un04_runs))),
+        "IRRAD rows (cells %s)" % ", ".join(UN04_IRRAD_F)))
 F_KEYS = ["fnum", "cell", "base_cell", "kind", "board_or_role", "chips", "family", "xfer_n_pix",
           "xfer_mu_ps", "xfer_se_ps", "xfer_tost", "xfer_lin_n_pix", "xfer_lin_mu_ps",
           "xfer_lin_se_ps", "xfer_lin_tost", "xfer_lin_lpo_tost", "delta_xferlin_minus_xfer_mu_ps",
@@ -853,7 +916,8 @@ save(fig, "un04_linear_refit",
           rows=[dict(r, label=l) for r, l in zip(F_ROWS[F_KEYS].to_dict("records"), F_ROWS.label)],
           self_transfer_left_out=F_SELF[F_SELF_KEYS].to_dict("records"),
           self_transfer_rule=SELF_TRANSFER_RULE, cells_with_no_row_left=f_none,
-          irrad_runs_checked=["%s %s" % k for k in un04_irrad], good_run_drops=[], drawn=drawn,
+          irrad_runs_checked=["%s %s" % k for k in un04_irrad], good_run_drops=[],
+          irrad_cells=UN04_IRRAD_F, beam=cell_beams(f_cells), drawn=drawn,
           legend_overlap_problems=(["the legend covers %d points" % covered] if covered else [])),
      dict(levels.CONVENTIONS, figure="per axis-F pair row with both arms: xfer_mu_ps +- Z90 "
                                      "xfer_se_ps and xfer_lin_mu_ps +- Z90 xfer_lin_se_ps; "
@@ -862,7 +926,7 @@ save(fig, "un04_linear_refit",
           pairs="chips of the two boards of board_or_role in the target run: the role -> board "
                 "map of the coefficient table's role column (transfer.role_boards), the chip "
                 "from runs_summary.csv (IRRAD) or the board-config yaml (DESY)",
-          settings=SETTINGS_RULE),
+          settings=SETTINGS_RULE, fluence=campaign.FLUENCE_CONVENTION),
      inputs=UNIV_INPUTS)
 
 # %% [markdown]
@@ -882,24 +946,33 @@ E_OUT = sorted(set(E_ALL.cell) & set(LEFT_OUT), key=transfer.natkey)
 assert [c.split("_")[0] for c in E_CELLS] == ["E13", "E14", "E15"], E_CELLS
 un05_irrad = good_run_check(E_CELLS, "un05")
 un05_runs = cell_runs(E_CELLS)
+assert not irrad_cells(E_CELLS), "un05 is DESY only (no readout footer line)"
 
 
 def step_words(cell):
-    """'runs 19 -> 21' and the settings of the triple's boards that change, from the yaml."""
+    """'Aug runs 19 -> 21, 3 GeV' and the settings of the triple's boards that change, from the
+    yaml; a beam that changes between the runs gets a line of its own. Returns the text and
+    whether the threshold offset and the RFSel both change."""
     c = CELL.loc[cell]
     roles = transfer.role_boards(BANK, c.tgt_campaign, c.tgt_run)
     boards = sorted(roles[r] for r in ("dut", "ref", "trig"))
     src = [transfer.board_conditions(RS, c.src_campaign, c.src_run, b) for b in boards]
     tgt = [transfer.board_conditions(RS, c.tgt_campaign, c.tgt_run, b) for b in boards]
-    lines = ["%s runs %s -> %s" % (MONTH[c.tgt_campaign], c.src_run[3:], c.tgt_run[3:])]
+    gev = (desy_2026.beam_gev(c.src_campaign, c.src_run),
+           desy_2026.beam_gev(c.tgt_campaign, c.tgt_run))
+    lines = ["%s runs %s -> %s%s" % (MONTH[c.tgt_campaign], c.src_run[3:], c.tgt_run[3:],
+                                     ", %d GeV" % gev[0] if gev[0] == gev[1] else "")]
     for key, word in (("offset", "threshold offset"), ("rfsel", "RFSel")):
         a = "/".join("%g" % v for v in sorted({x[key] for x in src}))
         b = "/".join("%g" % v for v in sorted({x[key] for x in tgt}))
         if a != b:
             lines.append("%s %s -> %s" % (word, a, b))
-    if len(lines) == 1:
+    n_set = len(lines) - 1
+    if not n_set:
         lines.append("settings held")
-    return "\n".join(lines), len(lines) > 2
+    if gev[0] != gev[1]:
+        lines.append("beam %d -> %d GeV" % gev)
+    return "\n".join(lines), n_set == 2
 
 
 E_LABEL, E_COLOR = {}, {}
@@ -916,17 +989,19 @@ fig, axes, drawn, covered = levels.un05_settings_steps(
             (style.INK_MUTED, "same settings (floor)")],
     family_words=dict(interp="solid: target TOT within the source's",
                       extrap="hatched: target TOT beyond it"),
-    ylabel="Pair penalty, pixel-weighted [ps]", line1=facility_line(c for c, _ in un05_runs),
+    ylabel="Pair penalty, pixel-weighted [ps]", line1=facility_line(un05_runs),
     subject="Settings steps; in IRRAD only at 3.5e15",
     footer=("Per cell and family the pixel-weighted mean of the pair penalties (weights: the "
             "pixels pooled per row) and its 90 %% interval, se the root of the pixel-weighted "
-            "mean se^2.\nThe IRRAD threshold-offset and RFSel steps of the study exist only at "
+            "mean se^2, about the value for fully correlated rows (independent rows would give a "
+            "smaller se).\nThe IRRAD threshold-offset and RFSel steps of the study exist only at "
             "3.5e15 "
             "(July, H1 and F1, %d cells), a fluence these figures do not draw.\n%s"
             % (len(E_OUT), settings_footer(un05_runs))))
 save(fig, "un05_settings_steps",
      dict(n_bars=len(E_BARS), cells=E_CELLS, bars=E_BARS,
           labels={c: E_LABEL[c].replace("\n", "; ") for c in E_CELLS},
+          beam=cell_beams(E_CELLS),
           rows=E_ALL[E_ALL.cell.isin(E_CELLS)][
               ["cell", "board_or_role", "family", "n_pix", "mu_ps", "se_ps", "margin_ps", "tost",
                "guard_verdict"]].to_dict("records"),
@@ -936,8 +1011,10 @@ save(fig, "un05_settings_steps",
           legend_overlap_problems=(["the legend covers %d points" % covered] if covered else [])),
      dict(levels.CONVENTIONS, figure="bars: per cell and family mu = sum(n_pix mu_ps) / "
                                      "sum(n_pix), se = sqrt(sum(n_pix se_ps^2) / sum(n_pix)), "
-                                     "error bar Z90 se",
-          settings=SETTINGS_RULE),
+                                     "error bar Z90 se; that se is about the fully correlated "
+                                     "value (independent rows: sqrt(sum(n_pix^2 se_ps^2)) / "
+                                     "sum(n_pix), smaller)",
+          settings=SETTINGS_RULE, fluence=campaign.FLUENCE_CONVENTION),
      inputs=UNIV_INPUTS)
 
 # %% [markdown]
@@ -970,6 +1047,7 @@ un06_cells = list(MASTER[MASTER.level.isin(["a", "e", "h"])].cell)
 assert_none_left_out(un06_cells, "un06")
 un06_irrad = good_run_check(un06_cells, "un06")
 un06_runs = cell_runs(un06_cells)
+assert irrad_cells(un06_cells) == set(h_cells), "un06: only the March-to-July cells are IRRAD"
 
 
 def ctrl_row(cell, color, marker, **kw):
@@ -994,13 +1072,14 @@ panels = [
          legend=[(TEL_COLOR[t], TEL_MARKER[t], "%s telescope" % t.upper()) for t in ("h1", "f1")]),
 ]
 fig, axes, drawn, covered = levels.un06_controls(
-    panels, ylabel=PENALTY_LABEL, line1=facility_line(c for c, _ in un06_runs),
-    footer=("Per cell the inverse-variance mean over all target triples (both families) with its "
-            "90 %% interval; grey box: the cell's own margin. Pooled: one correction per board, "
-            "pooled over its pixels, against each pixel's own, in one run.\nMarch to July: March "
-            "source, July target, same chips at 1.5e15; x = the July bias minus the March bias "
-            "(median over the boards), points at one bias step spread by 5 V.\n%s"
-            % settings_footer(un06_runs)))
+    panels, ylabel=PENALTY_LABEL, line1=facility_line(un06_runs),
+    footer=from_hits(
+        ("Per cell the inverse-variance mean over all target triples (both families) with its "
+         "90 %% interval; grey box: the cell's own margin. Pooled: one correction per board, "
+         "pooled over its pixels, against each pixel's own, in one run.\nMarch to July: March "
+         "source, July target, same chips at 1.5e15; x = the July bias minus the March bias "
+         "(median over the boards), points at one bias step spread by 5 V.\n%s"
+         % settings_footer(un06_runs)), "March to July panel"))
 C_KEYS = ["cell", "level", "all_ivw_mu", "all_ivw_se", "all_margin", "all_verdict"]
 save(fig, "un06_controls",
      dict(same_day=[dict(r, label=LABEL[r["cell"]]) for r in
@@ -1010,11 +1089,12 @@ save(fig, "un06_controls",
           march_july=[dict(r, dbias_v=h_dbias[r["cell"]], x=h_dbias[r["cell"]] + h_shift[r["cell"]],
                            telescope=h_tel[r["cell"]]) for r in
                       MASTER[MASTER.level == "h"][C_KEYS].to_dict("records")],
-          irrad_runs_checked=["%s %s" % k for k in un06_irrad], good_run_drops=[], drawn=drawn,
+          irrad_runs_checked=["%s %s" % k for k in un06_irrad], good_run_drops=[],
+          beam=cell_beams(un06_cells), drawn=drawn,
           legend_overlap_problems=(["the legend covers %d points" % covered] if covered else [])),
      dict(levels.CONVENTIONS, figure="per cell all_ivw_mu +- Z90 all_ivw_se, all_margin as a "
                                      "box; March to July x = dbias_v of univ_cells (July target "
                                      "bias minus March source bias, medians over the boards) "
                                      "plus a 5 V spread within one dbias_v",
-          settings=SETTINGS_RULE),
+          settings=SETTINGS_RULE, fluence=campaign.FLUENCE_CONVENTION),
      inputs=UNIV_INPUTS)
