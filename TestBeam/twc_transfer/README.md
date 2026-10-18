@@ -331,15 +331,18 @@ read root on lxplus:
   which the study took from its pre-registration notes rather than from a table. The
   self-check joins 2143 rows, with differences up to 4.3e-5 ps in mu and 5.9e-5 ps in se and 3
   TOST verdicts that differ, as in the study's own run.
-- `axes`: the eight tables of `results_r2/`, `axis_F.csv`, `axis_F_long.csv` and, with
-  `--guardfix`, the three guardfix tables are byte for byte the study's
-  (`campaigns.STUDY_TABLE_MD5`). The cell table of `summary_F.md` is line for line the study's;
-  the rest of the study's file (its hypothesis, verdict tables and anomalies) is prose and not
-  produced.
-- Through the universality reduction (the recipe above), `univ_axis_r2.csv` (6011 rows),
+- `axes`: the eight tables of `results_r2/`, `axis_F_long.csv` and, with `--guardfix`, the
+  three guardfix tables are byte for byte the study's (`campaigns.STUDY_TABLE_MD5`).
+  `axis_F.csv` is the study's table corrected on 12 rows (Versions): its other 155 rows and
+  every column of the study's are equal as text, and it adds the five `<arm>_self_transfer`
+  columns. The cell table of `summary_F.md` is line for line the study's; the rest of the
+  study's file (its hypothesis, verdict tables and anomalies) is prose and not produced.
+- Through the universality reduction (the recipe above), run on a write root whose
+  `axis_F.csv` was still the study's table, `univ_axis_r2.csv` (6011 rows),
   `univ_axis_F_long.csv`, `univ_axis_F_wide.csv` and `univ_cells.csv` are byte for byte the
   published tables (`campaigns.PUBLISHED_MD5`), and `master_cells.csv` is byte for byte
-  `univ_master_cells.csv`, which the reduction's master part copies from the study's tree.
+  `univ_master_cells.csv`, which the reduction's master part copies from the study's tree. The
+  reduction has not been run on the corrected `axis_F.csv`.
 
 ## Versions
 
@@ -378,8 +381,8 @@ published table.
 The study ran in waves, each from its own job list and cell code (`campaigns.WAVES`: the
 sha256 prefix of its `tt.py`, all on the core above). The first table says what this package
 does with each wave's cells and aggregation tables and which published tables the wave feeds;
-the second lists every table this package gives back byte for byte, with its md5 and the
-command that writes it (`campaigns.TABLE_VERSIONS`). Both are rendered by
+the second lists every table this package gives back byte for byte, and `axis_F.csv`, which it
+corrects (below), with its md5 and the command that writes it (`campaigns.TABLE_VERSIONS`). Both are rendered by
 `campaigns.versions_markdown()`, and a test checks that they are the ones below.
 
 | wave | job list | tt.py | cells here | aggregation tags | aggregation here | feeds |
@@ -403,7 +406,7 @@ command that writes it (`campaigns.TABLE_VERSIONS`). Both are rendered by
 | `results_r2/axis_I.csv` | `4656d575599dfb9b7bcc68b21ef1a0e0` | `python -m twc_transfer axes` | stage 1 (05793488) | agg_I_mar_f0p9524 |
 | `results_r2/axis_J.csv` | `281926f5e3c313fb0d08e55859de78e7` | `python -m twc_transfer axes` | stage 1 (05793488) | agg_J_jul_f0p9259 |
 | `results_r2/axis_K.csv` | `d5b4825caf1f5483af1a69689759e9f3` | `python -m twc_transfer axes` | stage 2 (05793488) | agg_K_desy_f0p8153, agg_K_desy_f1p0 |
-| `results_r3/axis_F.csv` | `44c661a62fdbf95b05dd7d67cd86cb74` | `python -m twc_transfer axes` | stage 3 (698f72f9) | agg_F_* (the four tags of AXIS_TAGS F) |
+| `results_r3/axis_F.csv` | `d5425a11ff92f69c4528c57f5936ff0f` | `python -m twc_transfer axes` | stage 3 (698f72f9) | agg_F_* (the four tags of AXIS_TAGS F); the study's table, md5 44c661a62fdbf95b05dd7d67cd86cb74 as published (12 keys carry the self-transfer row), differs on those 12 rows and lacks the five <arm>_self_transfer columns |
 | `results_r3/axis_F_long.csv` | `8cead873b7cc767f21b356cbd74bd136` | `python -m twc_transfer axes` | stage 3 (698f72f9) | agg_F_* (the four tags of AXIS_TAGS F) |
 | `results_r3/guardfix/axis_E_gf.csv` | `2f0a77c5a5c58ffca95bb7fa2c24645f` | `python -m twc_transfer axes --guardfix` | guardfix (e83f71c1) | agg_E_jul_guardfix_f0p9259 |
 | `results_r3/guardfix/axis_J_gf.csv` | `7e4758c43efdd7d51f079c06f9ed8681` | `python -m twc_transfer axes --guardfix` | guardfix (e83f71c1) | agg_J_jul_guardfix_f0p9259 |
@@ -411,7 +414,7 @@ command that writes it (`campaigns.TABLE_VERSIONS`). Both are rendered by
 | `univ_master_cells.csv` | `62cfc93f96be1dcbab6cad770da772fa` | `python -m etroc_plots.universality.reduce --part master` | round 1 (258cb1f8) | a copy of master_cells.csv |
 | `univ_axis_r2.csv` | `15c688966ce406593454391e9d6120ff` | `python -m etroc_plots.universality.reduce --part axes` | stage 1 (05793488), stage 2 (05793488), guardfix (e83f71c1) | the eight results_r2 axis tables, the guardfix rows replacing those of their 11 cells, and the self_transfer flag from the aggregation tables |
 | `univ_axis_F_long.csv` | `51302099b643b24014141af7d860a059` | `python -m etroc_plots.universality.reduce --part axes` | stage 3 (698f72f9) | results_r3/axis_F_long.csv and the self_transfer flag |
-| `univ_axis_F_wide.csv` | `911efb7d856178f24e60a87b5203a755` | `python -m etroc_plots.universality.reduce --part axes` | stage 3 (698f72f9) | results_r3/axis_F.csv and the self_transfer flag |
+| `univ_axis_F_wide.csv` | `911efb7d856178f24e60a87b5203a755` | `python -m etroc_plots.universality.reduce --part axes` | stage 3 (698f72f9) | the study's results_r3/axis_F.csv, md5 44c661a62fdbf95b05dd7d67cd86cb74 as published (12 keys carry the self-transfer row), and the self_transfer flag |
 | `univ_cells.csv` | `2fcde80b93bff79a4d9eb54292546318` | `python -m etroc_plots.universality.reduce --part cells` | round 1 (258cb1f8), stage 1 (05793488), stage 2 (05793488), stage 3 (698f72f9), seeded rerun (698f72f9), guardfix (e83f71c1) | the seven job lists and the cell table of summary_F.md |
 
 "Reproduces" means byte for byte for an aggregation or a derived table, and for a cell the
@@ -431,6 +434,18 @@ its rows carry the label the study gave them, `A_desy_*`, rather than the name o
 they are read from (`campaigns.AXIS_TAGS`). Neither `master` nor `axes` reads
 `calibration.csv`. The tags `agg_dt_*` and `agg_V2_*` were not compared.
 
+`axis_F.csv` is corrected. A cell whose source triple is one of its own targets has, under
+one key of the wide table (cell, kind, pair or board, family, tag, f), two rows of an arm: the
+transfer row (`self_transfer` 0) and the self-transfer row (1: the target is its own source),
+which the aggregation keeps apart (SPEC 8). The study's wide table kept
+whichever came last; on 12 keys of `F_desy_f0p8153` (cells F2 and F3; the arms `xfer`,
+`xfer_lin`, `xfer_clip` and `xfer_rescale`, 48 entries) that was the self-transfer row: F3
+`trig-dut` extrapolating `xfer` reads n_pix 5, mu 0.000 ps, PASS where the transfer row is
+n_pix 69, mu 5.32 ps, FAIL. `axes` now shows the transfer row of an arm when the key has one,
+else its self-transfer row, and says which in `<arm>_self_transfer`. The study's table is
+`campaigns.AXIS_F_AS_PUBLISHED` (md5 `44c661a62fdbf95b05dd7d67cd86cb74`, as published: 12 keys
+carry the self-transfer row); `univ_axis_F_wide.csv` was composed from it.
+
 ## Acceptance evidence
 
 What was run against what, on lxplus under LCG_104d with `PYTHONHASHSEED=0`:
@@ -443,8 +458,8 @@ What was run against what, on lxplus under LCG_104d with `PYTHONHASHSEED=0`:
 | cell, modes c, d, e, xfer-lin | one triple each of G_P3_run26_n100, F2, F7, F8; the stage-3 toolkit rerun on the same node | 54, 390, 108, 108 rows | equal to the rerun except `ts`; `ks_d`, `ks_p` differ from the batch node's table by at most 3.3e-14, as the rerun does |
 | aggregation | every tag of stages 1 to 3, the seeded rerun (in its own tree) and the guardfix rerun, through the plan of `jobs --agg` on the study's cell tables | 41 tags x 3 files = 123 files | byte for byte; round 1 re-derived (`agg_desy_f0p8153`: 2 of its TOST verdicts change) |
 | round-1 chain | `master_cells.csv` and 13 intermediate tables | 43 cells x 105 columns, 14 files | byte for byte |
-| axis tables | `results_r2/` (8), `axis_F.csv`, `axis_F_long.csv`, the 3 guardfix tables | 13 tables | byte for byte |
-| universality reduction | the published tables | 4 tables, and the master copy | byte for byte |
+| axis tables | `results_r2/` (8), `axis_F.csv`, `axis_F_long.csv`, the 3 guardfix tables | 13 tables | 12 byte for byte; `axis_F.csv` equal but for the 12 rows it corrects (48 arm entries) and its 5 added flag columns |
+| universality reduction | the published tables, from axis tables whose `axis_F.csv` was the study's | 4 tables, and the master copy | byte for byte |
 | condor driver | the study's DAG of `cells_guardfix_rerun.tsv` | 19 nodes, 16 VARS lines, 5 PARENT lines, 17 commands | the same nodes in the same order, VARS keys and values, PARENT lines and wrapper steps in order; 17 of 17 commands byte for byte once the `--out` root is mapped back (Condor) |
 
 ## Limits
@@ -459,6 +474,11 @@ What was run against what, on lxplus under LCG_104d with `PYTHONHASHSEED=0`:
   reproduces them (Versions).
 - Round 1's aggregation tables are re-derived by `agg`, not reproduced; `master` reads them as
   they are.
+- The long axis tables (`results_r2/axis_<X>.csv`, `axis_F_long.csv`) keep the study's 24
+  columns, without `self_transfer`. Where a cell's source triple is one of its targets a key
+  holds two rows of an arm that only the flag tells apart: 208 rows of axis A (cells A4 to A7),
+  12 of axis I (I3), 552 of axis F (F1, F2, F3). The flag is in the tag's `agg_by_cell.csv`,
+  which the universality reduction joins; `axis_F.csv` carries it per arm.
 - The f_cal bootstrap is not part of this package: f is a campaign fact (`campaigns.F_CAL`).
 - The condor driver's DAG was compared with the study's by its files; no DAG written by this
   package has been submitted.

@@ -19,7 +19,8 @@ The only paths outside the repository live here, each behind an environment vari
 JOB_LISTS names the study's seven job lists with the output root each one wrote into; WAVES
 the cell code each wave ran, whether cell.py reproduces it and which published tables it
 feeds (CELL_VERSIONS is its short form); TABLE_VERSIONS the tables this package gives back
-byte for byte, with their md5 and command (versions_markdown() renders both for the README);
+byte for byte and the one it corrects (axis_F.csv, AXIS_F_AS_PUBLISHED), with their md5 and
+command (versions_markdown() renders both for the README);
 F_CAL the error inflation of the aggregation per campaign, at the two precisions the study
 used, and AGG_F the f each campaign's groups are aggregated with; THIN_RULE and THIN_RUNS the
 pre-registered thin rule; LEVEL_TITLES the round-1 levels; AXIS_TAGS and CELL_DESC the axis
@@ -425,7 +426,9 @@ CELL_DESC = {
 AXIS_F_CELLS = CELL_DESC["F"]
 
 # md5 of the study's tables that `master` and `axes` give back byte for byte, by the path the
-# port writes them to under its output folder (measured 2026-10-18); and of the universality
+# port writes them to under its output folder (measured 2026-10-18), save axis_F.csv, whose md5
+# is that of the corrected table `axes` writes from the archived agg_F tables (measured
+# 2026-10-18; the study's is AXIS_F_AS_PUBLISHED); and of the universality
 # tables etroc_plots.universality.reduce composes from them (its master part copies
 # master_cells.csv; its axes part composes the axis tables with the guardfix overlay and
 # appends the self_transfer flag; its cells part reads the job lists and summary_F.md).
@@ -439,12 +442,18 @@ STUDY_TABLE_MD5 = {
     "results_r2/axis_I.csv": "4656d575599dfb9b7bcc68b21ef1a0e0",
     "results_r2/axis_J.csv": "281926f5e3c313fb0d08e55859de78e7",
     "results_r2/axis_K.csv": "d5b4825caf1f5483af1a69689759e9f3",
-    "results_r3/axis_F.csv": "44c661a62fdbf95b05dd7d67cd86cb74",
+    "results_r3/axis_F.csv": "d5425a11ff92f69c4528c57f5936ff0f",
     "results_r3/axis_F_long.csv": "8cead873b7cc767f21b356cbd74bd136",
     "results_r3/guardfix/axis_E_gf.csv": "2f0a77c5a5c58ffca95bb7fa2c24645f",
     "results_r3/guardfix/axis_J_gf.csv": "7e4758c43efdd7d51f079c06f9ed8681",
     "results_r3/guardfix/axis_K_gf.csv": "db411e3e2daa8a45eeb0dafb84a55361",
 }
+# The study's axis_F.csv: per wide key and arm it kept the last row of the long table, and on 12
+# keys of F_desy_f0p8153 (cells F2 and F3, 48 arm entries) that was the self-transfer row
+# beside a transfer row (SPEC 10). The port's axis_F.csv shows the transfer row, flags each arm
+# with <arm>_self_transfer, and differs from the study's on those 12 rows and in the five flags.
+AXIS_F_AS_PUBLISHED = ("44c661a62fdbf95b05dd7d67cd86cb74",
+                       "as published (12 keys carry the self-transfer row)")
 PUBLISHED_MD5 = {
     "univ_master_cells.csv": "62cfc93f96be1dcbab6cad770da772fa",
     "univ_axis_r2.csv": "15c688966ce406593454391e9d6120ff",
@@ -475,7 +484,9 @@ TABLE_VERSIONS = (
     for x in _R2
 ) + (
     ("results_r3/axis_F.csv", "python -m twc_transfer axes", ("stage3",),
-     "agg_F_* (the four tags of AXIS_TAGS F)", True),
+     "agg_F_* (the four tags of AXIS_TAGS F); the study's table, md5 %s %s, differs on "
+     "those 12 rows and lacks the five <arm>_self_transfer columns" % AXIS_F_AS_PUBLISHED,
+     True),
     ("results_r3/axis_F_long.csv", "python -m twc_transfer axes", ("stage3",),
      "agg_F_* (the four tags of AXIS_TAGS F)", True),
 ) + tuple(
@@ -491,7 +502,8 @@ TABLE_VERSIONS = (
     ("univ_axis_F_long.csv", _REDUCE % "axes", ("stage3",),
      "results_r3/axis_F_long.csv and the self_transfer flag", True),
     ("univ_axis_F_wide.csv", _REDUCE % "axes", ("stage3",),
-     "results_r3/axis_F.csv and the self_transfer flag", True),
+     "the study's results_r3/axis_F.csv, md5 %s %s, and the self_transfer flag"
+     % AXIS_F_AS_PUBLISHED, True),
     ("univ_cells.csv", _REDUCE % "cells",
      ("round1", "stage1", "stage2", "stage3", "rerun_seeded", "guardfix"),
      "the seven job lists and the cell table of summary_F.md", True),

@@ -1,6 +1,6 @@
 """Tests of the axis tables (axes.py) on toy aggregation tables: the join of an aggregation row
-with the means over its target triples, the folders and labels of axis A, the guardfix overlay
-and the cell table of axis F.
+with the means over its target triples, the folders and labels of axis A, the self-transfer
+rows of the wide table of axis F, the guardfix overlay and the cell table of axis F.
 
 Run from TestBeam/:  python -m pytest twc_transfer/tests
 """
@@ -76,6 +76,35 @@ def test_axis_A_reads_the_r2_folders_and_labels_its_rows_A_desy(tmp_path):
     assert set(D.cell) == {"A1_P3_run26_0deg"}
     assert sorted(set(D.agg_tag)) == ["A_desy_f0p8153", "A_desy_f1p0"]
     assert set(D[D.f_variant_is_primary].f_inflate) == {0.8153}
+
+
+def test_the_wide_table_keeps_the_transfer_row_and_flags_a_self_transfer_row(tmp_path):
+    root = str(tmp_path / "T")
+    for folder, _, f, _ in C.AXIS_TAGS["F"]:
+        write_tag(root, folder, "F3_lin_d2", f)
+    # the primary DESY table: beside the transfer row of the interp key, a self-transfer row
+    # that differs only in its flag and numbers, after it; on the extrap key the self-transfer
+    # row alone
+    p = os.path.join(root, "tables", "agg_F_desy_f0p8153", "agg_by_cell.csv")
+    agg = pd.read_csv(p)
+    xfer = agg[agg.arm == "xfer"]
+    real = xfer[xfer.extrap_family == "interp"].assign(n_pix=69, mu=5.32, tost="FAIL")
+    null = xfer.assign(self_transfer=1, n_pix=5, mu=0.0, tost="PASS")
+    pd.concat([real, null, agg[agg.arm != "xfer"]]).to_csv(p, index=False)
+    X.build(root, str(tmp_path / "out"), axes=["F"])
+    W = pd.read_csv(tmp_path / "out" / "results_r3" / "axis_F.csv")
+    W = W[W.agg_tag == "F_desy_f0p8153"].set_index("family")
+    assert W.loc["interp", ["xfer_n_pix", "xfer_mu_ps", "xfer_tost", "xfer_self_transfer"]] \
+        .tolist() == [69, 5.32, "FAIL", 0]
+    assert W.loc["extrap", ["xfer_n_pix", "xfer_mu_ps", "xfer_self_transfer"]].tolist() == \
+        [5, 0.0, 1]
+    assert W.loc["interp", "xfer_lin_present"] == False                  # noqa: E712
+    assert np.isnan(W.loc["interp", "xfer_lin_self_transfer"])
+    # the long table keeps both rows, in the study's columns
+    FL = pd.read_csv(tmp_path / "out" / "results_r3" / "axis_F_long.csv")
+    assert list(FL.columns) == X.AXIS_COLUMNS
+    d = FL[(FL.agg_tag == "F_desy_f0p8153") & (FL.arm == "xfer")]
+    assert sorted(d.groupby("family").size().items()) == [("extrap", 1), ("interp", 2)]
 
 
 def test_the_guardfix_overlay_replaces_its_cells_in_place_and_drops_its_two_columns():
