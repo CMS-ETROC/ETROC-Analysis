@@ -1,8 +1,9 @@
 """Tests of the settings helpers: the settings classes of a display-run list and the accepted
-merges they draw in place of their runs, the settings guard, the threshold over the noise from
-the per-pixel noise widths (a merge's pooled scans too) and the offset its scan records, the
-small open marker of a board under 128 fitted pixels, the slot positions, the offset markers,
-the layout audit, the BL/NW point offsets and the RFSel pair readers (frontend.tot_shapes).
+merges they draw in place of their runs, a merge drawn only when the good-run list marks it good
+too, the settings guard, the threshold over the noise from the per-pixel noise widths (a merge's
+pooled scans too) and the offset its scan records, the small open marker of a board under 128
+fitted pixels, the slot positions, the offset markers, the layout audit (data outside the axes
+too), the BL/NW point offsets and the RFSel pair readers (frontend.tot_shapes).
 
 Run from TestBeam/:  python -m pytest etroc_plots/tests
 """
@@ -167,6 +168,58 @@ def test_scan_offset_is_the_runs_common_offset():
         settings.scan_offset(bl, "july", "h1", [99], "IH7")
 
 
+def merge_inputs(tmp_path, merge_good):
+    """H1 runs 46 and 47 (RFSel 1, offset 20, run 47 preferred) and their merge, accepted in the
+    merged table: the display list, runs_summary, both board tables (two combinations per board)
+    and a good-run list that marks the merge good or not (`merge_good`)."""
+    disp = tmp_path / "display_merge.csv"
+    disp.write_text("telescope,fluence,rfsel,os,run,preferred,combo,bias_note,note\n"
+                    "H1,3.5e15,1,20,46,0,band,,\nH1,3.5e15,1,20,47,1,band,,\n")
+    rs = []
+    for run in (46, 47):
+        r = dict(campaign=campaign.TABLE_CAMPAIGN["july"], telescope=campaign.TABLE_TEL["h1"],
+                 run=run)
+        for i, chip in enumerate(campaign.TELESCOPE_CHIPS["h1"]):
+            r.update({"board%d_chip" % i: "PT_" + chip, "board%d_hv" % i: 550.0,
+                      "board%d_irrad" % i: "3.5e15", "board%d_offset" % i: 20,
+                      "board%d_rfsel" % i: 1.0})
+        rs.append(r)
+
+    def rows(run, **extra):
+        return [dict(campaign=campaign.TABLE_CAMPAIGN["july"], telescope="h1", run=str(run),
+                     combo=combo, board_idx=i, board_chip="PT_" + chip, variant="top",
+                     floor="300", value_ps=40.0 + i + 5.0 * k, pixel_spread_ps=3.0,
+                     n_pixels=200, anointed=k == 0, **extra)
+                for i, chip in enumerate(campaign.TELESCOPE_CHIPS["h1"])
+                for k, combo in enumerate(("a", "b"))]
+    bt = pd.DataFrame(rows(46) + rows(47))
+    bm = pd.DataFrame(rows(tables.merge_name("h1", (46, 47)), runs_merged="46+47",
+                           accepted=True))
+    good = tmp_path / ("good_%s.csv" % merge_good)
+    good.write_text("campaign,telescope,run,good,reason\n" + "".join(
+        "%s,%s,%s,%s,r\n" % (campaign.GOOD_RUNS_CAMPAIGN, campaign.GOOD_RUNS_TEL["h1"], run, g)
+        for run, g in (("46", True), ("47", True), ("46+47", merge_good))))
+    return str(disp), pd.DataFrame(rs), bt, bm, str(good)
+
+
+def test_class_points_draw_a_merge_only_when_the_good_run_list_marks_it_good(tmp_path,
+                                                                             monkeypatch):
+    for merge_good in (False, True):
+        disp, rs, bt, bm, good = merge_inputs(tmp_path, merge_good)
+        monkeypatch.setattr(campaign, "GOOD_RUNS_CSV", good)
+        assert tables.accepted_merges(bm, campaign.TABLE_CAMPAIGN["july"]) == {"h1": [(46, 47)]}
+        pts = settings.class_points(bt, rs, disp, STEP, "top", "300", bt_merged=bm)
+        drawn = sorted({tuple(p["runs"]) for p in pts if "runs" in p})
+        if merge_good:
+            assert drawn == [(46, 47)]
+            assert {p["run"] for p in pts} == {"h1_grp_run46_47"}
+        else:   # accepted, not good: the runs stay single runs
+            assert drawn == [] and sorted({p["run"] for p in pts}) == [46, 47]
+        # every merge drawn passes the good-run list
+        good_list = tables.good_list("july", "h1")
+        assert all(good_list["+".join(map(str, m))][0] for m in drawn)
+
+
 def test_low_pixels_is_fewer_than_128_fitted_pixels():
     assert tables.LOW_PIXELS == 128
     assert settings.low_pixels(dict(band=dict(n_pixels=127)))
@@ -319,6 +372,30 @@ def test_layout_boxes_skip_ticks_outside_the_view():
     ticks = [t["text"] for t in settings.layout_boxes(fig, dpi=50)["axes"][0]["ticklabels"]]
     plt.close(fig)
     assert ticks == ["1.0", "2.0", "3.0", "600", "700"]
+
+
+def test_layout_problems_name_data_outside_the_axes():
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    def problems(y_ps, clip_on=True):
+        pts = marked_points()
+        pts[1]["band"] = dict(pts[1]["band"], marker_ps=y_ps, band_lo_ps=y_ps - 2.0,
+                              band_hi_ps=y_ps + 2.0)
+        fig, ax = plt.subplots()
+        settings.draw_slots(ax, pts, 0.2, {(0.0, 56): 0.1}, {("h1", 56): "56"}, (0, 150))
+        ax.plot([0.1], [200.0], "o", clip_on=clip_on)
+        ax.plot([-2.0, 2.0], [50.0, 50.0], "-")    # a curve the view crops: not a point
+        ax.set_xlim(-0.5, 0.7)
+        ax.set_ylim(0, 150)
+        out = settings.layout_problems(settings.layout_boxes(fig, dpi=50))
+        plt.close(fig)
+        return [p for p in out if "outside the axes" in p]
+
+    assert len(problems(200.0)) >= 2           # the band at 200 ps and the clipped marker
+    assert problems(140.0, clip_on=False) == []   # a mark the axes do not clip may stand outside
+    assert len(problems(140.0)) == 1
 
 
 def test_points_keep_the_pitch_between_runs():

@@ -33,9 +33,16 @@
 # The runs are the display runs of the step (`july/display_runs_jul.csv`): 9 on H1 and 11 on F1,
 # 80 boards. Every board is drawn as a band, the rule at this step (`../CONVENTIONS.md`,
 # "Resolution and TDC figures"): its value over every 3-board combination containing it. F1 runs
-# 46 and 47 form an accepted merge, and st02, st04 and st05 draw the merge in their place: 76
-# boards there. On those three a board whose resolution comes from fewer than 128 pixels (half
-# the chip) is a small open marker, named with its count in the footer.
+# 46 and 47 form a merge that the merged runs' table accepts and the good-run list marks good,
+# and st02, st04 and st05 draw the merge in their place: 76 boards there. On st01 to st05 a board
+# whose resolution comes from fewer than 128 pixels (half the chip) is a small open marker, named
+# with its count in the footer.
+#
+# The IRRAD 2026 loops behind these figures were recorded with the readout saturated: 47 to 81 %
+# of the ETROC2 packets lost their header and were dropped at decoding, so every number below is
+# a measurement on the surviving hits, selected by buffer state, with the selection bias open.
+# Details, and what it means per figure type: the "Data quality" section of the package README
+# (`../README.md`).
 #
 # Every figure is saved as PNG (200 dpi) and PDF, with `<name>_values.json` beside it: every
 # number drawn, the input files read and the commit of the code.
@@ -66,7 +73,7 @@
 #   threshold offset (each board's own offset; the bias in the footers).
 # * `july/display_runs_jul.csv`: the July display runs, their settings class and the preferred
 #   run of each class.
-# * `july/good_runs.csv`: the good-run list; every run drawn has to be good.
+# * `july/good_runs.csv`: the good-run list; every run and every merge drawn has to be good.
 # * `tables/run_times.csv`: the start of every run, for the time after the irradiation.
 # * `frontend/blnw_by_run.csv`: the autocalibration scan before each run, per board: the RFSel
 #   it recorded (an independent check of the RFSel in `runs_summary.csv`), the threshold offset
@@ -190,40 +197,47 @@ def save(fig, stem, payload, conventions, inputs=INPUTS):
 # * the settings guard: for every run, the RFSel of every board in `runs_summary.csv` equals the
 #   class's RFSel; the boards' offsets are the class's offsets; and where the autocalibration
 #   scan before the run recorded the RFSel (`rfsel_src` = scan in `blnw_by_run.csv`), it equals
-#   the RFSel in `runs_summary.csv`. The guard stops the notebook, naming the run, on any
-#   mismatch (it caught H1 runs 64, 67 and 70, which `runs_summary.csv` listed at RFSel 2 until
-#   2026-10-02).
+#   the RFSel in `runs_summary.csv`. The guard checks every run of the display-run list at this
+#   step and stops the notebook, naming the run, on any mismatch. Until 2026-10-02
+#   `runs_summary.csv` listed H1 runs 64, 67 and 70 at RFSel 2 where the DAQ ran RFSel 3; on that
+#   copy (`tables/superseded/runs_summary_2026-09-16.csv`) the guard stops on runs 64 and 67, the
+#   two of them on the display-run list (run 70 is not a display run).
 #
 # F1 has no class at RFSel 3 and offsets 6/8: its one run there, 59, is not good on the
 # good-run list (the cell below prints the reason).
 #
 # Merged runs: the merged runs' board table lists every merge with the run-merging study's
-# verdict (`runs_merged`, `accepted`). A class whose runs on a telescope include every run of an
-# accepted merge draws the merge in their place on st02, st04 and st05, one band per board from
-# the merged table by the rule of the single runs (`tables.classes_at_step`,
+# verdict (`runs_merged`, `accepted`), and the good-run list marks merges good or not as it does
+# single runs. A merge is drawn only when it passes both, accepted in the merged table and good
+# on the good-run list (`tables.good_merges`, the one merge verdict of the settings and resolution
+# figures): H1 6+7 and 18+19 are accepted but not good. A class whose runs on a telescope include
+# every run of such a merge draws the merge in their place on st02, st04 and st05, one band per
+# board from the merged table by the rule of the single runs (`tables.classes_at_step`,
 # `settings.class_points`): at this step F1 runs 46 and 47 (RFSel 1, offset 20). The merge's
 # RFSel and offset are the two runs' common ones in `runs_summary.csv`, as the merged notebook
-# reads them. A merge with a run outside the class is not drawn; the cell below lists the
-# accepted merges that touch a class and which of them stand in for their runs. st01 and st03
-# hold no RFSel 1 run, and st06 draws one autocalibration scan per run, so these keep the runs.
+# reads them. A merge with a run outside the class is not drawn; the cell below lists the merges
+# that pass both verdicts and touch a class, and which of them stand in for their runs. st01 and
+# st03 hold no RFSel 1 run, and st06 draws one autocalibration scan per run, so these keep the
+# runs.
 #
 # The runs of one class were taken at different times after the end of the 3.5e15 irradiation,
 # and on F1 at two biases: the cell below lists both for every run; the figures write the time
 # under each run and the bias in the footer.
 
 # %%
-MERGES = tables.accepted_merges(BT_MERGED, campaign.TABLE_CAMPAIGN[settings.CAMP])
+# accepted in the merged runs' table and good on the good-run list
+MERGES = tables.good_merges(BT_MERGED, settings.CAMP)
 CLASSES = tables.classes_at_step(campaign.DISPLAY_RUNS_JUL_CSV, STEP, MERGES)
 for c in CLASSES:
     print("RFSel %d, offset %-5s %s" % (c.rfsel, c.os, "; ".join(
         "%s runs %s (preferred %s)" % (t.upper(), c.runs[t], c.preferred[t]) for t in TELS
         if t in c.runs)))
-# the accepted merges with a run in a class, and whether the class draws them
+# the merges (accepted and good) with a run in a class, and whether the class draws them
 for t in TELS:
     for m in MERGES.get(t, []):
         for c in CLASSES:
             if set(m) & set(c.runs.get(t, [])):
-                print("accepted merge %s %s: RFSel %d, offset %s class, %s" % (
+                print("merge %s %s (accepted, good): RFSel %d, offset %s class, %s" % (
                     t.upper(), "+".join(map(str, m)), c.rfsel, c.os,
                     "drawn in place of its runs" if m in c.merges.get(t, []) else
                     "not drawn, runs %s are not display runs of the class"
@@ -250,7 +264,7 @@ for (tel, run), f in sorted(FACTS.items(), key=lambda kv: (TELS.index(kv[0][0]),
           % (tel.upper(), run, f["bias"], f["time"], f["hours"]))
 
 PTS = settings.class_points(BT, RS, campaign.DISPLAY_RUNS_JUL_CSV, STEP, VARIANT, FLOOR)
-# st02, st04 and st05: a class's accepted merge in place of its runs
+# st02, st04 and st05: a class's merge (accepted and good) in place of its runs
 PTS_M = settings.class_points(BT, RS, campaign.DISPLAY_RUNS_JUL_CSV, STEP, VARIANT, FLOOR,
                               bt_merged=BT_MERGED)
 print("boards drawn: %d; with the merges in place of their runs: %d" % (len(PTS), len(PTS_M)))
@@ -328,20 +342,24 @@ def low_marks(pts):
                              chip=p["chip"], n_pixels=p["band"]["n_pixels"]) for p in low])
 
 
+SURVIVING_TEXT = u"Pixel counts are the surviving readout sample."
+
+
 def low_text(low):
-    """The footer line of low_marks' boards: the rule, how many, and each board's count."""
+    """The footer lines of low_marks' boards: the rule, how many, and each board's count; then
+    that the counts are those of the surviving readout sample."""
     head = (u"Small open markers: resolution from under %d pixels (half the chip), %d of %d boards"
             % (low["threshold"], len(low["points"]), low["n_boards"]))
     if not low["points"]:
-        return head + u"."
+        return head + u". " + SURVIVING_TEXT
     runs = {}
     for q in low["points"]:
         runs.setdefault(q["tel"], {}).setdefault(q["run"], []).append(
             u"%s %d" % (q["chip"], q["n_pixels"]))
-    return head + u": %s." % u"; ".join(
+    return head + u": %s.\n%s" % (u"; ".join(
         u"%s %s" % (t.upper(), u", ".join(u"run %s (%s)" % (r, u", ".join(c))
                                          for r, c in rr.items()))
-        for t, rr in runs.items())
+        for t, rr in runs.items()), SURVIVING_TEXT)
 
 
 LOW_CONVENTION = ("a board whose resolution comes from fewer than %d pixels (board table n_pixels "
@@ -390,8 +408,9 @@ def conventions():
     return c
 
 
-MERGE_CONVENTION = ("a class whose runs include every run of an accepted merge (merged runs' "
-                    "board table: runs_merged, accepted) draws the merge in place of those runs: "
+MERGE_CONVENTION = ("a class whose runs include every run of a merge accepted in the merged runs' "
+                    "board table (runs_merged, accepted) and good on the good-run list "
+                    "(tables.good_merges) draws the merge in place of those runs: "
                     "one band per board from the merged table by the rule of the single runs; "
                     "RFSel and offset the runs' common ones in runs_summary.csv")
 
@@ -402,7 +421,8 @@ MERGE_CONVENTION = ("a class whose runs include every run of an accepted merge (
 # Every board of every display run at RFSel 2, in the cell of its own threshold offset: 12 runs,
 # 48 boards (H1 runs 18, 33, 52, 53 and 56; F1 runs 13, 14, 18, 32, 50, 51 and 52). H1 run 56
 # stands in two cells, IH7 and IH11 at offset 8, IH12 and IH13 at 10. One RFSel only, so the
-# offset is the one setting that changes between the cells.
+# offset is the one setting that changes between the cells. As on st02, a board whose resolution
+# comes from fewer than 128 pixels is a small open marker: here the four boards of H1 run 56.
 #
 # It is not the only thing that changes. The H1 boards at offset 10 ran 2.3 to 7.5 days after
 # the end of the irradiation, its offset-20 run 37 h after; on F1 the offset-20 runs came first
@@ -412,6 +432,7 @@ MERGE_CONVENTION = ("a class whose runs include every run of an accepted merge (
 
 # %%
 p01 = [dict(p) for p in PTS if p["rfsel"] == 2]
+LOW_01 = low_marks(p01)
 OFFSETS_01 = [o for o in campaign.SETTINGS_OFFSETS if any(p["offset"] == o for p in p01)]
 split = {(p["tel"], p["run"]) for p in p01 if p["os"] != str(p["offset"])}
 split_text = u"; ".join(u"%s run %d: %s" % (t.upper(), r, u", ".join(
@@ -428,10 +449,10 @@ fig, lay = settings.res_by_offset(
         SELECTION,
         u"Every display run at RFSel 2: %s." % counts_text(p01),
         u"Each board in the cell of its own offset (%s)." % split_text,
-        BAND_TEXT, RUN_TEXT, bias_text(p01)]))
+        BAND_TEXT, low_text(LOW_01), RUN_TEXT, bias_text(p01)]))
 payload = values(p01, lay)
-payload.update(offsets=OFFSETS_01, split_runs=split_text)
-save(fig, "st01_res_vs_offset_rfsel2", payload, conventions())
+payload.update(offsets=OFFSETS_01, split_runs=split_text, low_pixels=LOW_01)
+save(fig, "st01_res_vs_offset_rfsel2", payload, dict(conventions(), low_pixels=LOW_CONVENTION))
 
 # %% [markdown]
 # ## Figure st02: resolution against the settings class
@@ -490,10 +511,13 @@ save(fig, "st02_res_vs_settings_class", payload,
 # partners (H1: run 56 at 7.5 days, runs 64 and 67 at 9.0 and 9.6 days; F1: runs 32 and 52 at
 # 2.3 and 7.5 days, runs 71 and 86 at 9.6 and 10.0 days): the step mixes the RFSel with the
 # time after the irradiation. Figure st05 draws every board against its offset over its noise
-# width (x_B), which puts the boards at different offsets on one axis.
+# width (x_B), which puts the boards at different offsets on one axis. As on st02, a board whose
+# resolution comes from fewer than 128 pixels is a small open marker: the seven boards of H1 runs
+# 56 and 67.
 
 # %%
 p03 = [dict(p) for p in PTS if (p["rfsel"], p["os"]) in campaign.RFSEL_STEP_CLASSES[p["tel"]]]
+LOW_03 = low_marks(p03)
 QUARTERS = [((t, r), sorted({p["offset"] for p in p03 if (p["tel"], p["rfsel"]) == (t, r)}))
             for t in TELS for r, _ in campaign.RFSEL_STEP_CLASSES[t]]
 step_offsets = []
@@ -520,12 +544,12 @@ fig, lay = settings.rfsel_step(
         u"quarter labels." % counts_text(p03),
         u"Offsets kept across the step: %s; changed: %s." % (u", ".join(same),
                                                              u", ".join(moved)),
-        BAND_TEXT, RUN_TEXT, bias_text(p03)]))
+        BAND_TEXT, low_text(LOW_03), RUN_TEXT, bias_text(p03)]))
 payload = values(p03, lay)
 payload.update(quarters=[dict(tel=k[0], rfsel=k[1], offsets=v) for k, v in QUARTERS],
                offsets_across_step=[dict(tel=t, chip=c, rfsel2=a, rfsel3=b)
-                                    for t, c, a, b in step_offsets])
-save(fig, "st03_rfsel2_vs_3", payload, conventions())
+                                    for t, c, a, b in step_offsets], low_pixels=LOW_03)
+save(fig, "st03_rfsel2_vs_3", payload, dict(conventions(), low_pixels=LOW_CONVENTION))
 
 # %% [markdown]
 # ## The threshold over the noise, x_B
