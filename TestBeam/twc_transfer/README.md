@@ -77,7 +77,8 @@ here writes a file. A caller that writes passes `ensure_dirs(campaigns.write_roo
 
 From `TestBeam/`, with a folder of your own as the write root. The recipe is index, then bank
 (and the Tier-0 screen of it), then cells, then their aggregation, then the round-1 chain and
-the axis tables, then the universality reduction:
+the axis tables, then the universality reduction. Each line reads the study's tree, not the
+output of the line before it; "Chaining on your own outputs" below says how to chain them:
 
     export ETROC_TWC_OUT=/path/to/your/output
     python -m twc_transfer index --campaign mar --run h1_run1 --combo extra0-ref1-dut2
@@ -171,6 +172,28 @@ What refuses to run, and why:
 is refitted from events, and of the in-run split, is seeded from Python's `hash()` of strings,
 which is salted per process otherwise. Those seeds reproduce the study's cells only under
 LCG_104d (Python 3.9.12) with `PYTHONHASHSEED=0`; under another Python they are not verified.
+
+### Chaining on your own outputs
+
+Every command writes into the write root (`ETROC_TWC_OUT`) and takes the study's tables from
+the read root (`ETROC_TWC_TRANSFER_ROOT`, by default the study's tree): a relative `--cells`,
+`--bank`, `--src-bank` or `--tier0` is taken in the read root, and `master` and `axes` read only
+the read root. A chain of steps on your own
+outputs therefore points the read root of each step at the write root of the step before it,
+and writes each step into a new write root (one may not lie inside the read root). For example,
+the guardfix table of axis J from your own aggregation of the study's four J cells:
+
+    export ETROC_TWC_OUT=/path/to/step1
+    python -m twc_transfer agg --cells 'cells_guardfix/J?_h1_*/*.csv' --f-inflate 0.9259 \
+        --out tables/agg_J_jul_guardfix_f0p9259
+    export ETROC_TWC_TRANSFER_ROOT=/path/to/step1 ETROC_TWC_OUT=/path/to/step2
+    python -m twc_transfer axes --guardfix --axis J
+
+The first step reads the study's cells and writes `tables/agg_J_jul_guardfix_f0p9259/` under
+step 1; the second reads that folder and writes `results_r3/guardfix/axis_J_gf.csv` under step 2
+(byte for byte the study's, md5 `7e4758c43efdd7d51f079c06f9ed8681`). Cells of your own enter
+the same way: write them under one write root, then aggregate them with that root as the read
+root, or with absolute `--cells` patterns.
 
 ## How etroc_plots reads these
 
@@ -382,6 +405,17 @@ fit's restart jitter rather than by the float difference. To reproduce a publish
 point `ETROC_TWC_CORE` at a core of the hashes above; `_core.core_versions()` reports what was
 loaded, and the manifest of a DAG says which core its cells run on.
 
+The core of these hashes is the one of commit `ac97d8d6` (2026-08-24) of this repository. A
+detached worktree of that commit gives it without touching your checkout:
+
+    git worktree add --detach ../ETROC-Analysis-core-ac97d8d6 ac97d8d6
+    export ETROC_TWC_CORE=$PWD/../ETROC-Analysis-core-ac97d8d6/TestBeam/condor_at_lxplus/core
+    sha1sum $ETROC_TWC_CORE/twc_solver.py $ETROC_TWC_CORE/bootstrap.py $ETROC_TWC_CORE/io_utils.py
+
+(from the repository's top folder; on macOS `shasum -a 1`). The three sums must be those of
+`campaigns.CELLS_CORE_SHA1` above. Run the package from your own checkout as before; only the
+core comes from the worktree.
+
 What the repository's core changes, measured on one node with nothing but the core changed:
 
 - one triple of mar `h1_run1` (6000 events, 16 arms): the coefficients by at most 3.8e-12
@@ -411,10 +445,10 @@ corrects (below), with its md5 and the command that writes it (`campaigns.TABLE_
 | round 1 | `cells.tsv` | 258cb1f8 | reruns them (older cell, older columns) | agg_desy_*, agg_aug_*, agg_mar_f0p9524, agg_jul_f0p9259 | re-derives them (later rules, more columns): agg_desy_f0p8153 changes tost on 2 rows; master reads them as they are | `univ_master_cells.csv`, `univ_cells.csv` |
 | stage 1 | `cells_stage1.tsv` | 05793488 | reruns them (older cell) | the groups of cells_stage1.tsv: axes D, E, I, J | reproduces them (all 7 tags compared) | `univ_axis_r2.csv`, `univ_cells.csv` |
 | stage 2 | `cells_stage2.tsv` | 05793488 | reruns them (older cell) | the groups of cells_stage2.tsv: axes A, B, C, K | reproduces them (all 8 tags compared; its A_desy tags are the study's agg_A_r2_desy_*, since stage 3 reused the folder name) | `univ_axis_r2.csv`, `univ_cells.csv` |
-| stage 3 | `cells_stage3.tsv` | 698f72f9 | reproduces them (one triple per cell in modes c, d, e and xfer-lin compared) | the groups of cells_stage3.tsv: A8 and A9, F, G | reproduces them (all 8 tags compared) | `univ_axis_F_long.csv`, `univ_axis_F_wide.csv`, `univ_cells.csv` |
-| seeded rerun | `cells_rerun.tsv` | 698f72f9 | reproduces them (the stage-3 code) | the groups of cells_rerun.tsv, in the rerun's own tree | reproduces them (all 14 tags compared) | `univ_cells.csv` |
+| stage 3 | `cells_stage3.tsv` | 698f72f9 | reproduces them up to the cross-node tolerance (ks_d, ks_p within 3.3e-14; one triple per cell in modes c, d, e and xfer-lin compared) | the groups of cells_stage3.tsv: A8 and A9, F, G | reproduces them (all 8 tags compared) | `univ_axis_F_long.csv`, `univ_axis_F_wide.csv`, `univ_cells.csv` |
+| seeded rerun | `cells_rerun.tsv` | 698f72f9 | not compared (the stage-3 code) | the groups of cells_rerun.tsv, in the rerun's own tree | reproduces them (all 14 tags compared) | `univ_cells.csv` |
 | guardfix | `cells_guardfix_rerun.tsv` | e83f71c1 | reproduces them (the smoke cell compared, 240 rows) | agg_E_jul_guardfix_*, agg_J_jul_guardfix_*, agg_K_desy_guardfix_* | reproduces them (all 4 tags compared) | `univ_axis_r2.csv`, `univ_cells.csv` |
-| v2 wave 1 | `cells_v2w1.tsv` | e83f71c1 | reproduces them (the guardfix code); the list is not in jobs/ | agg_V2_* | the guardfix code, not compared | none |
+| v2 wave 1 | `cells_v2w1.tsv` | e83f71c1 | not compared (the guardfix code); the list is not in jobs/ | agg_V2_* | the guardfix code, not compared | none |
 
 | table | md5 | command | waves (tt.py) | made from |
 |---|---|---|---|---|
@@ -439,7 +473,10 @@ corrects (below), with its md5 and the command that writes it (`campaigns.TABLE_
 | `univ_cells.csv` | `2fcde80b93bff79a4d9eb54292546318` | `python -m etroc_plots.universality.reduce --part cells` | round 1 (258cb1f8), stage 1 (05793488), stage 2 (05793488), stage 3 (698f72f9), seeded rerun (698f72f9), guardfix (e83f71c1) | the seven job lists and the cell table of summary_F.md |
 
 "Reproduces" means byte for byte for an aggregation or a derived table, and for a cell the
-same table except `ts` when its command runs on a core of the hashes above; "reruns" means the
+same table except `ts` when its command runs on a core of the hashes above, on the node the
+compared table was made on; "up to the cross-node tolerance" adds that on another node `ks_d`
+and `ks_p` differ too, by at most 3.3e-14 (6.1e-14 relative; the largest of the stage-3
+comparisons, Acceptance evidence); "reruns" means the
 command runs but computes with the current cell; "not compared" means the code is the same as
 a compared wave's and no table of that wave was run against the study's. `cell.py` is the
 guardfix version; the stage-3 version differs from it only by `--lpo-fallback`, whose default

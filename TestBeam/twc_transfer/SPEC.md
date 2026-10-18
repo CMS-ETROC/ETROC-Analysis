@@ -10,7 +10,9 @@ The code cites sections as "SPEC 1", "SPEC 5.1" and so on.
 
 ## 0. Layout and invariants
 
-The library is the ten modules listed in `README.md`. It imports the pipeline core unmodified
+The library is the first ten modules of the table in `README.md`, `campaigns` to `stats`; the
+commands (`cell`, `agg`, `master`, `axes`, `cli` and `__main__`, `jobs`) are built on it. The
+library imports the pipeline core unmodified
 (`_core.py`; the directory is `ETROC_TWC_CORE` or this repository's
 `condor_at_lxplus/core`):
 
@@ -28,8 +30,8 @@ A step-10 track file (`time/track_*.parquet`) has the columns `tot_<role>`, `toa
 `file`, `cal_<role>`, `HasNeighbor_<role>`, `trackNeighbor`, and no event id. A four-board run
 has four leave-one-out combos; on March H1 each holds about 1090 to 1210 triples per run.
 
-Nothing in the library writes a file. A caller that writes, the command line of section 6
-included, uses `campaigns.write_root()` (the folder `ETROC_TWC_OUT`, which has no default,
+Nothing in the library writes a file (`naming.ensure_dirs` makes the output folders); the
+commands write. Each uses `campaigns.write_root()` (the folder `ETROC_TWC_OUT`, which has no default,
 is made absolute and may be neither inside the read root, the study's output trees, a data root
 nor this checkout) and `naming.ensure_dirs(root)`.
 
@@ -763,7 +765,8 @@ trip is part of the result.
   job logs. A table of another schema is read with a line.
 - The job list, `jobs/cells.tsv` by default (`--jobs`): each cell's level and campaign group.
 
-**f, at two precisions** (`campaigns.F_CAL`). The verdicts carry each table's f as its folder
+**f, at two precisions** (`campaigns.F_CAL`; March's is known to four decimals only, 0.9524 at
+both). The verdicts carry each table's f as its folder
 names it, four decimals; the recomputation uses the bootstrap's full value of the cell's group,
 as the study's own recomputation did.
 

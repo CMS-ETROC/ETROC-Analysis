@@ -22,7 +22,7 @@ feeds (CELL_VERSIONS is its short form); TABLE_VERSIONS the tables this package 
 byte for byte and the one it corrects (axis_F.csv, AXIS_F_AS_PUBLISHED), with their md5 and
 command (versions_markdown() renders both for the README);
 F_CAL the error inflation of the aggregation per campaign, at the two precisions the study
-used, and AGG_F the f each campaign's groups are aggregated with; THIN_RULE and THIN_RUNS the
+used (March's is known to four decimals only), and AGG_F the f each campaign's groups are aggregated with; THIN_RULE and THIN_RUNS the
 pre-registered thin rule; LEVEL_TITLES the round-1 levels; AXIS_TAGS and CELL_DESC the axis
 tables and what their cells compare.
 
@@ -113,12 +113,13 @@ WAVES = (
      "since stage 3 reused the folder name)",
      ("univ_axis_r2.csv", "univ_cells.csv")),
     ("stage3", "stage 3", "cells_stage3.tsv", "698f72f9", True,
-     "reproduces them (one triple per cell in modes c, d, e and xfer-lin compared)",
+     "reproduces them up to the cross-node tolerance (ks_d, ks_p within 3.3e-14; one triple "
+     "per cell in modes c, d, e and xfer-lin compared)",
      "the groups of cells_stage3.tsv: A8 and A9, F, G",
      "reproduces them (all 8 tags compared)",
      ("univ_axis_F_long.csv", "univ_axis_F_wide.csv", "univ_cells.csv")),
     ("rerun_seeded", "seeded rerun", "cells_rerun.tsv", "698f72f9", True,
-     "reproduces them (the stage-3 code)",
+     "not compared (the stage-3 code)",
      "the groups of cells_rerun.tsv, in the rerun's own tree",
      "reproduces them (all 14 tags compared)",
      ("univ_cells.csv",)),
@@ -128,7 +129,7 @@ WAVES = (
      "reproduces them (all 4 tags compared)",
      ("univ_axis_r2.csv", "univ_cells.csv")),
     ("v2w1", "v2 wave 1", "cells_v2w1.tsv", "e83f71c1", True,
-     "reproduces them (the guardfix code); the list is not in jobs/",
+     "not compared (the guardfix code); the list is not in jobs/",
      "agg_V2_*", "the guardfix code, not compared",
      ()),
 )
@@ -142,7 +143,8 @@ CELL_VERSIONS = tuple((w[0], w[2], w[3], w[4]) for w in WAVES)
 # in the read root). The study's aggregation was run with four decimals: the numbers written
 # into its drivers for DESY May, March and July, the measured August value formatted "%.4f".
 # The round-1 recomputation of the verdicts used the full values. agg --f-cal <campaign> takes
-# the four-decimal value, which reproduces the aggregated tables; --f-precision full the other.
+# the four-decimal value, which re-derives the aggregated tables (their f_source then names the
+# campaign, so only --f-inflate gives them back byte for byte); --f-precision full the other.
 # DESY May and August were also aggregated at f = 1.0, and August at the DESY value 0.8153 (its
 # pre-registered fallback); those runs pass the number with --f-inflate.
 # (four decimals, full value, provenance)
