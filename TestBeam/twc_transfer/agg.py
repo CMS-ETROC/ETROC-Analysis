@@ -24,7 +24,8 @@ control (guard_verdict, tost_label), the primary flag (primary_flag) and Holm ov
 board FAIL claims (holm_board_fails).
 
 The error inflation f is given explicitly, as a campaign's value from campaigns.F_CAL, or read
-from the read root's tables/f_cal.json (f_inflate_for).
+from the read root's tables/f_cal.json when that file names the campaign of every cell
+aggregated (f_inflate_for).
 
 aggregate() computes the three tables in memory and writes nothing; cmd_agg reads the cell
 tables, calls it and writes the tables under the write root.
@@ -373,13 +374,17 @@ def holm_board_fails(agg):
 
 
 # ----------------------------------------------------------------------------- f_cal
-def f_inflate_for(explicit=None, campaign=None, precision="agg", read_root=None):
+def f_inflate_for(explicit=None, campaign=None, precision="agg", read_root=None,
+                  cell_campaigns=()):
     """The error inflation f (SPEC 4 errors, 3) and where it came from: (f, f_source).
 
     In order: `explicit` (--f-inflate); the campaign's value of campaigns.F_CAL (--f-cal),
     at `precision` "agg", the value the study's aggregation ran with (four decimals), or
     "full", the bootstrap's value (the round-1 recomputation's); else the f_cal of
-    <read root>/tables/f_cal.json; else 1.0, the uninflated half-split error, with a line."""
+    <read root>/tables/f_cal.json, which must name its campaign and be the one campaign of
+    `cell_campaigns` (the campaigns of the cells aggregated): a file that cannot be read, names
+    no campaign or another one raises ValueError; else 1.0, the uninflated half-split error,
+    with a line."""
     if explicit is not None:
         return float(explicit), "explicit"
     if campaign is not None:
@@ -391,13 +396,21 @@ def f_inflate_for(explicit=None, campaign=None, precision="agg", read_root=None)
         raise ValueError("f precision %r is neither 'agg' nor 'full'" % (precision,))
     p = os.path.join(read_root or campaigns.transfer_root(), "tables", "f_cal.json")
     if os.path.exists(p):
+        give = "give --f-cal <campaign> or --f-inflate F"
         try:
             with open(p) as fh:
                 j = json.load(fh)
-            return float(j["f_cal"]), "tables/f_cal.json (%s, ref=%s)" % (j.get("run"),
-                                                                          j.get("ref"))
-        except Exception:
-            pass
+            f = float(j["f_cal"])
+        except Exception as e:
+            raise ValueError("%s holds no f_cal (%s: %s): %s" % (p, type(e).__name__, e, give))
+        camp = j.get("campaign")
+        cells = ", ".join(sorted(set(cell_campaigns))) or "none"
+        if not camp:
+            raise ValueError("%s names no campaign, so its f cannot be checked against the "
+                             "cells' campaign (%s): %s" % (p, cells, give))
+        if set(cell_campaigns) != {camp}:
+            raise ValueError("%s is campaign %s, the cells %s: %s" % (p, camp, cells, give))
+        return f, "tables/f_cal.json (%s %s, ref=%s)" % (camp, j.get("run"), j.get("ref"))
     log("WARNING: no f given and no tables/f_cal.json in the read root; using f = 1.0 (the "
         "uninflated half-split error)")
     return 1.0, "default 1.0 (uncalibrated)"
@@ -592,8 +605,8 @@ def _in_read_root(path, read_root):
 
 def cmd_agg(a, root):
     """`agg`: aggregate the cell tables matched by --cells into <write root>/tables/ (or
-    --out, a relative one in the write root): delta_by_triple.csv, agg_by_cell.csv, calibration.csv, and with --tier0
-    tier0_calibration.csv and tier0_vs_tier2.csv."""
+    --out, a relative one in the write root): delta_by_triple.csv, agg_by_cell.csv,
+    calibration.csv, and with --tier0 tier0_calibration.csv and tier0_vs_tier2.csv."""
     read_root = campaigns.transfer_root()
     outdir = campaigns.output_path(a.out, root, "tables")
     files = sorted(sum([glob.glob(_in_read_root(x, read_root)) for x in a.cells], []))
@@ -601,9 +614,14 @@ def cmd_agg(a, root):
         sys.exit("agg: no cell CSVs matched")
     if a.f_precision != "agg" and a.f_cal is None:
         sys.exit("agg: --f-precision applies to --f-cal only")
-    f_inf, f_src = f_inflate_for(a.f_inflate, a.f_cal, a.f_precision, read_root)
+    cells = read_cells(files)
+    camps = cells["campaign"].dropna().astype(str).unique() if "campaign" in cells else ()
     try:
-        res = aggregate(read_cells(files), baseline=a.baseline, f_inflate=f_inf,
+        f_inf, f_src = f_inflate_for(a.f_inflate, a.f_cal, a.f_precision, read_root, camps)
+    except ValueError as e:
+        sys.exit("agg: %s" % e)
+    try:
+        res = aggregate(cells, baseline=a.baseline, f_inflate=f_inf,
                         f_source=f_src, nmin_eval=a.nmin_eval)
     except AggregationError as e:
         sys.exit(str(e))

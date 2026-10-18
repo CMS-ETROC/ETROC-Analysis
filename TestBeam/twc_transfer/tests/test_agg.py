@@ -219,7 +219,7 @@ def test_holm_runs_over_each_cells_board_fail_claims_only():
     assert list(out.fail_holm) == [1, 1, 0, 0, 1]
 
 
-def test_f_inflate_is_explicit_or_the_campaigns_four_decimal_value_or_f_cal_json(tmp_path):
+def test_f_inflate_is_explicit_or_the_campaigns_four_decimal_value_or_one(tmp_path):
     assert C.F_CAL["aug"][:2] == (0.8979, 0.8979111975615606)
     assert A.f_inflate_for(0.5, None) == (0.5, "explicit")
     assert A.f_inflate_for(None, "aug")[0] == 0.8979
@@ -229,16 +229,33 @@ def test_f_inflate_is_explicit_or_the_campaigns_four_decimal_value_or_f_cal_json
         A.f_inflate_for(None, "aug", "rounded")
     for c, (four, full, _) in C.F_CAL.items():
         assert four == round(full, 4), c
-    tables = tmp_path / "tables"
-    tables.mkdir()
+    (tmp_path / "tables").mkdir()
     assert A.f_inflate_for(None, None, read_root=str(tmp_path)) == (1.0, "default 1.0 (uncalibrated)")
-    (tables / "f_cal.json").write_text('{"f_cal": 0.8152579445510614, "run": "run26", "ref": "sub"}')
-    f, src = A.f_inflate_for(None, None, read_root=str(tmp_path))
-    assert f == 0.8152579445510614 and src == "tables/f_cal.json (run26, ref=sub)"
     a = cli.parse_command(["agg", "--cells", "x.csv", "--f-cal", "aug"])
     assert (a.f_cal, a.f_precision, a.f_inflate) == ("aug", "agg", None)
     with pytest.raises(ValueError, match="not allowed with"):
         cli.parse_command(["agg", "--cells", "x.csv", "--f-cal", "aug", "--f-inflate", "1"])
+
+
+def test_the_read_roots_f_cal_json_aggregates_the_cells_of_its_own_campaign_only(monkeypatch,
+                                                                                tmp_path):
+    T, out = _roots(monkeypatch, tmp_path)
+    _write_cell(T, toy_cell())                          # campaign jul
+    tables = os.path.join(T, "tables")
+    os.makedirs(tables)
+    blob = dict(f_cal=0.8152579445510614, run="run26", ref="sub")
+    for camp, why in ((None, "names no campaign"), ("desy", "is campaign desy, the cells jul")):
+        with open(os.path.join(tables, "f_cal.json"), "w") as fh:
+            json.dump(dict(blob, campaign=camp) if camp else blob, fh)
+        with pytest.raises(SystemExit, match=why + ".*--f-cal.*--f-inflate"):
+            cli.main(["agg", "--cells", "cells/*/*.csv"])
+        assert not os.path.exists(os.path.join(out, "tables", "agg_by_cell.csv"))
+    with open(os.path.join(tables, "f_cal.json"), "w") as fh:
+        json.dump(dict(blob, campaign="jul"), fh)
+    assert cli.main(["agg", "--cells", "cells/*/*.csv"]) == 0
+    cal = pd.read_csv(os.path.join(out, "tables", "calibration.csv"))
+    assert set(cal.f_inflate) == {0.8152579445510614}
+    assert set(cal.f_source) == {"tables/f_cal.json (jul run26, ref=sub)"}
 
 
 def test_agg_defaults_are_the_studys():
