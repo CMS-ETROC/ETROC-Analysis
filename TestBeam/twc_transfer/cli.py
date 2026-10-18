@@ -16,7 +16,9 @@
   axes    the axis tables from the aggregation tables (axes.py, SPEC.md 10)
           -> <write root>/results_r2/axis_<X>.csv, results_r3/axis_F{,_long}.csv and
           summary_F.md; --guardfix -> results_r3/guardfix/axis_<E,J,K>_gf.csv
-  jobs    a job list (jobs.py): with --dry-run, every command expanded and parsed
+  jobs    a job list (jobs.py): --dry-run prints every command expanded and parsed;
+          --write-dag DIR writes its condor DAG under DIR in the write root and submits
+          nothing; --check-inputs and --agg are the DAG's PREP and AGG nodes (SPEC.md 6a)
 
 Argument names, defaults and types are those of the study's own command line, so the
 commands of its job lists parse unchanged. `--out` overrides an output file name.
@@ -182,13 +184,30 @@ def build_parser(raising=False):
                    help="the output folder (default the write root): results_r2/, results_r3/")
     q.set_defaults(func=cmd_axes)
 
-    q = sub.add_parser("jobs", help="check a job list")
+    q = sub.add_parser("jobs", help="check a job list, or write its condor DAG (SPEC.md 6a)")
     q.add_argument("--list", required=True, dest="job_list",
                    help="a job list file, or the name of one in jobs/")
+    mq = q.add_mutually_exclusive_group(required=True)
+    mq.add_argument("--dry-run", dest="dry_run", action="store_true",
+                    help="print every command expanded and parse it; writes nothing")
+    mq.add_argument("--write-dag", dest="write_dag", default=None, metavar="DIR",
+                    help="write the DAG, its submit files, its wrapper and the expanded job "
+                         "table under DIR (in the write root); submits nothing")
+    mq.add_argument("--check-inputs", dest="check_inputs", action="store_true",
+                    help="list every input the commands name that does not exist (the DAG's "
+                         "PREP node)")
+    mq.add_argument("--agg", action="store_true",
+                    help="aggregate every group of the list at its campaign's f (the DAG's "
+                         "AGG node)")
     q.add_argument("--job", action="append", default=None,
-                   help="only this job id (repeatable)")
-    q.add_argument("--dry-run", dest="dry_run", action="store_true",
-                   help="print every command expanded and parse it (required)")
+                   help="with --dry-run: only this job id (repeatable)")
+    q.add_argument("--dag-name", dest="dag_name", default=None,
+                   help="the DAG's name (default transfer_<list name without cells_>)")
+    q.add_argument("--retry", type=int, default=1, help="DAGMan RETRY of every node")
+    q.add_argument("--maxjobs", type=int, default=12,
+                   help="the -maxjobs the DAG is written for (manifest and wall estimate)")
+    q.add_argument("--no-prep-node", dest="prep_node", action="store_false",
+                   help="leave the PREP node out (SMOKE -> the cell jobs -> AGG)")
     q.set_defaults(func=cmd_jobs)
     return p
 
@@ -310,13 +329,42 @@ def cmd_axes(a, root):
 
 def cmd_jobs(a, root):
     from . import jobs
-    if not a.dry_run:
-        raise SystemExit("twc_transfer jobs: only --dry-run is available")
-    njobs, failed = jobs.dry_run(jobs.list_path(a.job_list), campaigns.CAMPAIGNS,
-                                 campaigns.transfer_root(), _write_root(), parse_command,
-                                 only=a.job)
+    if a.job and not a.dry_run:
+        raise SystemExit("twc_transfer jobs: --job goes with --dry-run only")
+    path = jobs.list_path(a.job_list)
+    read_root, write_root = campaigns.transfer_root(), _write_root()
+    if a.dry_run:
+        njobs, failed = jobs.dry_run(path, campaigns.CAMPAIGNS, read_root, write_root,
+                                     parse_command, only=a.job)
+        if failed:
+            raise SystemExit("twc_transfer jobs: %d of %d commands failed"
+                             % (len(failed), njobs))
+        return
+    try:
+        if a.write_dag:
+            jobs.write_dag(path, a.write_dag, campaigns.CAMPAIGNS, read_root, write_root,
+                           parse_command, dag_name=a.dag_name, retry=a.retry,
+                           maxjobs=a.maxjobs, prep_node=a.prep_node)
+            return
+        expanded = jobs.expanded_jobs(path, campaigns.CAMPAIGNS, read_root, write_root,
+                                      parse_command)
+        if a.check_inputs:
+            _, missing = jobs.check_inputs(expanded, read_root)
+            if missing:
+                raise SystemExit("twc_transfer jobs: %d input(s) missing" % len(missing))
+            return
+        plan = jobs.agg_plan(expanded, write_root)
+    except ValueError as e:
+        raise SystemExit("twc_transfer jobs: %s" % e)
+
+    def run(argv):
+        b = build_parser().parse_args(argv)
+        b.func(b, write_root)
+
+    failed = jobs.run_agg(plan, run)
     if failed:
-        raise SystemExit("twc_transfer jobs: %d of %d commands failed" % (len(failed), njobs))
+        raise SystemExit("twc_transfer jobs: %d of %d aggregations failed: %s"
+                         % (len(failed), len(plan), ", ".join(failed)))
 
 
 def main(argv=None):

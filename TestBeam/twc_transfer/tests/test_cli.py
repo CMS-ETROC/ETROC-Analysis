@@ -61,8 +61,10 @@ def test_jobs_dry_run_expands_and_parses_and_writes_nothing(monkeypatch, tmp_pat
     assert "--bank %s/bank/coeffs_desy_r.parquet" % (tmp_path / "T") in text
     assert "toy.tsv: 2 jobs (0 smoke), 2 parsed, 0 failed" in text
     assert sorted(os.listdir(tmp_path)) == ["toy.tsv"]
-    with pytest.raises(SystemExit, match="only --dry-run"):
+    with pytest.raises(SystemExit):
         cli.main(["jobs", "--list", str(toy)])
+    assert "one of the arguments --dry-run --write-dag --check-inputs --agg is required" \
+        in capsys.readouterr().err
     toy.write_text(toy.read_text().replace("--cell a ", "--cell b "))
     with pytest.raises(SystemExit, match="1 of 2 commands failed"):
         cli.main(["jobs", "--list", str(toy), "--dry-run"])
