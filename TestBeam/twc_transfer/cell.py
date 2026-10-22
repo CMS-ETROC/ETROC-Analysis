@@ -9,14 +9,22 @@ one row per (triple, arm, pair or board) to the cell table, a CSV with the fixed
 CELL_COLUMNS. A run that stops can be started again with the same command: the triples already
 in the table are skipped.
 
+A source read from events can be subsampled (SPEC.md 3c): --src-cap draws it down to N events
+without replacement, seeded by --src-seed (0, the study's draw, by default), and the leave-pair-out
+guard with it; the targets are read as before. The coverage, lever and extrapolation family of a
+target then come from the full source (--src-range full, the default) or from the capped draw
+(--src-range capped, what the study's stage-3 ladder did); the table carries ENSEMBLE_COLUMNS
+after CELL_COLUMNS with both labels, the cap and the seed.
+
 What lives here:
 
   board identity      BoardIdentityError, the role map (--role-map) and its checks
-  sources             source_from_bank (--src-bank), source_coeffs_for (a refit from events),
+  sources             source_from_bank (--src-bank), source_coeffs_for (a refit from events,
+                      subsampled by source_sampling: --src-cap, --src-seed),
                       pooled_source / pooled_lpo_source (mode e), the in-run split (cmd_cell)
   one-board cells     _one_board_arm (protocols P3 and P4 of SPEC.md 3), _xfer_board_of
   source picking      _pick_sources (--src-k, --src-pick)
-  the cell            cmd_cell, _flush, CELL_COLUMNS
+  the cell            cmd_cell, _flush, CELL_COLUMNS, ENSEMBLE_COLUMNS (cell_columns)
 
 The placebo of a source refitted from events (source_coeffs_for) and of the in-run split
 (cmd_cell) is seeded from Python's hash() of a tuple of strings, which is salted per process
@@ -81,6 +89,45 @@ CELL_COLUMNS = [
     # coverage / extrapolation
     "cov_C", "hist_O", "lever_X", "lever_X_all", "extrap",
 ]
+
+# The overlap columns of SPEC.md 5.3, which a subsampled source (SPEC.md 3c) writes twice more.
+OVERLAP_KEYS = ("cov_C", "hist_O", "lever_X", "lever_X_all", "extrap")
+# Written after CELL_COLUMNS by a cell whose source is subsampled (--src-cap or --src-seed),
+# and only by one: a table of a cell without them keeps the study's fifty columns. The
+# overlap columns of CELL_COLUMNS then follow --src-range; these keep both labels.
+ENSEMBLE_COLUMNS = [
+    "src_cap",          # the source's event cap: --src-cap, or --cap when it is 0
+    "src_seed",         # the seed of the source's draw without replacement
+    "src_range",        # full | capped: the label cov_C .. extrap of CELL_COLUMNS carry
+    "n_src_full",       # events of the full source the full-range label is built from
+] + ["%s_full" % k for k in OVERLAP_KEYS] + ["%s_capped" % k for k in OVERLAP_KEYS]
+
+
+def subsampled(a):
+    """Is the source of this cell a seeded subsample (--src-cap > 0 or --src-seed given)?"""
+    return bool(int(getattr(a, "src_cap", 0) or 0)) or getattr(a, "src_seed", None) is not None
+
+
+def cell_columns(a):
+    """The columns of this cell's table: CELL_COLUMNS, and ENSEMBLE_COLUMNS after them when
+    its source is subsampled."""
+    return CELL_COLUMNS + ENSEMBLE_COLUMNS if subsampled(a) else CELL_COLUMNS
+
+
+def source_sampling(a):
+    """(cap, seed, full_cap) of a cell's source read (SPEC.md 3c).
+
+    cap       the source's event cap: --src-cap, or --cap when it is 0 (0 = no cap)
+    seed      the seed of its draw without replacement: --src-seed, else 0, the study's draw
+    full_cap  the cap of the full source, the sample the full-range label is built from:
+              the larger of --cap and --src-cap (no cap when --cap is 0), read with seed 0,
+              which is the source of the same cell without --src-cap and --src-seed
+    """
+    cap = int(getattr(a, "src_cap", 0) or 0) or a.cap
+    seed = getattr(a, "src_seed", None)
+    seed = 0 if seed is None else int(seed)
+    full_cap = 0 if not a.cap else max(int(a.cap), cap)
+    return cap, seed, full_cap
 
 
 # ------------------------------------------------------------------ source lookup
@@ -501,7 +548,10 @@ def source_coeffs_for(tri, a, bank=None, src_name=None):
 
     Returns (coeffs, info) where info carries the source identity, n_fit, the
     per-board source stats needed by the overlap metrics, the placebo source and
-    the source-side LPO map; or (None, reason) when the source is missing.
+    the source-side LPO map, and for the full-range label of SPEC 3c the full source's
+    stats and polynomial (`full_stats`, `full_coeffs`, `n_src_full`; the capped ones
+    themselves when the source is not subsampled); or (None, reason) when the source is
+    missing.
     """
     mode = a.mode
     src_campaign = a.src_campaign or a.campaign
@@ -519,9 +569,11 @@ def source_coeffs_for(tri, a, bank=None, src_name=None):
     # read, and at that value every candidate source track of a DESY / March run is
     # saturated: `n_fit_src = 6000` for the top pixel and for the runner-up alike, so
     # "the most populous pixel" is a deterministic tie-break and not, at this cap, a
-    # better-determined polynomial. `--src-cap` raises the source read alone (0 = follow
-    # --cap), which changes n_fit_src and nothing about any target's evaluation set.
-    s_cap = int(getattr(a, "src_cap", 0) or 0) or a.cap
+    # better-determined polynomial. `--src-cap` sets the source read alone (0 = follow
+    # --cap), which changes n_fit_src and nothing about any target's evaluation set; the
+    # draw down to it is seeded by `--src-seed` (0, the study's draw, by default), and so is
+    # the leave-pair-out guard's (SPEC 3c).
+    s_cap, s_seed, full_cap = source_sampling(a)
     info = dict(src_campaign=src_campaign, src_run=src_run, src_combo=src_combo)
 
     if (getattr(a, "role_map", None) and mode in ("a", "b", "f")
@@ -570,7 +622,7 @@ def source_coeffs_for(tri, a, bank=None, src_name=None):
         p = os.path.join(run_dir(src_campaign, src_run, src_root), src_combo, "time", name + ".parquet")
         if not os.path.exists(p):
             return None, "no matching source triple"
-        src = Triple.from_file(p, src_campaign, src_run, src_combo, cap=s_cap,
+        src = Triple.from_file(p, src_campaign, src_run, src_combo, cap=s_cap, seed=s_seed,
                                neighbor=a.neighbor, neighbor_logic=a.neighbor_logic)
         if src.n < a.nmin_src:
             return None, "source triple too small (n=%d)" % src.n
@@ -597,7 +649,7 @@ def source_coeffs_for(tri, a, bank=None, src_name=None):
                          name + ".parquet")
         if not os.path.exists(p):
             return None, "source triple file missing"
-        src = Triple.from_file(p, src_campaign, src_run, src_combo, cap=s_cap,
+        src = Triple.from_file(p, src_campaign, src_run, src_combo, cap=s_cap, seed=s_seed,
                                neighbor=a.neighbor, neighbor_logic=a.neighbor_logic)
     elif mode == "e":
         return None, "pooled mode handled by the caller"
@@ -615,6 +667,16 @@ def source_coeffs_for(tri, a, bank=None, src_name=None):
         s["cal_mean"] = src.cal.get(r, np.nan)
     src_pix = dict(src.pix)
     src_boards = dict(src.boards)
+
+    # SPEC 3c: the full source, from which the full-range label (coverage, lever, family) of
+    # a subsampled source is built, so that the label of a target does not move with the cap
+    # or the seed. It is this file read as the same cell without --src-cap and --src-seed
+    # reads it (full_cap, seed 0), its own TOT summary and its own polynomial; when that is
+    # the sample already read, nothing is read twice.
+    full = None
+    if (s_cap, s_seed) != (full_cap, 0):
+        full = Triple.from_file(p, src_campaign, src_run, src_combo, cap=full_cap, seed=0,
+                                neighbor=a.neighbor, neighbor_logic=a.neighbor_logic)
 
     rm_active = bool(getattr(a, "role_map", None)) and mode in ("a", "b", "c", "cb", "d", "f")
     # Are the per-event content keys comparable? Decided by the BOARDS alone, never by
@@ -659,7 +721,7 @@ def source_coeffs_for(tri, a, bank=None, src_name=None):
             # itself was read through, so the coefficients and this guard can never come
             # from two different trees.
             got = lpo_events(src, drop, cap=s_cap, root=src_root, neighbor=a.neighbor,
-                             neighbor_logic=a.neighbor_logic)
+                             neighbor_logic=a.neighbor_logic, seed=s_seed)
             if got is not None:
                 ltot, ltoa, lfile, lroles, sib, nl = got
                 c = solve(ltot, ltoa, lroles)
@@ -712,6 +774,21 @@ def source_coeffs_for(tri, a, bank=None, src_name=None):
     if keys_ok and set(src.roles) >= set(tri.roles):
         ent = src.key_entry(None, tuple(sorted(tri.roles)))
         src_keys = {0: [ent], 1: [ent]}
+    # the full source's label pieces (SPEC 3c), keyed as `stats` and `coeffs` are: by TARGET
+    # role under a --role-map, through the same permutation. They label targets only; no
+    # target is corrected with them.
+    if full is None:
+        full_stats, full_coeffs, n_full = stats, coeffs, src.n
+    else:
+        full_coeffs = solve(full.tot, full.toa, full.roles)
+        full_stats = {r: tot_stats(full.tot[r]) for r in full.roles}
+        n_full = full.n
+        mp_f = info.get("src_role_map")
+        if mp_f:
+            full_coeffs = {t: full_coeffs[s_] for t, s_ in mp_f.items() if s_ in full_coeffs}
+            full_stats = {t: full_stats[s_] for t, s_ in mp_f.items() if s_ in full_stats}
+    info.update(full_stats=full_stats, full_coeffs=full_coeffs, n_src_full=n_full,
+                src_cap=s_cap, src_seed=s_seed)
     info.update(src_triple=src.name, src_key=src.key, n_fit=src.n, self_transfer=self_transfer,
                 stats=stats, placebo=placebo, lpo=lpo, src_obj=src, src_pix=src_pix,
                 src_boards=src_boards, src_keys=src_keys, lpo_keys=lpo_keys,
@@ -907,6 +984,40 @@ def _rows_for_arm(arm, ev, tri, base, meta, ov, per_board=None):
                          lever_X=ovget(r, "lever_X"), lever_X_all=ovget(r, "lever_X_all"),
                          extrap=ovget(r, "extrap")))
     return rows
+
+
+def _overlap_by_board(stats, coeffs, tri, xb, sr):
+    """SPEC 5.3's overlap metrics per target board: board `xb` against the support and the
+    polynomial of source board `sr` for a one-board transfer, else every board against its
+    own source board. {} when there is no source summary."""
+    ov = {}
+    if not stats:
+        return ov
+    if xb is not None:
+        if sr in stats and sr in (coeffs or {}):
+            ov[xb] = overlap_metrics(stats[sr], tri.tot[xb], coeffs[sr])
+    else:
+        for r in tri.roles:
+            if r in stats and r in (coeffs or {}):
+                ov[r] = overlap_metrics(stats[r], tri.tot[r], coeffs[r])
+    return ov
+
+
+def _ensemble_fields(rows, a, info, arm, ev, tri, base, meta, ov_full, ov_cap):
+    """Fill ENSEMBLE_COLUMNS on the rows of one arm (SPEC 3c), in place: the source's cap, seed
+    and range rule on every row, and both overlap labels, reduced over a pair's two boards as
+    _rows_for_arm reduces the label of CELL_COLUMNS. `info` is None for a self arm, whose rows
+    carry no source and so no n_src_full."""
+    s_cap, s_seed, _ = source_sampling(a)
+    labels = {}
+    for tag, ov in (("full", ov_full), ("capped", ov_cap)):
+        labels[tag] = _rows_for_arm(arm, ev, tri, base, meta, ov)
+    for i, row in enumerate(rows):
+        row.update(src_cap=s_cap, src_seed=s_seed, src_range=getattr(a, "src_range", "full"),
+                   n_src_full=(info or {}).get("n_src_full", np.nan))
+        for tag, alt in labels.items():
+            for k in OVERLAP_KEYS:
+                row["%s_%s" % (k, tag)] = alt[i][k]
 
 
 def _merge_keys(*ks):
@@ -1251,6 +1362,21 @@ def cmd_cell(a, root):
     # transfer. Validated before a single event is read; mode cb refuses to exist without
     # its declaration.
     xb, sr = _xfer_board_of(a)
+    # SPEC 3c: --src-cap and --src-seed subsample a source that is READ FROM EVENTS. A
+    # bank-backed source reads none (its coefficients were fitted when the bank was built),
+    # mode e pools the target's own board under --pool-cap and mode inrun splits the target
+    # itself, so either flag there would be a silent no-op: refused, like the checks below.
+    if subsampled(a):
+        if int(a.src_cap or 0) < 0 or (a.src_seed is not None and int(a.src_seed) < 0):
+            sys.exit("cell %s: --src-cap and --src-seed take values >= 0 (got %r, %r)"
+                     % (a.cell, a.src_cap, a.src_seed))
+        if getattr(a, "src_bank", None) or a.mode in ("e", "inrun"):
+            sys.exit("cell %s: --src-cap / --src-seed subsample a source read from its track "
+                     "file; %s reads no such source, so the flags would change nothing.  "
+                     "Drop them, or refit the source from events (no --src-bank) in mode "
+                     "a, b, c, cb, d or f."
+                     % (a.cell, "--src-bank" if getattr(a, "src_bank", None)
+                        else "mode %s" % a.mode))
     # --src-parity-contrast is a SAME-RUN measurement: the two arms fit the source on the
     # file parity that matches the evaluation fold and on the complementary one, and their
     # difference is the inter-board common mode the two SHARE because they are the same
@@ -1298,18 +1424,20 @@ def cmd_cell(a, root):
             "verdict against self_cf compares a 2-effective-dof baseline, against "
             "xfer a 0-dof one." % (ORDER + 1, ORDER))
     dest = campaigns.output_path(a.out, root, "cells", "%s.csv" % a.cell)
+    columns = cell_columns(a)
     done = set()
     if os.path.exists(dest) and not a.overwrite:
         # Whether appending would mis-align the columns is knowable from the header alone,
         # before a single event is read; `_flush` checks it again before every append.
         with open(dest) as fh:
             head0 = fh.readline().strip().split(",")
-        if head0 != CELL_COLUMNS:
-            sys.exit("cell %s: %s has a different schema (%d cols) from CELL_COLUMNS "
-                     "(%d), so appending to it would mis-align every column.  Re-run "
-                     "with --overwrite to regenerate it, or point --out at a new file.  "
-                     "(Checked at open time - nothing has been computed yet.)"
-                     % (a.cell, dest, len(head0), len(CELL_COLUMNS)))
+        if head0 != columns:
+            sys.exit("cell %s: %s has a different schema (%d cols) from this cell's (%d: "
+                     "CELL_COLUMNS%s), so appending to it would mis-align every column.  "
+                     "Re-run with --overwrite to regenerate it, or point --out at a new "
+                     "file.  (Checked at open time - nothing has been computed yet.)"
+                     % (a.cell, dest, len(head0), len(columns),
+                        " + ENSEMBLE_COLUMNS" if columns is not CELL_COLUMNS else ""))
         old = pd.read_csv(dest)
         if "tgt_triple" not in old.columns:
             sys.exit("cell %s: %s is not a cell table - it has no `tgt_triple` column, "
@@ -1391,6 +1519,14 @@ def cmd_cell(a, root):
         targets = [_triple_name_of(p_) for p_ in files]
         print("  mode %s; target %s %s %s; source: %s"
               % (a.mode, a.campaign, a.run, a.combo, _source_text(a)))
+        if subsampled(a):
+            s_cap, s_seed, full_cap = source_sampling(a)
+            print("  source subsampled: %s events drawn with seed %d; coverage, lever and "
+                  "family from the %s (--src-range %s); %d more columns (ENSEMBLE_COLUMNS)"
+                  % (s_cap or "all", s_seed,
+                     "full source (%s events, seed 0)" % (full_cap or "all")
+                     if a.src_range == "full" else "capped draw", a.src_range,
+                     len(ENSEMBLE_COLUMNS)))
         print("  targets (%d): %s" % (len(targets), ", ".join(targets)))
         if _p3_self_skip:
             print("  excluded as P3 self-transfer targets: %s"
@@ -1866,20 +2002,19 @@ def cmd_cell(a, root):
                     % (tri.name, "in-sample: " + ", ".join(ins) if ins
                        else "no arm is in-sample"))
 
-            ov = {}
-            if src_stats:
-                if xb is not None:
-                    # the coverage / overlap / extrapolation triad of SPEC 5.3 compares the
-                    # polynomial's own TOT support with the support it is evaluated over.
-                    # For a one-board transfer that is source board `sr`'s support against
-                    # TARGET board `xb`'s TOT, across boards in a cb cell, which is exactly
-                    # where the EXTRAP flag has to be able to fire.
-                    if sr in src_stats and sr in (xfer_c or {}):
-                        ov[xb] = overlap_metrics(src_stats[sr], tri.tot[xb], xfer_c[sr])
-                else:
-                    for r in tri.roles:
-                        if r in src_stats and r in (xfer_c or {}):
-                            ov[r] = overlap_metrics(src_stats[r], tri.tot[r], xfer_c[r])
+            # the coverage / overlap / extrapolation triad of SPEC 5.3 compares the
+            # polynomial's own TOT support with the support it is evaluated over. For a
+            # one-board transfer that is source board `sr`'s support against TARGET board
+            # `xb`'s TOT, across boards in a cb cell, which is exactly where the EXTRAP flag
+            # has to be able to fire. Under a subsampled source (SPEC 3c) it is taken twice:
+            # from the capped draw (its own support and polynomial: `ov_cap`) and from the
+            # full source (`ov_full`); --src-range says which one the rows' cov_C .. extrap
+            # carry, and so which family the aggregation puts the target in.
+            ov_cap = _overlap_by_board(src_stats, xfer_c, tri, xb, sr)
+            ov_full = ov_cap
+            if info.get("full_stats") is not None and info["full_stats"] is not src_stats:
+                ov_full = _overlap_by_board(info["full_stats"], info["full_coeffs"], tri, xb, sr)
+            ov = ov_full if getattr(a, "src_range", "full") == "full" else ov_cap
 
             # per-board source bookkeeping
             spix, sboard = info.get("src_pix") or {}, info.get("src_boards") or {}
@@ -1976,15 +2111,20 @@ def cmd_cell(a, root):
                               # are blank rather than inheriting the cell's source.
                               xfer_board="", src_role="", src_pick="", src_pix_rc="",
                               src_pix_ntrk=np.nan, src_pix_pop=np.nan, lpo_pairs=np.nan)
-                rows += _rows_for_arm(arm, ev, tri, maps["self_cf"], m2,
-                                      ov if arm.startswith("xfer") else {},
-                                      per_board if arm.startswith("xfer") else None)
+                is_x = arm.startswith("xfer")
+                new_rows = _rows_for_arm(arm, ev, tri, maps["self_cf"], m2, ov if is_x else {},
+                                         per_board if is_x else None)
+                if columns is not CELL_COLUMNS:
+                    _ensemble_fields(new_rows, a, info if not (arm in self_arms and src_i == 0)
+                                     else None, arm, ev, tri, maps["self_cf"], m2,
+                                     ov_full if is_x else {}, ov_cap if is_x else {})
+                rows += new_rows
         n_done += 1
         log("%s [%d/%d] n=%d src=%d  %.0fs  (done %d)"
             % (tri.name, i + 1, len(files), tri.n, len(src_specs),
                time.time() - t0, n_done))
         if rows and (i + 1) % max(a.flush, 1) == 0:
-            _flush(rows, dest)
+            _flush(rows, dest, columns)
             rows = []
         # ---- the two job-sizing caps. `--ntrip all` makes the target list the whole
         # board, so the cap that bounds a job is a count of triples ACTUALLY measured (the
@@ -1998,7 +2138,7 @@ def cmd_cell(a, root):
             log("time budget reached, stopping (resumable)")
             break
     if rows:
-        _flush(rows, dest)
+        _flush(rows, dest, columns)
     for name, why in skipped:
         log("skipped %s: %s" % (name, why))
     if n_p3_skipped:
@@ -2033,31 +2173,33 @@ def cmd_cell(a, root):
     print("cell %s -> %s  [%.0fs]" % (a.cell, dest, time.time() - t0))
 
 
-def _flush(rows, dest):
+def _flush(rows, dest, columns=CELL_COLUMNS):
     """Append with a FIXED column list and a header check.
 
     An append that wrote a header only when the file did not exist would lay new-order
     rows under an old header after any change of the columns and mis-align every column
-    from there on. The schema is CELL_COLUMNS, and a mismatch is a hard error that names
-    the fix rather than a silent corruption.
+    from there on. The schema is CELL_COLUMNS (with ENSEMBLE_COLUMNS after them for a
+    subsampled source, cell_columns), and a mismatch is a hard error that names the fix
+    rather than a silent corruption.
     """
+    label = "CELL_COLUMNS" if columns is CELL_COLUMNS else "CELL_COLUMNS + ENSEMBLE_COLUMNS"
     df = pd.DataFrame(rows)
-    for c in CELL_COLUMNS:
+    for c in columns:
         if c not in df.columns:
             df[c] = np.nan
-    extra = [c for c in df.columns if c not in CELL_COLUMNS]
+    extra = [c for c in df.columns if c not in columns]
     if extra:
-        raise SystemExit("_flush: rows carry columns outside CELL_COLUMNS: %s "
-                         "(add them to the schema)" % extra)
-    df = df[CELL_COLUMNS]
+        raise SystemExit("_flush: rows carry columns outside %s: %s "
+                         "(add them to the schema)" % (label, extra))
+    df = df[columns]
     if os.path.exists(dest):
         with open(dest) as fh:
             head = fh.readline().strip().split(",")
-        if head != CELL_COLUMNS:
+        if head != list(columns):
             raise SystemExit(
-                "_flush: %s has a different schema (%d cols) from CELL_COLUMNS (%d). "
+                "_flush: %s has a different schema (%d cols) from %s (%d). "
                 "Appending would mis-align every column - re-run the cell with "
-                "--overwrite to regenerate it." % (dest, len(head), len(CELL_COLUMNS)))
+                "--overwrite to regenerate it." % (dest, len(head), label, len(columns)))
         df.to_csv(dest, mode="a", header=False, index=False)
     else:
         df.to_csv(dest, mode="w", header=True, index=False)

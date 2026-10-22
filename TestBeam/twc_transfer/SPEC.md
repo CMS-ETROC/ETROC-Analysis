@@ -150,8 +150,9 @@ In modes `a`, `b` and `f` the source is read from the source run's track file of
 takes the largest track files whose pixels are new on every board, `pixpop` ranks the pixels of
 the board the polynomial is fitted on (`--src-role`, else `--xfer-board`) by population and
 takes each one's largest track, `auto` is `pixpop` when a board is named and `trkpop`
-otherwise; every target is evaluated against every source. `--src-cap` raises the source's own
-event cap (0 follows `--cap`).
+otherwise; every target is evaluated against every source. `--src-cap` sets the source's own
+event cap (0 follows `--cap`), drawn with `--src-seed`, and `--src-range` says which source
+sample labels the targets (section 3c).
 
 Mode `e` (`cell.pooled_source`) assembles the pool one board at a time: for board r every pool
 triple whose pixel on r is the target's is dropped (`--pool-lopo-scope triple` drops only the
@@ -217,6 +218,51 @@ pair (`xb`, y) needs a source solve that excluded y, `lpo[y][sr]`; for y = `sr` 
 so P4 guards one of `xb`'s two pairs and P3 both. The number of guarded pairs is written as
 `lpo_pairs` (under `--lpo-fallback own` also for an `all3` cell, counting the guard entries
 filled, up to 6).
+
+### 3c. The source-count ensemble
+
+How many source events a transferred correction needs is read from many draws of the source
+per event count, not from one: the penalty of one draw at N events carries that draw's fit
+noise, so the shape of a ladder of single draws says nothing about where it stops falling.
+
+- **The draw.** `--src-cap N` caps a source read from its track file at N events, after the
+  cut and the dropna, by a draw without replacement (`events.load_events`) seeded by
+  `--src-seed S` (0 when not given: the draw the study's ladder made). The leave-pair-out
+  source events of the guard are drawn with the same cap and seed. `n_fit_src` is the number
+  drawn, N or the file's count when it holds fewer. In modes a, b and f the source floor
+  `--nmin-src` is checked on the draw (modes c, d and cb have none), so `ensemble` refuses a
+  template of those modes whose floor exceeds its smallest rung. Nothing about a target changes: its triples,
+  its events and its folds are those of the same cell without the two flags, in every member.
+- **The full source.** The source of the same cell without `--src-cap` and `--src-seed`: the
+  file read at the larger of `--cap` and `--src-cap` (no cap when `--cap` is 0) with seed 0.
+  It is read once per source (not at all when it is the sample already read), and serves only
+  to label targets; no target is corrected with it.
+- **The range rule.** With `--src-range full` (the default) a target's coverage, overlap, lever
+  and family (section 5.3: `cov_C`, `hist_O`, `lever_X`, `lever_X_all`, `extrap`) are those of
+  the full source: its [q0.5, q99.5] and its polynomial, so a target sits in the same family at
+  every cap and seed, the family the uncapped cell gives it. With `--src-range capped` they are
+  the draw's own, its [q0.5, q99.5] and its polynomial: the study's stage-3 ladder, whose
+  family moved with the cap (at 100 events every target read as extrapolating). The
+  aggregation (section 8) takes the family from `extrap` as always.
+- **The table.** A cell run with `--src-cap` or `--src-seed` writes `cell.ENSEMBLE_COLUMNS`
+  after the fifty of `cell.CELL_COLUMNS`: `src_cap` (the cap, `--cap` when `--src-cap` is 0),
+  `src_seed`, `src_range` and `n_src_full` (the full source's events; blank on a self arm), then
+  the five overlap columns twice, `<col>_full` and `<col>_capped`, reduced over a pair's two
+  boards as the five of `CELL_COLUMNS` are. At the rung `all` with seed 0 the two labels are
+  equal. A cell without either flag writes the fifty columns, as the study's did.
+- **Refused.** Either flag with `--src-bank` (a bank row reads no events: its coefficients were
+  fitted when the bank was built), in mode `e` (its pool has `--pool-cap`) or in mode `inrun`
+  (the source is half of the target), and a negative cap or seed.
+- **The grid.** `ensemble --list LIST --template JOB` (`ensemble.py`) turns one cell row of a job
+  list into one cell per (rung, seed): `--rungs` (default 100, 200, 400, 800, 1600, 3200, all),
+  seeds 0 to `--seeds` - 1 (default 20) at every capped rung and seed 0 alone at `all`. The
+  member's cell id is `<stem>_n<N>_s<SS>` (`<stem>_nall_s00` at `all`; the stem is the
+  template's cell id without its rung tag), its output `${TT_OUT}/cells/<id>/<id>.csv`, its
+  group the template's with `ens` after the first part (`G_desy` -> `Gens_desy`), and every
+  other token of its command the template's. With one smoke row (three targets at the smallest
+  rung, seed 1) the rows are written as a job list in the write root, which `jobs --write-dag`
+  (or `ensemble --write-dag DIR`) turns into a DAG (section 6a); its AGG node aggregates each
+  member as a cell of its own, so every (N, seed) has its own random-effects aggregate.
 
 ## 4. Estimator and errors
 
@@ -435,9 +481,14 @@ unchanged.
     jobs   --list LIST (--dry-run [--job ID ...] | --check-inputs | --agg
                       | --write-dag DIR [--dag-name N] [--retry 1] [--maxjobs 12]
                         [--no-prep-node])                           (section 6a)
+    ensemble --list LIST --template JOB [--rungs 100,200,400,800,1600,3200,all] [--seeds 20]
+           [--src-range full|capped] [--stem S] [--group G] [--est-min M] [--out FILE]
+           [--write-dag DIR [--dag-name N] [--retry 1] [--maxjobs 12]]
+           -> ensemble/cells_<stem>_ensemble.tsv                     (section 3c)
     cell   --cell ID --mode a|b|c|cb|d|e|f|inrun --campaign C --run R --combo X [--root DIR]
            [--src-campaign C] [--src-run R] [--src-combo X] [--src-root DIR] [--src-triple T]
            [--src-bank FILE] [--src-k 5] [--src-pick auto|pixpop|trkpop] [--src-cap 0]
+           [--src-seed S] [--src-range full|capped]
            [--role-map T:S,...] [--xfer-board B] [--src-role B] [--split block|parity]
            [--pool-ntrip 40] [--pool-cap 1500] [--pool-lopo-scope board|triple]
            [--pool-lpo-ntrip 6] [--arms core|ext] [--lpo] [--lpo-fallback sibling|own]
@@ -597,7 +648,8 @@ submits nothing. A job list in, a DAG out; the layout is the study's.
   the protocol columns (`xfer_board`, `src_role`, `src_pick`, `src_pix_rc`, `src_pix_ntrk`,
   `src_pix_pop`, `lpo_pairs`), the overlap metrics on transfer arms (`cov_C`, `hist_O`,
   `lever_X`, `lever_X_all`, `extrap`), `rho`, and `ts`, the time the target's rows were made.
-  There is no `git_sha` column.
+  There is no `git_sha` column. A cell with a subsampled source adds the fourteen columns of
+  `cell.ENSEMBLE_COLUMNS` after these (section 3c).
 - **Resume, keyed on `tgt_triple`.** Rows are appended after every `--flush` target triples
   (default 2) and at the end, with the fixed column list. A table that exists is resumed unless
   `--overwrite` is given: its header must be `CELL_COLUMNS` (otherwise the cell stops before

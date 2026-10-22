@@ -39,7 +39,7 @@ import numpy as np
 import pandas as pd
 
 from . import campaigns
-from .cell import CELL_COLUMNS
+from .cell import CELL_COLUMNS, ENSEMBLE_COLUMNS
 from .naming import log
 from .stats import (holm, kcal_from_cells, margin_for, p_nonequiv, random_effects,
                     source_random_effect, tost)
@@ -80,7 +80,10 @@ def read_cells(files):
     """The cell tables in `files`, stacked; every column of CELL_COLUMNS present.
 
     A file without arm, kind, name and value is skipped with a line; a table with another
-    column set is aggregated on the shared columns, the missing ones NaN. The side-car
+    column set is aggregated on the shared columns, the missing ones NaN. The table of a cell
+    with a subsampled source (CELL_COLUMNS + ENSEMBLE_COLUMNS, SPEC.md 3c) is a cell table
+    like any other: its extra columns travel into delta_by_triple.csv, and its family is the
+    one its cov_C .. extrap carry (--src-range of the cell). The side-car
     <table without .csv>.lpo_shape.json of a cell run with --lpo-fallback own is merged in
     memory as the column lpo_shape (one JSON text per tgt_triple, NaN for a triple it does not
     name); it is not a cell-table column."""
@@ -91,7 +94,7 @@ def read_cells(files):
         if miss:
             log("agg: skipping %s (not a cell table: missing %s)" % (os.path.basename(f), miss))
             continue
-        if list(t.columns) != CELL_COLUMNS:
+        if list(t.columns) not in (CELL_COLUMNS, CELL_COLUMNS + ENSEMBLE_COLUMNS):
             log("agg: %s has another cell schema (%d columns, not the %d of CELL_COLUMNS); "
                 "aggregating it on the shared columns only"
                 % (os.path.basename(f), len(t.columns), len(CELL_COLUMNS)))

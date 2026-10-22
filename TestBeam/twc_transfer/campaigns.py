@@ -115,7 +115,8 @@ WAVES = (
      ("univ_axis_r2.csv", "univ_cells.csv")),
     ("stage3", "stage 3", "cells_stage3.tsv", "698f72f9", True,
      "reproduces them up to the cross-node tolerance (ks_d, ks_p within 3.3e-14; one triple "
-     "per cell in modes c, d, e and xfer-lin compared)",
+     "per cell in modes c, d, e and xfer-lin compared); the seven rows that cap their source "
+     "(SMOKE and the G cells) with --src-range capped, on their first 50 columns (SPEC 3c)",
      "the groups of cells_stage3.tsv: A8 and A9, F, G",
      "reproduces them (all 8 tags compared)",
      ("univ_axis_F_long.csv", "univ_axis_F_wide.csv", "univ_cells.csv")),

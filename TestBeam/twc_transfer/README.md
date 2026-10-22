@@ -72,6 +72,7 @@ the event cut and the width are the pipeline's own (`condor_at_lxplus/core/twc_s
 | `axes` | the axis tables: `merge_triples`, `axis_table`, `wide_table`, `overlay` (the guardfix overlay), `f_cell_table`, `build`, `cmd_axes`, `AXIS_COLUMNS` |
 | `cli`, `__main__` | the command line, `python -m twc_transfer` (below) |
 | `jobs` | the job lists: reader, root expansion, `--dry-run`, and the condor driver (`write_dag`, `check_inputs`, `agg_plan`); the study's seven lists are in `jobs/` |
+| `ensemble` | the source-count ensemble: one template cell row made into the job list of a rung x seed grid of source caps (`ensemble_jobs`, `member_command`, `cmd_ensemble`) |
 
 The package re-exports nothing; import the modules. `etroc_plots` never imports it.
 
@@ -162,7 +163,7 @@ column.
 What refuses to run, and why:
 
 - A writing subcommand (`index`, `bank`/`fit`, `tier0`, `cell`/`transfer`, `agg`, `master`,
-  `axes`) without `ETROC_TWC_OUT`: there is no default output folder, so nothing lands in the
+  `axes`, `ensemble`) without `ETROC_TWC_OUT`: there is no default output folder, so nothing lands in the
   study's own tree by accident.
 - `ETROC_TWC_OUT` that is, or lies inside, the read root (`ETROC_TWC_TRANSFER_ROOT`), one of
   the study's output trees (`campaigns.JOB_LISTS`, the seeded rerun's included), a campaign's
@@ -177,7 +178,10 @@ What refuses to run, and why:
   is not the target's board without a `--role-map`, `--role-map` in modes e and inrun, mode cb
   without both `--src-role` and `--xfer-board`, `--xfer-lin` on a one-board cell or without
   `--arms ext`, `--src-parity-contrast` with a source in another run.
-- Resuming a cell table whose columns are not `cell.CELL_COLUMNS`.
+- `--src-cap` or `--src-seed` where the cell draws no source events: with `--src-bank`, in mode
+  `e` or in mode `inrun` (Source-count ensemble, below); a negative cap or seed.
+- Resuming a cell table whose columns are not those the cell writes: `cell.CELL_COLUMNS`, and
+  `cell.ENSEMBLE_COLUMNS` after them when the source is subsampled.
 - An aggregation whose k_cal pool of a one-board pair holds a row identical to the baseline
   (SPEC.md 8, rule 7): it would pull the error scale down; nothing is written.
 - In the round-1 chain, an aggregation table that is not one of the seven of round 1
@@ -188,6 +192,9 @@ What refuses to run, and why:
   one that holds the DAG already, on a list without exactly one smoke row, with a job id named
   SMOKE, PREP or AGG on another row, or with a group that names no campaign (its cells would be
   aggregated with another campaign's f).
+- `ensemble` on a template that is not a cell row or is a chunk row (`--chunk`), in mode a, b or
+  f with a source floor (`--nmin-src`) above its smallest rung (the floor is checked on the
+  draw), or into a job list that exists already.
 
 `python -m twc_transfer` pins the thread pools to one thread and, if `PYTHONHASHSEED` is not
 0, restarts itself once with `PYTHONHASHSEED=0` and says so: the placebo of a cell whose source
@@ -331,6 +338,52 @@ the aggregation plan) where the study ran `prep.sh` (bootstraps and banks, workd
 and `agg_guardfix.sh`, so PREP is microcentury with 2000 MB. The wrapper also checks the
 package's sha unconditionally, where the study's skipped the check when no sha was given.
 
+## Source-count ensemble
+
+How many source events a transferred correction needs is read from many draws of the source at
+each event count. Stage 3 drew the source once per count (the G cells of `cells_stage3.tsv`,
+seed 0 at every rung), so its ladder shows one draw's noise, and its families moved with the cap
+because each target's coverage was taken from the capped draw. Three cell options fix that
+(SPEC.md 3c):
+
+- `--src-cap N` draws N source events without replacement, after the cut, as before;
+- `--src-seed S` seeds that draw (0 when not given, the draw stage 3 made); the leave-pair-out
+  source events are drawn with the same cap and seed;
+- `--src-range full` (the default) takes every target's coverage, overlap, lever and family
+  from the full source, the source the same cell reads without the two options, so a target
+  is in the same family at every cap and seed; `--src-range capped` takes them from the draw,
+  as stage 3 did.
+
+A cell with either option writes fourteen columns after the fifty of `cell.CELL_COLUMNS`
+(`cell.ENSEMBLE_COLUMNS`): the cap, the seed, the range rule, the full source's event count,
+and the five overlap columns from both the full source (`<col>_full`) and the draw
+(`<col>_capped`). The targets, their events and their folds are those of the cell without the
+options in every member. The aggregation reads these tables like any other and takes the family
+from `extrap`.
+
+`ensemble` writes the job list of the grid from one cell row of a job list, and with
+`--write-dag` its DAG (Condor, above); nothing is submitted:
+
+    python -m twc_transfer ensemble --list cells_stage3.tsv --template G_P3_run26_nall \
+        --est-min 30 --write-dag dag_g_ensemble --retry 3
+
+This gives one cell per rung (default `--rungs 100,200,400,800,1600,3200,all`) and seed (0 to 19,
+`--seeds 20`) at every capped rung, and seed 0 alone at `all`: 121 cells plus a smoke row (three
+targets, rung 100, seed 1), written to `$ETROC_TWC_OUT/ensemble/cells_G_P3_run26_ensemble.tsv`.
+A member is named `<stem>_n<N>_s<SS>` (`G_P3_run26_n100_s07`, `G_P3_run26_nall_s00`), writes
+`cells/<member>/<member>.csv` and carries every other option of the template: here protocol P3
+(mode c, `--xfer-board dut`, the most populated source pixel), DESY run 26, combo
+`ref1-trig2-dut3` (the triple of PT-IH5, PT-IH3 and PT-IH2), 60 target triples, `--cap 6000`
+and the study's floors. Its group is the
+template's with `ens` added (`Gens_desy`), so the AGG node writes
+`tables/agg_Gens_desy_<f>/`, with each member a cell of its own: one random-effects aggregate
+per (rung, seed). The rung `all` is the source as `--cap` reads it (6000 events here, drawn
+from a track file of more), the same sample the range rule takes as the full source. Seed 0 at
+each capped rung repeats stage 3's draw. `--est-min` sets each
+row's CPU estimate (stage 3's P3 cells took 20 to 29 CPU-minutes each, their lists said 51).
+Write the DAG on lxplus, into a write root on AFS, as for any list: the wrapper carries the
+paths of the host it was written on.
+
 ## Tests
 
     cd TestBeam && python -m pytest twc_transfer/tests -q
@@ -366,7 +419,12 @@ The cell was checked on two cells of the study, against their tables, with `PYTH
 - One triple (`--triples`) of the stage-3 P3 cell `G_P3_run26_n100`: its 54 rows equal a rerun of
   the study's stage-3 toolkit on the same node except `ts`. Both differ from the study's
   table, which was made on a batch node, in `ks_d` (13 entries, at most 2e-16) and `ks_p` (12
-  entries, at most 1.5e-14).
+  entries, at most 1.5e-14). That cell caps its source (`--src-cap 100`): since the
+  source-count ensemble its overlap columns follow `--src-range`, so the comparison is that of
+  `--src-range capped`. On a toy run, a capped cell of this version with `--src-range capped`
+  gives the fifty columns of the version before the ensemble as text, except `ts`; with the
+  default `full` it differs in `cov_C`, `hist_O`, `lever_X` and `lever_X_all` only; a cell
+  without the two options is unchanged.
 
 The aggregation was checked by re-aggregating groups of the study's cell tables, read from the
 read root, with the f its driver passed (`--f-inflate`), and comparing the three files with the
@@ -471,7 +529,7 @@ corrects (below), with its md5 and the command that writes it (`campaigns.TABLE_
 | round 1 | `cells.tsv` | 258cb1f8 | reruns them (older cell, older columns) | agg_desy_*, agg_aug_*, agg_mar_f0p9524, agg_jul_f0p9259 | re-derives them (later rules, more columns): agg_desy_f0p8153 changes tost on 2 rows; master reads them as they are | `univ_master_cells.csv`, `univ_cells.csv` |
 | stage 1 | `cells_stage1.tsv` | 05793488 | reruns them (older cell) | the groups of cells_stage1.tsv: axes D, E, I, J | reproduces them (all 7 tags compared) | `univ_axis_r2.csv`, `univ_cells.csv` |
 | stage 2 | `cells_stage2.tsv` | 05793488 | reruns them (older cell) | the groups of cells_stage2.tsv: axes A, B, C, K | reproduces them (all 8 tags compared; its A_desy tags are the study's agg_A_r2_desy_*, since stage 3 reused the folder name) | `univ_axis_r2.csv`, `univ_cells.csv` |
-| stage 3 | `cells_stage3.tsv` | 698f72f9 | reproduces them up to the cross-node tolerance (ks_d, ks_p within 3.3e-14; one triple per cell in modes c, d, e and xfer-lin compared) | the groups of cells_stage3.tsv: A8 and A9, F, G | reproduces them (all 8 tags compared) | `univ_axis_F_long.csv`, `univ_axis_F_wide.csv`, `univ_cells.csv` |
+| stage 3 | `cells_stage3.tsv` | 698f72f9 | reproduces them up to the cross-node tolerance (ks_d, ks_p within 3.3e-14; one triple per cell in modes c, d, e and xfer-lin compared); the seven rows that cap their source (SMOKE and the G cells) with --src-range capped, on their first 50 columns (SPEC 3c) | the groups of cells_stage3.tsv: A8 and A9, F, G | reproduces them (all 8 tags compared) | `univ_axis_F_long.csv`, `univ_axis_F_wide.csv`, `univ_cells.csv` |
 | seeded rerun | `cells_rerun.tsv` | 698f72f9 | not compared (the stage-3 code) | the groups of cells_rerun.tsv, in the rerun's own tree | reproduces them (all 14 tags compared) | `univ_cells.csv` |
 | guardfix | `cells_guardfix_rerun.tsv` | e83f71c1 | reproduces them (the smoke cell compared, 240 rows) | agg_E_jul_guardfix_*, agg_J_jul_guardfix_*, agg_K_desy_guardfix_* | reproduces them (all 4 tags compared) | `univ_axis_r2.csv`, `univ_cells.csv` |
 | v2 wave 1 | `cells_v2w1.tsv` | e83f71c1 | not compared (the guardfix code); the list is not in jobs/ | agg_V2_* | the guardfix code, not compared | none |
@@ -578,5 +636,9 @@ What was run against what, on lxplus under LCG_104d with `PYTHONHASHSEED=0`:
 - The f_cal bootstrap is not part of this package: f is a campaign fact (`campaigns.F_CAL`).
 - The condor driver's DAG was compared with the study's by its files; no DAG written by this
   package has been submitted.
+- The source-count ensemble was checked on toy runs only. Its leave-pair-out draw under
+  `--src-seed` is not exercised by a test (the toy run has no sibling combos), and at a rung
+  close to the source's event count the draws overlap, so their spread understates the
+  spread of independent samples of that size.
 - The last line of the recipe runs `etroc_plots.universality`, which is not part of this package:
   run it from a checkout whose `etroc_plots` has the universality module.

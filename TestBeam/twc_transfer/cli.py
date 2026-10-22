@@ -19,9 +19,13 @@
   jobs    a job list (jobs.py): --dry-run prints every command expanded and parsed;
           --write-dag DIR writes its condor DAG under DIR in the write root and submits
           nothing; --check-inputs and --agg are the DAG's PREP and AGG nodes (SPEC.md 6a)
+  ensemble  the source-count ensemble of one cell of a job list (ensemble.py, SPEC.md 3c):
+          one cell per (rung, seed) -> <write root>/ensemble/cells_<stem>_ensemble.tsv,
+          and with --write-dag DIR its condor DAG under DIR, submitting nothing
 
 Argument names, defaults and types are those of the study's own command line, so the
-commands of its job lists parse unchanged. `--out` overrides an output file name (a folder
+commands of its job lists parse unchanged; `cell --src-seed` and `--src-range` are this
+package's (SPEC.md 3c) and leave a command without them as the study ran it. `--out` overrides an output file name (a folder
 for agg, master and axes); a relative one is taken in the write root.
 
 Every subcommand that writes needs the write root, ETROC_TWC_OUT (campaigns.write_root()):
@@ -43,8 +47,12 @@ import time
 
 from . import campaigns
 
-WRITING = ("index", "bank", "fit", "tier0", "cell", "transfer", "agg", "master", "axes")
+WRITING = ("index", "bank", "fit", "tier0", "cell", "transfer", "agg", "master", "axes",
+           "ensemble")
 CELL_MODES = ["a", "b", "c", "cb", "d", "e", "f", "inrun"]
+# the source-count ensemble's default grid (SPEC.md 3c): the rungs, and the seeds per rung
+ENSEMBLE_RUNGS = ("100", "200", "400", "800", "1600", "3200", "all")
+ENSEMBLE_SEEDS = 20
 
 
 class _RaisingParser(argparse.ArgumentParser):
@@ -115,6 +123,15 @@ def build_parser(raising=False):
         q.add_argument("--src-pick", dest="src_pick", default="auto",
                        choices=["auto", "pixpop", "trkpop"])
         q.add_argument("--src-cap", dest="src_cap", type=int, default=0)
+        q.add_argument("--src-seed", dest="src_seed", type=int, default=None,
+                       help="seed of the source's draw without replacement at its event cap "
+                       "(default 0, the study's draw); one member of a source-count "
+                       "ensemble (SPEC.md 3c)")
+        q.add_argument("--src-range", dest="src_range", default="full",
+                       choices=["full", "capped"],
+                       help="with --src-cap or --src-seed: the source sample the coverage, "
+                       "lever and extrapolation family are taken from, the full source "
+                       "(default) or the capped draw (SPEC.md 3c)")
         q.add_argument("--arms", default="core", choices=["core", "ext"])
         q.add_argument("--xfer-lin", dest="xfer_lin_arm", action="store_true")
         q.add_argument("--lpo", action="store_true", help="build the leave-pair-out arms")
@@ -216,6 +233,33 @@ def build_parser(raising=False):
     q.add_argument("--no-prep-node", dest="prep_node", action="store_false",
                    help="leave the PREP node out (SMOKE -> the cell jobs -> AGG)")
     q.set_defaults(func=cmd_jobs)
+
+    q = sub.add_parser("ensemble", help="the source-count ensemble of one cell (SPEC.md 3c)")
+    q.add_argument("--list", required=True, dest="job_list",
+                   help="the job list holding the template row: a file, or one of jobs/")
+    q.add_argument("--template", required=True,
+                   help="job_id of the template row, a cell command (its --src-cap, "
+                        "--src-seed, --src-range, --cell and --out are replaced)")
+    q.add_argument("--rungs", default=",".join(ENSEMBLE_RUNGS),
+                   help="source event caps, comma-separated; 'all' follows --cap")
+    q.add_argument("--seeds", type=int, default=ENSEMBLE_SEEDS,
+                   help="seeds 0..K-1 per capped rung; the 'all' rung runs seed 0 only")
+    q.add_argument("--src-range", dest="src_range", default="full", choices=["full", "capped"])
+    q.add_argument("--stem", default=None,
+                   help="cell id stem (default the template's cell id without its rung tag)")
+    q.add_argument("--group", default=None,
+                   help="group of the rows (default the template's, its first part + 'ens')")
+    q.add_argument("--est-min", dest="est_min", type=int, default=None,
+                   help="CPU-minute estimate per job (default the template's)")
+    q.add_argument("--out", default=None,
+                   help="the job list written (default ensemble/cells_<stem>_ensemble.tsv in "
+                        "the write root)")
+    q.add_argument("--write-dag", dest="write_dag", default=None, metavar="DIR",
+                   help="also write the list's condor DAG under DIR, as jobs --write-dag")
+    q.add_argument("--dag-name", dest="dag_name", default=None)
+    q.add_argument("--retry", type=int, default=1)
+    q.add_argument("--maxjobs", type=int, default=12)
+    q.set_defaults(func=cmd_ensemble)
     return p
 
 
@@ -372,6 +416,18 @@ def cmd_jobs(a, root):
     if failed:
         raise SystemExit("twc_transfer jobs: %d of %d aggregations failed: %s"
                          % (len(failed), len(plan), ", ".join(failed)))
+
+
+def cmd_ensemble(a, root):
+    from . import ensemble, jobs
+    try:
+        path = ensemble.cmd_ensemble(a, root, parse_command)
+        if a.write_dag:
+            jobs.write_dag(path, a.write_dag, campaigns.CAMPAIGNS, campaigns.transfer_root(),
+                           root, parse_command, dag_name=a.dag_name, retry=a.retry,
+                           maxjobs=a.maxjobs)
+    except (ValueError, FileNotFoundError) as e:
+        raise SystemExit("twc_transfer ensemble: %s" % e)
 
 
 def main(argv=None):
