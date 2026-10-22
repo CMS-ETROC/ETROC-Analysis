@@ -14,7 +14,9 @@ without replacement, seeded by --src-seed (0, the study's draw, by default), and
 guard with it; the targets are read as before. The coverage, lever and extrapolation family of a
 target then come from the full source (--src-range full, the default) or from the capped draw
 (--src-range capped, what the study's stage-3 ladder did); the table carries ENSEMBLE_COLUMNS
-after CELL_COLUMNS with both labels, the cap and the seed.
+after CELL_COLUMNS with both labels, the cap and the seed. --src-rank R (modes c, cb and d, with
+--src-k 1) takes the R-th source of the --src-pick order instead of the first: one member of a
+source-pixel ladder.
 
 What lives here:
 
@@ -23,7 +25,7 @@ What lives here:
                       subsampled by source_sampling: --src-cap, --src-seed),
                       pooled_source / pooled_lpo_source (mode e), the in-run split (cmd_cell)
   one-board cells     _one_board_arm (protocols P3 and P4 of SPEC.md 3), _xfer_board_of
-  source picking      _pick_sources (--src-k, --src-pick)
+  source picking      _pick_sources (--src-k, --src-pick), _ranked_source (--src-rank)
   the cell            cmd_cell, _flush, CELL_COLUMNS, ENSEMBLE_COLUMNS (cell_columns)
 
 The placebo of a source refitted from events (source_coeffs_for) and of the in-run split
@@ -1209,6 +1211,27 @@ def _pick_sources(a, tri_pix_by_name, src_campaign, src_run, src_combo, board=No
     return chosen, meta
 
 
+def _ranked_source(a, pick, *args, **kw):
+    """`--src-rank R` (SPEC 3c): the R-th source of the order `pick` (_pick_sources) takes,
+    alone, with its pick evidence. The first R sources are picked as `--src-k R` would pick
+    them, so rank 1 is the source of `--src-k 1`. Exits when the rule finds fewer than R."""
+    r = int(a.src_rank)
+    names, meta = pick(_with(a, src_k=r), *args, **kw)
+    if len(names) < r:
+        sys.exit("cell %s: --src-rank %d, but the pick rule finds %d distinct source "
+                 "pixel(s): %s" % (a.cell, r, len(names), ", ".join(names) or "none"))
+    nm = names[r - 1]
+    return [nm], {k: v for k, v in meta.items() if k == nm}
+
+
+def _with(a, **kw):
+    """A copy of the namespace `a` with the attributes `kw` set."""
+    b = type(a)()
+    b.__dict__.update(vars(a))
+    b.__dict__.update(kw)
+    return b
+
+
 def _xfer_board_of(a):
     """Validate `--xfer-board` / `--src-role` and mode `cb`. Returns `(xb, sr)`.
 
@@ -1377,6 +1400,21 @@ def cmd_cell(a, root):
                      "a, b, c, cb, d or f."
                      % (a.cell, "--src-bank" if getattr(a, "src_bank", None)
                         else "mode %s" % a.mode))
+    # --src-rank picks one source further down the --src-pick order. It exists where that
+    # order is used (modes c, cb, d) and only for one source: with --src-triple the source is
+    # named already, and with --src-k above 1 "the R-th" would be ambiguous.
+    if getattr(a, "src_rank", None) is not None:
+        why = None
+        if int(a.src_rank) < 1:
+            why = "takes a rank >= 1 (got %r)" % a.src_rank
+        elif a.mode not in ("c", "cb", "d"):
+            why = "orders the sources of modes c, cb and d; mode %s picks none" % a.mode
+        elif a.src_triple:
+            why = "picks the source, which --src-triple names already"
+        elif int(a.src_k or 0) != 1:
+            why = "picks one source: give --src-k 1 (got %r)" % a.src_k
+        if why:
+            sys.exit("cell %s: --src-rank %s" % (a.cell, why))
     # --src-parity-contrast is a SAME-RUN measurement: the two arms fit the source on the
     # file parity that matches the evaluation fold and on the complementary one, and their
     # difference is the inter-board common mode the two SHARE because they are the same
@@ -1464,9 +1502,12 @@ def cmd_cell(a, root):
     if a.mode in ("c", "cb", "d"):
         # the board the pixels are ranked on is the board the coefficients are FITTED on,
         # i.e. `sr`; `xb` is where they land. For P3 the two coincide.
-        src_names, src_pick_meta = _pick_sources(
-            a, None, a.src_campaign or a.campaign, a.src_run or a.run,
-            a.src_combo or a.combo, board=sr)
+        pick_args = (None, a.src_campaign or a.campaign, a.src_run or a.run,
+                     a.src_combo or a.combo)
+        if getattr(a, "src_rank", None):
+            src_names, src_pick_meta = _ranked_source(a, _pick_sources, *pick_args, board=sr)
+        else:
+            src_names, src_pick_meta = _pick_sources(a, *pick_args, board=sr)
         if not src_names:
             sys.exit("cell %s: mode %s needs --src-triple or --src-k" % (a.cell, a.mode))
         _rule = _pick_rule(a, sr)

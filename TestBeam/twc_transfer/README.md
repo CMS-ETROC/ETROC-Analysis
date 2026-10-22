@@ -192,7 +192,11 @@ What refuses to run, and why:
   one that holds the DAG already, on a list without exactly one smoke row, with a job id named
   SMOKE, PREP or AGG on another row, or with a group that names no campaign (its cells would be
   aggregated with another campaign's f).
-- `ensemble` on a template that is not a cell row or is a chunk row (`--chunk`), in mode a, b or
+- `cell --src-rank` below 1, with `--src-triple`, with `--src-k` other than 1, outside modes c,
+  cb and d, or above the number of sources the pick rule finds.
+- `ensemble` with both `--seeds` and `--src-ranks`, `--src-ranks` on a template of a mode with
+  no pick order, `--append` to a list that does not exist or that holds one of the new job ids,
+  on a template that is not a cell row or is a chunk row (`--chunk`), in mode a, b or
   f with a source floor (`--nmin-src`) above its smallest rung (the floor is checked on the
   draw), with a rung above the template's `--cap` (its full source would be another sample),
   or into a job list that exists already.
@@ -384,6 +388,24 @@ each capped rung repeats stage 3's draw. `--est-min` sets each
 row's CPU estimate (stage 3's P3 cells took 20 to 29 CPU-minutes each, their lists said 51).
 Write the DAG on lxplus, into a write root on AFS, as for any list: the wrapper carries the
 paths of the host it was written on.
+
+Two more options build arms that run beside the grid. `cell --src-rank R` (modes c, cb and d,
+with `--src-k 1`) takes the R-th source of the `--src-pick` order instead of the first, and
+`ensemble --src-ranks K` makes the source-pixel ladder of a template: ranks 1 to K at each rung,
+seed 0, members `<stem>_<rung>_p<RR>`. `--append --out LIST` adds such an arm to a list written
+before (no second smoke row), so that one DAG, on one core, runs them all, each arm under its own
+group and so its own aggregation tags:
+
+    python -m twc_transfer ensemble --list cells_stage3.tsv --template G_P3_run26_nall \
+        --est-min 30 --out ensemble/cells_G_ensemble.tsv
+    python -m twc_transfer ensemble --list cells_stage3.tsv --template G_P3_run26_nall \
+        --rungs all --src-ranks 10 --group Gpix_desy --est-min 30 \
+        --append --out ensemble/cells_G_ensemble.tsv
+    python -m twc_transfer jobs --list $ETROC_TWC_OUT/ensemble/cells_G_ensemble.tsv \
+        --write-dag dag_g_ensemble --retry 3
+
+A list on another core (`ETROC_TWC_CORE`) is a list, and a DAG, of its own: every node of a DAG
+runs the core it was written with (Condor).
 
 ## Tests
 

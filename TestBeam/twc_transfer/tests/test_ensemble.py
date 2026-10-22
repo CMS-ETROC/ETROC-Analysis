@@ -277,3 +277,75 @@ def test_a_rung_above_the_template_cap_is_refused(tmp_path, monkeypatch):
         cli.main(["ensemble", "--list", STAGE3, "--template", "G_P3_run26_nall",
                   "--rungs", "3200,12000,all", "--seeds", "2"])
     assert not os.path.exists(str(tmp_path / "out" / "ensemble"))
+
+
+def _ranked(env, name, *extra):
+    """A P3 cell of the toy whose source is picked by pixel population (no --src-triple)."""
+    cli.main(["cell", "--cell", name, "--mode", "c", "--xfer-board", "dut", "--src-pick",
+              "pixpop", "--src-k", "1", "--campaign", "toy", "--run", "r1", "--combo", COMBO,
+              "--root", env["data"], "--ntrip", "3"] + list(extra))
+    return pd.read_csv(os.path.join(env["out"], "cells", "%s.csv" % name))
+
+
+def test_a_ranked_source_is_the_rth_of_the_pick_order(env):
+    first = _ranked(env, "k1")
+    r1 = _ranked(env, "r1", "--src-rank", "1")
+    r2 = _ranked(env, "r2", "--src-rank", "2")
+    r3 = _ranked(env, "r3", "--src-rank", "3")
+    # the pick order of the toy is its population order: R1C1, R2C2, R3C3
+    srcs = [sorted(set(t.src_triple.dropna())) for t in (first, r1, r2, r3)]
+    assert srcs == [[TRIPLES[0][0]], [TRIPLES[0][0]], [TRIPLES[1][0]], [TRIPLES[2][0]]]
+    assert set(r2.src_pick.dropna()) == {"pixpop"} and set(r2.src_pix_rc.dropna()) == {"R2C2"}
+    # rank 1 is the cell of --src-k 1
+    cols = [c for c in first.columns if c not in ("cell", "ts")]
+    pd.testing.assert_frame_equal(first[cols], r1[cols])
+    with pytest.raises(SystemExit, match="finds 3 distinct source"):
+        _ranked(env, "r4", "--src-rank", "4")
+    for bad, msg in ((["--src-rank", "0"], "rank >= 1"),
+                     (["--src-rank", "2", "--src-triple", SRC], "names already"),
+                     (["--src-rank", "2", "--src-k", "2"], "give --src-k 1")):
+        with pytest.raises(SystemExit, match=msg):
+            _ranked(env, "bad", *bad)
+
+
+def test_the_source_pixel_ladder_and_its_arms_go_into_one_list(tmp_path, monkeypatch):
+    monkeypatch.setenv("ETROC_TWC_TRANSFER_ROOT", str(tmp_path / "read"))
+    monkeypatch.setenv("ETROC_TWC_OUT", str(tmp_path / "out"))
+    out = "ensemble/main.tsv"
+    cli.main(["ensemble", "--list", STAGE3, "--template", "G_P3_run26_nall", "--rungs",
+              "100,all", "--seeds", "2", "--out", out])
+    cli.main(["ensemble", "--list", STAGE3, "--template", "G_P3_run26_nall", "--rungs", "all",
+              "--src-ranks", "10", "--group", "Gpix_desy", "--append", "--out", out])
+    cli.main(["ensemble", "--list", "cells_stage2.tsv", "--template", "C1_P3_30to20",
+              "--rungs", "all", "--src-ranks", "5", "--group", "Cpix_desy", "--append",
+              "--out", out])
+    path = str(tmp_path / "out" / out)
+    rows = J.read_jobs(path)
+    assert [j["job_id"] for j in rows].count("SMOKE") == 1 and rows[0]["job_id"] == "SMOKE"
+    assert len(rows) == 1 + 3 + 10 + 5
+    pix = [j for j in rows if j["group"] == "Gpix_desy"]
+    assert [j["job_id"] for j in pix] == ["G_P3_run26_nall_p%02d" % r for r in range(1, 11)]
+    for r, j in enumerate(pix, 1):
+        ns = cli.parse_command(shlex.split(J.expand(j["command"], C.CAMPAIGNS, "/r", "/w")))
+        assert (ns.src_rank, ns.src_k, ns.src_seed, ns.src_cap, ns.cap) == (r, 1, 0, 0, 6000)
+    c1 = [j for j in rows if j["group"] == "Cpix_desy"]
+    assert [j["job_id"] for j in c1] == ["C1_P3_30to20_nall_p%02d" % r for r in range(1, 6)]
+    ns = cli.parse_command(shlex.split(J.expand(c1[0]["command"], C.CAMPAIGNS, "/r", "/w")))
+    assert (ns.run, ns.src_run, ns.ntrip, ns.src_rank) == ("run30", "run33", "100", 1)
+    plan = J.agg_plan(J.expanded_jobs(path, C.CAMPAIGNS, str(tmp_path / "read"),
+                                      str(tmp_path / "out"), cli.parse_command),
+                      str(tmp_path / "out"))
+    assert sorted(p["tag"] for p in plan) == sorted(
+        "agg_%s_%s" % (g, f) for g in ("Gens_desy", "Gpix_desy", "Cpix_desy")
+        for f in ("f0p8153", "f1p0"))
+    # a repeated arm, two ladders at once, and a rank ladder of a mode with no pick order
+    with pytest.raises(SystemExit, match="holds G_P3_run26_nall_p01"):
+        cli.main(["ensemble", "--list", STAGE3, "--template", "G_P3_run26_nall", "--rungs",
+                  "all", "--src-ranks", "10", "--group", "Gpix_desy", "--append", "--out", out])
+    with pytest.raises(SystemExit, match="give one"):
+        cli.main(["ensemble", "--list", STAGE3, "--template", "G_P3_run26_nall", "--seeds",
+                  "2", "--src-ranks", "3", "--out", "ensemble/other.tsv"])
+    with pytest.raises(SystemExit, match="orders the sources of modes c, cb, d"):
+        cli.main(["ensemble", "--list", "cells.tsv", "--template", "a1_twin_26to27",
+                  "--rungs", "all", "--src-ranks", "2", "--out", "ensemble/other.tsv"])
+    assert len(J.read_jobs(path)) == 19

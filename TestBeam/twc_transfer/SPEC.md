@@ -251,6 +251,13 @@ noise, so the shape of a ladder of single draws says nothing about where it stop
   the five overlap columns twice, `<col>_full` and `<col>_capped`, reduced over a pair's two
   boards as the five of `CELL_COLUMNS` are. At the rung `all` with seed 0 the two labels are
   equal. A cell without either flag writes the fifty columns, as the study's did.
+- **The source rank.** `--src-rank R`, in modes c, cb and d with `--src-k 1`, takes the R-th
+  source of the `--src-pick` order alone: the first R are picked as `--src-k R` picks them
+  (distinct pixels on the ranked board) and the last is kept, with its pick evidence
+  (`src_pick`, `src_pix_rc`, `src_pix_ntrk`, `src_pix_pop`). Rank 1 is the source of
+  `--src-k 1`. A cell exits when the rule finds fewer than R sources, and refuses the flag with
+  `--src-triple`, with `--src-k` other than 1 and in the other modes. The table records the
+  source by name, as for every cell; the rank is in the member's id (below).
 - **Refused.** Either flag with `--src-bank` (a bank row reads no events: its coefficients were
   fitted when the bank was built), in mode `e` (its pool has `--pool-cap`) or in mode `inrun`
   (the source is half of the target), and a negative cap or seed.
@@ -264,6 +271,11 @@ noise, so the shape of a ladder of single draws says nothing about where it stop
   rung, seed 1) the rows are written as a job list in the write root, which `jobs --write-dag`
   (or `ensemble --write-dag DIR`) turns into a DAG (section 6a); its AGG node aggregates each
   member as a cell of its own, so every (N, seed) has its own random-effects aggregate.
+  With `--src-ranks K` the seed axis is replaced by the source ranks 1 to K (`--src-rank`) at
+  every rung, seed 0, members `<stem>_<rung tag>_p<RR>`; `--seeds` is refused beside it, and so
+  is a template of a mode without a pick order. `--append --out LIST` adds the rows of another
+  template to a list written before, with no second smoke row, refusing a job id the list holds:
+  one list, and so one DAG and one core, for several arms, each with its own group.
 
 ## 4. Estimator and errors
 
@@ -482,14 +494,15 @@ unchanged.
     jobs   --list LIST (--dry-run [--job ID ...] | --check-inputs | --agg
                       | --write-dag DIR [--dag-name N] [--retry 1] [--maxjobs 12]
                         [--no-prep-node])                           (section 6a)
-    ensemble --list LIST --template JOB [--rungs 100,200,400,800,1600,3200,all] [--seeds 20]
-           [--src-range full|capped] [--stem S] [--group G] [--est-min M] [--out FILE]
+    ensemble --list LIST --template JOB [--rungs 100,200,400,800,1600,3200,all]
+           [--seeds 20 | --src-ranks K] [--src-range full|capped] [--stem S] [--group G]
+           [--est-min M] [--out FILE [--append]]
            [--write-dag DIR [--dag-name N] [--retry 1] [--maxjobs 12]]
            -> ensemble/cells_<stem>_ensemble.tsv                     (section 3c)
     cell   --cell ID --mode a|b|c|cb|d|e|f|inrun --campaign C --run R --combo X [--root DIR]
            [--src-campaign C] [--src-run R] [--src-combo X] [--src-root DIR] [--src-triple T]
            [--src-bank FILE] [--src-k 5] [--src-pick auto|pixpop|trkpop] [--src-cap 0]
-           [--src-seed S] [--src-range full|capped]
+           [--src-seed S] [--src-range full|capped] [--src-rank R]
            [--role-map T:S,...] [--xfer-board B] [--src-role B] [--split block|parity]
            [--pool-ntrip 40] [--pool-cap 1500] [--pool-lopo-scope board|triple]
            [--pool-lpo-ntrip 6] [--arms core|ext] [--lpo] [--lpo-fallback sibling|own]

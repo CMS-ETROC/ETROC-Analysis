@@ -24,8 +24,8 @@
           and with --write-dag DIR its condor DAG under DIR, submitting nothing
 
 Argument names, defaults and types are those of the study's own command line, so the
-commands of its job lists parse unchanged; `cell --src-seed` and `--src-range` are this
-package's (SPEC.md 3c) and leave a command without them as the study ran it. `--out` overrides an output file name (a folder
+commands of its job lists parse unchanged; `cell --src-seed`, `--src-range` and `--src-rank`
+are this package's (SPEC.md 3c) and leave a command without them as the study ran it. `--out` overrides an output file name (a folder
 for agg, master and axes); a relative one is taken in the write root.
 
 Every subcommand that writes needs the write root, ETROC_TWC_OUT (campaigns.write_root()):
@@ -132,6 +132,10 @@ def build_parser(raising=False):
                        help="with --src-cap or --src-seed: the source sample the coverage, "
                        "lever and extrapolation family are taken from, the full source "
                        "(default) or the capped draw (SPEC.md 3c)")
+        q.add_argument("--src-rank", dest="src_rank", type=int, default=None,
+                       help="modes c, cb and d with --src-k 1: the source is the R-th of the "
+                       "--src-pick order (1 is the one --src-k 1 takes); one member of a "
+                       "source-pixel ladder (SPEC.md 3c)")
         q.add_argument("--arms", default="core", choices=["core", "ext"])
         q.add_argument("--xfer-lin", dest="xfer_lin_arm", action="store_true")
         q.add_argument("--lpo", action="store_true", help="build the leave-pair-out arms")
@@ -239,11 +243,17 @@ def build_parser(raising=False):
                    help="the job list holding the template row: a file, or one of jobs/")
     q.add_argument("--template", required=True,
                    help="job_id of the template row, a cell command (its --src-cap, "
-                        "--src-seed, --src-range, --cell and --out are replaced)")
+                        "--src-seed, --src-range, --src-rank, --cell and --out are replaced)")
     q.add_argument("--rungs", default=",".join(ENSEMBLE_RUNGS),
                    help="source event caps, comma-separated; 'all' follows --cap")
-    q.add_argument("--seeds", type=int, default=ENSEMBLE_SEEDS,
-                   help="seeds 0..K-1 per capped rung; the 'all' rung runs seed 0 only")
+    q.add_argument("--seeds", type=int, default=None,
+                   help="seeds 0..K-1 per capped rung (default %d); the 'all' rung runs "
+                        "seed 0 only" % ENSEMBLE_SEEDS)
+    q.add_argument("--src-ranks", dest="src_ranks", type=int, default=None, metavar="K",
+                   help="instead of seeds: the source-pixel ladder, one cell per rung and "
+                        "source rank 1..K (--src-rank), seed 0")
+    q.add_argument("--append", action="store_true",
+                   help="add the rows to the existing list --out (no second smoke row)")
     q.add_argument("--src-range", dest="src_range", default="full", choices=["full", "capped"])
     q.add_argument("--stem", default=None,
                    help="cell id stem (default the template's cell id without its rung tag)")

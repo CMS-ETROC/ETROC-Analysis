@@ -110,7 +110,7 @@ CELL_DEFAULTS = dict(
     overwrite=False, dry_run=False, max_triples=0, timebudget=0.0,
     # this package's options of the source-count ensemble (SPEC.md 3c), not the study's: at
     # these defaults a cell reads its source as the study's did
-    src_seed=None, src_range="full")
+    src_seed=None, src_range="full", src_rank=None)
 TIER0_DEFAULTS = dict(cmd="tier0", tag="all", max_src=0, out=None)
 INDEX_DEFAULTS = dict(cmd="index", campaign="mar", run=None, combo=None, root=None, cap=6000,
                       neighbor="none", neighbor_logic="OR", out=None, ntrip=100000)
