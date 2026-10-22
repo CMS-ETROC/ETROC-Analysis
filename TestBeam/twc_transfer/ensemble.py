@@ -194,6 +194,11 @@ def cmd_ensemble(a, root, parse):
         ns = parse(shlex.split(jobs.expand(j["command"], campaigns.CAMPAIGNS, read_root, root)))
         if ns.cell != j["cell_id"]:
             raise ValueError("%s: --cell %s is not the row's cell id" % (j["job_id"], ns.cell))
+        if ns.cap and ns.src_cap > ns.cap:
+            raise ValueError("%s: a rung of %d events is above the template's --cap %d; its full "
+                             "source would be read at %d, so its targets' family would not be "
+                             "that of the other rungs" % (j["job_id"], ns.src_cap, ns.cap,
+                                                         ns.src_cap))
         if ns.mode in SOURCE_FLOOR_MODES and ns.src_cap and ns.nmin_src > ns.src_cap:
             raise ValueError("%s: in mode %s the source floor --nmin-src %d applies to the draw, "
                              "so a rung of %d events would refuse every source; give the "

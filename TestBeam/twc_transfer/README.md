@@ -194,7 +194,8 @@ What refuses to run, and why:
   aggregated with another campaign's f).
 - `ensemble` on a template that is not a cell row or is a chunk row (`--chunk`), in mode a, b or
   f with a source floor (`--nmin-src`) above its smallest rung (the floor is checked on the
-  draw), or into a job list that exists already.
+  draw), with a rung above the template's `--cap` (its full source would be another sample),
+  or into a job list that exists already.
 
 `python -m twc_transfer` pins the thread pools to one thread and, if `PYTHONHASHSEED` is not
 0, restarts itself once with `PYTHONHASHSEED=0` and says so: the placebo of a cell whose source

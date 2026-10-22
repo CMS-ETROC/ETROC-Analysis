@@ -231,7 +231,8 @@ noise, so the shape of a ladder of single draws says nothing about where it stop
   source events of the guard are drawn with the same cap and seed. `n_fit_src` is the number
   drawn, N or the file's count when it holds fewer. In modes a, b and f the source floor
   `--nmin-src` is checked on the draw (modes c, d and cb have none), so `ensemble` refuses a
-  template of those modes whose floor exceeds its smallest rung. Nothing about a target changes: its triples,
+  template of those modes whose floor exceeds its smallest rung. It also refuses a rung above
+  the template's `--cap`, whose full source would be another sample than the other rungs'. Nothing about a target changes: its triples,
   its events and its folds are those of the same cell without the two flags, in every member.
 - **The full source.** The source of the same cell without `--src-cap` and `--src-seed`: the
   file read at the larger of `--cap` and `--src-cap` (no cap when `--cap` is 0) with seed 0.

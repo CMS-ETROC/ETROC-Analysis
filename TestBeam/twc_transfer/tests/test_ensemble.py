@@ -266,3 +266,14 @@ def test_a_grid_whose_source_floor_exceeds_a_rung_is_refused(tmp_path, monkeypat
     cli.main(["ensemble", "--list", "cells.tsv", "--template", "a1_twin_26to27",
               "--rungs", "1000,all", "--seeds", "2"])
     assert len(J.read_jobs(str(tmp_path / "out" / "ensemble" / "cells_a1_twin_26to27_ensemble.tsv"))) == 4
+
+
+def test_a_rung_above_the_template_cap_is_refused(tmp_path, monkeypatch):
+    # the full source is read at the larger of --cap and --src-cap, so a rung above --cap would
+    # label its targets from another sample than the other rungs do
+    monkeypatch.setenv("ETROC_TWC_TRANSFER_ROOT", str(tmp_path / "read"))
+    monkeypatch.setenv("ETROC_TWC_OUT", str(tmp_path / "out"))
+    with pytest.raises(SystemExit, match="above the template's --cap 6000"):
+        cli.main(["ensemble", "--list", STAGE3, "--template", "G_P3_run26_nall",
+                  "--rungs", "3200,12000,all", "--seeds", "2"])
+    assert not os.path.exists(str(tmp_path / "out" / "ensemble"))
