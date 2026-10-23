@@ -405,7 +405,12 @@ group and so its own aggregation tags:
         --write-dag dag_g_ensemble --retry 3
 
 A list on another core (`ETROC_TWC_CORE`) is a list, and a DAG, of its own: every node of a DAG
-runs the core it was written with (Condor).
+runs the core it was written with (Condor). Give it its own `--stem`: `ensemble` refuses members
+whose tables or ids another list of the write root holds. `--src-ranks K` needs K distinct pixels
+on the ranked board, and in a same-run P3 cell each rank drops its own source triple from the
+targets. `--seed-from S` adds seeds S and up to a rung, for example the seeds 1 to 19 of a rung
+whose seed 0 has run. A command without `--src-seed` and `--src-range`, the study's `--src-cap`
+rows included, runs as the study ran it.
 
 ## Tests
 
@@ -442,12 +447,9 @@ The cell was checked on two cells of the study, against their tables, with `PYTH
 - One triple (`--triples`) of the stage-3 P3 cell `G_P3_run26_n100`: its 54 rows equal a rerun of
   the study's stage-3 toolkit on the same node except `ts`. Both differ from the study's
   table, which was made on a batch node, in `ks_d` (13 entries, at most 2e-16) and `ks_p` (12
-  entries, at most 1.5e-14). That cell caps its source (`--src-cap 100`): since the
-  source-count ensemble its overlap columns follow `--src-range`, so the comparison is that of
-  `--src-range capped`. On a toy run, a capped cell of this version with `--src-range capped`
-  gives the fifty columns of the version before the ensemble as text, except `ts`; with the
-  default `full` it differs in `cov_C`, `hist_O`, `lever_X` and `lever_X_all` only; a cell
-  without the two options is unchanged.
+  entries, at most 1.5e-14). That cell caps its source (`--src-cap 100`) without `--src-seed`,
+  so it runs as the study ran it (SPEC 3c): on a toy run such a cell gives the table of the
+  version before the ensemble as text, except `ts`, as does a cell without the options.
 
 The aggregation was checked by re-aggregating groups of the study's cell tables, read from the
 read root, with the f its driver passed (`--f-inflate`), and comparing the three files with the
@@ -552,7 +554,7 @@ corrects (below), with its md5 and the command that writes it (`campaigns.TABLE_
 | round 1 | `cells.tsv` | 258cb1f8 | reruns them (older cell, older columns) | agg_desy_*, agg_aug_*, agg_mar_f0p9524, agg_jul_f0p9259 | re-derives them (later rules, more columns): agg_desy_f0p8153 changes tost on 2 rows; master reads them as they are | `univ_master_cells.csv`, `univ_cells.csv` |
 | stage 1 | `cells_stage1.tsv` | 05793488 | reruns them (older cell) | the groups of cells_stage1.tsv: axes D, E, I, J | reproduces them (all 7 tags compared) | `univ_axis_r2.csv`, `univ_cells.csv` |
 | stage 2 | `cells_stage2.tsv` | 05793488 | reruns them (older cell) | the groups of cells_stage2.tsv: axes A, B, C, K | reproduces them (all 8 tags compared; its A_desy tags are the study's agg_A_r2_desy_*, since stage 3 reused the folder name) | `univ_axis_r2.csv`, `univ_cells.csv` |
-| stage 3 | `cells_stage3.tsv` | 698f72f9 | reproduces them up to the cross-node tolerance (ks_d, ks_p within 3.3e-14; one triple per cell in modes c, d, e and xfer-lin compared); the seven rows that cap their source (SMOKE and the G cells) with --src-range capped, on their first 50 columns (SPEC 3c) | the groups of cells_stage3.tsv: A8 and A9, F, G | reproduces them (all 8 tags compared) | `univ_axis_F_long.csv`, `univ_axis_F_wide.csv`, `univ_cells.csv` |
+| stage 3 | `cells_stage3.tsv` | 698f72f9 | reproduces them up to the cross-node tolerance (ks_d, ks_p within 3.3e-14; one triple per cell in modes c, d, e and xfer-lin compared) | the groups of cells_stage3.tsv: A8 and A9, F, G | reproduces them (all 8 tags compared) | `univ_axis_F_long.csv`, `univ_axis_F_wide.csv`, `univ_cells.csv` |
 | seeded rerun | `cells_rerun.tsv` | 698f72f9 | not compared (the stage-3 code) | the groups of cells_rerun.tsv, in the rerun's own tree | reproduces them (all 14 tags compared) | `univ_cells.csv` |
 | guardfix | `cells_guardfix_rerun.tsv` | e83f71c1 | reproduces them (the smoke cell compared, 240 rows) | agg_E_jul_guardfix_*, agg_J_jul_guardfix_*, agg_K_desy_guardfix_* | reproduces them (all 4 tags compared) | `univ_axis_r2.csv`, `univ_cells.csv` |
 | v2 wave 1 | `cells_v2w1.tsv` | e83f71c1 | not compared (the guardfix code); the list is not in jobs/ | agg_V2_* | the guardfix code, not compared | none |

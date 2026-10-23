@@ -94,15 +94,20 @@ CELL_COLUMNS = [
 
 # The overlap columns of SPEC.md 5.3, which a subsampled source (SPEC.md 3c) writes twice more.
 OVERLAP_KEYS = ("cov_C", "hist_O", "lever_X", "lever_X_all", "extrap")
-# Written after CELL_COLUMNS by a cell whose source is subsampled (--src-cap or --src-seed),
-# and only by one: a table of a cell without them keeps the study's fifty columns. The
-# overlap columns of CELL_COLUMNS then follow --src-range; these keep both labels.
+# Written after CELL_COLUMNS by a member of an ensemble (ensemble_table: --src-seed, --src-rank,
+# or --src-cap with an explicit --src-range), and only by one: any other cell, a command of the
+# study's with --src-cap among them, keeps the study's fifty columns. The overlap columns of
+# CELL_COLUMNS then follow --src-range (src_range_of); these keep both labels.
 ENSEMBLE_COLUMNS = [
     "src_cap",          # the source's event cap: --src-cap, or --cap when it is 0
     "src_seed",         # the seed of the source's draw without replacement
     "src_range",        # full | capped: the label cov_C .. extrap of CELL_COLUMNS carry
     "n_src_full",       # events of the full source the full-range label is built from
-] + ["%s_full" % k for k in OVERLAP_KEYS] + ["%s_capped" % k for k in OVERLAP_KEYS]
+] + ["%s_full" % k for k in OVERLAP_KEYS] + ["%s_capped" % k for k in OVERLAP_KEYS] + [
+    "src_rank",         # --src-rank, blank without it
+]
+# the ensemble columns of the tables written before src_rank was added
+ENSEMBLE_COLUMNS_V1 = ENSEMBLE_COLUMNS[:-1]
 
 
 def subsampled(a):
@@ -110,10 +115,66 @@ def subsampled(a):
     return bool(int(getattr(a, "src_cap", 0) or 0)) or getattr(a, "src_seed", None) is not None
 
 
+def ensemble_refusal(a):
+    """The refusal of the source-count options (SPEC.md 3c) for the cell options `a`, or None.
+    `cmd_cell` exits with it; `ensemble` checks every member with it before writing a list.
+
+    --src-cap and --src-seed subsample a source that is READ FROM EVENTS. A bank-backed source
+    of modes a, b, c, cb and f reads none (its coefficients were fitted when the bank was
+    built; mode d reads events whatever --src-bank says), mode e pools the target's own board
+    under --pool-cap and mode inrun splits the target itself, so either flag there would be a
+    silent no-op. --src-rank picks one source further down the --src-pick order: it exists
+    where that order is used (modes c, cb, d) and only for one source, since with --src-triple
+    the source is named already and with --src-k above 1 "the R-th" would be ambiguous."""
+    cell_ = getattr(a, "cell", "?")
+    if subsampled(a):
+        if int(a.src_cap or 0) < 0 or (a.src_seed is not None and int(a.src_seed) < 0):
+            return ("cell %s: --src-cap and --src-seed take values >= 0 (got %r, %r)"
+                    % (cell_, a.src_cap, a.src_seed))
+        bank = getattr(a, "src_bank", None) and a.mode != "d"
+        if bank or a.mode in ("e", "inrun"):
+            return ("cell %s: --src-cap / --src-seed subsample a source read from its track "
+                    "file; %s reads no such source, so the flags would change nothing.  "
+                    "Drop them, or refit the source from events (no --src-bank) in mode "
+                    "a, b, c, cb, d or f."
+                    % (cell_, "--src-bank" if bank else "mode %s" % a.mode))
+    if getattr(a, "src_rank", None) is not None:
+        why = None
+        if int(a.src_rank) < 1:
+            why = "takes a rank >= 1 (got %r)" % a.src_rank
+        elif a.mode not in ("c", "cb", "d"):
+            why = "orders the sources of modes c, cb and d; mode %s picks none" % a.mode
+        elif a.src_triple:
+            why = "picks the source, which --src-triple names already"
+        elif int(a.src_k or 0) != 1:
+            why = "picks one source: give --src-k 1 (got %r)" % a.src_k
+        if why:
+            return "cell %s: --src-rank %s" % (cell_, why)
+    return None
+
+
+def src_range_of(a):
+    """The source sample the targets' overlap columns come from: --src-range when given, else
+    'full' with --src-seed (a member of an ensemble) and 'capped' without it, as the study's
+    own commands took it from their capped draw (SPEC.md 3c)."""
+    r = getattr(a, "src_range", None)
+    if r:
+        return r
+    return "full" if getattr(a, "src_seed", None) is not None else "capped"
+
+
+def ensemble_table(a):
+    """Does this cell write ENSEMBLE_COLUMNS? With --src-seed or --src-rank, or with a
+    subsampled source and an explicit --src-range. A command of the study's (--src-cap alone)
+    writes its fifty columns."""
+    return (getattr(a, "src_seed", None) is not None or getattr(a, "src_rank", None) is not None
+            or (subsampled(a) and getattr(a, "src_range", None) is not None))
+
+
 def cell_columns(a):
-    """The columns of this cell's table: CELL_COLUMNS, and ENSEMBLE_COLUMNS after them when
-    its source is subsampled."""
-    return CELL_COLUMNS + ENSEMBLE_COLUMNS if subsampled(a) else CELL_COLUMNS
+    """The columns of this cell's table: CELL_COLUMNS, and ENSEMBLE_COLUMNS after them for a
+    member of an ensemble (ensemble_table)."""
+    return CELL_COLUMNS + ENSEMBLE_COLUMNS if ensemble_table(a) else CELL_COLUMNS
 
 
 def source_sampling(a):
@@ -676,7 +737,9 @@ def source_coeffs_for(tri, a, bank=None, src_name=None):
     # reads it (full_cap, seed 0), its own TOT summary and its own polynomial; when that is
     # the sample already read, nothing is read twice.
     full = None
-    if (s_cap, s_seed) != (full_cap, 0):
+    # read when a label or the ensemble columns need it; a command of the study's needs neither
+    if ((ensemble_table(a) or src_range_of(a) == "full")
+            and (s_cap, s_seed) != (full_cap, 0)):
         full = Triple.from_file(p, src_campaign, src_run, src_combo, cap=full_cap, seed=0,
                                 neighbor=a.neighbor, neighbor_logic=a.neighbor_logic)
 
@@ -1015,8 +1078,9 @@ def _ensemble_fields(rows, a, info, arm, ev, tri, base, meta, ov_full, ov_cap):
     for tag, ov in (("full", ov_full), ("capped", ov_cap)):
         labels[tag] = _rows_for_arm(arm, ev, tri, base, meta, ov)
     for i, row in enumerate(rows):
-        row.update(src_cap=s_cap, src_seed=s_seed, src_range=getattr(a, "src_range", "full"),
-                   n_src_full=(info or {}).get("n_src_full", np.nan))
+        row.update(src_cap=s_cap, src_seed=s_seed, src_range=src_range_of(a),
+                   n_src_full=(info or {}).get("n_src_full", np.nan),
+                   src_rank=getattr(a, "src_rank", None) or np.nan)
         for tag, alt in labels.items():
             for k in OVERLAP_KEYS:
                 row["%s_%s" % (k, tag)] = alt[i][k]
@@ -1385,36 +1449,9 @@ def cmd_cell(a, root):
     # transfer. Validated before a single event is read; mode cb refuses to exist without
     # its declaration.
     xb, sr = _xfer_board_of(a)
-    # SPEC 3c: --src-cap and --src-seed subsample a source that is READ FROM EVENTS. A
-    # bank-backed source reads none (its coefficients were fitted when the bank was built),
-    # mode e pools the target's own board under --pool-cap and mode inrun splits the target
-    # itself, so either flag there would be a silent no-op: refused, like the checks below.
-    if subsampled(a):
-        if int(a.src_cap or 0) < 0 or (a.src_seed is not None and int(a.src_seed) < 0):
-            sys.exit("cell %s: --src-cap and --src-seed take values >= 0 (got %r, %r)"
-                     % (a.cell, a.src_cap, a.src_seed))
-        if getattr(a, "src_bank", None) or a.mode in ("e", "inrun"):
-            sys.exit("cell %s: --src-cap / --src-seed subsample a source read from its track "
-                     "file; %s reads no such source, so the flags would change nothing.  "
-                     "Drop them, or refit the source from events (no --src-bank) in mode "
-                     "a, b, c, cb, d or f."
-                     % (a.cell, "--src-bank" if getattr(a, "src_bank", None)
-                        else "mode %s" % a.mode))
-    # --src-rank picks one source further down the --src-pick order. It exists where that
-    # order is used (modes c, cb, d) and only for one source: with --src-triple the source is
-    # named already, and with --src-k above 1 "the R-th" would be ambiguous.
-    if getattr(a, "src_rank", None) is not None:
-        why = None
-        if int(a.src_rank) < 1:
-            why = "takes a rank >= 1 (got %r)" % a.src_rank
-        elif a.mode not in ("c", "cb", "d"):
-            why = "orders the sources of modes c, cb and d; mode %s picks none" % a.mode
-        elif a.src_triple:
-            why = "picks the source, which --src-triple names already"
-        elif int(a.src_k or 0) != 1:
-            why = "picks one source: give --src-k 1 (got %r)" % a.src_k
-        if why:
-            sys.exit("cell %s: --src-rank %s" % (a.cell, why))
+    why = ensemble_refusal(a)
+    if why:
+        sys.exit(why)
     # --src-parity-contrast is a SAME-RUN measurement: the two arms fit the source on the
     # file parity that matches the evaluation fold and on the complementary one, and their
     # difference is the inter-board common mode the two SHARE because they are the same
@@ -1562,12 +1599,14 @@ def cmd_cell(a, root):
               % (a.mode, a.campaign, a.run, a.combo, _source_text(a)))
         if subsampled(a):
             s_cap, s_seed, full_cap = source_sampling(a)
+            rng = src_range_of(a)
             print("  source subsampled: %s events drawn with seed %d; coverage, lever and "
-                  "family from the %s (--src-range %s); %d more columns (ENSEMBLE_COLUMNS)"
+                  "family from the %s (--src-range %s); %s"
                   % (s_cap or "all", s_seed,
                      "full source (%s events, seed 0)" % (full_cap or "all")
-                     if a.src_range == "full" else "capped draw", a.src_range,
-                     len(ENSEMBLE_COLUMNS)))
+                     if rng == "full" else "capped draw", rng,
+                     "%d more columns (ENSEMBLE_COLUMNS)" % len(ENSEMBLE_COLUMNS)
+                     if ensemble_table(a) else "the fifty columns of CELL_COLUMNS"))
         print("  targets (%d): %s" % (len(targets), ", ".join(targets)))
         if _p3_self_skip:
             print("  excluded as P3 self-transfer targets: %s"
@@ -2055,7 +2094,7 @@ def cmd_cell(a, root):
             ov_full = ov_cap
             if info.get("full_stats") is not None and info["full_stats"] is not src_stats:
                 ov_full = _overlap_by_board(info["full_stats"], info["full_coeffs"], tri, xb, sr)
-            ov = ov_full if getattr(a, "src_range", "full") == "full" else ov_cap
+            ov = ov_full if src_range_of(a) == "full" else ov_cap
 
             # per-board source bookkeeping
             spix, sboard = info.get("src_pix") or {}, info.get("src_boards") or {}

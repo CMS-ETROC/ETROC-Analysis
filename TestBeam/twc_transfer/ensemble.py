@@ -27,7 +27,7 @@ import re
 import shlex
 import time
 
-from . import campaigns, jobs
+from . import campaigns, cell, jobs, naming
 
 # the template's flags that every member sets itself
 REPLACED = ("--cell", "--src-cap", "--src-seed", "--src-range", "--src-rank", "--out")
@@ -145,7 +145,7 @@ def member_command(template_command, cid, n, seed, src_range="full", rank=None):
 
 
 def ensemble_jobs(template, rungs, seeds, src_range="full", stem=None, group=None,
-                  est_min=None, ranks=None):
+                  est_min=None, ranks=None, seed_from=0):
     """The rows of the rung x seed grid from one template job (a dict of jobs.FIELDS): seeds
     0 .. seeds-1 at every capped rung, seed 0 at the rung 'all' (0), in rung order; with
     `ranks` K, source ranks 1 .. K at every rung instead, seed 0. Each row's job_id is its cell
@@ -163,7 +163,7 @@ def ensemble_jobs(template, rungs, seeds, src_range="full", stem=None, group=Non
         if ranks is not None:
             members = [(0, r) for r in range(1, int(ranks) + 1)]
         else:
-            members = [(s, None) for s in (range(int(seeds)) if n else (0,))]
+            members = [(s, None) for s in (range(int(seed_from), int(seeds)) if n else (0,))]
         for s, r in members:
             cid = cell_id(stem, n, s, r)
             rows.append(dict(job_id=cid, cell_id=cid, level=template["level"], group=group,
@@ -175,7 +175,9 @@ def ensemble_jobs(template, rungs, seeds, src_range="full", stem=None, group=Non
 
 def smoke_job(template, rungs, src_range="full", stem=None):
     """The list's smoke row: SMOKE_NTRIP target triples at the smallest capped rung with seed
-    SMOKE_SEED, so that the first node reads a subsampled source and its full source."""
+    SMOKE_SEED, so that the first node reads a subsampled source and its full source; with no
+    capped rung (`--rungs all`), at the rung 'all' with seed 0, which reads the source once.
+    It carries no --src-rank: a rank ladder's smoke row is its template's first source."""
     stem = stem or default_stem(template["cell_id"])
     capped = [n for n in rungs if n]
     n = min(capped) if capped else 0
@@ -200,6 +202,49 @@ def write_list(path, rows, smoke, comments=()):
     return path
 
 
+def _check_outputs(rows, dest, root):
+    """Refuse members whose cell folder exists in the write root, or whose id another list of
+    the ensemble folder holds: two lists of one template in one write root would write the same
+    tables and the same aggregation tags."""
+    there = [j["job_id"] for j in rows
+             if os.path.exists(os.path.join(root, "cells", j["cell_id"]))]
+    if there:
+        raise ValueError("cells/%s exists in the write root: another list wrote it; give this "
+                         "list its own --stem (for example one per core)" % there[0])
+    folder = os.path.dirname(dest)
+    ids = set(j["job_id"] for j in rows)
+    for name in sorted(os.listdir(folder)) if os.path.isdir(folder) else ():
+        other = os.path.join(folder, name)
+        if not name.endswith(".tsv") or os.path.abspath(other) == os.path.abspath(dest):
+            continue
+        clash = ids & set(j["job_id"] for j in jobs.read_jobs(other))
+        if clash:
+            raise ValueError("%s holds %s already; give this list its own --stem"
+                             % (other, sorted(clash)[0]))
+
+
+def _check_rank_count(row, parse, read_root, root, k):
+    """Refuse a rank ladder whose pick rule finds fewer than `k` sources, when the source tree
+    can be read here (it is skipped, and said, where it cannot: on a machine without the data)."""
+    ns = parse(shlex.split(jobs.expand(row["command"], campaigns.CAMPAIGNS, read_root, root)))
+    src_campaign = ns.src_campaign or ns.campaign
+    try:
+        tree = naming.run_dir(src_campaign, ns.src_run or ns.run,
+                              ns.src_root or (ns.root if src_campaign == ns.campaign else None))
+    except Exception:  # noqa: BLE001 - an unknown campaign is the cell's own refusal
+        tree = None
+    if not tree or not os.path.isdir(tree):
+        print("ensemble: the source tree of %s cannot be read here; the cell checks its %d "
+              "ranks when it runs" % (row["job_id"], k))
+        return
+    _, sr = cell._xfer_board_of(ns)
+    names, _ = cell._pick_sources(cell._with(ns, src_k=k), None, src_campaign,
+                                  ns.src_run or ns.run, ns.src_combo or ns.combo, board=sr)
+    if len(names) < k:
+        raise ValueError("--src-ranks %d: the pick rule finds %d distinct source pixel(s) for "
+                         "%s" % (k, len(names), row["job_id"]))
+
+
 def cmd_ensemble(a, root, parse):
     """`ensemble`: write the job list of the source-count ensemble of the template row
     `--template` of `--list` into the write root (default ensemble/cells_<stem>_ensemble.tsv),
@@ -218,15 +263,24 @@ def cmd_ensemble(a, root, parse):
     append = bool(getattr(a, "append", False))
     if append and not a.out:
         raise ValueError("--append adds to the list --out names; give --out")
+    seed_from = int(getattr(a, "seed_from", 0) or 0)
+    if not 0 <= seed_from < seeds:
+        raise ValueError("--seed-from %d is not one of the seeds 0..%d" % (seed_from, seeds - 1))
     rungs = parse_rungs(a.rungs)
-    stem = a.stem or default_stem(tmpl["cell_id"])
-    rows = ensemble_jobs(tmpl, rungs, seeds, a.src_range, stem, a.group, a.est_min, ranks)
+    # a list whose labels come from the capped draw names its members apart from the default's
+    stem = a.stem or default_stem(tmpl["cell_id"]) + ("_capped" if a.src_range == "capped"
+                                                       else "")
+    rows = ensemble_jobs(tmpl, rungs, seeds, a.src_range, stem, a.group, a.est_min, ranks,
+                         seed_from)
     smoke = None if append else smoke_job(tmpl, rungs, a.src_range, stem)
     read_root = campaigns.transfer_root()
     for j in ([smoke] if smoke else []) + rows:
         ns = parse(shlex.split(jobs.expand(j["command"], campaigns.CAMPAIGNS, read_root, root)))
         if ns.cell != j["cell_id"]:
             raise ValueError("%s: --cell %s is not the row's cell id" % (j["job_id"], ns.cell))
+        why = cell.ensemble_refusal(ns)
+        if why:
+            raise ValueError("%s: %s" % (j["job_id"], why))
         if ranks is not None and ns.mode not in RANKED_MODES:
             raise ValueError("%s: --src-ranks orders the sources of modes %s; the template is "
                              "mode %s" % (j["job_id"], ", ".join(RANKED_MODES), ns.mode))
@@ -240,7 +294,10 @@ def cmd_ensemble(a, root, parse):
                              "so a rung of %d events would refuse every source; give the "
                              "template --nmin-src %d or less"
                              % (j["job_id"], ns.mode, ns.nmin_src, ns.src_cap, ns.src_cap))
+    if ranks is not None:
+        _check_rank_count(rows[-1], parse, read_root, root, int(ranks))
     dest = campaigns.output_path(a.out, root, "ensemble", "cells_%s_ensemble.tsv" % stem)
+    _check_outputs(rows, dest, root)
     old_comments, old_rows = [], []
     if append:
         if not os.path.isfile(dest):
@@ -253,6 +310,10 @@ def cmd_ensemble(a, root, parse):
         dup = [j["job_id"] for j in rows if j["job_id"] in taken]
         if dup:
             raise ValueError("--append: %s holds %s already" % (dest, ", ".join(dup[:5])))
+        if not a.group and rows[0]["group"] in set(j["group"] for j in old_rows):
+            raise ValueError("--append: %s holds group %s already; give the arm its own "
+                             "--group, so that it gets its own aggregation tags"
+                             % (dest, rows[0]["group"]))
     elif os.path.exists(dest):
         raise ValueError("%s exists: an ensemble list is written once (its DAG folder keeps "
                          "the copy it ran from); name a new --out, or add to it with --append"

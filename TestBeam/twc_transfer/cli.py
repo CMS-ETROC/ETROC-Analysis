@@ -24,8 +24,9 @@
           and with --write-dag DIR its condor DAG under DIR, submitting nothing
 
 Argument names, defaults and types are those of the study's own command line, so the
-commands of its job lists parse unchanged; `cell --src-seed`, `--src-range` and `--src-rank`
-are this package's (SPEC.md 3c) and leave a command without them as the study ran it. `--out` overrides an output file name (a folder
+commands of its job lists parse unchanged. `cell --src-seed`, `--src-range` and
+`--src-rank` are this package's (SPEC.md 3c); a command without them, `--src-cap` included,
+runs as the study ran it. `--out` overrides an output file name (a folder
 for agg, master and axes); a relative one is taken in the write root.
 
 Every subcommand that writes needs the write root, ETROC_TWC_OUT (campaigns.write_root()):
@@ -52,7 +53,7 @@ WRITING = ("index", "bank", "fit", "tier0", "cell", "transfer", "agg", "master",
 CELL_MODES = ["a", "b", "c", "cb", "d", "e", "f", "inrun"]
 # the source-count ensemble's default grid (SPEC.md 3c): the rungs, and the seeds per rung
 ENSEMBLE_RUNGS = ("100", "200", "400", "800", "1600", "3200", "all")
-ENSEMBLE_SEEDS = 20
+from .ensemble import DEFAULT_SEEDS as ENSEMBLE_SEEDS  # noqa: E402
 
 
 class _RaisingParser(argparse.ArgumentParser):
@@ -127,11 +128,12 @@ def build_parser(raising=False):
                        help="seed of the source's draw without replacement at its event cap "
                        "(default 0, the study's draw); one member of a source-count "
                        "ensemble (SPEC.md 3c)")
-        q.add_argument("--src-range", dest="src_range", default="full",
+        q.add_argument("--src-range", dest="src_range", default=None,
                        choices=["full", "capped"],
                        help="with --src-cap or --src-seed: the source sample the coverage, "
-                       "lever and extrapolation family are taken from, the full source "
-                       "(default) or the capped draw (SPEC.md 3c)")
+                       "lever and extrapolation family are taken from, the full source or "
+                       "the capped draw; default full with --src-seed (an ensemble member), "
+                       "capped without it, as the study's commands ran (SPEC.md 3c)")
         q.add_argument("--src-rank", dest="src_rank", type=int, default=None,
                        help="modes c, cb and d with --src-k 1: the source is the R-th of the "
                        "--src-pick order (1 is the one --src-k 1 takes); one member of a "
@@ -243,7 +245,8 @@ def build_parser(raising=False):
                    help="the job list holding the template row: a file, or one of jobs/")
     q.add_argument("--template", required=True,
                    help="job_id of the template row, a cell command (its --src-cap, "
-                        "--src-seed, --src-range, --src-rank, --cell and --out are replaced)")
+                        "--src-seed, --src-range, --src-rank, --cell and --out are replaced, "
+                        "and --src-k is set to 1 under --src-ranks)")
     q.add_argument("--rungs", default=",".join(ENSEMBLE_RUNGS),
                    help="source event caps, comma-separated; 'all' follows --cap")
     q.add_argument("--seeds", type=int, default=None,
@@ -251,7 +254,11 @@ def build_parser(raising=False):
                         "seed 0 only" % ENSEMBLE_SEEDS)
     q.add_argument("--src-ranks", dest="src_ranks", type=int, default=None, metavar="K",
                    help="instead of seeds: the source-pixel ladder, one cell per rung and "
-                        "source rank 1..K (--src-rank), seed 0")
+                        "source rank 1..K (--src-rank), seed 0; needs K distinct pixels on "
+                        "the ranked board, and in a same-run P3 cell each rank drops its own "
+                        "source triple from the targets, so ranks share all targets but one")
+    q.add_argument("--seed-from", dest="seed_from", type=int, default=0,
+                   help="first seed of a capped rung (default 0): seeds S..K-1")
     q.add_argument("--append", action="store_true",
                    help="add the rows to the existing list --out (no second smoke row)")
     q.add_argument("--src-range", dest="src_range", default="full", choices=["full", "capped"])

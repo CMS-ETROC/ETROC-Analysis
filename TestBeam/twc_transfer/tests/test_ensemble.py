@@ -11,6 +11,7 @@ seconds.
 
 Run from TestBeam/:  python -m pytest twc_transfer/tests
 """
+import argparse
 import os
 import shlex
 import sys
@@ -349,3 +350,79 @@ def test_the_source_pixel_ladder_and_its_arms_go_into_one_list(tmp_path, monkeyp
         cli.main(["ensemble", "--list", "cells.tsv", "--template", "a1_twin_26to27",
                   "--rungs", "all", "--src-ranks", "2", "--out", "ensemble/other.tsv"])
     assert len(J.read_jobs(path)) == 19
+
+
+def test_the_range_default_follows_the_seed(env):
+    # a command of the study's (--src-cap alone) runs as the study ran it: fifty columns and the
+    # label of its capped draw; a member of an ensemble (--src-seed) takes the full source's
+    legacy = _p3(env, "legacy", "--src-cap", "100")
+    capped = _p3(env, "capped_explicit", "--src-cap", "100", "--src-range", "capped")
+    member = _p3(env, "member", "--src-cap", "100", "--src-seed", "0")
+    assert list(legacy.columns) == CL.CELL_COLUMNS
+    cols = [c for c in CL.CELL_COLUMNS if c not in ("cell", "ts")]
+    pd.testing.assert_frame_equal(legacy[cols], capped[cols])
+    x = _arm(member, "xfer")
+    assert set(x.src_range) == {"full"}
+    np.testing.assert_allclose(x.cov_C, x.cov_C_full)
+    assert not np.allclose(_arm(legacy, "xfer").cov_C, x.cov_C, equal_nan=True)
+    # agg_by_cell carries the cap, the seed and the rank of a member, and nothing for the rest
+    cli.main(["agg", "--cells", os.path.join(env["out"], "cells", "member.csv"), "--f-inflate",
+              "1.0", "--out", "agg_member"])
+    by_cell = pd.read_csv(os.path.join(env["out"], "agg_member", "agg_by_cell.csv"))
+    assert set(by_cell.src_cap) == {100} and set(by_cell.src_seed) == {0}
+    assert by_cell.src_rank.isna().all()
+    cli.main(["agg", "--cells", os.path.join(env["out"], "cells", "legacy.csv"), "--f-inflate",
+              "1.0", "--out", "agg_legacy"])
+    assert "src_cap" not in pd.read_csv(os.path.join(env["out"], "agg_legacy",
+                                                     "agg_by_cell.csv")).columns
+
+
+def test_ensemble_refuses_at_writing_what_a_member_would_refuse(tmp_path, monkeypatch):
+    monkeypatch.setenv("ETROC_TWC_TRANSFER_ROOT", str(tmp_path / "read"))
+    monkeypatch.setenv("ETROC_TWC_OUT", str(tmp_path / "out"))
+    ens = tmp_path / "out" / "ensemble"
+    # a cell refusal (mode e reads no source to subsample) stops the list, nothing is written
+    with pytest.raises(SystemExit, match="mode e reads no such source"):
+        cli.main(["ensemble", "--list", "cells.tsv", "--template", "e1_pooled_aug_run23",
+                  "--rungs", "100,all", "--seeds", "2"])
+    assert not ens.exists()
+    # a second list of one template in one write root would write the same cells
+    base = ["ensemble", "--list", STAGE3, "--template", "G_P3_run26_nall", "--rungs", "100,all",
+            "--seeds", "2"]
+    cli.main(base + ["--out", "ensemble/a.tsv"])
+    with pytest.raises(SystemExit, match="holds G_P3_run26_n100_s00"):
+        cli.main(base + ["--out", "ensemble/b.tsv"])
+    cli.main(base + ["--stem", "G_P3_run26_repocore", "--out", "ensemble/b.tsv"])
+    (tmp_path / "out" / "cells" / "G_P3_run26_x_n100_s00").mkdir(parents=True)
+    with pytest.raises(SystemExit, match="exists in the write root"):
+        cli.main(base + ["--stem", "G_P3_run26_x", "--out", "ensemble/c.tsv"])
+    # an appended arm needs its own group
+    with pytest.raises(SystemExit, match="holds group Gens_desy"):
+        cli.main(["ensemble", "--list", STAGE3, "--template", "G_P3_run26_nall", "--rungs",
+                  "all", "--src-ranks", "2", "--append", "--out", "ensemble/a.tsv"])
+    # --seed-from: seeds 1..19 of a rung whose seed 0 exists already
+    cli.main(base[:5] + ["--rungs", "6000", "--seeds", "20", "--seed-from", "1", "--stem",
+                         "G_P3_run26_6k", "--out", "ensemble/d.tsv"])
+    ids = [j["job_id"] for j in J.read_jobs(str(ens / "d.tsv"))][1:]
+    assert ids == ["G_P3_run26_6k_n6000_s%02d" % s for s in range(1, 20)]
+
+
+def test_member_options_and_the_full_source_rule():
+    # a rank member takes one source, whatever --src-k its template had
+    cmd = E.member_command("cell --cell x --mode c --xfer-board dut --src-k 5 --campaign desy "
+                           "--run run26 --out o.csv", "x_nall_p02", 0, 0, "full", 2)
+    ns = cli.parse_command(shlex.split(cmd))
+    assert (ns.src_k, ns.src_rank, ns.src_seed) == (1, 2, 0)
+    # the full source follows --cap: the larger of --cap and --src-cap, uncapped at --cap 0
+    def ns_(**kw):
+        d = dict(src_cap=0, src_seed=None, cap=6000)
+        d.update(kw)
+        return argparse.Namespace(**d)
+    assert CL.source_sampling(ns_(src_cap=100)) == (100, 0, 6000)
+    assert CL.source_sampling(ns_(src_cap=100, src_seed=3, cap=0)) == (100, 3, 0)
+    assert CL.source_sampling(ns_(cap=300)) == (300, 0, 300)
+    # mode d reads events whatever --src-bank says, so its draw is not refused
+    base = dict(cell="x", src_cap=100, src_seed=None, src_bank="b.parquet", src_rank=None,
+                src_triple=None, src_k=1)
+    assert CL.ensemble_refusal(argparse.Namespace(mode="d", **base)) is None
+    assert "--src-bank reads no such" in CL.ensemble_refusal(argparse.Namespace(mode="c", **base))

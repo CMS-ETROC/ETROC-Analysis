@@ -234,28 +234,42 @@ noise, so the shape of a ladder of single draws says nothing about where it stop
   template of those modes whose floor exceeds its smallest rung. It also refuses a rung above
   the template's `--cap`, whose full source would be another sample than the other rungs'. Nothing about a target changes: its triples,
   its events and its folds are those of the same cell without the two flags, in every member.
-- **The full source.** The source of the same cell without `--src-cap` and `--src-seed`: the
-  file read at the larger of `--cap` and `--src-cap` (no cap when `--cap` is 0) with seed 0.
+- **Nesting and size.** For one seed the draws are nested across rungs (one permutation of the
+  file, cut at N), so the members of one seed are not independent across rungs; seed 0 is also
+  nested in the full source. A rung at or above the file's event count reads the whole file
+  for every seed: its members are identical and its spread is zero by construction.
+- **The full source.** The file read at the larger of `--cap` and `--src-cap` (no cap when
+  `--cap` is 0) with seed 0; when `--src-cap` is at most `--cap`, the source of the same cell
+  without `--src-cap` and `--src-seed`.
   It is read once per source (not at all when it is the sample already read), and serves only
   to label targets; no target is corrected with it.
-- **The range rule.** With `--src-range full` (the default) a target's coverage, overlap, lever
+- **The range rule.** Without `--src-range` the rule is `full` when `--src-seed` is given (a
+  member of an ensemble) and `capped` otherwise, so a command of the study's (`--src-cap` alone)
+  runs as the study ran it: the fifty columns, its capped label, no full-source read. With
+  `--src-range full` a target's coverage, overlap, lever
   and family (section 5.3: `cov_C`, `hist_O`, `lever_X`, `lever_X_all`, `extrap`) are those of
   the full source: its [q0.5, q99.5] and its polynomial, so a target sits in the same family at
   every cap and seed, the family the uncapped cell gives it. With `--src-range capped` they are
   the draw's own, its [q0.5, q99.5] and its polynomial: the study's stage-3 ladder, whose
   family moved with the cap (at 100 events every target read as extrapolating). The
   aggregation (section 8) takes the family from `extrap` as always.
-- **The table.** A cell run with `--src-cap` or `--src-seed` writes `cell.ENSEMBLE_COLUMNS`
+- **The table.** A member of an ensemble (`--src-seed`, `--src-rank`, or `--src-cap` with an
+  explicit `--src-range`) writes `cell.ENSEMBLE_COLUMNS`
   after the fifty of `cell.CELL_COLUMNS`: `src_cap` (the cap, `--cap` when `--src-cap` is 0),
   `src_seed`, `src_range` and `n_src_full` (the full source's events; blank on a self arm), then
   the five overlap columns twice, `<col>_full` and `<col>_capped`, reduced over a pair's two
   boards as the five of `CELL_COLUMNS` are. At the rung `all` with seed 0 the two labels are
-  equal. A cell without either flag writes the fifty columns, as the study's did.
+  equal. The last, `src_rank`, is the `--src-rank` (blank without it; tables written before it
+  existed have the other fourteen, which `agg` reads too). `agg_by_cell.csv` of such tables
+  carries `src_cap`, `src_seed` and `src_rank` per cell. Any other cell writes the fifty columns,
+  as the study's did.
 - **The source rank.** `--src-rank R`, in modes c, cb and d with `--src-k 1`, takes the R-th
   source of the `--src-pick` order alone: the first R are picked as `--src-k R` picks them
   (distinct pixels on the ranked board) and the last is kept, with its pick evidence
   (`src_pick`, `src_pix_rc`, `src_pix_ntrk`, `src_pix_pop`). Rank 1 is the source of
-  `--src-k 1`. A cell exits when the rule finds fewer than R sources, and refuses the flag with
+  `--src-k 1`. In a same-run P3 cell each source's own triple is dropped from the targets, so
+  two ranks share every target but the two sources' triples. A cell exits when the rule finds
+  fewer than R sources, and refuses the flag with
   `--src-triple`, with `--src-k` other than 1 and in the other modes. The table records the
   source by name, as for every cell; the rank is in the member's id (below).
 - **Refused.** Either flag with `--src-bank` (a bank row reads no events: its coefficients were
@@ -272,9 +286,15 @@ noise, so the shape of a ladder of single draws says nothing about where it stop
   (or `ensemble --write-dag DIR`) turns into a DAG (section 6a); its AGG node aggregates each
   member as a cell of its own, so every (N, seed) has its own random-effects aggregate.
   With `--src-ranks K` the seed axis is replaced by the source ranks 1 to K (`--src-rank`) at
-  every rung, seed 0, members `<stem>_<rung tag>_p<RR>`; `--seeds` is refused beside it, and so
-  is a template of a mode without a pick order. `--append --out LIST` adds the rows of another
-  template to a list written before, with no second smoke row, refusing a job id the list holds:
+  every rung, seed 0, members `<stem>_<rung tag>_p<RR>`, each with `--src-k 1`; `--seeds` is
+  refused beside it, and so is a template of a mode without a pick order. `--seed-from S` starts
+  the seeds of a capped rung at S. Before writing, `ensemble` applies the cell's own refusals to
+  every member, counts the sources of a rank ladder where the source tree can be read, and
+  refuses a member whose `cells/<id>/` exists in the write root or whose id another list of the
+  ensemble folder holds (a list on another core needs its own `--stem`; the default stem of a
+  `capped` list ends in `_capped`). `--append --out LIST` adds the rows of another
+  template to a list written before, with no second smoke row, refusing a job id or (without
+  `--group`) a group the list holds:
   one list, and so one DAG and one core, for several arms, each with its own group.
 
 ## 4. Estimator and errors
@@ -666,7 +686,8 @@ submits nothing. A job list in, a DAG out; the layout is the study's.
   `cell.ENSEMBLE_COLUMNS` after these (section 3c).
 - **Resume, keyed on `tgt_triple`.** Rows are appended after every `--flush` target triples
   (default 2) and at the end, with the fixed column list. A table that exists is resumed unless
-  `--overwrite` is given: its header must be `CELL_COLUMNS` (otherwise the cell stops before
+  `--overwrite` is given: its header must be the cell's columns, `CELL_COLUMNS` and for a
+  member of an ensemble `ENSEMBLE_COLUMNS` after them (otherwise the cell stops before
   reading an event), the target triples already in it are skipped and the others appended, so a
   rerun of the same command never writes a triple twice. `--overwrite` removes the table
   first.
