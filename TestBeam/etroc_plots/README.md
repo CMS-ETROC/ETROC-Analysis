@@ -87,6 +87,12 @@ line after the pixel counts of their small open markers. Figure st07 also draws 
 track files, so its footer ends with the full line. Figure st06 is drawn from the
 autocalibration scans and carries neither.
 
+The resolution figures (re01-re18) are drawn from the resolution tables too. A figure that draws
+small markers (under 128 pixels, half the chip) gives the shorter line after the pixel counts of
+those markers; a figure without small markers does not carry it. Figure re10 counts the pixels
+with a resolution and says in its own words that the count is of the surviving readout sample.
+The numbers table re09 carries neither line.
+
 The per-loop census and the readout mechanism are documented with the DAQ work and will be
 published with it.
 
