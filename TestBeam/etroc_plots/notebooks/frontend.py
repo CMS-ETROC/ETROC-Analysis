@@ -556,15 +556,16 @@ for k, tel in enumerate(TELS):
 # 1,675 and 1,669 events give medians of 3.01 and 2.02 ns; the other four choices for that pixel
 # give 2.28-2.97 ns.
 #
-# The board statistics barely move with the ranking rule. The other rule ranks each pixel's
-# triples by file size (`--rank bytes`, the rule of the first presented figures). It changes the
-# triple of 733 of the 30,623 pixels of the tables (2.4 %; 661 of the 28,267 that count). Over
-# the 120 boards of the 30 runs it moves the board values of fe07-fe09 by at most 0.0135 ns
-# (median of the pixel medians) and 0.0029 ns (pooled median). The most frequent TOT (0.1 ns
-# bins) moves on two boards: by one bin on July F1 run 9 board 3, the one board of the 56 that
-# fe08 draws, and by two bins on July F1 run 52 board 1, which neither fe07 nor fe08 draws. These
-# numbers compare the published tables of 2026-10-09 with a rebuild ranked by file size
-# (2026-10-18). fe07 and fe08 state this in their footers.
+# The board statistics barely move with the ranking rule. The other rule ranks each pixel's triples
+# by file size (`--rank bytes`, the rule of the first presented figures). It picks a different
+# triple for 733 of the 30,623 pixels of the tables (2.4 %). Of the 28,267 pixels that count, 661
+# change triple. The board values of fe07-fe09 hardly change: over the 120 boards of the 30 runs
+# they move by at most 0.0135 ns (median of the pixel medians) and 0.0029 ns (pooled median). The
+# most frequent TOT (0.1 ns bins) moves on two boards only. On July F1 run 9 board 3 it moves by
+# one bin (of the 56 boards fe08 draws, the only one that moves). On July F1 run 52 board 1, which
+# neither fe07 nor fe08 draws, it moves by two bins. These numbers compare the published tables of
+# 2026-10-09 with a rebuild ranked by file size (2026-10-18). fe07 and fe08 state this in their
+# footers.
 #
 # * TOT: the time over threshold of every event of that triple, in ns, as reconstructed.
 # * dTOA: the TOA difference of two boards of one triple after the time-walk correction solved
