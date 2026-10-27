@@ -81,6 +81,11 @@ The maps figures (maps01-maps18) are drawn from the resolution tables, not from 
 Their only count of readout data is a pixel count, so each of their footers ends with the shorter
 line "Pixel counts are the surviving readout sample." (`SURVIVING_TEXT` in the maps notebook).
 
+The settings figures st01-st05 are drawn from the resolution tables too, and give the shorter
+line after the pixel counts of their small open markers. Figure st07 also draws the TOT of the
+track files, so its footer ends with the full line. Figure st06 is drawn from the
+autocalibration scans and carries neither.
+
 The per-loop census and the readout mechanism are documented with the DAQ work and will be
 published with it.
 

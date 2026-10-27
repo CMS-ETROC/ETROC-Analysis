@@ -211,7 +211,9 @@ as reproducible as this file: when a number shown on the figure is not in it, ad
   the campaign's `READOUT_FOOTER`, which sends the reader to the README's "Data quality"
   section.
 - A figure drawn from the IRRAD 2026 resolution tables, whose only count of readout data is a
-  pixel count, ends its footer with the one line "Pixel counts are the surviving readout
-  sample." (`SURVIVING_TEXT` in its notebook: the maps notebook).
+  pixel count, carries the one line "Pixel counts are the surviving readout sample."
+  (`SURVIVING_TEXT` in its notebook): the maps figures end their footer with it, and the
+  settings figures st01 to st05 give it after the pixel counts of their small open markers.
+  A figure that also draws readout hits ends with `READOUT_FOOTER` instead (st07).
 - A figure drawn from autocalibration scans, from IV or slow-control logs, or from DESY data
   only carries neither.
