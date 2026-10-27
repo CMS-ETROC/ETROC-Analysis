@@ -1373,7 +1373,7 @@ if not (TC[R_EARLY]["rfsel"] == TC[R_SAME]["rfsel"] == TC[R_NEXT]["rfsel"] - 1
 TC_OFFSET = TC[R_SAME]["offset"]
 tc_rows = rfsel_hist[(rfsel_hist["campaign"] == RF_CAMP) & (rfsel_hist["tel"] == RF_TEL)
                      & (rfsel_hist["group"].astype(str) == TC_NAME)]
-TC_COMBO = tot_shapes.ANOINTED[RF_BOARD]          # the boards of the chip's triples
+TC_COMBO = tot_shapes.REFERENCE[RF_BOARD]         # the boards of the chip's triples
 counted16 = {r: counted(RF_CAMP, RF_TEL, r, RF_BOARD) for r in TC_RUNS}
 common16 = set.intersection(*(set(v) for v in counted16.values()))
 hv16 = {b: {r: board_settings(RF_CAMP, RF_TEL, r, b)["hv"] for r in TC_RUNS} for b in TC_COMBO}

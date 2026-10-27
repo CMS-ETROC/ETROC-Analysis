@@ -12,7 +12,7 @@ run's config yaml (extra0-dut1-ref2; the role at an index changes between runs, 
 not), so the chip of a board is always TELESCOPE_CHIPS[telescope][board index].
 
 Combos and triples. Boards 0, 1 and 2 are read from the combo of boards 0-1-2, board 3 from the
-combo 1-2-3 (ANOINTED). A pixel's triple is one file of that combo holding the pixel: the one
+combo 1-2-3 (REFERENCE). A pixel's triple is one file of that combo holding the pixel: the one
 with the most events (rank="rows"; ties go to the larger file, then to the first file name), or
 the largest file (rank="bytes", ties to the first file name; the rule of the CERN IRRAD 2026
 talk figures). The events of a file are its row count, read from the parquet footer. A pixel
@@ -61,7 +61,7 @@ from . import blnw
 
 FLOOR = 300                       # events in a pixel's triple for the pixel to count
 NBOARDS = 4
-ANOINTED = {0: (0, 1, 2), 1: (0, 1, 2), 2: (0, 1, 2), 3: (1, 2, 3)}
+REFERENCE = {0: (0, 1, 2), 1: (0, 1, 2), 2: (0, 1, 2), 3: (1, 2, 3)}
 COMBOS = ((0, 1, 2), (1, 2, 3))
 PAIRS = ((0, 1), (0, 2), (1, 2), (2, 3))
 PAIR_COMBO = {(0, 1): (0, 1, 2), (0, 2): (0, 1, 2), (1, 2): (0, 1, 2), (2, 3): (1, 2, 3)}
@@ -197,8 +197,8 @@ def ranked(t, rank):
 
 def best_triples(tri, board, rank="rows", boards=None):
     """One row per pixel of `board`: its triple among the triples of one run (rows of the triples
-    table) in the combo `boards` (default ANOINTED[board]), sorted by pixel."""
-    t = tri[tri["boards"] == boards_text(boards or ANOINTED[board])]
+    table) in the combo `boards` (default REFERENCE[board]), sorted by pixel."""
+    t = tri[tri["boards"] == boards_text(boards or REFERENCE[board])]
     t = ranked(t, rank).drop_duplicates(["row_%d" % board, "col_%d" % board], keep="first")
     return t.sort_values(["row_%d" % board, "col_%d" % board], kind="mergesort").reset_index(drop=True)
 
@@ -351,7 +351,7 @@ def run_tables(camp, tel, run, tri, rank="rows", log=None):
             out["dtoa"].append(rec)
 
     for b in range(NBOARDS):
-        croles = [roles[x] for x in ANOINTED[b]]
+        croles = [roles[x] for x in REFERENCE[b]]
         chunks, medians = [], []
         for _, t in best_triples(tri, b, rank).iterrows():
             passes = int(t["n_rows"]) >= FLOOR

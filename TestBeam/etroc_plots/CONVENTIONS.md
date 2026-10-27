@@ -57,11 +57,12 @@ rest are for whoever writes the next figure.
 - Every figure or panel showing resolution or TDC data states the front-end operating point in its
   title: RFSel with the feedback resistor, the discriminator threshold as baseline + offset, and the
   preamp power. `style.settings_text` writes it.
-- A board's value comes from one 3-board combination, the anointed one: boards 0-1-2 for boards
-  0, 1 and 2, boards 1-2-3 for board 3. Where the value depends on the combination
+- A board's value comes from one 3-board combination, the reference combination: boards 0-1-2
+  for boards 0, 1 and 2, boards 1-2-3 for board 3. It is fixed, the same in every run, so that a
+  board has one number on every figure. Where the value depends on the combination
   (`BAND_STEPS` in the campaign module: 3.5e15 for IRRAD 2026), the board is drawn as a band: a
   shaded box over its value in every combination containing it, the marker at the box's centre,
-  the bar the anointed combination's pixel spread (`resolution.tables.band`). The footer says so
+  the bar the reference combination's pixel spread (`resolution.tables.band`). The footer says so
   (`tables.BAND_FOOTER`). A figure that compares the combinations themselves shows each
   combination's value and no band. A figure built on maps pooled over every combination (the
   merge cost, figure 7 of the merged notebook) says so in its footer.
@@ -75,7 +76,7 @@ rest are for whoever writes the next figure.
   CAL mode), 0.3 ns for the TOA and 0.2 ns for the TOT of fe03-fe04, 0.1 ns for the pooled TOT,
   25 ps (about one TOA code) for the TOA difference.
 - A pixel's TOT and TOA difference come from one triple of pixels: among the track files of its
-  board's anointed combination, the one with the most events, counted when it holds at least 300
+  board's reference combination, the one with the most events, counted when it holds at least 300
   (`tot_shapes.FLOOR`). Nothing is pooled across the triples of a pixel. The TOT depends on which
   triple is read (the partner pixels fix where the track crosses the pixel), so a figure of TOT
   says which triple it took.

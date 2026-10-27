@@ -1,7 +1,7 @@
 """Per-pixel time-resolution maps: one 16 x 16 map per board, read from the pixel table.
 
 A board's map holds, for every pixel with a quote, the pixel's time resolution (value_ps) and
-its fit error (err_ps) from the pixel table, anointed combination, one track variant and event
+its fit error (err_ps) from the pixel table, reference combination, one track variant and event
 floor (resolution/tables.py). The board value and pixel spread come from the board table. The
 maps are drawn in the chip frame (both axes inverted: pixel row 0, column 0 at the bottom
 right), on one fixed colour scale, VMIN to VMAX, for every map of every figure; a pixel outside
@@ -72,14 +72,14 @@ def saturated_cells(grid, vmin=VMIN, vmax=VMAX):
 
 def run_boards(bt, grids, rs, campaign, telescope, run, variant, floor, band=False):
     """The boards of one run, in slot order, as dictionaries: chip, board_idx, bias (hv, from
-    runs_summary), combo and combo_chips (the anointed combination), value_ps, pixel_spread_ps,
+    runs_summary), combo and combo_chips (the reference combination), value_ps, pixel_spread_ps,
     stat_ps, n_pixels (board table), grid and err_grid (pixel_grids), saturated_count. With
     `band`, also "band": tables.band, the board's value over every combination containing it.
     Raises ValueError when a board is missing or its map does not hold n_pixels quotes."""
     rows = tables.board_rows(bt, telescope, run, variant, floor, campaign)
     chips = _campaign.TELESCOPE_CHIPS[telescope]
     if list(rows["board_idx"]) != list(range(len(chips))):
-        raise ValueError("%s %s run %s: anointed boards %s, expected one row per board 0-%d"
+        raise ValueError("%s %s run %s: reference-combo boards %s, expected one row per board 0-%d"
                          % (campaign, telescope, run, list(rows["board_idx"]), len(chips) - 1))
     settings = {b["board_idx"]: b for b in
                 tables.run_settings(rs, campaign, _campaign.TABLE_TEL[telescope], run)}

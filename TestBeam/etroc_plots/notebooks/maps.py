@@ -114,7 +114,7 @@ def show(stem):
 # resolution for every board of every 3-board combination of a run, per pixel and per board. The
 # maps use, for each board:
 #
-# * the anointed combination: boards 0-1-2 for boards 0, 1 and 2, boards 1-2-3 for board 3;
+# * the reference combination: boards 0-1-2 for boards 0, 1 and 2, boards 1-2-3 for board 3;
 # * the most-populated track through each pixel (`VARIANT = "top"`);
 # * tracks with at least 300 events (`FLOOR`); a pixel without such a track has no value.
 #
@@ -122,8 +122,8 @@ def show(stem):
 # that quote. The board value is the table's robust Gaussian mean over the board's pixel map
 # (2.5-sigma clip). At 3.5e15 p/cm$^2$ (`BAND_STEPS` in the campaign module) the board value
 # depends on the combination, so the figures give the centre of the board's values over every
-# combination containing it, with their range; the pixels stay the anointed combination's. The
-# histogram boxes are the exception: they give the anointed combination's value, the one their
+# combination containing it, with their range; the pixels stay the reference combination's. The
+# histogram boxes are the exception: they give the reference combination's value, the one their
 # histogram draws, then the range and centre.
 #
 # `RUNS` names one run per fluence step, lowest fluence first:
@@ -245,15 +245,15 @@ HIST_TEXT = (u"Histograms: pixel values in 1 ps bins over the board value %s 6 p
                 pixel_maps.SIGMA))
 BAND_STEPS_TEXT = u" and ".join(style.fluence_label(f) for f in campaign.BAND_STEPS)
 BAND_TEXT = (u"At %s: board value = centre of the chip's values over every combination containing "
-             u"it (range given); pixels from the anointed combination" % BAND_STEPS_TEXT)
-HIST_BAND_TEXT = (u"At %s: maps and histograms from the anointed combination, its board value in "
+             u"it (range given); pixels from the reference combination" % BAND_STEPS_TEXT)
+HIST_BAND_TEXT = (u"At %s: maps and histograms from the reference combination, its board value in "
                   u"the box; combinations = range and centre of the chip's values over every "
                   u"combination containing it" % BAND_STEPS_TEXT)
 LADDER_CAPTION_TEXT = u"under each map: bias, board value, pixels with a value, sat"
 PANEL_TEXT = (u"%s; colour scale %d-%d ps; grey = no value"
               % (FRAME_TEXT, pixel_maps.VMIN, pixel_maps.VMAX))
 PANEL_BAND_TEXT = (u"board value = centre of the chip's values over every combination containing "
-                   u"it; pixels from the anointed combination")
+                   u"it; pixels from the reference combination")
 
 
 def fluence_text(fluence):
@@ -273,15 +273,15 @@ def subject(b):
     return u"%s, %d V" % (b["chip"], int(round(b["hv"])))
 
 
-def value_lines(b, prefix=u"board value ", anointed=True):
+def value_lines(b, prefix=u"board value ", reference=True):
     """The board value as drawn: at BAND_STEPS the band centre, then the band's range and, with
-    `anointed`, the value of the combination the pixels come from."""
+    `reference`, the value of the combination the pixels come from."""
     band = b.get("band")
     if band is None:
         return [u"%s%.1f ps" % (prefix, b["value_ps"])]
     rng = u"combinations %.1f-%.1f ps" % (band["band_lo_ps"], band["band_hi_ps"])
-    if anointed:
-        rng += u", this one %.1f" % band["anointed_ps"]
+    if reference:
+        rng += u", this one %.1f" % band["reference_ps"]
     return [u"%s%.1f ps" % (prefix, band["marker_ps"]), rng]
 
 
@@ -296,7 +296,7 @@ def hist_caption(b):
     if band is None:
         return u"\n".join([pixels_text(b)] + value_lines(b))
     return u"\n".join([pixels_text(b),
-                       u"board value %.1f ps (this combination)" % band["anointed_ps"],
+                       u"board value %.1f ps (this combination)" % band["reference_ps"],
                        u"combinations %.1f-%.1f ps, centre %.1f"
                        % (band["band_lo_ps"], band["band_hi_ps"], band["marker_ps"])])
 
@@ -310,12 +310,12 @@ def panel_caption(b):
 
 
 def selection_text(boards):
-    """The selection, each anointed combination named by its chips with the chips it stands
+    """The selection, each reference combination named by its chips with the chips it stands
     for."""
     combos = {}
     for b in boards:
         combos.setdefault(b["combo_chips"], []).append(b["chip"])
-    return (u"Selection: %s, tracks with at least %s events, each chip from its anointed "
+    return (u"Selection: %s, tracks with at least %s events, each chip from its reference "
             u"combination: %s" % (tables.VARIANT_TEXT[VARIANT], FLOOR, u"; ".join(
                 u"%s for %s" % (c, u", ".join(chips)) for c, chips in combos.items())))
 
@@ -333,8 +333,8 @@ def conventions():
     c["error_bar"] = "none drawn; error_map_ps holds each pixel's fit error, written in its cell"
     c["band"] = ("at the campaign's BAND_STEPS: band_lo_ps / band_hi_ps = min / max of the "
                  "board's value over every combination containing it, marker_ps = their centre "
-                 "(the board value of the map captions and the ladder), anointed_ps = the "
-                 "anointed combination's value (the board value of the histogram boxes)")
+                 "(the board value of the map captions and the ladder), reference_ps = the "
+                 "reference combination's value (the board value of the histogram boxes)")
     c["histogram"] = ("fit: hist_counts in hist_bin_ps bins from hist_lo_ps (board value +/- 6 "
                       "pixel spreads), n_outside pixels beyond that range; Gaussian area fixed "
                       "to n_in_hist")
@@ -371,7 +371,7 @@ def save_panels(stem, figs):
 # errors (the box counts any pixel outside that range), a binned Gaussian fit when the histogram
 # holds at least 30 pixels, and the pulls of the fit. The fit shows the shape of the
 # distribution; the board value, in the box, is the table's robust mean (at 3.5e15, the
-# anointed combination's, then the range and centre over every combination).
+# reference combination's, then the range and centre over every combination).
 
 # %%
 def run_compound(stem, camp, tel, run):
@@ -414,7 +414,7 @@ for _camp, _tel in RUNS:
 
 # %%
 def ladder_caption(b):
-    lines = value_lines(b, prefix=u"", anointed=False)
+    lines = value_lines(b, prefix=u"", reference=False)
     lines[0] = u"%d V, %s, %d px, sat %d" % (int(round(b["hv"])), lines[0], b["n_pixels"],
                                             b["saturated_count"])
     return lines

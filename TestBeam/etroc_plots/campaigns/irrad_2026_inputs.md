@@ -60,7 +60,7 @@ Edit these to change what the figures show.
 
 | file | contents |
 |---|---|
-| `july/display_runs_jul.csv` | the July runs drawn at the 1.5e15, 2e15 and 3.5e15 steps. One row per run: telescope, fluence, rfsel, os (threshold offset), run, preferred (1 marks the run used where a figure needs one run per telescope, fluence, RFSel and offset), combo (anointed = the fixed board combination, band = the min-max over all combinations), bias_note, note |
+| `july/display_runs_jul.csv` | the July runs drawn at the 1.5e15, 2e15 and 3.5e15 steps. One row per run: telescope, fluence, rfsel, os (threshold offset), run, preferred (1 marks the run used where a figure needs one run per telescope, fluence, RFSel and offset), combo (`anointed`, its name on disk for the reference combination, the fixed board combination; `band` = the min-max over all combinations), bias_note, note |
 | `july/good_runs.csv` | a good/bad verdict with a one-line reason for every run (campaign, telescope, run, good, reason); the IV figures read its `IRRAD_Mar2026` and `IRRAD_Jul2026` rows |
 
 ## Rebuilt by this package
@@ -106,7 +106,7 @@ run merging itself (the merged step-13 outputs) was done by the run-merging stud
 
 | file | contents | origin |
 |---|---|---|
-| `tables/irrad/board_table_irrad.csv` | one row per run, 3-board combination, board, track variant and event floor, March and July: the board's time resolution, pixel spread and pixel count, and whether the combination is the anointed one for that board | `build_pixel_tables.py --family irrad`, 2026-09-15/16, from each run's step-13 `resolution_table_<combo>.csv` with the functions of `TestBeam/condor_at_lxplus/utils/quote_resolution.py` |
+| `tables/irrad/board_table_irrad.csv` | one row per run, 3-board combination, board, track variant and event floor, March and July: the board's time resolution, pixel spread and pixel count, and whether the combination is the reference one for that board (the column `anointed`, its name on disk) | `build_pixel_tables.py --family irrad`, 2026-09-15/16, from each run's step-13 `resolution_table_<combo>.csv` with the functions of `TestBeam/condor_at_lxplus/utils/quote_resolution.py` |
 | `tables/irrad/pixel_table_irrad.csv.gz` | the same per pixel: resolution, fit error, events behind the pixel | the same build |
 | `tables/merged/board_table_merged.csv`, `tables/merged/pixel_table_merged.csv` | the same two tables for merged runs (`run` is the merge's name, such as `h1_grp_run3_4`), with the share of tracks dropped as degenerate per combination | the same build, on the merged step-13 outputs of the run-merging study |
 | `tables/merged/per_pixel_cost_summary.csv` | per merge and board: the cost of merging, per pixel (median, 16th and 84th percentile) and on the board value | `merge_runs/merge_cost/build_per_pixel_cost.py` of the run-merging study, 2026-09-15 |
