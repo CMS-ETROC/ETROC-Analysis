@@ -2,8 +2,9 @@
 with merges, every display run as single runs, the points of single and merged runs, the
 standard operating point, the stop clock with its bounds, the hours since the first run at a
 step, the colour rule, the low-pixel threshold and the good-run list reader the settings figures
-share; the fluence ladder's picks (step_winners), the one-run-per-condition selector, the
-floor-"none" pixel lookup and the numbers table; the
+share; the surviving-sample line of the footers, with and without small markers; the fluence
+ladder's picks (step_winners), the one-run-per-condition selector, the floor-"none" pixel lookup
+and the numbers table with the line under it; the
 combination split's runs, points and layout, with and without merges; the bias summary drawn in
 part (re12 to re14) with the whole figure's colours; the combination checks (re16 to re18): the
 partner-excluded combination, the pair-corrected midpoint, a missing combination reported, the HV
@@ -251,7 +252,8 @@ def test_numbers_table_rows_and_restored_merge_cells(good_csv, tmp_path):
     assert df.loc[df["bookkeeping fluence [p/cm2]"] != 3.5e15, "band low [ps]"].isna().all()
     paths = numbers_table.write_table(df, str(tmp_path), "t")
     assert [os.path.basename(p) for p in paths] == ["t.csv", "t.md"]
-    assert len(open(paths[1]).read().splitlines()) == 2 + 16
+    md = open(paths[1]).read().splitlines()
+    assert len(md) == 2 + 16 + 2 and md[-2:] == ["", curves.SURVIVING_TEXT]
     assert len(pd.read_csv(paths[0])) == 16
 
 
@@ -329,6 +331,17 @@ def test_low_pixels_below_128_only():
     assert [q["n_pixels"] for q in curves.low_pixel_points(pts)] == [127, 45]
     assert curves._with_low({}, pts)["low_pixels"]["points"] == curves.low_pixel_points(pts)
     assert "low_pixels" not in curves._with_low({}, pts[1::2])
+
+
+def test_footer_lines_carry_the_surviving_line_with_and_without_small_markers():
+    assert curves.SURVIVING_TEXT == u"Pixel counts are the surviving readout sample."
+    pts = [dict(tel="h1", label="11", board_idx=i, chip=c, n_pixels=n)
+           for i, (c, n) in enumerate(zip(CHIPS, (200, 128, 256, 240)))]
+    assert curves.low_line(pts) == [curves.SURVIVING_TEXT]
+    pts[2]["n_pixels"] = 45
+    assert curves.low_line(pts) == [
+        u"Small open markers, under 128 pixels (half the chip): H1 run 11 (%s 45)." % CHIPS[2],
+        curves.SURVIVING_TEXT]
 
 
 # ------------------------------------------------------------------------ combination split

@@ -318,12 +318,12 @@ as reproducible as this file: when a number shown on the figure is not in it, ad
   section.
 - A figure drawn from the IRRAD 2026 resolution tables, whose only count of readout data is a
   pixel count, says that the count is of the surviving sample with the one line "Pixel counts
-  are the surviving readout sample." (`SURVIVING_TEXT` in its notebook). Where the line stands
-  depends on the notebook. The maps figures end their footer with it. The settings figures st01
-  to st05 give it after the pixel counts of their small open markers, also when no board is
-  under 128 pixels. The resolution figures give it only when they draw small markers, after the
-  pixel counts of those markers (`low_line`, re11's `low_line11`, `rows_footer` of re16-re18);
-  re10 says it in its own words, and re09 does not carry it. A figure that also draws readout
-  hits ends with `READOUT_FOOTER` instead (st07).
+  are the surviving readout sample." (`SURVIVING_TEXT`; `curves.SURVIVING_TEXT` for the
+  resolution figures). Every figure that prints a pixel count carries the line, after the pixel
+  counts of its small open markers where it draws any (`curves.low_line`). The numbers table re09
+  carries it under the table: on the figure, and as the last line of its .md (the .csv stays a
+  plain table). The figures without it print no pixel count: re11 and re16-re18 when they draw
+  no small markers (their small-marker line is their only pixel count). A figure that also
+  draws readout hits ends with `READOUT_FOOTER` instead (st07).
 - A figure drawn from autocalibration scans (fe01-fe02, st06), from IV or slow-control logs, or
   from DESY data only carries neither.

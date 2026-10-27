@@ -21,6 +21,10 @@ Columns, named in words with the unit in brackets (COLUMNS):
   preferred run
       July: "yes" when the run, or the merge holding it, is the step's preferred run; empty for
       March (March has no display-run list)
+
+Under the table, after a blank line, the .md carries the line curves.SURVIVING_TEXT ("Pixel
+counts are the surviving readout sample."), as the table figure's footer does; the .csv stays a
+plain table.
 """
 import os
 
@@ -124,7 +128,8 @@ def _md_cell(col, v):
 
 def write_table(df, out_dir, stem):
     """Write `df` (numbers_table) as <stem>.csv (every digit) and <stem>.md (ps to 0.1) in
-    `out_dir`. Returns the two paths."""
+    `out_dir`, the .md with the line curves.SURVIVING_TEXT under the table. Returns the two
+    paths."""
     os.makedirs(out_dir, exist_ok=True)
     csv_path = os.path.join(out_dir, stem + ".csv")
     md_path = os.path.join(out_dir, stem + ".md")
@@ -133,6 +138,7 @@ def write_table(df, out_dir, stem):
              "|" + "|".join("---" for _ in df.columns) + "|"]
     for _, r in df.iterrows():
         lines.append("| " + " | ".join(_md_cell(c, r[c]) for c in df.columns) + " |")
+    lines += ["", curves.SURVIVING_TEXT]
     with open(md_path, "w") as fh:
         fh.write("\n".join(lines) + "\n")
     return [csv_path, md_path]

@@ -69,8 +69,9 @@
 # The IRRAD 2026 loops behind these figures were recorded with the readout saturated: 47 to 81 %
 # of the ETROC2 packets lost their header and were dropped at decoding, so every number below is
 # a measurement on the surviving hits, selected by buffer state, with the selection bias open.
-# Details, and what it means per figure type: the "Data quality" section of the package README
-# (`../README.md`).
+# Every figure that prints a pixel count says so in its footer: "Pixel counts are the surviving
+# readout sample." (`curves.SURVIVING_TEXT`). Details, and what it means per figure type: the
+# "Data quality" section of the package README (`../README.md`).
 #
 # Every figure is saved as PNG (200 dpi) and PDF, with `<name>_values.json` beside it: every
 # number drawn, the input files read and the commit of the code.
@@ -284,7 +285,6 @@ YLIM = (20.0, 80.0)            # ps, every figure
 TEL_TITLES = dict(campaign.TELESCOPE_TITLE)
 TAG = style.settings_text(rfsel=2, offset=20)
 # one footer line each: a footer line stays under about 180 characters to fit the figure width
-SURVIVING_TEXT = u"Pixel counts are the surviving readout sample."
 SELECTION = (u"Selection: %s, tracks with at least %s events, each chip from its reference "
              u"combination (boards 0-1-2 for boards 0-2, boards 1-2-3 for board 3).\n"
              u"Widths = FWHM/2.355 of the TOA-difference core, as the result tables carry them; "
@@ -335,21 +335,6 @@ def run_list(tel, runs):
 def counts_text(pts):
     n = [p["n_pixels"] for p in pts]
     return u"%d boards, %d-%d pixels per board" % (len(pts), min(n), max(n))
-
-
-def low_line(pts):
-    """[the footer lines of the points under LOW_PIXELS] or [] when there are none: "Small open
-    markers, under 128 pixels: H1 run 11 (IH7 45, IH11 35, IH12 40, IH13 79).", SURVIVING_TEXT."""
-    runs = {}
-    for q in curves.low_pixel_points(pts):
-        chips = runs.setdefault((q["tel"], q["label"]), [])
-        if u"%s %d" % (q["chip"], q["n_pixels"]) not in chips:
-            chips.append(u"%s %d" % (q["chip"], q["n_pixels"]))
-    if not runs:
-        return []
-    return [u"Small open markers, under %d pixels (half the chip): %s." % (
-        curves.LOW_PIXELS, u"; ".join(u"%s run %s (%s)" % (t.upper(), r, u", ".join(c))
-                                      for (t, r), c in runs.items())), SURVIVING_TEXT]
 
 
 def drawn_range(p):
@@ -440,7 +425,7 @@ footer01 = u"\n".join([
         counts_text([p for t in TELS for p in P01[t]])),
     u"H1 runs %s; F1 runs %s." % (bias_text(P01["h1"], "h1"), bias_text(P01["f1"], "f1")),
     u"Not drawn: %s." % u"; ".join(u"%s run %d (%s)" % (t.upper(), r, why) for t in TELS
-                                    for r, why in sorted(DROP01[t].items()))] + low_line(
+                                    for r, why in sorted(DROP01[t].items()))] + curves.low_line(
     [p for t in TELS for p in P01[t]]) + [
     u"Lines join each chip's points in bias order."])
 check_ylim({"points": P01}, YLIM, "re01_res_vs_bias_march_preirrad")
@@ -481,7 +466,7 @@ footer02 = u"\n".join([
     (u"Not drawn: %s." % u"; ".join(u"%s run %d (%s)" % (t.upper(), r, why) for t in TELS
                                      for r, why in sorted(DROP02[t].items())))
     if any(DROP02.values()) else u"No run of these steps is at another operating point."] + (
-    low_line([p for t in TELS for p in P02[t]])) + [
+    curves.low_line([p for t in TELS for p in P02[t]])) + [
     FLUENCE_TEXT + u" Lines join each chip's points of one step in bias order."])
 check_ylim({"points": P02}, YLIM, "re02_res_vs_bias_march_steps")
 fig, n02 = curves.res_vs_bias_march_steps(
@@ -543,7 +528,7 @@ footer03 = u"\n".join([
     u"Open markers: July runs off the display-run list, kept as a second bias point (H1 %s; "
     u"F1 %s)." % (bias_text([p for p in july03["h1"] if p["run"] in off03["h1"]], "h1"),
                    bias_text([p for p in july03["f1"] if p["run"] in off03["f1"]], "f1"))] + (
-    low_line([p for t in TELS for p in P03[t]])) + [
+    curves.low_line([p for t in TELS for p in P03[t]])) + [
     u"%s. %s" % (counts_text([p for t in TELS for p in P03[t]]), FLUENCE_TEXT)])
 check_ylim({"points": P03}, YLIM, "re03_res_1p5e15_march_vs_july")
 fig, n03 = curves.res_1p5e15_march_vs_july(
@@ -633,7 +618,7 @@ footer04 = u"\n".join([
         u", ".join(run_list(t, OFF04[t]) for t in TELS if OFF04[t])),
     u"Not drawn, at other biases: %s." % u"; ".join(
         u"%s runs %s" % (t.upper(), bias_text(NOT04[t], t)) for t in TELS if NOT04[t])] + (
-    low_line([p for t in TELS for p in P04[t]])) + [
+    curves.low_line([p for t in TELS for p in P04[t]])) + [
     u"%s. %s" % (counts_text([p for t in TELS for p in P04[t]]), FLUENCE_TEXT)])
 check_ylim({"points": P04}, YLIM, "re04_res_july_1p5e15_stability")
 fig, n04 = curves.res_july_1p5e15_stability(
@@ -716,7 +701,7 @@ footer05 = u"\n".join([
     u"the allowed range of the end, 0 to +%.2f h (latest: the F1 LV back on)." % (
         campaign.RAD_STOP_UTC[2e15][11:16], STOP05[1]),
     u"Under each run: its number and each chip's in-run bias current in uA, the median over the "
-    u"run's HV plateau. %s." % counts_text([p for t in TELS for p in P05[t]])] + low_line(
+    u"run's HV plateau. %s." % counts_text([p for t in TELS for p in P05[t]])] + curves.low_line(
     [p for t in TELS for p in P05[t]]) + [
     FLUENCE_TEXT])
 check_ylim({"points": P05}, YLIM, "re05_res_2e15_cooling_down")
@@ -820,7 +805,7 @@ footer06 = u"\n".join([
                    for t in TELS if OS15[t])),
     u"x (right) = hours from %s UTC, the earliest end of the irradiation the records allow (the "
     u"latest is 2 min later); under each run its number, under each group its bias." % (
-        campaign.RAD_STOP_UTC[3.5e15][11:19])] + low_line(
+        campaign.RAD_STOP_UTC[3.5e15][11:19])] + curves.low_line(
     [p for t in TELS for p in B06[t] + T06[t]]) + [
     u"%s. %s" % (counts_text([p for t in TELS for p in T06[t]]), FLUENCE_TEXT)])
 check_ylim({"bias": B06, "hours": T06}, YLIM, "re06_res_3p5e15_vs_bias_and_hours")
@@ -901,7 +886,7 @@ footer07 = u"\n".join([
     u"This figure overrides the merge rule and draws single runs, two runs at one bias stacked: "
     u"the rule would draw %s in place of their runs." % u", ".join(
         u"%s %s" % (t.upper(), m) for t in TELS for m in OVER07[t]),
-    u"At 3.5e15 every point is a band: %s." % tables.BAND_FOOTER] + low_line(july07) + [
+    u"At 3.5e15 every point is a band: %s." % tables.BAND_FOOTER] + curves.low_line(july07) + [
     u"%s. %s" % (counts_text([p for t in TELS for p in P07[t]]), FLUENCE_TEXT)])
 check_ylim({"points": P07}, YLIM, "re07_res_vs_bias_summary")
 fig, n07 = curves.res_vs_bias_summary(
@@ -980,7 +965,7 @@ footer08 = u"\n".join([
     u"F1 %s." % pick_text("f1", "july"),
     u"Both measurements at 1.5e15: March %.2fe15 left of the step, July %.2fe15 right of it; "
     u"lines join a board's steps within one campaign." % (ladder.DODGE, ladder.DODGE),
-    u"At 3.5e15 every point is a band: %s." % tables.BAND_FOOTER] + low_line(
+    u"At 3.5e15 every point is a band: %s." % tables.BAND_FOOTER] + curves.low_line(
     [p for t in TELS for p in P08[t]]) + [
     u"%s. %s" % (counts_text([p for t in TELS for p in P08[t]]), FLUENCE_TEXT)])
 check_ylim({"points": P08}, YLIM, "re08_best_res_vs_fluence")
@@ -1000,7 +985,9 @@ save(fig, "re08_best_res_vs_fluence",
 #
 # The numbers behind re08, one row per telescope, campaign, step and board, written as
 # `re09_numbers_table.csv` (every digit) and `re09_numbers_table.md` (0.1 ps) beside the table
-# figure. Per row: the chip, the run (a merge as "3+4"), its bias, offset and RFSel, the pixels
+# figure. The .md ends with the line "Pixel counts are the surviving readout sample." under the
+# table, as the figure's footer does; the .csv stays a plain table. Per row: the chip, the run
+# (a merge as "3+4"), its bias, offset and RFSel, the pixels
 # behind the point, the value drawn on the ladder with its pixel-to-pixel spread ("top": the
 # most-populated track per pixel), the same board and run with the central track per pixel
 # ("central"), and at 3.5e15 the band's ends and the reference combination's own value. At 3.5e15
@@ -1030,6 +1017,7 @@ footer09 = u"\n".join([
     u"board over every combination containing it; reference = the reference combination's value.",
     u"At 3.5e15 the reference combination's value is given for both track choices: reference "
     u"(most-populated track) and central reference (central track).",
+    curves.SURVIVING_TEXT,
     FLUENCE_TEXT])
 fig, n09 = numbers_table.table_figure(
     T09, name=u"Resolution per chip and step", tag=TAG,
@@ -1087,8 +1075,8 @@ footer10 = u"\n".join([
     u"Pixels with a resolution per board, reference combination, %s: solid = tracks with at "
     u"least %s events (the points of the fluence ladder), dashed = tracks with any events." % (
         tables.VARIANT_TEXT[VARIANT], FLOOR),
-    u"Pixels with a resolution in the surviving readout sample; the IRRAD loops lost 47-81 % of "
-    u"their packet headers, so this counts DAQ survival as much as the chip.",
+    curves.SURVIVING_TEXT + u" The IRRAD loops lost 47-81 % of their packet headers, so these "
+    u"counts measure DAQ survival as much as the chip.",
     u"Runs as on the fluence ladder: March, the highest-bias run of each step at RFSel 2, "
     u"threshold offset 20; July, the preferred display run, merges by the merge rule.",
     u"Small open markers: %s at 3.5e15, display runs at a lower bias than the ladder's run, at "
@@ -1186,7 +1174,7 @@ def split_text(t):
 
 def low_line11(pts):
     """The footer lines of the points under LOW_PIXELS, per telescope: points, then runs; then
-    SURVIVING_TEXT."""
+    curves.SURVIVING_TEXT."""
     low = [p for p in pts if curves.low_pixels(p)]
     if not low:
         return []
@@ -1198,7 +1186,7 @@ def low_line11(pts):
         curves.LOW_PIXELS, len(low), len(pts), sum(p["reference"] for p in low), u"; ".join(
             u"%s run%s %s" % (t.upper(), u"s" if len(by[t]) > 1 else u"",
                               u", ".join(map(curves.run_label, sorted(by[t]))))
-            for t in TELS if t in by)), SURVIVING_TEXT]
+            for t in TELS if t in by)), curves.SURVIVING_TEXT]
 
 
 all11 = [p for t in TELS for p in P11[t]]
@@ -1281,7 +1269,7 @@ def subset_footer(pts_by_tel, what):
                      u"every step; not drawn: %s." % u"; ".join(
                          u"%s run %d (%s)" % (t.upper(), r, why) for t in TELS
                          for r, why in sorted(DROP07M[t].items())))
-    return u"\n".join(lines + low_line(pts) + [
+    return u"\n".join(lines + curves.low_line(pts) + [
         u"%s. %s" % (counts_text(pts), FLUENCE_TEXT)])
 
 
@@ -1348,7 +1336,7 @@ footer15 = u"\n".join([
         bias_text(P15["h1"], "h1"), bias_text(P15["f1"], "f1")),
     u"x = hours from %s UTC, the earliest end of the irradiation the records allow (the latest is "
     u"2 min later); under each run its number and its bias." % (
-        campaign.RAD_STOP_UTC[3.5e15][11:19])] + low_line(
+        campaign.RAD_STOP_UTC[3.5e15][11:19])] + curves.low_line(
     [p for t in TELS for p in P15[t]]) + [
     u"%s. %s" % (counts_text([p for t in TELS for p in P15[t]]), FLUENCE_TEXT)])
 check_ylim({"points": P15}, YLIM, "re15_res_vs_hours_after_3p5e15")
@@ -1504,7 +1492,7 @@ def rows_footer(what, rows, missing, dropped):
     low = [p for p in every if curves.low_pixels(p)]
     if low:
         lines += [u"Small markers, under %d pixels (half the chip): %d of %d points." % (
-            curves.LOW_PIXELS, len(low), len(every)), SURVIVING_TEXT]
+            curves.LOW_PIXELS, len(low), len(every)), curves.SURVIVING_TEXT]
     lines.append(u"%d points. %s" % (len(every), FLUENCE_TEXT))
     return u"\n".join(lines)
 

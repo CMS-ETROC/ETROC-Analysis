@@ -35,7 +35,9 @@ Clocks, from the run starts of RUN_TIMES_CSV (overview.timeline.read_run_times):
 
 Pixels (low_pixels): a point built from fewer than LOW_PIXELS pixels (half the chip) is drawn
 as a small open marker on every figure here, the legend says "under 128 pixels" and the
-figure's numbers list those points (low_pixels); the footer gives their counts.
+figure's numbers list those points (low_pixels); the footer gives their counts (low_line).
+Pixel counts are those of the surviving readout sample: every footer that prints one carries
+SURVIVING_TEXT, after the small-marker counts where there are any (low_line).
 
 Colour (color_rule): several looks (campaign, fluence step) on the axes -> colour = look, the
 fluence ladder (FLUENCE_COLOR) with a later measurement at the same step in teal
@@ -87,6 +89,7 @@ STANDARD_OFFSET = 20
 STOP_BAND_MIN_H = 0.25      # an allowed-stop range at least this long (h) is drawn as a band
 LOW_PIXELS = tables.LOW_PIXELS   # one constant for the settings and resolution figures: a point from fewer pixels (half the chip) gets a small open marker
 LOW_MARKER = 5.5            # its marker size, x the figure's scale (the small open markers)
+SURVIVING_TEXT = u"Pixel counts are the surviving readout sample."   # the data-quality line
 CAMP_ORDER = ("march", "july")     # the order of the looks at one fluence step
 _MERGE_RUN = re.compile(r"_grp_run(\d+(?:_\d+)+)$")
 
@@ -376,6 +379,23 @@ def _with_low(numbers, pts):
     if low:
         numbers["low_pixels"] = dict(threshold=LOW_PIXELS, marker="small open", points=low)
     return numbers
+
+
+def low_line(pts):
+    """The footer lines after a figure's pixel counts: the line of the points under LOW_PIXELS,
+    when there are any ("Small open markers, under 128 pixels (half the chip): H1 run 11 (IH7 45,
+    IH11 35, IH12 40, IH13 79)."), then SURVIVING_TEXT, which every figure printing a pixel count
+    carries."""
+    runs = {}
+    for q in low_pixel_points(pts):
+        chips = runs.setdefault((q["tel"], q["label"]), [])
+        if u"%s %d" % (q["chip"], q["n_pixels"]) not in chips:
+            chips.append(u"%s %d" % (q["chip"], q["n_pixels"]))
+    if not runs:
+        return [SURVIVING_TEXT]
+    return [u"Small open markers, under %d pixels (half the chip): %s." % (
+        LOW_PIXELS, u"; ".join(u"%s run %s (%s)" % (t.upper(), r, u", ".join(c))
+                               for (t, r), c in runs.items())), SURVIVING_TEXT]
 
 
 # -------------------------------------------------------------------------------- colour
