@@ -35,16 +35,18 @@ CHIPS = campaign.TELESCOPE_CHIPS["h1"]
 
 
 def board_table(runs, camp=JUL, variant="top", floor="300", base=40.0, n0=250):
-    """Anointed rows for every board of each run (a run number or a merge name), value_ps =
-    `base` + board index, plus one non-anointed row per board (5 ps higher)."""
+    """Reference-combination rows for every board of each run (a run number or a merge name),
+    value_ps = `base` + board index, plus one row per board in another combination (5 ps
+    higher)."""
     rows = []
     for run in runs:
         for i, chip in enumerate(CHIPS):
-            for anointed, combo in ((True, "a"), (False, "b")):
+            for ref, combo in ((True, "a"), (False, "b")):
                 rows.append(dict(campaign=camp, telescope="h1", run=str(run), combo=combo,
                                  board_idx=i, board_chip="PT_" + chip, variant=variant,
-                                 floor=floor, value_ps=base + i + (0 if anointed else 5),
-                                 pixel_spread_ps=3.0, n_pixels=n0 + i, anointed=anointed))
+                                 floor=floor, value_ps=base + i + (0 if ref else 5),
+                                 pixel_spread_ps=3.0, n_pixels=n0 + i,
+                                 **{tables.REFERENCE_COLUMN: ref}))
     return pd.DataFrame(rows)
 
 
@@ -241,11 +243,11 @@ def test_numbers_table_rows_and_restored_merge_cells(good_csv, tmp_path):
     assert list(merged["central value [ps]"]) == [35.0, 36.0, 37.0, 38.0]
     assert set(df.loc[df["campaign"] == "March", "preferred run"]) == {""}
     band = df[df["bookkeeping fluence [p/cm2]"] == 3.5e15]
-    # band rows: top and central at the band centre (anointed 40 + i, other combo 45 + i)
+    # band rows: top and central at the band centre (reference combination 40 + i, other combo 45 + i)
     assert list(band["top value [ps]"]) == [42.5, 43.5, 44.5, 45.5]
     assert list(band["central value [ps]"]) == [32.5, 33.5, 34.5, 35.5]
-    assert list(band["anointed value [ps]"]) == [40.0, 41.0, 42.0, 43.0]
-    assert list(band["central anointed value [ps]"]) == [30.0, 31.0, 32.0, 33.0]
+    assert list(band["reference combination value [ps]"]) == [40.0, 41.0, 42.0, 43.0]
+    assert list(band["central reference combination value [ps]"]) == [30.0, 31.0, 32.0, 33.0]
     assert df.loc[df["bookkeeping fluence [p/cm2]"] != 3.5e15, "band low [ps]"].isna().all()
     paths = numbers_table.write_table(df, str(tmp_path), "t")
     assert [os.path.basename(p) for p in paths] == ["t.csv", "t.md"]
@@ -373,17 +375,17 @@ def test_split_runs_references_then_every_run_by_class(split_display, tmp_path):
 
 def test_combo_points_every_combination_and_layout():
     bt = board_table([18], n0=126)
-    bt["combo"] = bt["anointed"].map({True: "extra0-dut1-ref2", False: "dut1-ref2-trig3"})
+    bt["combo"] = bt[tables.REFERENCE_COLUMN].map({True: "extra0-dut1-ref2", False: "dut1-ref2-trig3"})
     rs = runs_summary([(JUL, 18, "3.5e15", 550.0, 20, 2)])
     e = dict(run=18, step=3.5e15, rfsel=2, os="20", ref=False, preferred=True)
     pts = combo_split.combo_points(bt, rs, "h1", [e])
     assert len(pts) == 8 and [p["board_idx"] for p in pts] == [0, 0, 1, 1, 2, 2, 3, 3]
     assert {p["boards"] for p in pts} == {(0, 1, 2), (1, 2, 3)}
-    assert [p["anointed"] for p in pts if p["board_idx"] == 0] == [False, True]
+    assert [p["reference"] for p in pts if p["board_idx"] == 0] == [False, True]
     assert [p["value_ps"] for p in pts if p["board_idx"] == 1] == [46.0, 41.0]
-    assert [curves.low_pixels(p) for p in pts if p["anointed"]] == [True, True, False, False]
-    with pytest.raises(ValueError):          # a board without an anointed combination
-        combo_split.combo_points(bt[~(bt["anointed"] & (bt["board_idx"] == 2))], rs, "h1", [e])
+    assert [curves.low_pixels(p) for p in pts if p["reference"]] == [True, True, False, False]
+    with pytest.raises(ValueError):          # a board without a reference combination
+        combo_split.combo_points(bt[~(bt[tables.REFERENCE_COLUMN] & (bt["board_idx"] == 2))], rs, "h1", [e])
     # x: a lone run gets GROUP_MIN slots, three runs of one class one slot each
     ents = [dict(e, run=4, step=1.5e15, ref=True), dict(e, run=13), dict(e, run=14), dict(e)]
     lay = combo_split.layout(ents)
@@ -409,7 +411,7 @@ def test_combo_points_of_a_merge_read_the_merged_table():
     bt = board_table([46, 47], base=40.0)
     bm = board_table([tables.merge_name("h1", (46, 47))], base=60.0)
     for t in (bt, bm):
-        t["combo"] = t["anointed"].map({True: "extra0-dut1-ref2", False: "dut1-ref2-trig3"})
+        t["combo"] = t[tables.REFERENCE_COLUMN].map({True: "extra0-dut1-ref2", False: "dut1-ref2-trig3"})
     rs = runs_summary([(JUL, 46, "3.5e15", 480.0, 20, 1), (JUL, 47, "3.5e15", 480.0, 20, 1),
                        (JUL, 13, "3.5e15", 390.0, 20, 2)])
     e = dict(run=(46, 47), step=3.5e15, rfsel=1, os="20", ref=False, preferred=True)
@@ -457,8 +459,8 @@ COMBOS = {(0, 1, 2): "extra0-dut1-ref2", (0, 1, 3): "ref0-dut1-trig3",
 def combination_table(run=18, drop=()):
     """Every 3-board combination of H1 run `run` but those in `drop`: each board's row in each
     combination, value_ps = 40 + 10 x the board left out + the board index, pixel_spread_ps = 2 +
-    the board left out, n_pixels = 200 + 10 x the board left out + the board index; anointed on
-    boards 0-1-2 for boards 0 to 2 and 1-2-3 for board 3."""
+    the board left out, n_pixels = 200 + 10 x the board left out + the board index; the reference
+    combination is boards 0-1-2 for boards 0 to 2 and 1-2-3 for board 3."""
     rows = []
     for boards, combo in COMBOS.items():
         if boards in drop:
@@ -469,7 +471,8 @@ def combination_table(run=18, drop=()):
                              board_chip="PT_" + CHIPS[b], variant="top", floor="300",
                              value_ps=40.0 + 10 * out + b, pixel_spread_ps=2.0 + out,
                              n_pixels=200 + 10 * out + b,
-                             anointed=boards == ((0, 1, 2) if b < 3 else (1, 2, 3))))
+                             **{tables.REFERENCE_COLUMN:
+                                boards == ((0, 1, 2) if b < 3 else (1, 2, 3))}))
     return pd.DataFrame(rows)
 
 
@@ -482,8 +485,8 @@ def test_partner_excluded_takes_the_combination_without_the_hv_partner():
                                                                    (0, 1, 2), (0, 1, 3)]
     assert out["value_ps"].tolist() == [50.0, 41.0, 72.0, 63.0]
     assert out["chip"].tolist() == ["PT_" + c for c in CHIPS]
-    anointed, none = combo_check.anointed_rows(t)
-    assert none == [] and anointed["value_ps"].tolist() == [70.0, 71.0, 72.0, 43.0]
+    reference, none = combo_check.reference_rows(t)
+    assert none == [] and reference["value_ps"].tolist() == [70.0, 71.0, 72.0, 43.0]
 
 
 def test_midpoint_is_the_rms_of_the_present_mean_and_the_absent_value():

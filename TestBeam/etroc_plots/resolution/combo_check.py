@@ -3,7 +3,7 @@
 
 Rows, for board b with HV partner p (PARTNERS: boards 0-1 and 2-3 are HV pairs):
 
-  anointed          the board's anointed combination (boards 0-1-2 for boards 0-2, 1-2-3 for
+  reference         the board's reference combination (boards 0-1-2 for boards 0-2, 1-2-3 for
                     board 3): the value every result figure draws.
   partner_excluded  the one combination omitting p: board 0 from boards 0-2-3, board 1 from
                     1-2-3, board 2 from 0-1-2, board 3 from 0-1-3.
@@ -36,7 +36,7 @@ from matplotlib.lines import Line2D
 from ..campaigns import active as campaign, check_required
 from .. import style
 from ..frontend import blnw
-from . import curves
+from . import curves, tables
 from .combo_split import _bottom, combo_boards
 from .settings import DIVIDER_GID, LABEL_GID
 
@@ -44,7 +44,7 @@ check_required("resolution")
 
 PARTNERS = {0: 1, 1: 0, 2: 3, 3: 2}
 KEYS = ["campaign", "telescope", "run", "board_idx"]
-ROWS = ("anointed", "partner_excluded", "midpoint")
+ROWS = ("reference", "partner_excluded", "midpoint")
 HV_CYCLE_FRAC = 0.20
 SCALE = curves.SCALE
 EVENT_STYLE = {"hv": dict(color="#ff7f0e", linestyle="--", dx=-0.56),
@@ -79,7 +79,7 @@ def _value(r):
 
 
 def _by_board(bt, boards_of):
-    """For each run-board of `bt` (its anointed row names it): the row of the combination
+    """For each run-board of `bt` (its reference row names it): the row of the combination
     boards_of(board) gives. Returns (frame KEYS + chip, combo, value_ps, bar_ps, n_pixels,
     missing)."""
     t = _combos(bt)
@@ -95,20 +95,20 @@ def _by_board(bt, boards_of):
                                              "n_pixels"]), missing
 
 
-def anointed_rows(bt):
-    """Row 1: each run-board's anointed combination (`anointed` true) of the combination table
-    `bt` (one variant and event floor). Returns (frame, missing); a run-board without an anointed
-    row is in `missing`."""
+def reference_rows(bt):
+    """Row 1: each run-board's reference combination (tables.REFERENCE_COLUMN true) of the
+    combination table `bt` (one variant and event floor). Returns (frame, missing); a run-board
+    without a reference row is in `missing`."""
     t = _combos(bt)
     rows, missing = [], []
     for key, g in t.groupby(KEYS, sort=True):
-        hit = g[g["anointed"].astype(str).str.lower() == "true"]
+        hit = g[g[tables.REFERENCE_COLUMN].astype(str).str.lower() == "true"]
         if len(hit) > 1:
-            raise ValueError("%s: %d anointed combinations" % (key, len(hit)))
+            raise ValueError("%s: %d reference combinations" % (key, len(hit)))
         if len(hit):
             rows.append(dict(zip(KEYS, key), **_value(hit.iloc[0])))
         else:
-            missing.append(dict(zip(KEYS, key), row="anointed", combination="anointed"))
+            missing.append(dict(zip(KEYS, key), row="reference", combination="reference"))
     return pd.DataFrame(rows, columns=KEYS + ["chip", "combo", "value_ps", "bar_ps",
                                              "n_pixels"]), missing
 
@@ -168,7 +168,7 @@ def combination_rows(bt, variant="top", floor="300"):
     """The three rows (ROWS) of the board table `bt` at one track variant and event floor:
     {row: (frame, missing)}."""
     t = bt[(bt["variant"] == variant) & (bt["floor"].astype(str) == str(floor))]
-    return {"anointed": anointed_rows(t), "partner_excluded": partner_excluded(t),
+    return {"reference": reference_rows(t), "partner_excluded": partner_excluded(t),
             "midpoint": midpoint(t)}
 
 

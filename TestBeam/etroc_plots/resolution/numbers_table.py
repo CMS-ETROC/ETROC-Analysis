@@ -5,16 +5,18 @@ beside a table figure (PNG and PDF through style.save_figure).
 Columns, named in words with the unit in brackets (COLUMNS):
 
   telescope, campaign, bookkeeping fluence [p/cm2], board, chip, run ("3+4" for a merge),
-  merged, bias [V], threshold offset, RFSel, pixels (the points' event floor, anointed
+  merged, bias [V], threshold offset, RFSel, pixels (the points' event floor, reference
   combination)
   top value [ps], top pixel spread [ps]
       the value drawn on the ladder: most-populated track per pixel; at a step of BAND_STEPS
-      the band centre, with the anointed combination's spread
+      the band centre, with the reference combination's spread
   central value [ps], central pixel spread [ps]
-      the same board and run with the central track per pixel (central_values): the anointed
-      value, or the band centre at a step of BAND_STEPS; empty where the table has no row
-  band low [ps], band high [ps], anointed value [ps], central anointed value [ps]
-      at a step of BAND_STEPS: the band's ends and the anointed combination's own value, with
+      the same board and run with the central track per pixel (central_values): the reference
+      combination's value, or the band centre at a step of BAND_STEPS; empty where the table
+      has no row
+  band low [ps], band high [ps], reference combination value [ps], central reference
+  combination value [ps]
+      at a step of BAND_STEPS: the band's ends and the reference combination's own value, with
       the most-populated and with the central track per pixel; empty elsewhere
   preferred run
       July: "yes" when the run, or the merge holding it, is the step's preferred run; empty for
@@ -34,8 +36,8 @@ check_required("resolution")
 COLUMNS = ["telescope", "campaign", "bookkeeping fluence [p/cm2]", "board", "chip", "run",
            "merged", "bias [V]", "threshold offset", "RFSel", "pixels", "top value [ps]",
            "top pixel spread [ps]", "central value [ps]", "central pixel spread [ps]",
-           "band low [ps]", "band high [ps]", "anointed value [ps]",
-           "central anointed value [ps]", "preferred run"]
+           "band low [ps]", "band high [ps]", "reference combination value [ps]",
+           "central reference combination value [ps]", "preferred run"]
 PS_COLUMNS = [c for c in COLUMNS if c.endswith("[ps]")]
 
 
@@ -44,12 +46,11 @@ def _key(p):
 
 
 def central_values(bt, bm, pts, floor, variant="central"):
-    """{(tel, camp, label, board_idx): dict(value_ps, spread_ps, anointed_ps) or None}: each
+    """{(tel, camp, label, board_idx): dict(value_ps, spread_ps, reference_ps) or None}: each
     point's run and board with track variant `variant` at event floor `floor`, from the point's
     table (the merged table for a merge): at a step of BAND_STEPS the band centre (tables.band),
-    the anointed spread and the anointed combination's own value; elsewhere the anointed
-    combination's value and spread (anointed_ps None). None where the table has no anointed
-    row."""
+    the reference combination's spread and its own value; elsewhere the reference combination's
+    value and spread (reference_ps None). None where the table has no reference row."""
     out = {}
     for p in pts:
         table = bm if p["merged"] else bt
@@ -57,7 +58,7 @@ def central_values(bt, bm, pts, floor, variant="central"):
         rows = tables.board_rows(table, p["tel"], p["run"], variant, floor, campaign=tc,
                                  board_idx=p["board_idx"])
         if len(rows) > 1:
-            raise ValueError("%s %s run %s board %d: %d anointed %s rows"
+            raise ValueError("%s %s run %s board %d: %d reference %s rows"
                              % (p["tel"], p["camp"], p["label"], p["board_idx"], len(rows),
                                 variant))
         if not len(rows):
@@ -66,11 +67,11 @@ def central_values(bt, bm, pts, floor, variant="central"):
             b = tables.band(table, p["tel"], p["run"], p["board_idx"], variant, floor,
                             campaign=tc)
             out[_key(p)] = dict(value_ps=b["marker_ps"], spread_ps=b["bar_spread_ps"],
-                                anointed_ps=b["reference_ps"])
+                                reference_ps=b["reference_ps"])
         else:
             r = rows.iloc[0]
             out[_key(p)] = dict(value_ps=float(r["value_ps"]),
-                                spread_ps=float(r["pixel_spread_ps"]), anointed_ps=None)
+                                spread_ps=float(r["pixel_spread_ps"]), reference_ps=None)
     return out
 
 
@@ -91,7 +92,7 @@ def numbers_table(points, central):
             p["n_pixels"], p["y_ps"], p["yerr_ps"], c["value_ps"] if c else None,
             c["spread_ps"] if c else None,
             band["band_lo_ps"] if band else None, band["band_hi_ps"] if band else None,
-            band["reference_ps"] if band else None, c["anointed_ps"] if c and band else None,
+            band["reference_ps"] if band else None, c["reference_ps"] if c and band else None,
             "" if p["preferred"] is None else ("yes" if p["preferred"] else "no")])))
     return pd.DataFrame(rows, columns=COLUMNS)
 
@@ -150,9 +151,10 @@ def cell_text(r):
     lines += [run, u"%d pixels" % r["pixels"]]
     if pd.notna(r["band low [ps]"]):
         lines += [u"band %.1f to %.1f ps" % (r["band low [ps]"], r["band high [ps]"]),
-                  u"anointed %.1f ps" % r["anointed value [ps]"]]
-        if pd.notna(r["central anointed value [ps]"]):
-            lines.append(u"central anointed %.1f ps" % r["central anointed value [ps]"])
+                  u"reference %.1f ps" % r["reference combination value [ps]"]]
+        if pd.notna(r["central reference combination value [ps]"]):
+            lines.append(u"central reference %.1f ps"
+                         % r["central reference combination value [ps]"])
     return lines
 
 

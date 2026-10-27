@@ -12,7 +12,7 @@ The points, one per (telescope, step, board), come from step_winners:
           replaced by its merge where curves.merge_rule takes one.
 
 Both looks at 1.5e15 stay: March, and July after four months of cooling down. Each point is the
-board's value in its anointed combination; at a step of BAND_STEPS it is a band (tables.band),
+board's value in its reference combination; at a step of BAND_STEPS it is a band (tables.band),
 as on every resolution figure.
 
 The x axis is the bookkeeping fluence, linear, in units of X_UNIT (1e15 p/cm2), ticked at the
@@ -142,7 +142,7 @@ def step_winners(bt, bm, rs, telescope, class_by_step, good, merges, march_runs=
 
 def floor_none_pixels(bt, bm, pts, variant="top", floor="none"):
     """{(tel, camp, label, board_idx): n_pixels} of each point's run and board at event floor
-    `floor` (default "none": tracks with any events), anointed combination, from the same table
+    `floor` (default "none": tracks with any events), reference combination, from the same table
     as the point (the merged table for a merge). A missing row gives None, never 0; two rows
     raise ValueError."""
     out = {}
@@ -151,7 +151,7 @@ def floor_none_pixels(bt, bm, pts, variant="top", floor="none"):
                                  campaign=campaign.TABLE_CAMPAIGN[p["camp"]],
                                  board_idx=p["board_idx"])
         if len(rows) > 1:
-            raise ValueError("%s %s run %s board %d: %d anointed rows at floor %s"
+            raise ValueError("%s %s run %s board %d: %d reference rows at floor %s"
                              % (p["tel"], p["camp"], p["label"], p["board_idx"], len(rows),
                                 floor))
         out[(p["tel"], p["camp"], p["label"], p["board_idx"])] = (

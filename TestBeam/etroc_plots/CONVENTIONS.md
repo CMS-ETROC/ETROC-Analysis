@@ -134,8 +134,8 @@ rest are for whoever writes the next figure.
 - A point built from fewer than `curves.LOW_PIXELS` pixels (128, half the chip) is a small open
   marker on every resolution figure with a pixel count per point; the legend says "under 128
   pixels" and the footer gives the counts. On the combination split the small marker keeps the
-  fill rule of that figure (filled = anointed). The pixel-yield figure, whose axis is the pixel
-  count, keeps its own markers.
+  fill rule of that figure (filled = the reference combination). The pixel-yield figure, whose
+  axis is the pixel count, keeps its own markers.
 - The fluence ladder (`resolution/ladder.py`) draws one run per campaign and step
   (`ladder.step_winners`): March, the highest-bias run at the standard operating point of each step
   (`MARCH_DISPLAY_RUNS`, checked against the tables; a disagreement stops the notebook); July, the
@@ -146,10 +146,11 @@ rest are for whoever writes the next figure.
 - The numbers table (`resolution/numbers_table.py`) has one row per point of the ladder, columns
   `numbers_table.COLUMNS`: telescope, campaign, bookkeeping fluence, board, chip, run (a merge as
   "3+4"), merged, bias, threshold offset, RFSel, pixels; the top value and pixel spread (what the
-  ladder draws) and the same with the central track per pixel; at 3.5e15 the band's ends, the
-  anointed value and the central anointed value; and, for July, whether the run is the step's
-  preferred run. At 3.5e15 the top and central values are band centres; the anointed values have
-  columns of their own. It is written as .csv (every digit) and .md (0.1 ps) beside its figure.
+  ladder draws) and the same with the central track per pixel; at 3.5e15 the band's ends and the
+  reference combination's value, with the most-populated and with the central track per pixel;
+  and, for July, whether the run is the step's preferred run. At 3.5e15 the top and central
+  values are band centres; the reference combination's values have columns of their own. It is
+  written as .csv (every digit) and .md (0.1 ps) beside its figure.
 - The pixel-yield figure counts, per board and point of the ladder, the pixels with a resolution
   at the ladder's event floor (300 events: solid lines with markers) and with tracks of any events
   (floor "none": dashed, no markers). A floor-"none" row missing from the table is a gap in the
@@ -161,7 +162,7 @@ rest are for whoever writes the next figure.
   verdict and whose runs are all in one settings class in place of those runs (as on the settings
   figures), grouped by settings class under the axis with the class and the step written below
   the run numbers.
-  Colour = combination, filled = the anointed combination, open = the others, marker = chip, bar =
+  Colour = combination, filled = the reference combination, open = the others, marker = chip, bar =
   the pixel spread in that combination; no band.
 - An appendix figure follows the rules of the figure it derives from and its footer names that
   figure: the resolution notebook's re12 to re14 are re07's points restricted to some steps or one
@@ -169,7 +170,7 @@ rest are for whoever writes the next figure.
   its under-128 rule).
 - The combination checks (`resolution/combo_check.py`: re16 and re17 against the bias, re18
   against the run) draw each board in three rows, every value read from the single-run board
-  table's combination rows: top, the anointed combination; middle, the combination without the
+  table's combination rows: top, the reference combination; middle, the combination without the
   board's HV partner (partners 0-1 and 2-3: board 0 from boards 0-2-3, 1 from 1-2-3, 2 from 0-1-2,
   3 from 0-1-3); bottom, the pair-corrected midpoint w_mid^2 = (w_present^2 + w_absent^2)/2,
   w_present the RMS of the board's values in the two combinations holding the board and its

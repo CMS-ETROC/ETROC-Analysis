@@ -3,7 +3,7 @@
 Points: one per (run, board), from the published board tables (BOARD_TABLE for single runs,
 BOARD_TABLE_MERGED for merges, read by resolution.tables) and runs_summary.csv (each board's chip,
 bias, bookkeeping fluence, threshold offset and RFSel; the March RFSel, which runs_summary leaves
-empty, is MARCH_RFSEL). A point is the board's value in its anointed combination, its bar the
+empty, is MARCH_RFSEL). A point is the board's value in its reference combination, its bar the
 pixel-to-pixel spread there; at a step of BAND_STEPS it carries the band too (tables.band) and
 is drawn as one.
 
@@ -106,14 +106,14 @@ def points(bt, bm, rs, telescope, runs, camp, variant="top", floor="300"):
     telescope `telescope` ("h1") in campaign `camp` ("march" / "july"):
 
       tel, camp, run (the table's run: int, or the merge name "h1_grp_run3_4"), runs (the run
-      numbers), label ("3+4"), board_idx, chip, value_ps (the anointed combination's value),
+      numbers), label ("3+4"), board_idx, chip, value_ps (the reference combination's value),
       bar_ps (its pixel-to-pixel spread), n_pixels, hv, fluence (bookkeeping), offset, rfsel,
       rfsel_source ("runs_summary" or "MARCH_RFSEL"), merged, band (tables.band at a step of
-      BAND_STEPS, else None), y_ps and yerr_ps (what is drawn: the band centre and the anointed
-      spread where there is a band, else the value and its spread).
+      BAND_STEPS, else None), y_ps and yerr_ps (what is drawn: the band centre and the reference
+      combination's spread where there is a band, else the value and its spread).
 
     A merge takes its boards' settings from runs_summary through tables.common_settings, which
-    raises when its runs differ in fluence, RFSel, offset, chip or bias. A run without anointed
+    raises when its runs differ in fluence, RFSel, offset, chip or bias. A run without reference
     rows in the table, or whose chips differ from runs_summary, raises ValueError."""
     tc, tk = campaign.TABLE_CAMPAIGN[camp], campaign.TABLE_TEL[telescope]
     out = []
@@ -128,7 +128,7 @@ def points(bt, bm, rs, telescope, runs, camp, variant="top", floor="300"):
         boards = {b["board_idx"]: b for b in tables.run_settings(rs, tc, tk, members[0])}
         rows = tables.board_rows(table, telescope, key, variant, floor, campaign=tc)
         if not len(rows):
-            raise ValueError("%s %s run %s: no anointed rows (variant %s, floor %s) in the %s "
+            raise ValueError("%s %s run %s: no reference rows (variant %s, floor %s) in the %s "
                              "board table" % (telescope, camp, run_label(members), variant,
                                               floor, "merged" if merged else "single-run"))
         for _, r in rows.iterrows():

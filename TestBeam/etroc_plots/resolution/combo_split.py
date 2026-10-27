@@ -10,14 +10,14 @@ a reference is the preferred run alone, so no merge replaces it.
 
 Points (combo_points): one per (run, board, combination containing the board), from the
 single-run board table (a merge: the merged board table) at one track variant and event floor,
-every combination and not only the anointed one: value_ps, bar_ps (the pixel-to-pixel spread of
-the board's map in that combination), n_pixels, anointed; the board's chip and bias from
-runs_summary.
+every combination and not only the reference one: value_ps, bar_ps (the pixel-to-pixel spread of
+the board's map in that combination), n_pixels, reference (tables.REFERENCE_COLUMN on disk); the
+board's chip and bias from runs_summary.
 
 The figure (combo_split): one row per telescope, one panel per board. In a panel the runs stand
 side by side, grouped by step and settings class (a dotted line between classes, a solid one
 between steps), the combinations of a run side by side at COMBO_DX apart. Colour =
-combination, by its three boards (COMBO_COLOR); filled = the board's anointed combination, open
+combination, by its three boards (COMBO_COLOR); filled = the board's reference combination, open
 = the others; marker = chip, as everywhere. No band: the figure compares the combinations
 themselves (CONVENTIONS). Under each panel: each run's number (a merge as "46+47") and this
 board's bias, then the class, then the step. A point under curves.LOW_PIXELS pixels is a small marker, filled or open
@@ -89,8 +89,8 @@ def combo_points(bt, rs, telescope, entries, camp="july", variant="top", floor="
     merge (a tuple of runs) reads the merged board table `bm` (tables.merge_name), its boards'
     chip and bias shared by its runs (tables.common_settings raises otherwise). Each dict: the
     entry's keys (run, step, rfsel, os, ref, preferred) and tel, board_idx, chip, hv
-    (runs_summary), combo, boards (combo_boards), value_ps, bar_ps, n_pixels, anointed. A run
-    whose board has no anointed combination, or one whose chips differ from runs_summary, raises
+    (runs_summary), combo, boards (combo_boards), value_ps, bar_ps, n_pixels, reference. A run
+    whose board has no reference combination, or one whose chips differ from runs_summary, raises
     ValueError."""
     tc, tk = campaign.TABLE_CAMPAIGN[camp], campaign.TABLE_TEL[telescope]
     out = []
@@ -110,8 +110,8 @@ def combo_points(bt, rs, telescope, entries, camp="july", variant="top", floor="
         for i, b in sorted(boards.items()):
             chip = style.chip_short(b["chip"])
             mine = rows[rows["board_idx"] == i].sort_values("combo")
-            if not (mine["anointed"] == True).any():          # noqa: E712  (a pandas mask)
-                raise ValueError("%s run %s board %d: no anointed combination (variant %s, "
+            if not (mine[tables.REFERENCE_COLUMN] == True).any():   # noqa: E712  (a pandas mask)
+                raise ValueError("%s run %s board %d: no reference combination (variant %s, "
                                  "floor %s)" % (telescope, curves.run_label(run), i, variant,
                                                 floor))
             for _, r in mine.iterrows():
@@ -123,7 +123,7 @@ def combo_points(bt, rs, telescope, entries, camp="july", variant="top", floor="
                                 combo=r["combo"], boards=combo_boards(r["combo"]),
                                 value_ps=float(r["value_ps"]),
                                 bar_ps=float(r["pixel_spread_ps"]), n_pixels=int(r["n_pixels"]),
-                                anointed=bool(r["anointed"])))
+                                reference=bool(r[tables.REFERENCE_COLUMN])))
     return out
 
 
@@ -168,14 +168,14 @@ def combo_x(pts, x_of_run, dx=COMBO_DX):
 
 def _draw(ax, pts, xs, scale):
     """Each point at its x: the chip's marker and the pixel-spread bar in the combination's
-    colour, filled for the anointed combination, open otherwise, small under LOW_PIXELS."""
+    colour, filled for the reference combination, open otherwise, small under LOW_PIXELS."""
     for p in pts:
         c = COMBO_COLOR[p["boards"]]
         small = curves.low_pixels(p)
         ax.errorbar([xs[(p["run"], p["board_idx"], p["combo"])]], [p["value_ps"]],
                     yerr=[p["bar_ps"]], color=c, marker=style.chip_marker(p["chip"]),
                     markersize=(curves.LOW_MARKER if small else 8.5) * scale,
-                    markerfacecolor=c if p["anointed"] else style.SURFACE, markeredgecolor=c,
+                    markerfacecolor=c if p["reference"] else style.SURFACE, markeredgecolor=c,
                     markeredgewidth=1.6 * scale, linestyle="none", capsize=2.0 * scale,
                     elinewidth=1.2 * scale, zorder=3)
 
@@ -197,7 +197,7 @@ def _bottom(artists, ax, renderer):
 
 def low_points(pts):
     """The points of `pts` under curves.LOW_PIXELS pixels, as the values file lists them."""
-    return [{k: p[k] for k in ("tel", "run", "board_idx", "chip", "combo", "anointed",
+    return [{k: p[k] for k in ("tel", "run", "board_idx", "chip", "combo", "reference",
                                "n_pixels")} for p in pts if curves.low_pixels(p)]
 
 
@@ -263,7 +263,7 @@ def combo_split(pts_by_tel, layouts, *, tel_titles, class_text, step_text, ylim,
                 steps=[dict(text=step_text(f), x=0.5 * (x0 + x1)) for f, x0, x1 in steps])
             numbers += [dict({k: p[k] for k in ("tel", "run", "step", "rfsel", "os", "ref",
                                                 "preferred", "board_idx", "chip", "hv", "combo",
-                                                "value_ps", "bar_ps", "n_pixels", "anointed")},
+                                                "value_ps", "bar_ps", "n_pixels", "reference")},
                              boards=list(p["boards"]),
                              x=xs[(p["run"], p["board_idx"], p["combo"])],
                              color=COMBO_COLOR[p["boards"]], small=curves.low_pixels(p))
@@ -275,7 +275,7 @@ def combo_split(pts_by_tel, layouts, *, tel_titles, class_text, step_text, ylim,
                for b in present]
     handles += [Line2D([], [], color=style.INK, marker="o", markersize=8.5 * scale,
                        markerfacecolor=style.INK, linestyle="none",
-                       label=u"filled: anointed combination"),
+                       label=u"filled: reference combination"),
                 Line2D([], [], color=style.INK, marker="o", markersize=8.5 * scale,
                        markerfacecolor=style.SURFACE, markeredgewidth=1.6 * scale,
                        linestyle="none", label=u"open: other combinations")]

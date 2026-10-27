@@ -46,24 +46,24 @@
 # * Figure re15: re06's hours panel at the standard operating point alone: 3.5e15 against the
 #   hours after the end of the irradiation step.
 # * Figures re16, re17 and re18: the combination checks: each board's resolution in its
-#   anointed combination, in the combination without its HV partner, and the pair-corrected
+#   reference combination, in the combination without its HV partner, and the pair-corrected
 #   midpoint of the two, against the bias (re16 July, re17 March) and against the run (re18,
 #   every July run, with the HV and LV cycles, irradiation steps and shared autocalibration
 #   scans between runs).
 #
-# Every point is one board in one run: its value in its anointed 3-board combination (boards
+# Every point is one board in one run: its value in its reference 3-board combination (boards
 # 0-1-2 for boards 0, 1 and 2; boards 1-2-3 for board 3), the most-populated track per pixel,
 # tracks with at least 300 events; the width is FWHM/2.355 of the TOA-difference core, as the
 # result tables carry it. The bar is the pixel-to-pixel spread of the board's map. Every point at
 # 3.5e15 is a band: a shaded box from the lowest to the highest value of the board over every
-# 3-board combination containing it, the marker at its centre, the bar the anointed
+# 3-board combination containing it, the marker at its centre, the bar the reference
 # combination's pixel-to-pixel spread (`../CONVENTIONS.md`, "Resolution and TDC figures").
 # re01 to re05 have no 3.5e15 point, so no band; re11 compares the combinations themselves and
 # draws each one.
 #
 # A point built from fewer than 128 pixels (half the chip; `curves.LOW_PIXELS`) is drawn as a
 # small open marker on every figure, the legend says "under 128 pixels" and the footer gives the
-# counts (on re11 the small marker keeps its fill: filled is the anointed combination there).
+# counts (on re11 the small marker keeps its fill: filled is the reference combination there).
 #
 # The IRRAD 2026 loops behind these figures were recorded with the readout saturated: 47 to 81 %
 # of the ETROC2 packets lost their header and were dropped at decoding, so every number below is
@@ -273,7 +273,7 @@ TEL_TITLES = dict(campaign.TELESCOPE_TITLE)
 TAG = style.settings_text(rfsel=2, offset=20)
 # one footer line each: a footer line stays under about 180 characters to fit the figure width
 SURVIVING_TEXT = u"Pixel counts are the surviving readout sample."
-SELECTION = (u"Selection: %s, tracks with at least %s events, each chip from its anointed "
+SELECTION = (u"Selection: %s, tracks with at least %s events, each chip from its reference "
              u"combination (boards 0-1-2 for boards 0-2, boards 1-2-3 for board 3).\n"
              u"Widths = FWHM/2.355 of the TOA-difference core, as the result tables carry them; "
              u"bar = the pixel-to-pixel spread of the board's map." % (tables.VARIANT_TEXT[VARIANT],
@@ -375,7 +375,7 @@ def check_good(pts, camp):
 def conventions(**extra):
     c = tables.conventions(VARIANT, FLOOR)
     c.update(width="FWHM/2.355 of the TOA-difference core per pair, as the board table carries "
-                   "it", bar="pixel-to-pixel spread of the anointed combination",
+                   "it", bar="pixel-to-pixel spread of the reference combination",
              marker="chip (style.chip_marker); open marker and black edge as the legends say",
              x_repeats="no jitter: points at one x share it; lines join the mean at each x",
              fluence="bookkeeping, p/cm2; on chip = %g x bookkeeping (CHIP_FLUENCE_FACTOR)"
@@ -990,10 +990,11 @@ save(fig, "re08_best_res_vs_fluence",
 # figure. Per row: the chip, the run (a merge as "3+4"), its bias, offset and RFSel, the pixels
 # behind the point, the value drawn on the ladder with its pixel-to-pixel spread ("top": the
 # most-populated track per pixel), the same board and run with the central track per pixel
-# ("central"), and at 3.5e15 the band's ends and the anointed combination's own value. At 3.5e15
-# both "top" and "central" are band centres, each of its own track choice, and the anointed
-# value is given for both choices. The table shown in September put the central anointed value
-# in its central column at 3.5e15; here that number is the column "central anointed value". The
+# ("central"), and at 3.5e15 the band's ends and the reference combination's own value. At 3.5e15
+# both "top" and "central" are band centres, each of its own track choice, and the reference
+# value is given for both choices. The table shown in September put the central reference value
+# in its central column at 3.5e15; here that number is the column "central reference
+# combination value". The
 # column "preferred run" says, for July, whether the run is the step's preferred display run
 # or the merge holding it.
 #
@@ -1011,15 +1012,15 @@ print("table: %d rows -> %s" % (len(T09), ", ".join(os.path.basename(p) for p in
 footer09 = u"\n".join([
     u"Per cell: top = the value on the fluence ladder, %s, with its pixel-to-pixel spread; "
     u"central = the same with the central track per pixel." % tables.VARIANT_TEXT[VARIANT],
-    u"Each chip from its anointed combination (boards 0-1-2 for boards 0-2, boards 1-2-3 for "
+    u"Each chip from its reference combination (boards 0-1-2 for boards 0-2, boards 1-2-3 for "
     u"board 3), tracks with at least %s events, widths = FWHM/2.355 of the TOA-difference core." % (
         FLOOR),
     u"Runs: March, the highest-bias run of each step at RFSel 2, threshold offset 20; July, the "
     u"preferred display run, merges by the merge rule (merged: the merge of the runs named).",
     u"At 3.5e15: top and central are band centres; band = the lowest to the highest value of the "
-    u"board over every combination containing it; anointed = the anointed combination's value.",
-    u"At 3.5e15 the anointed combination's value is given for both track choices: anointed "
-    u"(most-populated track) and central anointed (central track).",
+    u"board over every combination containing it; reference = the reference combination's value.",
+    u"At 3.5e15 the reference combination's value is given for both track choices: reference "
+    u"(most-populated track) and central reference (central track).",
     FLUENCE_TEXT])
 fig, n09 = numbers_table.table_figure(
     T09, name=u"Resolution per chip and step", tag=TAG,
@@ -1028,9 +1029,9 @@ save(fig, "re09_numbers_table",
      payload(dict(rows=numbers_table.records(T09), cells=n09["cells"], columns=n09["columns"],
                   table_rows=n09["rows"], files=[os.path.basename(p) for p in TABLE09]),
              footer09),
-     conventions(top="the value drawn on re08: the anointed combination's value, or the band "
+     conventions(top="the value drawn on re08: the reference combination's value, or the band "
                      "centre at a step of BAND_STEPS",
-                 central="variant central at the same floor, anointed combination; the band "
+                 central="variant central at the same floor, reference combination; the band "
                          "centre at a step of BAND_STEPS",
                  band=tables.BAND_FOOTER))
 
@@ -1040,7 +1041,7 @@ save(fig, "re09_numbers_table",
 # For each re08 point, the pixels of the board with a resolution: with tracks of at least 300
 # events (solid lines and the chip markers: the pixels behind the ladder's values) and with
 # tracks of any number of events (dashed lines, the same runs at event floor "none"). A pixel
-# counts once it has one track through the anointed combination. The gap between the two lines
+# counts once it has one track through the reference combination. The gap between the two lines
 # is the pixels the 300-event floor removes; where the solid line falls, the ladder's values come
 # from fewer pixels.
 #
@@ -1074,7 +1075,7 @@ ANY10 = ladder.floor_none_pixels(BT, BM, ALL08 + [p for t in TELS for p in EXTRA
                                  variant=VARIANT)
 extra_runs10 = {t: sorted({p["run"] for p in EXTRA10[t]}) for t in TELS}
 footer10 = u"\n".join([
-    u"Pixels with a resolution per board, anointed combination, %s: solid = tracks with at "
+    u"Pixels with a resolution per board, reference combination, %s: solid = tracks with at "
     u"least %s events (the points of the fluence ladder), dashed = tracks with any events." % (
         tables.VARIANT_TEXT[VARIANT], FLOOR),
     u"Pixels with a resolution in the surviving readout sample; the IRRAD loops lost 47-81 % of "
@@ -1096,7 +1097,7 @@ save(fig, "re10_pixel_yield_vs_fluence",
              extra_runs={t: extra_runs10[t] for t in TELS}),
      conventions(colour="board (etroc_style.BOARD_COLOR)",
                  line_style="event floor: solid at least %s events, dashed any events" % FLOOR,
-                 n_pixels_any="n_pixels of the anointed row at floor 'none', same variant and "
+                 n_pixels_any="n_pixels of the reference row at floor 'none', same variant and "
                               "table; None where the table has no row"))
 
 # %% [markdown]
@@ -1120,11 +1121,11 @@ save(fig, "re10_pixel_yield_vs_fluence",
 # on the maps notebook, so H1 3+4 and 11+12 are not drawn.
 #
 # The combination checks re16 to re18 (appendix) read the same combination rows and draw, for
-# every good run at the standard point, the anointed combination beside the one without the
+# every good run at the standard point, the reference combination beside the one without the
 # board's HV partner and their pair-corrected midpoint.
 #
 # The colour is the combination (by its three boards; no fluence hue: the steps are on the
-# axis), filled for the board's anointed combination and open for the other two, the marker the
+# axis), filled for the board's reference combination and open for the other two, the marker the
 # chip, the bar the pixel-to-pixel spread of the board's map in that combination. No band: the
 # figure draws the combinations themselves. Under each panel: each run's number and this
 # board's bias, then the settings class, then the step. A point from fewer than 128 pixels is a
@@ -1184,8 +1185,8 @@ def low_line11(pts):
     for p in low:     # a run as a tuple of its runs: single runs and merges sort together
         run = p["run"] if isinstance(p["run"], tuple) else (p["run"],)
         by.setdefault(p["tel"], set()).add(run)
-    return [u"Small markers, under %d pixels (half the chip): %d of %d points (%d anointed); %s." % (
-        curves.LOW_PIXELS, len(low), len(pts), sum(p["anointed"] for p in low), u"; ".join(
+    return [u"Small markers, under %d pixels (half the chip): %d of %d points (%d filled); %s." % (
+        curves.LOW_PIXELS, len(low), len(pts), sum(p["reference"] for p in low), u"; ".join(
             u"%s run%s %s" % (t.upper(), u"s" if len(by[t]) > 1 else u"",
                               u", ".join(map(curves.run_label, sorted(by[t]))))
             for t in TELS if t in by)), SURVIVING_TEXT]
@@ -1194,7 +1195,7 @@ def low_line11(pts):
 all11 = [p for t in TELS for p in P11[t]]
 footer11 = u"\n".join([
     u"Selection: %s, tracks with at least %s events; every 3-board combination containing the "
-    u"board, filled = the board's anointed combination, open = the other two; no band." % (
+    u"board, filled = the board's reference combination, open = the other two; no band." % (
         tables.VARIANT_TEXT[VARIANT], FLOOR),
     u"Widths = FWHM/2.355 of the TOA-difference core, as the result tables carry them; bar = the "
     u"pixel-to-pixel spread of the board's map in that combination.",
@@ -1221,7 +1222,7 @@ save(fig, "re11_combo_split_3p5e15",
      payload(n11, footer11, runs={t: SPLIT11[t] for t in TELS}, good_runs=GOOD11,
              merges={t: [curves.run_label(m) for m in MERGED11[t]] for t in TELS}),
      conventions(colour="combination (combo_split.COMBO_COLOR), by its three boards",
-                 marker="chip (style.chip_marker); filled = anointed combination, open = the "
+                 marker="chip (style.chip_marker); filled = reference combination, open = the "
                         "others; small under curves.LOW_PIXELS pixels",
                  bar="pixel-to-pixel spread of the board's map in that combination",
                  band="none: every combination drawn",
@@ -1364,8 +1365,8 @@ save(fig, "re15_res_vs_hours_after_3p5e15",
 # Each board's resolution from three choices of 3-board combination, all read from the
 # single-run board table's combination rows (`../resolution/combo_check.py`):
 #
-# * top row, the anointed combination (boards 0-1-2 for boards 0-2, 1-2-3 for board 3): the
-#   anointed values (at 3.5e15, re06 and re07 draw the band centre instead);
+# * top row, the reference combination (boards 0-1-2 for boards 0-2, 1-2-3 for board 3): the
+#   reference values (at 3.5e15, re06 and re07 draw the band centre instead);
 # * middle row, the combination without the board's HV partner (boards 0 and 1, and 2 and 3,
 #   are HV pairs): board 0 from boards 0-2-3, board 1 from 1-2-3, board 2 from 0-1-2, board 3
 #   from 0-1-3;
@@ -1399,10 +1400,10 @@ save(fig, "re15_res_vs_hours_after_3p5e15",
 # scan exactly or to within 3 pixels, the cell stops otherwise) and gives the same groups.
 
 # %%
-ROW_TITLES = {"anointed": u"anointed combination",
+ROW_TITLES = {"reference": u"reference combination",
               "partner_excluded": u"combination without the HV partner",
               "midpoint": u"pair-corrected midpoint"}
-ROW_WORD = {"anointed": u"top", "partner_excluded": u"middle", "midpoint": u"bottom"}
+ROW_WORD = {"reference": u"top", "partner_excluded": u"middle", "midpoint": u"bottom"}
 COMBO = combo_check.combination_rows(BT, VARIANT, FLOOR)
 STEPS_MAR = (0.0, 3e14, 9e14, 1.5e15)
 
@@ -1455,8 +1456,8 @@ def missing_text(missing):
                                             u", ".join(map(str, runs)),
                                             u"s" if len(bs) > 1 else u"", u", ".join(map(str, bs)))
                 for (t, runs), bs in groups.items())))
-    if missing["anointed"]:
-        raise RuntimeError("anointed rows missing: %s" % missing["anointed"])
+    if missing["reference"]:
+        raise RuntimeError("reference rows missing: %s" % missing["reference"])
     return u"; ".join(parts) if parts else u"none"
 
 
@@ -1468,12 +1469,12 @@ def runs_text(runs_by_tel):
 
 def rows_footer(what, rows, missing, dropped):
     every = [p for r in rows for t in TELS for p in rows[r][t]]
-    n_runs = {t: len({p["run"] for p in rows["anointed"][t]}) for t in TELS}
+    n_runs = {t: len({p["run"] for p in rows["reference"][t]}) for t in TELS}
     lines = [
         u"Selection: %s, tracks with at least %s events. Widths = FWHM/2.355 of the "
         u"TOA-difference core, as the result tables carry them; bar = the pixel-to-pixel spread."
         % (tables.VARIANT_TEXT[VARIANT], FLOOR),
-        u"Top: the anointed combination (boards 0-1-2 for boards 0-2, 1-2-3 for board 3). Middle: "
+        u"Top: the reference combination (boards 0-1-2 for boards 0-2, 1-2-3 for board 3). Middle: "
         u"the combination without the board's HV partner (pairs 0-1, 2-3).",
         u"Bottom: $w_\mathrm{mid}^2 = (w_\mathrm{present}^2 + w_\mathrm{absent}^2)/2$, "
         u"$w_\mathrm{present}$ = RMS of the two combinations holding the board and its partner, "
@@ -1509,7 +1510,7 @@ def rows_payload(n, footer, rows, missing, dropped, camp, **extra):
 
 ROWS_CONVENTIONS = dict(
     colour="fluence step (FLUENCE_COLOR), a later look at a step in the later-look hue",
-    rows="anointed combination; the combination without the HV partner (PARTNERS); the "
+    rows="reference combination; the combination without the HV partner (PARTNERS); the "
          "pair-corrected midpoint (combo_check.midpoint)",
     band="none: the rows compare the combinations")
 
@@ -1527,7 +1528,7 @@ for stem, camp, steps, data, ylim in (
                                     xlabel=style.XLABEL_BIAS, ylim=ylim, tag=TAG, data=data,
                                     footer=footer)
     save(fig, stem, rows_payload(n, footer, rows, missing, dropped, camp,
-                                 runs={t: sorted({p["run"] for p in rows["anointed"][t]})
+                                 runs={t: sorted({p["run"] for p in rows["reference"][t]})
                                        for t in TELS}),
          conventions(population="every good run at the standard point at every step, single "
                                 "runs", **ROWS_CONVENTIONS))

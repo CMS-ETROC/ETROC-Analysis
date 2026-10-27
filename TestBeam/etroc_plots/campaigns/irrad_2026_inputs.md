@@ -110,7 +110,7 @@ The code that made these is not in this repository; the origin column says what 
 The time-resolution results of the test-beam chain (`TestBeam/condor_at_lxplus`), as flat tables
 in `tables/`; the merged-runs and resolution notebooks read them (the resolution notebook's
 combination split, re11, and its combination checks, re16 to re18, read every combination of
-`board_table_irrad.csv`, not only the anointed one). `../resolution/tables.py` describes their
+`board_table_irrad.csv`, not only the reference one). `../resolution/tables.py` describes their
 columns, and each folder carries a `PIXEL_TABLES_README.md` from its build. The code that made
 them is not in this repository yet: the build scripts are named in the origin column, and the
 run merging itself (the merged step-13 outputs) was done by the run-merging study's scripts
