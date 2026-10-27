@@ -157,8 +157,8 @@ runs of `FRONTEND_RUNS` and the July display runs at RFSel 2, threshold offset 2
   three minutes per run. The TOA difference uses the pipeline's time-walk solver
   (`condor_at_lxplus/core/twc_solver.py`, `apply_timewalk_correction_arrays`: one polynomial in
   TOT per board, solved jointly over the triple's three boards), so the rebuild runs from
-  `TestBeam/`. `--rank bytes` picks each pixel's triple by file size, the rule of the CERN IRRAD
-  2026 talk figures (kept for comparisons); the default, `rows`, by its events.
+  `TestBeam/`. `--rank bytes` picks each pixel's triple by file size, the rule of the first
+  presented figures (kept for comparisons); the default, `rows`, by its events.
 
 A pixel's triple: the track files of a run hold one triple of pixels each, on boards 0-1-2 or
 1-2-3 (the folder name gives the boards' roles and indices, `extra0-dut1-ref2`). Each pixel of a

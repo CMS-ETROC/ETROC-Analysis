@@ -375,7 +375,7 @@ def _check_chip_fluence_text():
 
 _check_chip_fluence_text()
 
-# 24 GeV/c proton NIEL hardness factor, 0.62 +- 0.04 (ETL talk, 20 April 2026). With the
+# 24 GeV/c proton NIEL hardness factor, 0.62 +- 0.04 (ETL meeting, 20 April 2026). With the
 # on-chip factor, one bookkeeping proton is CONV_FULL n_eq on the chip, so the three March steps
 # correspond to 1.4, 4.2 and 7.0e14 n_eq.
 NIEL_24GEV = 0.62
@@ -558,8 +558,8 @@ BAND_STEPS = (3.5e15,)
 
 # ==================================================================== setup and timeline
 # campaigns.REQUIRED["overview"]: etroc_plots.overview and notebooks/overview.py read these.
-# The sensor under each chip, in board order (TELESCOPE_CHIPS): wafer and die. Source: the March
-# 2026 campaign slides.
+# The sensor under each chip, in board order (TELESCOPE_CHIPS): wafer and die. Source: the
+# campaign's own slides (March 2026).
 TELESCOPE_SENSORS = {"h1": ["W27 #20", "W14 #22", "W14 #23", "W15 #01"],
                      "f1": ["W5 4-7", "W5 5-7", "W5 3-7", "W5 5-8"]}
 
@@ -567,7 +567,7 @@ TELESCOPE_SENSORS = {"h1": ["W27 #20", "W14 #22", "W14 #23", "W15 #01"],
 # (centre in cm, share of the protons), which flatten the profile over the chip window of
 # +-BEAM_WINDOW_CM. BEAM_TABLE is the facility's table of the options it considered: (name,
 # exposures, mean and RMS deviation of the unit-area profile over the window). Source: the
-# March 2026 campaign slides, which give the width as "Width/sigma = 1.1 cm". Read as a FWHM
+# campaign's own slides (March 2026), which give the width as "Width/sigma = 1.1 cm". Read as a FWHM
 # (sigma = 1.1 / 2.355 cm), it reproduces every row of the table to within 0.002 in the mean and
 # 0.0003 in the RMS deviation; read as sigma, the centre row's mean would be 0.35, not 0.71. So
 # 1.1 cm is the FWHM. The table's own sampling of the window is not documented.
@@ -616,9 +616,9 @@ RFSEL_TOT_PAIRS = {("july", "f1"): [(47, 18), (52, 86)]}
 # RFSEL_TOT_PAIRS.
 TOT_TIME_CONTROL = {("july", "f1"): [(32, 52, 86)]}
 # Runs drawn beside the display runs of their step on the fluence ladders of the frontend
-# notebook (fe01, fe07) only, as the CERN IRRAD 2026 talk drew them, per (campaign, telescope)
-# and fluence step. H1 July run 19 is the repeat of run 18 (same settings, same autocalibration
-# scan, 8 h later). Not display runs; in no other figure.
+# notebook (fe01, fe07) only, per (campaign, telescope) and fluence step. H1 July run 19 is the
+# repeat of run 18 (same settings, same autocalibration scan, 8 h later). Not display runs; in no
+# other figure.
 LADDER_EXTRA_RUNS = {("july", "h1"): {3.5e15: [19]}}
 # The runs whose hits the frontend tables are built from, per campaign and telescope: in March
 # the step runs of MARCH_DISPLAY_RUNS and the March run of COOLDOWN_PAIRS; in July the July run of

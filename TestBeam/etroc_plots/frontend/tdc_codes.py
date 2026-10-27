@@ -446,8 +446,8 @@ def diff_ticks(lim, max_ticks=9):
 # lim = the `percentile` of |July - March| over the pixels with a CAL mode in both runs, "pooled"
 # over both telescopes (one range shared by every difference map) or "per_telescope" (one range
 # per telescope), rounded up to the next integer code ("ceil") or not ("none"), at least
-# `min_code`. The CERN IRRAD 2026 talk drew one range per telescope, its 98th percentile without
-# rounding: dict(pool="per_telescope", percentile=98.0, rounding="none", min_code=1.0).
+# `min_code`. The first presented figures drew one range per telescope, its 98th percentile
+# without rounding: dict(pool="per_telescope", percentile=98.0, rounding="none", min_code=1.0).
 DIFF_RANGE = dict(pool="pooled", percentile=99.0, rounding="ceil", min_code=1.0)
 
 

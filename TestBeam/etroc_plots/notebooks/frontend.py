@@ -210,15 +210,14 @@ def run_bias(camp, tel, run):
 # %% [markdown]
 # ## The runs
 #
-# * The fluence ladder (fe01). March: at each step the highest-bias run at threshold offset 20
-#   (`MARCH_DISPLAY_RUNS` in the campaign module, the runs of the maps notebook). July: every run
-#   of the display-run list (`july/display_runs_jul.csv`) at RFSel 2 and threshold offset 20,
-#   preferred or not, side by side, then the step's extra runs.
+# * The runs at each fluence step (fe01). March: at each step the highest-bias run at threshold
+#   offset 20 (`MARCH_DISPLAY_RUNS` in the campaign module, the runs of the maps notebook). July:
+#   every run of the display-run list (`july/display_runs_jul.csv`) at RFSel 2 and threshold
+#   offset 20, preferred or not, side by side, then the step's extra runs.
 # * An extra run (`LADDER_EXTRA_RUNS` in the campaign module) is drawn beside the display runs of
-#   its step on the ladders of fe01 and fe07 only, as the CERN IRRAD 2026 talk drew it. It is not
-#   a display run and no other figure reads it. The one extra is H1 run 19 at 3.5e15, the repeat
-#   of run 18 eight hours later at the same settings; it reused run 18's autocalibration scan, so
-#   its fe01 points coincide with run 18's.
+#   its step on fe01 and fe07 only. It is not a display run and no other figure reads it. The one
+#   extra is H1 run 19 at 3.5e15, the repeat of run 18 eight hours later at the same settings; it
+#   reused run 18's autocalibration scan, so its fe01 points coincide with run 18's.
 # * The pair at 1.5e15 (fe02-fe06), `COOLDOWN_PAIRS` in the campaign module: before cooling
 #   down, the March run of the 1.5e15 step whose leakage current matches the July run's (its
 #   lowest bias, run 17 on both telescopes); after cooling down, the July preferred display run
@@ -552,14 +551,17 @@ for k, tel in enumerate(TELS):
 #
 # The triple matters: a pixel's TOT median depends on which of its triples is read. The partner
 # pixels on the other two boards fix where the track, at 60 deg to the chip, crosses the pixel,
-# and corridors grazing the pixel read a lower TOT: in July F1 run 13, board 3 pixel (10, 14),
-# two corridors of 1,675 and 1,669 events give medians of 3.01 and 2.02 ns (the other four
-# corridors of that pixel 2.28-2.97 ns). The board statistics barely move with the rule: ranking
-# each pixel's triples by file size instead (`--rank bytes`, the rule of the CERN IRRAD 2026 talk
-# figures) changes the triple of 554 of 22,472 pixels (2.5 %) and moves the board values of
-# fe07-fe09 by at most 0.0135 ns (median of the pixel medians) and 0.0029 ns (pooled median) over
-# 88 boards, and the most frequent TOT of one board by one 0.1 ns bin (comparison of the two
-# rebuilds, 2026-10-02). fe07 and fe08 state this in their footers.
+# and tracks that only graze the pixel (their partner pixels put the crossing at its edge) read
+# a lower TOT. Example: in July F1 run 13, board 3 pixel (10, 14), two partner-pixel choices of
+# 1,675 and 1,669 events give medians of 3.01 and 2.02 ns; the other four choices for that pixel
+# give 2.28-2.97 ns.
+#
+# The board statistics barely move with the ranking rule. The other rule ranks each pixel's
+# triples by file size (`--rank bytes`, the rule of the first presented figures). It changes the
+# triple of 554 of 22,472 pixels (2.5 %). Over 88 boards it moves the board values of fe07-fe09
+# by at most 0.0135 ns (median of the pixel medians) and 0.0029 ns (pooled median), and the most
+# frequent TOT of one board by one 0.1 ns bin. These numbers come from a comparison of the two
+# rebuilds (2026-10-02). fe07 and fe08 state this in their footers.
 #
 # * TOT: the time over threshold of every event of that triple, in ns, as reconstructed.
 # * dTOA: the TOA difference of two boards of one triple after the time-walk correction solved
@@ -596,8 +598,8 @@ NBOARDS = {t: len(campaign.TELESCOPE_CHIPS[t]) for t in TELS}
 RANK_SHIFT = dict(pixmed_median_ns=0.01349, median_ns=0.00290, mode_boards_moved=1, boards=88)
 RANK_SHIFT_TEXT = "%.3f ns" % (np.ceil(RANK_SHIFT["pixmed_median_ns"] * 1e3) / 1e3)  # at most
 CORRIDOR_TEXT = (u"A pixel's TOT depends on which of its triples is read: the partner pixels fix "
-                 u"where the 60 deg track crosses it, and corridors grazing the pixel read a lower "
-                 u"TOT (medians up to 1 ns apart for corridors of equal count).")
+                 u"where the 60 deg track crosses it, and tracks grazing the pixel read a lower "
+                 u"TOT (medians up to 1 ns apart for triples of equal count).")
 SET_WORDS = "RFSel %d, threshold offset %d" % (SETTINGS["rfsel"], SETTINGS["offset"])
 COMBO_WORDS = "boards 0-1-2 for boards 0-2, boards 1-2-3 for board 3"
 MARCH_STEPS = {t: {step_fluence("march", t, r) for r in campaign.MARCH_DISPLAY_RUNS[t]}
@@ -734,7 +736,7 @@ save(fig, "fe07_tot_median_vs_fluence",
           pixels="a pixel counts when its triple (the one with the most events in boards 0-1-2, "
                  "board 3: 1-2-3) holds >= %d events" % FLOOR,
           triple_rule="one triple per pixel, the most populated; a pixel's TOT median depends on "
-                      "the triple (track corridor) read, the board statistic barely: rank_shift "
+                      "the triple read, the board statistic barely: rank_shift "
                       "is the largest change of a board value when the triple is the largest "
                       "file instead (two rebuilds of 2026-10-02 compared)",
           times="run start (tables/run_times.csv) minus RAD_STOP_UTC of the step, hours",
@@ -801,11 +803,11 @@ save(fig, "fe08_tot_board_vs_fluence",
 # same pixel in every run (among the pixels counted in all seven runs, the one whose smallest
 # event count over the runs is largest). One curve per run, each as the fraction of its events
 # per bin: fe09 in 0.1 ns bins; fe10 one bin per TOT code, on the code ladder of the pixel's CAL
-# mode in the run (one code = 2 x 3.125 ns / CAL mode, the code at each multiple of 32 half of
-# that), so the edges differ run to run. One x range per telescope (0.5 to 99.5 % of
-# its curves). The legend gives the step,
-# the time from the end of its irradiation to the run start (the July 1.5e15 run after cooling
-# down, timed from the end of the March 1.5e15 step) and the board's bias.
+# mode in the run (one TOT code = 2 x 3.125 ns / CAL mode; every 32nd code is half as wide,
+# from the TOT formula of fe03-fe04), so the edges differ run to run. One x range per telescope
+# (0.5 to 99.5 % of its curves). The legend gives the step, the time from the end of its
+# irradiation to the run start (the July 1.5e15 run after cooling down, timed from the end of the
+# March 1.5e15 step) and the board's bias.
 
 # %%
 TOT_W, DT_W = 0.1, tot_shapes.DT_BIN_PS
@@ -1074,7 +1076,7 @@ save(fig, "fe12_dtoa_shape_pixel_vs_fluence",
 # is the one in that triple. Bins: TOT one TOT code, on the code ladder of the pixel's CAL mode in
 # the run as in fe10; dTOA 25 ps, the bin the table stores and about one TOA code of these two
 # pixels (3.125 ns / CAL, with each board's median CAL in the triple from `dtoa_triples.csv`), as
-# in fe11-fe12. At 100 ps, the bin of the CERN IRRAD 2026 talk, the curve fills four bins.
+# in fe11-fe12. In 100 ps bins the curve would fill four bins.
 
 # %%
 for k, t in enumerate(TELS):

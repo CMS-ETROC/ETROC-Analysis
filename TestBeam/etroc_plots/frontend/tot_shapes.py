@@ -14,8 +14,8 @@ not), so the chip of a board is always TELESCOPE_CHIPS[telescope][board index].
 Combos and triples. Boards 0, 1 and 2 are read from the combo of boards 0-1-2, board 3 from the
 combo 1-2-3 (REFERENCE). A pixel's triple is one file of that combo holding the pixel: the one
 with the most events (rank="rows"; ties go to the larger file, then to the first file name), or
-the largest file (rank="bytes", ties to the first file name; the rule of the CERN IRRAD 2026
-talk figures). The events of a file are its row count, read from the parquet footer. A pixel
+the largest file (rank="bytes", ties to the first file name; the rule of the first presented
+figures). The events of a file are its row count, read from the parquet footer. A pixel
 counts for a board when its triple holds at least FLOOR events.
 
 What the tables hold (`python -m etroc_plots.frontend.rebuild --part tracks`; the columns are

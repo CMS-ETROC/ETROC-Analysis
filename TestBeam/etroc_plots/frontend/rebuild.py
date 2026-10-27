@@ -23,7 +23,7 @@ update the checksum list to use them). The parts:
 --runs takes "pairs" (COOLDOWN_PAIRS), "frontend" (frontend_runs()) or campaign:telescope:run
 items such as july:h1:4; the TDC part always adds the July run of each telescope's COOLDOWN_PAIRS
 pair, whose most populated pixels it histograms. --rank picks a pixel's triple by its events (rows,
-the default) or by its file size (bytes, the rule of the CERN IRRAD 2026 talk figures, for
+the default) or by its file size (bytes, the rule of the first presented figures, for
 comparisons). The progress and every run's counts go to standard output.
 """
 import argparse
