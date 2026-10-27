@@ -727,7 +727,7 @@ TWC_BANK_BEST_CSV = os.path.join(INPUTS_UNIVERSALITY, "twc_bank_best.csv")      
 UNIV_EXCLUDED_STEPS = (2e15, 3.5e15)
 # The study's own outputs, read only by the reduction, never by a notebook. Read-only.
 # TWC_TRANSFER_ROOT holds the coefficient bank (bank/coeffs_<campaign>_<run>.parquet), the
-# round-1 table of the level cells (figs/transfer_2026-09-04/inputs/master_cells.csv) and the
+# first summary table of the level cells (figs/transfer_2026-09-04/inputs/master_cells.csv) and the
 # aggregation tables the axis tables were built from (tables/agg_<agg_tag>/agg_by_cell.csv).
 TWC_TRANSFER_ROOT = (os.environ.get("ETROC_TWC_TRANSFER_ROOT")
                      or "/eos/user/m/musafdar/DESY_May2026/analysis/twc_transfer")

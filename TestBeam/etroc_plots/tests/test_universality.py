@@ -35,7 +35,7 @@ def synthetic_agg():
 
 
 def axis_rows(agg):
-    """The axis-table rows of `agg`, as the study's axis builder wrote them."""
+    """The axis-table rows of `agg`, as the study's axis-table code wrote them."""
     return agg.drop(columns="self_transfer").rename(columns={"mu": "mu_ps", "se": "se_ps"})
 
 

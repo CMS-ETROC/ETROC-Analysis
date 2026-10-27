@@ -12,7 +12,7 @@ universality/results/ of the inputs, or ETROC_TWC_RESULTS_ROOT), which must hold
 seven job lists below), the axis tables campaign.UNIV_AXIS_SOURCES names
 (results_r2/axis_{A,B,C,D,E,I,J,K}.csv and results_r3/guardfix/axis_{E,J,K}_gf.csv) and
 results_r3/ (axis_F.csv, axis_F_long.csv, summary_F.md). R (default TWC_TRANSFER_ROOT) holds the
-coefficient bank, bank/coeffs_<campaign>_<run>.parquet, the round-1 table of the level cells,
+coefficient bank, bank/coeffs_<campaign>_<run>.parquet, the first summary table of the level cells,
 figs/transfer_2026-09-04/inputs/master_cells.csv, and the aggregation tables the axis tables were
 built from, tables/agg_<agg_tag>/agg_by_cell.csv (campaign.UNIV_AGG_DIRS names the folders that
 hold a tag under another name). The parts:
@@ -169,8 +169,8 @@ def read_tsv(path):
 
 
 def axis_f_base_cells(summary_md, cells):
-    """{F cell: round-1 cell} from the table "Cells and what each compares" of summary_F.md, whose
-    rows read "| F4 | b1, run26<-run9 ... |": the first word names the round-1 cell, matched to
+    """{F cell: level cell} from the table "Cells and what each compares" of summary_F.md, whose
+    rows read "| F4 | b1, run26<-run9 ... |": the first word names the level cell, matched to
     the one cell of `cells` that starts with it ("b1" -> "b1_30to0")."""
     text = open(summary_md).read()
     sec = text.split("## Cells and what each compares", 1)[1].split("\n## ", 1)[0]
@@ -316,7 +316,7 @@ def agg_rows(twc_root, tags):
     """The aggregation rows behind the axis tables' `tags` (their agg_tag values): agg_by_cell.csv
     of each tag's folder under twc_root/tables (campaign.UNIV_AGG_DIRS, else agg_<tag>), in the
     axis tables' words (board_or_role, family), with agg_tag. They are read with pandas' default
-    float parser, as the study's axis builder read them, so mu and se equal the axis tables'
+    float parser, as the study's axis-table code read them, so mu and se equal the axis tables'
     numbers exactly."""
     frames, missing = [], []
     for tag in sorted(set(tags)):

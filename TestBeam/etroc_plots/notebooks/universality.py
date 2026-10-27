@@ -21,24 +21,44 @@
 # the pair penalty, how much wider a pair of boards gets with the source's correction than with
 # the target's own, on the same events.
 #
+# The penalties come from a study of the transfer. It fixed its questions, its margins and its
+# verdict rule before the data were looked at. A few of its words appear below:
+#
+# * A cell is one comparison of a source with a target. The level cells, 43 of them, answer the
+#   study's main questions, a to h. The comparison axes, A to K, each change one condition at a
+#   time.
+# * A comparison is scored on target triples: one pixel on each of the three boards of the
+#   target run. A triple is interpolating when its TOT lies within the source's TOT range, and
+#   extrapolating when it reaches beyond it. The study calls these two kinds families, and claims
+#   a transfer for the interpolating family only.
+# * A pair row is the penalty of one pair of boards in one comparison, over the triples of one
+#   family.
+# * The correction change says how far the target's TOT reaches beyond the source's: the rms
+#   change of the correction when the target's TOT is clipped to the source's range. The study's
+#   tables call it the lever (`lever_X`).
+#
+# The figures:
+#
 # * Figure un01: the correction of one pixel against TOT along four axes, with the TOT of the
 #   fitted events below: the angle to the beam (DESY May 2026, 0 to 60 deg), the sensor bias
 #   (CERN IRRAD March 2026, H1), the fluence step (March, H1, the runs of the fluence ladder)
-#   and the four months between March and July at 1.5e15 (H1 and F1).
+#   and the four months between March and July at 1.5e15 (H1 and F1). The fluences are the
+#   campaign's bookkeeping fluences.
 # * Figure un02: the penalty of every extrapolating pair row of the comparison axes against the
-#   share of the target's TOT the source covers and against the lever, with the interpolating
-#   rows as a band.
-# * Figure un03: the penalty of each of the 43 level cells, interpolating family and all target
-#   triples, with the study's verdicts and each cell's margin.
+#   share of the target's TOT the source covers and against the correction change, with the
+#   interpolating rows as a band.
+# * Figure un03: the penalty of each of the 43 level cells, over the interpolating family and
+#   over all target triples, with the study's verdicts and each cell's margin.
 # * Figure un04: the penalty before and after refitting the linear term of the correction on
-#   the target, per pair row of the re-scored cells.
-# * Figure un05: the threshold-offset and RFSel steps of August, against a control with the
-#   settings held and the beam stepped from 4 to 3 GeV.
-# * Figure un06: three controls: the floor on one day, a board correction pooled over pixels
-#   against the pixel's own, and March to July against the bias step.
+#   the target, per pair row of the eleven comparisons of axis F.
+# * Figure un05: the threshold-offset and RFSel steps of DESY August 2026, against a control
+#   with the settings held and the beam stepped from 4 to 3 GeV.
+# * Figure un06: three controls: the noise floor on one day (the penalty when nothing changes),
+#   a board correction pooled over pixels against the pixel's own, and March to July against the
+#   bias step.
 #
-# No comparison with an IRRAD run at 2e15 or 3.5e15 is drawn; the cell before un02 says what
-# that leaves out.
+# No comparison with an IRRAD run at 2e15 or 3.5e15 is drawn. The section "The comparisons and
+# their pair penalties", before figure un02, says what that leaves out.
 #
 # Data quality. The IRRAD 2026 loops were recorded with the readout saturated: 47 to 81 % of the
 # ETROC2 packets lost their header and were dropped at decoding, so every fit and penalty of an
@@ -59,8 +79,7 @@
 #    `/eos/user/m/musafdar/ETROC_plot_inputs/irrad_2026`: the six tables of `universality/`,
 #    `tables/runs_summary.csv` and `july/good_runs.csv`. `../campaigns/irrad_2026_inputs.md`
 #    lists every table with where it came from. The `universality/` tables come from the
-#    TWC-transfer study (its level cells, margins and verdict rule set before it ran): its
-#    coefficient bank, one file of fits per run, and its result tables;
+#    TWC-transfer study: its coefficient bank, one file of fits per run, and its result tables;
 #    `python -m etroc_plots.universality.reduce` (run from `TestBeam/`) remakes them from those,
 #    read by default from their copy in `universality/results/` (15 s on one lxplus core). To
 #    read your own copy, copy that whole `irrad_2026` folder and point `ETROC_INPUTS` at it. The
@@ -80,8 +99,9 @@
 # * `universality/univ_cells.csv`: every comparison (cell) with its source and target run
 #   (un02-un06). `univ_master_cells.csv`: per level cell the inverse-variance means, margins and
 #   verdicts (un03, un06). `univ_axis_r2.csv`: the pair rows of the comparison axes with their
-#   coverage, lever and self-transfer flag (un02, un05). `univ_axis_F_wide.csv` and
-#   `univ_axis_F_long.csv`: axis F, the linear refit, and its margins (un04).
+#   coverage, correction change (`lever_X`) and self-transfer flag (un02, un05).
+#   `univ_axis_F_wide.csv` and `univ_axis_F_long.csv`: axis F, the linear refit, and its margins
+#   (un04).
 # * `tables/runs_summary.csv`: the chips, bias, fluence step, RFSel and threshold offset of
 #   every IRRAD run (un01-un06).
 # * `july/good_runs.csv`: the good-run list; every IRRAD run drawn must be on it as good.
@@ -89,10 +109,11 @@
 #   from the campaign's board-config yaml in `TestBeam/board_configs_yaml/`, read by
 #   `../campaigns/desy_2026.py`.
 #
-# The arithmetic lives in `../universality/transfer.py` (the readers, the verdict override, the
-# pixel choice and the curves) and `../universality/levels.py` (the rows and bars un02-un06
-# draw), the drawing in `../universality/curves.py` and `levels.py`. This notebook holds the
-# choices made per figure: the runs, the colours and the words on each figure.
+# The arithmetic lives in `../universality/transfer.py` (the readers, the verdict override that
+# the text before figure un03 describes, the pixel choice and the curves) and
+# `../universality/levels.py` (the rows and bars un02-un06 draw), the drawing in
+# `../universality/curves.py` and `levels.py`. This notebook holds the choices made per figure:
+# the runs, the colours and the words on each figure.
 # `../tests/test_universality.py` tests the verdict override, the self-transfer flag (its join in
 # the reduction and the rows left out here), the axis-F rows, the DESY beam of a set of runs and
 # the reduction's default study folder.
@@ -502,35 +523,47 @@ save(fig, "un01_twc_curves", un01,
 # %% [markdown]
 # ## The comparisons and their pair penalties
 #
-# The study ran its comparisons ("cells") in two sets. The level cells (a to h) ask the
-# pre-registered questions: (a) the floor, the same correction on twin runs or on two halves of
-# one run; (b) the angle; (b') the angle on the offset holder; (c) one pixel's correction for a
-# whole board; (d) one board's for another; (e) a correction pooled over a board's pixels against
-# the pixel's own, in August and in a May control; (g) the fluence; (h) March to July at
-# 1.5e15. The comparison axes (A to K) follow single knobs: A a pixel's or a board's correction
-# for a whole board within one run, B time with the settings held, C an angle step, D a bias
-# step at one fluence, E the threshold offset and RFSel, I the sensor vendor, J the cooling down,
-# K the PT-IH2 board sensor -20 to -10 C, 45 deg, bias +10 V; axis F re-scores eleven cells with
-# the linear term of the correction refitted on the target.
+# The study ran its comparisons (its cells) in two sets. The level cells answer the study's main
+# questions, a to h, one comparison per cell:
 #
-# Every number drawn below is a pair penalty: the width of a pair of boards of a target triple
-# with the source's correction, minus its width with the target's own correction fitted on the
-# other half of the events, on the same events (ps). A row is interpolating when the target's
-# TOT lies within the source's, else extrapolating; transfer is claimed on interpolating rows
-# only. The margin of each row is max(1 ps, 2 % of the baseline width), from the tables.
+# * (a) the noise floor: the same correction on two runs at the same settings, or on two halves
+#   of one run;
+# * (b) the angle; (b') the angle on the offset holder;
+# * (c) one pixel's correction for a whole board; (d) one board's for another;
+# * (e) a correction pooled over a board's pixels against the pixel's own, in August and in a
+#   May control;
+# * (g) the fluence; (h) March to July at 1.5e15.
+#
+# The comparison axes, A to K, each change one condition at a time: A a pixel's or a board's
+# correction for a whole board within one run, B time with the settings held, C an angle step,
+# D a bias step at one fluence, E the threshold offset and RFSel, I the sensor vendor, J the
+# cooling down, K the PT-IH2 board sensor -20 to -10 C, 45 deg, bias +10 V. Axis F evaluates
+# eleven comparisons again, with the linear term of the correction refitted on the target. The
+# tables read hold no level f and no axes G and H.
+#
+# Every number drawn below is a pair penalty, in ps. Take a target triple (one pixel on each of
+# the three boards of the target run, with the tracks through all three) and a pair of its
+# boards. The penalty is the pair's width with the source's correction, minus its width with
+# the target's own correction, on the same events. The target's own correction is fitted on the
+# other half of the events, so it is not scored on the events it was fitted on. A triple is
+# interpolating when its TOT lies within the source's TOT range, else extrapolating (the study's
+# thresholds are in `../campaigns/irrad_2026_inputs.md`). Transfer is claimed on the
+# interpolating family only. The margin of each row is max(1 ps, 2 % of the baseline width),
+# from the tables; the baseline width is the pair's width with the target's own correction.
 #
 # **No comparison with an IRRAD run at 2e15 or 3.5e15 is drawn** (`UNIV_EXCLUDED_STEPS` of the
 # campaign module). In the study those are the July threshold-offset and RFSel steps (axis E,
-# cells E1-E12) and the cooling-down cells (axis J), all at 3.5e15; the cell below counts what
+# cells E1-E12) and the cooling-down cells (axis J), all at 3.5e15; the code below counts what
 # that leaves out of each figure. Every IRRAD run of a cell drawn is checked against the good-run
 # list; the DESY runs are not on that list, so the check does not apply to them.
 #
 # **No self transfer is drawn.** A row whose source triple is its target triple (the same run,
 # combination and pixels) is a self transfer: the study keeps such rows as their own group and
 # leaves them out of its per-cell summaries (the level-cell table); its axis tables carry them,
-# marked by the column `self_transfer` (one per arm in the wide axis-F table), which the
-# reduction recovers from the study's aggregation tables. The axis figures leave them out too;
-# the cell below counts them.
+# marked by the column `self_transfer`, which the reduction recovers from the study's
+# aggregation tables. The wide axis-F table has one such column per correction variant (the
+# study calls a variant an arm). The axis figures leave these rows out too; the code below
+# counts them.
 
 # %%
 UNIV_INPUTS = [campaign.UNIV_CELLS_CSV, campaign.UNIV_MASTER_CSV, campaign.UNIV_AXIS_R2_CSV,
@@ -660,14 +693,15 @@ SELF_TRANSFER_RULE = ("left out: rows flagged self_transfer 1 (in the wide axis-
                       "study's per-cell summaries leave these rows out too")
 
 # %% [markdown]
-# ## Figure un02: penalty against coverage and lever
+# ## Figure un02: penalty against coverage and correction change
 #
-# Every extrapolating pair row of the comparison axes (the transferred correction, the primary
-# error factor), its penalty against how much of the target's TOT the source covers and against
-# the lever: the rms change of the correction when the target's TOT is clipped to the source's
-# 0.5-99.5 % range, over the target events outside it. The grey band and the dashed line are the
-# interpolating rows of the same axes, as a reference. The axis E and J rows of the IRRAD runs at
-# 3.5e15 are left out of both; the band is computed without them.
+# Every extrapolating pair row of the comparison axes (the source's correction applied as is, with
+# the study's main error estimate): its penalty against how much of the target's TOT the source
+# covers, and against the correction change. Here that is the rms change of the correction when the
+# target's TOT is clipped to the source's 0.5-99.5 % range, over the target events outside it. The
+# grey band and the dashed line are the interpolating rows of the same axes, as a reference. The
+# axis E and J rows of the IRRAD runs at 3.5e15 are left out of both; the band is computed without
+# them.
 #
 # Six extrapolating rows of axis A (cells A4, A5 and A6, two pairs each, one pixel each) are self
 # transfers: their source triple is the target triple. Each is a second row of a pair whose row
@@ -762,13 +796,16 @@ save(fig, "un02_coverage_lever",
 # %% [markdown]
 # ## Figure un03: the penalty of every level cell
 #
-# One row per level cell, grouped by level. Left, the interpolating family, the claim the study
-# registered before it ran: the inverse-variance mean of the cell's interpolating pair rows,
-# its 90 % interval, the cell's verdict, and at the right edge the share of the cell's
-# differences that are interpolating. Right, all target triples, both families pooled
-# (descriptive). The verdicts are the study's: a cell without a leave-pair-out guard that is not
-# a FAIL reads "no leave-pair-out check". The level cells hold no IRRAD run at 2e15 or 3.5e15
-# (asserted).
+# One row per level cell, grouped by main question. Left, the interpolating family, on which the
+# study makes its claim: the inverse-variance mean of the cell's interpolating pair rows, its
+# 90 % interval, the cell's verdict, and at the right edge the share of the cell's differences
+# that are interpolating. Right, all target triples, both families pooled (descriptive).
+#
+# The verdicts are the study's, with one override. The study's leave-pair-out check refits the
+# correction without the other board of the pair scored, so a correction cannot have learned
+# that pair. A cell whose check is missing or cannot decide (leaving the pair out costs the
+# target's own correction more than the margin), and whose verdict is not a FAIL, reads "no
+# leave-pair-out check". The level cells hold no IRRAD run at 2e15 or 3.5e15 (asserted).
 
 # %%
 LABEL = {
@@ -853,17 +890,17 @@ save(fig, "un03_penalty_per_cell",
 # %% [markdown]
 # ## Figure un04: the linear refit
 #
-# Axis F re-scores eleven cells with a second transferred correction: the source's quadratic
-# term kept and the linear term refitted on the target (fold-matched, one more parameter fitted
-# on the target than the correction as is). Per pair row the penalty before (grey) and after
-# (red); filled markers are interpolating rows, open ones extrapolating. A pair is named by the
-# chips of its two boards in the target run (the study's combination of that run, as the
-# coefficient table records it). Where a cell's source triple is one of its target triples (cells
-# F1 to F3), a pair or board can have two rows of an arm: the transfer row, over the pixels
-# transferred, and the self-transfer row, over the pixels whose source triple is the target
-# triple. The wide axis-F table holds the transfer row of every arm (its `<arm>_self_transfer`
-# flags, checked by the reduction against the study's aggregation, are 0 throughout), so every
-# pair row of the eleven cells is drawn and none is a self transfer.
+# Axis F evaluates eleven cells again with a second transferred correction: the source's quadratic
+# term kept and the linear term refitted on the target, on the same half of the target events as the
+# target's own correction. Per pair row the penalty before (grey) and after (red); filled markers
+# are interpolating rows, open ones extrapolating. A pair is named by the chips of its two boards in
+# the target run (the study's combination of that run, as the coefficient table records it). Where a
+# cell's source triple is one of its target triples (cells F1 to F3), a pair or board can have two
+# rows of one correction variant: the transfer row, over the pixels transferred, and the
+# self-transfer row, over the pixels whose source triple is the target triple. The wide axis-F table
+# holds the transfer row of every variant (its `<arm>_self_transfer` flags, checked by the reduction
+# against the study's aggregation, are 0 throughout), so every pair row of the eleven cells is drawn
+# and none is a self transfer.
 
 # %%
 F_ROWS = levels.refit_rows(AXIS_F)
@@ -1023,11 +1060,11 @@ save(fig, "un05_settings_steps",
 # ## Figure un06: three controls
 #
 # The same numbers as the right panel of un03 (all target triples, both families), for three
-# questions: the floor on one day (twin runs, and the parity and block halves of run 26); a
-# correction pooled over a board's pixels against the pixel's own, in the August runs and in the
-# May control (run 26); and March to July at 1.5e15 on the same chips, against the bias step
-# between the two runs (the July bias minus the March bias, the median over the boards). Points
-# at one bias step are spread by 5 V.
+# questions: the noise floor on one day (two runs at the same settings, and run 26 split two ways:
+# its even and odd files, and two contiguous blocks); a correction pooled over a board's pixels
+# against the pixel's own, in the August runs and in the May control (run 26); and March to July at
+# 1.5e15 on the same chips, against the bias step between the two runs (the July bias minus the
+# March bias, the median over the boards). Points at one bias step are spread by 5 V.
 
 # %%
 TEL_COLOR = {"h1": BOARD_COLOR[0], "f1": BOARD_COLOR[1]}       # as in un01's March-to-July panel

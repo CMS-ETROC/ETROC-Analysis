@@ -124,7 +124,9 @@ rest are for whoever writes the next figure.
   transferred correction minus its width with the target's own, on the same events, in ps. Axis
   titles say pair penalty (or pair width), never a board's resolution. Intervals are 90 %
   (mu +- 1.645 se); each row's own margin is drawn behind it; the verdicts are the study's, after
-  the override `transfer.read_master` applies.
+  the override `transfer.read_master` applies: a cell whose leave-pair-out check (a refit without
+  the other board of the pair) is missing or cannot decide, and that is not a FAIL, reads "no
+  leave-pair-out check".
 - A pair is named by the chips of its two boards in the target run; the study's role words stay
   in the values file.
 - Comparisons that touch an IRRAD run at a fluence step in `UNIV_EXCLUDED_STEPS` (the campaign

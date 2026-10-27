@@ -100,7 +100,7 @@ The code that made these is not in this repository; the origin column says what 
 | `march/conditions_March2026_H1_HPK.csv` | H1 run conditions: run start (UTC), chip, role, HV and threshold offset per board, fluence label | the DAQ run metadata |
 | `vgl/vgl_points.csv` | V_gl (gain-layer depletion voltage) per chip and fluence | the campaign IV notebooks (`ExtractIVCurves.ipynb`), k-factor peak of the fine low-V scans; the file's header records the cross-check |
 | `universality/univ_cells.csv` | every cell of the TWC-transfer study (one comparison of a source and a target): its level or axis, its source and target runs | the study's job lists (its toolkit is not in this repository; specification dated 2026-09-09), reduced by `python -m etroc_plots.universality.reduce`. Columns and command in "Universality tables" below |
-| `universality/univ_master_cells.csv` | the study's verdict table of the level cells | the inputs of the study's round-1 report of 2026-09-04 (its `master_cells.csv`), copied byte for byte by the same command |
+| `universality/univ_master_cells.csv` | the study's verdict table of the level cells | the inputs of the study's first summary table, of 2026-09-04 (its `master_cells.csv`), copied byte for byte by the same command |
 | `universality/univ_axis_r2.csv` | the follow-up axes A-E and I-K, every arm of every cell | the study's eight round-2 axis tables, the guard-fix rerun's rows replacing those of its 11 cells of axes E, J and K, with the self-transfer flag from the study's aggregation tables, by the same command |
 | `universality/univ_axis_F_wide.csv`, `universality/univ_axis_F_long.csv` | axis F, the source correction with its linear term refitted on the target: the arms side by side, and in the shape of the other axes | the study's long axis-F table and the wide one as `python -m twc_transfer axes` writes it (the transfer row of each arm; "Universality tables" below), copied with the self-transfer flag by the same command |
 | `universality/twc_bank_best.csv` | one time-walk correction per pixel and run, DESY May and August and IRRAD March and July 2026: the quadratic's coefficients, and the TOT range and histogram behind it | the study's coefficient bank (63 files, 102 MB), reduced to the best fit per pixel by the same command |
@@ -386,7 +386,7 @@ are not in this repository. The six tables are made by
 run from `TestBeam/` on lxplus (`../universality/reduce.py`; copy the files into `universality/`
 and update the checksum lines to use them). R is `TWC_TRANSFER_ROOT` (default
 `/eos/user/m/musafdar/DESY_May2026/analysis/twc_transfer`): the coefficient bank,
-`bank/coeffs_<campaign>_<run>.parquet`, the round-1 report's inputs,
+`bank/coeffs_<campaign>_<run>.parquet`, the inputs of the study's first summary table,
 `figs/transfer_2026-09-04/inputs/master_cells.csv`, and the aggregation tables the axis tables
 were built from, `tables/agg_<agg_tag>/agg_by_cell.csv`. S is the study's own folder
 (`TWC_RESULTS_ROOT`, by default the copy in `universality/results/`, below): `condor/` (the seven
@@ -414,7 +414,7 @@ self-transfer row on 12 keys, is kept as
 The files the reduction reads are copied unchanged, at their relative paths, to
 `universality/results/` (114 MB, copied 2026-10-18; 109 files, checksums in
 `universality/results/files.md5`): the study folder's `condor/`, `results_r2/` and `results_r3/`
-(with `guardfix/`), and from `TWC_TRANSFER_ROOT` the bank files, the round-1 table of the level
+(with `guardfix/`), and from `TWC_TRANSFER_ROOT` the bank files, the first summary table of the level
 cells and the aggregation tables. One file is not the study's: `results_r3/axis_F.csv` is the
 corrected table `python -m twc_transfer axes` writes (md5 `d5425a11ff92f69c4528c57f5936ff0f`),
 and the study's (md5 `44c661a62fdbf95b05dd7d67cd86cb74`) is kept beside it as
@@ -549,7 +549,7 @@ The wide table is made from `results_r3/axis_F.csv` as `python -m twc_transfer a
 (md5 `d5425a11ff92f69c4528c57f5936ff0f`; the package `TestBeam/twc_transfer` at commit 95a0e41f,
 from the stage-3 aggregation tables of axis F). Where a key (cell, kind, pair or board, family,
 tag) holds two rows of an arm in the long table, the transfer row and the self-transfer row, that
-table shows the transfer row. The study's own builder kept whichever came last, and on 12 keys of
+table shows the transfer row. The study's table code kept whichever came last, and on 12 keys of
 `F_desy_f0p8153`, 4 of F2 and 8 of F3, that was the self-transfer row of the `xfer`, `xfer_lin`,
 `xfer_clip` and `xfer_rescale` arms (48 entries: 1-5 pixels, and a penalty of exactly 0.0 ps in
 `xfer`, beside an `xfer_lin_lpo` arm that was not); the extrapolating `xfer` row of one F3 pair,
@@ -603,6 +603,6 @@ Every variable the package and the notebooks read. Set them before the notebook'
 | `ETROC_BLNW_ROOT` | `/eos/uscms/store/group/lpcmtdstudies` | the autocalibration scan histories (`BLNW_SQLITES`), read only by the BL/NW part of `frontend.rebuild` |
 | `ETROC_DECODED_ROOT` | `/eos/user/j/jongho` | the merged hits (`DECODED_DIRS`), read only by the TDC part of `frontend.rebuild` |
 | `ETROC_ANALYSIS_ROOT` | `/eos/user/m/musafdar` | the reconstructed tracks (`ANALYSIS_DIRS`), read only by the tracks part of `frontend.rebuild` |
-| `ETROC_TWC_TRANSFER_ROOT` | `/eos/user/m/musafdar/DESY_May2026/analysis/twc_transfer` | the TWC-transfer study's coefficient bank and round-1 report inputs (`TWC_TRANSFER_ROOT`), read only by `universality.reduce` (its bank and master parts, and the cells part's check against the master table) |
+| `ETROC_TWC_TRANSFER_ROOT` | `/eos/user/m/musafdar/DESY_May2026/analysis/twc_transfer` | the TWC-transfer study's coefficient bank and the inputs of its first summary table (`TWC_TRANSFER_ROOT`), read only by `universality.reduce` (its bank and master parts, and the cells part's check against the master table) |
 | `ETROC_TWC_RESULTS_ROOT` | `$ETROC_INPUTS/universality/results` | the TWC-transfer study's own folder (`TWC_RESULTS_ROOT`: its job lists and axis tables; by default the copy of the files the reduction reads), read only by the cells and axes parts of `universality.reduce` (or `--results-root`) |
 | `ETROC_FIGURES` | `figures` (next to the notebook) | where the notebooks write; figures go to `$ETROC_FIGURES/<notebook>/`, such as `$ETROC_FIGURES/iv/` |
