@@ -38,7 +38,7 @@ as a small open marker on every figure here, the legend says "under 128 pixels" 
 figure's numbers list those points (low_pixels); the footer gives their counts.
 
 Colour (color_rule): several looks (campaign, fluence step) on the axes -> colour = look, the
-fluence ladder (FLUENCE_COLOR) with a later look at the same step in the later-look hue
+fluence ladder (FLUENCE_COLOR) with a later measurement at the same step in teal
 (iv_plot.timing_color); one look -> colour = board (etroc_style.BOARD_COLOR), the step named in
 the header. Marker and line style = chip on every figure. No jitter: points at one x share it;
 the line of a series runs through the mean at each x.
@@ -50,9 +50,11 @@ Figures (each returns the figure and the numbers drawn):
   res_vs_bias_march_steps      the March bias scans after each step, colour = fluence
   res_1p5e15_march_vs_july     the March 1.5e15 scan and the July 1.5e15 points
   res_july_1p5e15_stability    July 1.5e15 against the hours since the first run there
-  res_2e15_cooling_down        July 2e15 against the hours after the stop, in-run currents
+  res_2e15_cooling_down        July 2e15 against the hours after the end of the irradiation,
+                               in-run currents
   res_3p5e15_vs_bias_and_hours July 3.5e15 against the bias and against the hours after the
-                               stop, bands, one row of two panels per telescope
+                               end of the irradiation, bands, one row of two panels per
+                               telescope
   res_vs_bias_summary          every March standard run and the July runs the notebook gives,
                                colour = fluence step
 
@@ -393,8 +395,8 @@ def color_rule(pts):
 
 
 def look_colors(pts):
-    """{look: colour}: a step's first look its FLUENCE_COLOR, a later look at the same step the
-    later-look hue (iv_plot.timing_color)."""
+    """{look: colour}: a step's first look its FLUENCE_COLOR, a later measurement at the same
+    step the next hue of iv_plot.timing_color (teal for the first)."""
     out, seen = {}, {}
     for k in looks(pts):
         i = seen.get(k[1], 0)
@@ -672,7 +674,7 @@ def res_vs_bias_march_steps(pts_by_tel, **words):
 
 def res_1p5e15_march_vs_july(pts_by_tel, off_list, *, open_label, **words):
     """re03: the March scan at 1.5e15 and the July points at 1.5e15, colour = look (March the
-    step's colour, July the later-look hue). `off_list` {telescope: {run, ...}}: runs drawn with
+    step's colour, July teal). `off_list` {telescope: {run, ...}}: runs drawn with
     an open marker (off the display-run list), named `open_label` in the marker legend; merged
     runs keep the thick black edge. Returns (figure, numbers)."""
     def open_of(p):
@@ -744,9 +746,10 @@ def res_july_1p5e15_stability(pts_by_tel, hours, *, open_runs, open_legend, **wo
 
 
 def res_2e15_cooling_down(pts_by_tel, hours, *, stop, braces, **words):
-    """re05: July 2e15 against the hours after the stop, colour = board, the allowed-stop range
-    `stop` (stop_band) shaded at the origin; `braces` {telescope: (runs, text)}: a brace over
-    those runs at 3 ps above their highest bar. Returns (figure, numbers)."""
+    """re05: July 2e15 against the hours after the end of the irradiation, colour = board, the
+    allowed-stop range `stop` (stop_band) shaded at the origin; `braces` {telescope: (runs,
+    text)}: a brace over those runs at 3 ps above their highest bar. Returns (figure,
+    numbers)."""
     fig, axes, numbers = _time(pts_by_tel, hours, stop=stop, **words)
     numbers["braces"] = {}
     for ax, tel in zip(axes, list(words["tel_titles"])):
@@ -776,14 +779,14 @@ def res_3p5e15_vs_bias_and_hours(bias_pts, time_pts, hours, *, tel_titles, ylim,
                                  legend_locs=None, xlims=None, scale=SCALE):
     """re06: one step (July 3.5e15), one row per telescope of `tel_titles`, top to bottom: on
     the left the resolution against the bias (bias_pts {tel: points}), on the right against the
-    hours after the stop (time_pts {tel: points}, x = hours[tel][run]). Every point is a band
-    (BAND_STEPS); colour = board, marker = chip. On the time panels: under each run its label
-    (run_labels[tel][run], at `label_y` ps) and, at `group_y` ps, one text under each group of
-    runs (groups[tel]: [(runs, text), ...]), centred on the group; runs of open_runs[tel] are
-    drawn with open markers and named by open_legend {tel: (handles, loc, title)}; `stop`
-    shades the allowed-stop range (stop_band). legend_locs {(tel, "bias" or "hours"): loc or
-    (loc, ncol)} places the chip legend (default upper left, one row); xlims {(tel, panel): (lo,
-    hi)}. Returns (figure, numbers)."""
+    hours after the end of the irradiation (time_pts {tel: points}, x = hours[tel][run]). Every
+    point is a band (BAND_STEPS); colour = board, marker = chip. On the time panels: under each
+    run its label (run_labels[tel][run], at `label_y` ps) and, at `group_y` ps, one text under
+    each group of runs (groups[tel]: [(runs, text), ...]), centred on the group; runs of
+    open_runs[tel] are drawn with open markers and named by open_legend {tel: (handles, loc,
+    title)}; `stop` shades the allowed-stop range (stop_band). legend_locs {(tel, "bias" or
+    "hours"): loc or (loc, ncol)} places the chip legend (default upper left, one row); xlims
+    {(tel, panel): (lo, hi)}. Returns (figure, numbers)."""
     tels = list(tel_titles)
     open_runs = open_runs or {}
     open_legend = open_legend or {}
@@ -848,8 +851,8 @@ def res_vs_bias_summary(pts_by_tel, *, chip_fluence=False, mr=None, keep=None, *
     """re07: the bias scans of several steps and campaigns on one figure, one panel per
     telescope, the points the notebook gives (the resolution notebook: every March standard run
     and every July display run as a single run, display_singles); colour = fluence step (a later
-    look at a step in the later-look hue), marker = chip, merged runs (where given) with the
-    thick black edge, points under LOW_PIXELS small and open. The look legend stands once,
+    measurement at a step in teal), marker = chip, merged runs (where given) with the thick black
+    edge, points under LOW_PIXELS small and open. The look legend stands once,
     outside the last panel, with the marker kinds the figure holds; with `chip_fluence` its
     labels give the fluence on the chips (chip_look_text) instead of the bookkeeping fluence.
     `mr` inches of right margin hold that legend (default: wide enough for either labelling).
@@ -870,10 +873,10 @@ def res_vs_bias_summary(pts_by_tel, *, chip_fluence=False, mr=None, keep=None, *
 
 
 def res_3p5e15_vs_hours(pts_by_tel, hours, **words):
-    """re15: one step (July 3.5e15) against the hours after the stop, one panel per telescope,
-    colour = board (= chip), every point a band (BAND_STEPS); re06's hours panel without its
-    open-marker runs. `words` as res_july_1p5e15_stability without open_runs and open_legend
-    (tel_titles, xlabel, ylim, tag, data, footer, run_labels, label_y, and the optional stop,
-    xlims, low_loc, legend_locs, scale). Returns (figure, numbers)."""
+    """re15: one step (July 3.5e15) against the hours after the end of the irradiation, one
+    panel per telescope, colour = board (= chip), every point a band (BAND_STEPS); re06's
+    hours panel without its open-marker runs. `words` as res_july_1p5e15_stability without
+    open_runs and open_legend (tel_titles, xlabel, ylim, tag, data, footer, run_labels, label_y,
+    and the optional stop, xlims, low_loc, legend_locs, scale). Returns (figure, numbers)."""
     fig, _, numbers = _time(pts_by_tel, hours, **words)
     return fig, numbers

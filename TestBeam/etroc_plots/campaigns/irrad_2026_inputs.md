@@ -1,7 +1,7 @@
 # IRRAD 2026 inputs
 
 The notebooks (`../notebooks/iv.ipynb`, `merged.ipynb`, `maps.ipynb`, `overview.ipynb`,
-`frontend.ipynb`, `universality.ipynb` and `settings.ipynb`) draw
+`frontend.ipynb`, `universality.ipynb`, `settings.ipynb` and `resolution.ipynb`) draw
 the CERN IRRAD 2026 figures (March and July; the universality notebook draws DESY 2026 runs beside
 them) from two kinds of input, in two EOS locations. Raw data (the March IV
 scans, the slow-control logs and the week-1 spark-test log, read by the IV notebook only) are read

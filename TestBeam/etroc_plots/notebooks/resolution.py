@@ -11,7 +11,7 @@
 # ---
 
 # %% [markdown]
-# # Resolution: time resolution against bias, fluence and time after the stop, CERN IRRAD 2026
+# # Resolution: time resolution against bias, fluence and time after the end of the irradiation, CERN IRRAD 2026
 #
 # The time resolution of every board of the two telescopes (H1: HPK sensors on chips IH7, IH11,
 # IH12, IH13; F1: FBK sensors on LF10, LF12, LF17, LF18) against the bias, across the March
@@ -38,28 +38,29 @@
 # * Figure re11: the combination split at 3.5e15: each board's resolution in every 3-board
 #   combination containing it, run by run.
 #
-# The appendix holds figures of the July talk drawn from the points above, each by the rules of
-# the figure it derives from:
+# The appendix holds further views of the points above, each by the rules of the figure it
+# derives from:
 #
 # * Figures re12, re13 and re14: re07's points at fewer steps: July at 1.5e15 and 2e15; July at
 #   1.5e15, 2e15 and 3.5e15; March.
 # * Figure re15: re06's hours panel at the standard operating point alone: 3.5e15 against the
 #   hours after the end of the irradiation step.
 # * Figures re16, re17 and re18: the combination checks: each board's resolution in its
-#   reference combination, in the combination without its HV partner, and the pair-corrected
-#   midpoint of the two, against the bias (re16 July, re17 March) and against the run (re18,
-#   every July run, with the HV and LV cycles, irradiation steps and shared autocalibration
-#   scans between runs).
+#   reference combination, in the combination without its HV partner (boards 0-1 and 2-3 share
+#   HV), and the pair-corrected midpoint, a combined estimate from the combinations with and
+#   without the partner (defined under re16-re18). They are drawn against the bias (re16 July,
+#   re17 March) and against the run (re18, every July run, with the HV and LV cycles,
+#   irradiation steps and shared autocalibration scans between runs).
 #
-# Every point is one board in one run: its value in its reference 3-board combination (boards
-# 0-1-2 for boards 0, 1 and 2; boards 1-2-3 for board 3), the most-populated track per pixel,
-# tracks with at least 300 events; the width is FWHM/2.355 of the TOA-difference core, as the
-# result tables carry it. The bar is the pixel-to-pixel spread of the board's map. Every point at
-# 3.5e15 is a band: a shaded box from the lowest to the highest value of the board over every
-# 3-board combination containing it, the marker at its centre, the bar the reference
-# combination's pixel-to-pixel spread (`../CONVENTIONS.md`, "Resolution and TDC figures").
-# re01 to re05 have no 3.5e15 point, so no band; re11 compares the combinations themselves and
-# draws each one.
+# Every point is one board in one run: its value in its reference combination, the one 3-board
+# combination that stands for the board (boards 0-1-2 for boards 0, 1 and 2; boards 1-2-3 for board
+# 3), the most-populated track per pixel, tracks with at least 300 events; the width is FWHM/2.355
+# of the TOA-difference core, as the result tables carry it. The bar is the pixel-to-pixel spread of
+# the board's map. Every point at 3.5e15 is a band: a shaded box from the lowest to the highest
+# value of the board over every 3-board combination containing it, the marker at its centre, the bar
+# the reference combination's pixel-to-pixel spread (`../CONVENTIONS.md`, "Resolution and TDC
+# figures"). re01 to re05 have no 3.5e15 point, so no band; re11 compares the combinations
+# themselves and draws each one.
 #
 # A point built from fewer than 128 pixels (half the chip; `curves.LOW_PIXELS`) is drawn as a
 # small open marker on every figure, the legend says "under 128 pixels" and the footer gives the
@@ -221,26 +222,34 @@ def save(fig, stem, payload, conventions):
 # the standard operating point, RFSel 2 (`MARCH_RFSEL`: the March runs record no RFSel) and
 # threshold offset 20; the runs at offset 10 are named in the footers.
 #
-# The July points come from the display-run list, at the standard operating point (RFSel 2,
-# offset 20): at each step, its display runs and its preferred run. Where a merge of runs exists,
-# the merge rule decides whether a result figure draws it: a merge replaces its runs only when it
-# passes the one merge verdict of the settings and resolution figures (`tables.good_merges`: the
-# merged runs' board table accepts it and the good-run list marks it good) and every run of the
-# merge is in the step's display class (`curves.merge_rule`, given the accepted merges `MERGES`).
-# So H1 3+4 (1.5e15) and 11+12 (2e15) replace the preferred runs 4
-# and 12; H1 6+7 and 18+19 are not good as merges, H1 14+15 and F1 3+4 hold runs off the display
-# class, F1 46+47 sits at RFSel 1. At 3.5e15 no merge applies: the result run is 18 on both
-# telescopes. The cell below prints the rule's outcome for every merge at every July step.
+# The July points come from the display-run list. It sorts the runs of each step into settings
+# classes, one per (RFSel, threshold offset), each with its display runs and its preferred run.
+# The result figures use the class at the standard operating point (RFSel 2, offset 20).
 #
-# A figure whose axis is time draws single runs: a merge spans the times of its runs (re04,
-# re05). Two figures override the rule and say so in their footers: re03 and re07 draw the
-# display runs as single runs, so H1 run 4 where the rule would draw 3+4 (`curves.merge_override`
-# names the merges they leave out); the fluence ladder (re08 to re10) draws the merges by the
-# rule. re11 draws every settings class at 3.5e15 and takes the rule of the settings figures: a
-# merge that passes the one verdict and whose runs are all in one class stands in for them (F1
-# 46+47). The appendix figures draw the points of the figures they derive from (re12 to re14
-# those of re07, re15 those of re06), so the same choices. Every run drawn, single or merged, has
-# to be good on the good-run list; the cells stop otherwise.
+# A merge combines two runs at the same settings into one sample. It is drawn only when the
+# merged runs' table accepts it and the good-run list marks it good; `tables.good_merges` is the
+# one place that decides this, for the settings and the resolution figures alike. On a result
+# figure a merge also needs every one of its runs in the figure's settings class, and then it
+# replaces them (`curves.merge_rule`). So H1 3+4 (1.5e15) and 11+12 (2e15) replace the preferred
+# runs 4 and 12. H1 6+7 and 18+19 are not good as merges, H1 14+15 and F1 3+4 hold runs outside
+# the class, and F1 46+47 is at RFSel 1. At 3.5e15 no merge applies: the result run is 18 on both
+# telescopes. The cell below prints the outcome for every merge at every July step.
+#
+# Which figures draw merges:
+#
+# * by the rule: the fluence ladder, its table and its pixels (re08 to re10), and re06 (at
+#   3.5e15 no merge passes);
+# * single runs, because the axis is time and a merge spans the times of its runs: re04, re05;
+# * single runs against the rule: re03 and re07 draw the display runs as they were taken, so H1
+#   run 4 where the rule would draw 3+4; their footers say so and name the merges left out
+#   (`curves.merge_override`);
+# * re11 draws every settings class at 3.5e15: a merge that passes `tables.good_merges` and has
+#   all its runs in one class stands in for them (F1 46+47), as on the settings figures;
+# * the appendix figures draw the points of the figures they come from (re12 to re14 those of
+#   re07, re15 those of re06).
+#
+# Every run drawn, single or merged, has to be good on the good-run list; the cells stop
+# otherwise.
 
 # %%
 STEPS_JUL = (1.5e15, 2e15, 3.5e15)
@@ -266,6 +275,9 @@ if any(bad.values()):
 
 # %% [markdown]
 # ## The words every figure shares
+#
+# The y range, the header tag and the footer lines that every figure uses: the selection, the
+# fluence note and the readout-sample line.
 
 # %%
 YLIM = (20.0, 80.0)            # ps, every figure
@@ -447,9 +459,9 @@ save(fig, "re01_res_vs_bias_march_preirrad",
 # so the colour is the fluence step and the marker the chip; one line per chip and step.
 #
 # The runs of a step were taken in the order of the run numbers, over the hours after the step's
-# irradiation: the bias and the time after the stop change together within a step, and a scan
-# point is not a repeat at one condition. H1 run 19 ran IH7 at 465 V and the other chips at
-# 470 V; each board is drawn at its own bias.
+# irradiation: the bias and the time after the end of the irradiation change together within a step,
+# and a scan point is not a repeat at one condition. H1 run 19 ran IH7 at 465 V and the other chips
+# at 470 V; each board is drawn at its own bias.
 
 # %%
 P02, DROP02 = {t: [] for t in TELS}, {t: {} for t in TELS}
@@ -483,12 +495,12 @@ save(fig, "re02_res_vs_bias_march_steps",
 # %% [markdown]
 # ## Figure re03: 1.5e15 in March and in July
 #
-# The March scan at 1.5e15 (runs 16, 17, 19 on both telescopes, as in re02, in the step's
-# colour) beside the July points at the same bookkeeping fluence, measured after four months of
-# cooling down, in the later-look colour (teal; the March red stays with March). The July
-# points are the preferred display run of each telescope as a single run, and this figure
-# overrides the merge rule to draw them (the footer says so): H1 run 4 at
-# 540 V (the rule would draw the merge 3+4 in its place, as re08 does) and F1 run 9 at 460 V.
+# The March scan at 1.5e15 (runs 16, 17, 19 on both telescopes, as in re02, in the step's colour)
+# beside the July points at the same bookkeeping fluence, measured after four months of cooling
+# down, in teal, the colour of a later measurement at the same fluence (March keeps red). The July
+# points are the preferred display run of each telescope as a single run, and this figure overrides
+# the merge rule to draw them (the footer says so): H1 run 4 at 540 V (the rule would draw the merge
+# 3+4 in its place, as re08 does) and F1 run 9 at 460 V.
 #
 # Two more July points are drawn with open markers: H1 run 10 at 550 V and F1 run 4 at 480 V.
 # They are off the display-run list; they are a second July bias point per telescope, kept
@@ -542,8 +554,8 @@ save(fig, "re03_res_1p5e15_march_vs_july",
      payload(n03, footer03, off_list={t: sorted(v) for t, v in off03.items()},
              merge_rule={k: v for k, v in MERGE_EFFECT.items() if k.endswith("1.5e+15")},
              merge_override=OVER03, good_runs=GOOD03),
-     conventions(colour="look: March 1.5e15 FLUENCE_COLOR, July the later-look hue "
-                        "(iv_plot.timing_color)"))
+     conventions(colour="look: March 1.5e15 FLUENCE_COLOR, July teal, the colour of a later "
+                        "measurement at the same fluence (iv_plot.timing_color)"))
 
 # %% [markdown]
 # ## Figure re04: July at 1.5e15, a stability check after the reinstall
@@ -648,18 +660,18 @@ save(fig, "re04_res_july_1p5e15_stability",
 # H1 run 12 on the result figures, is not drawn: a merge spans the times of its runs, and the
 # axis is time.
 #
-# The clock: the records allow the 2e15 stop anywhere from 16:30 to 18:17:43 UTC on 2026-07-20
-# (`RAD_STOP_BOUNDS_UTC`: an operator's "beam is stopped" message at about 17:00 UTC, minus 30
-# min, and the return of the F1 LV, which comes back only once the telescopes leave the
-# irradiation zone). The hours count from the earliest, 16:30 UTC (`RAD_STOP_UTC`); the shaded
-# band at the origin spans the allowed range, 0 to +1.80 h, so each run's true time after the
-# stop lies up to 1.80 h below its x.
+# The clock: the records allow the end of the 2e15 irradiation anywhere from 16:30 to 18:17:43 UTC
+# on 2026-07-20 (`RAD_STOP_BOUNDS_UTC`: an operator's "beam is stopped" message at about 17:00 UTC,
+# minus 30 min, and the return of the F1 LV, which comes back only once the telescopes leave the
+# irradiation zone). The hours count from the earliest, 16:30 UTC (`RAD_STOP_UTC`); the shaded band
+# at the origin spans the allowed range, 0 to +1.80 h, so each run's true time after the end of the
+# irradiation lies up to 1.80 h below its x.
 #
 # Under each run: its number and each chip's in-run bias current (the median over the run's HV
 # plateau, `july/july_inrun_currents.csv`). The current falls from run to run as the sensors cool
 # down; F1 ran every run at one bias per chip (the brace), H1 too (IH7 540 V, the others 550 V).
-# The resolution can change with the time after the stop and with the current; these runs do
-# not separate the two.
+# The resolution can change with the time after the end of the irradiation and with the
+# current; these runs do not separate the two.
 
 # %%
 runs05, pref05 = CLASS[2e15]
@@ -722,12 +734,13 @@ save(fig, "re05_res_2e15_cooling_down",
              good_runs=GOOD05),
      conventions(colour="board (etroc_style.BOARD_COLOR): one step",
                  times="run start (tables/run_times.csv) minus RAD_STOP_UTC[2e15] (the earliest "
-                       "allowed stop), hours; the allowed range is RAD_STOP_BOUNDS_UTC",
+                       "allowed end of the irradiation), hours; the allowed range is "
+                       "RAD_STOP_BOUNDS_UTC",
                  in_run_current="july_inrun_currents.csv i_inrun_uA: median bias current over "
                                 "the run's HV plateau"))
 
 # %% [markdown]
-# ## Figure re06: 3.5e15 against the bias and against the hours after the stop
+# ## Figure re06: 3.5e15 against the bias and against the hours after the end of the irradiation
 #
 # The July display runs at 3.5e15 at the standard operating point (RFSel 2, threshold offset 20):
 # H1 run 18 (IH7 at 530 V, the other chips at 550 V); F1 runs 13 and 14 (LF17 at 370 V, the
@@ -736,19 +749,19 @@ save(fig, "re05_res_2e15_cooling_down",
 # One fluence step, so the colour is the board and the step is named in the header. Every point
 # is a band (see the top of this notebook).
 #
-# On the F1 hours panel two more runs are drawn with open markers: runs 50 and 51, the display
-# class at threshold offset 15 (LF10 and LF17 at 450 V, LF12 and LF18 at 480 V), a week after
-# the stop. They differ from run 18 in the offset and in each chip's bias at once, so the
+# On the F1 hours panel two more runs are drawn with open markers: runs 50 and 51, the display runs
+# at threshold offset 15 (LF10 and LF17 at 450 V, LF12 and LF18 at 480 V), a week after the end of
+# the irradiation. They differ from run 18 in the offset and in each chip's bias at once, so the
 # offset legend names them; they are not on the bias panel, which holds the offset-20 runs only.
 #
-# The clock: the records fix the 3.5e15 stop to between 15:49:26 and 15:51:26 UTC on 2026-07-25
-# (`RAD_STOP_BOUNDS_UTC`); the hours count from 15:49:26 (`RAD_STOP_UTC`). The allowed range is
-# 2 min, below the 0.25 h that earns a shaded band, so none is drawn.
+# The clock: the records fix the end of the 3.5e15 irradiation to between 15:49:26 and 15:51:26 UTC
+# on 2026-07-25 (`RAD_STOP_BOUNDS_UTC`); the hours count from 15:49:26 (`RAD_STOP_UTC`). The allowed
+# range is 2 min, below the 0.25 h that earns a shaded band, so none is drawn.
 #
-# Read with care: on F1 the bias rises from 390/370 V (runs 13, 14) to 480/450 V (run 18) while
-# the hours after the stop grow from 4 to 46, so the two panels show the same three runs from
-# two sides; these runs do not separate the bias from the cooling down. Under each run on the
-# hours panels: its number, and under each group of runs at one bias pattern that bias.
+# Read with care: on F1 the bias rises from 390/370 V (runs 13, 14) to 480/450 V (run 18) while the
+# hours after the end of the irradiation grow from 4 to 46, so the two panels show the same three
+# runs from two sides; these runs do not separate the bias from the cooling down. Under each run on
+# the hours panels: its number, and under each group of runs at one bias pattern that bias.
 #
 # re15 (appendix) draws the hours panels alone at the standard point: the same points and clock.
 
@@ -801,7 +814,7 @@ footer06 = u"\n".join([
     u"Every point a band: %s." % tables.BAND_FOOTER,
     u"The display runs at 3.5e15, RFSel 2, threshold offset 20: H1 %s; F1 %s. No merge applies "
     u"at this step (merge rule)." % (bias_text(B06["h1"], "h1"), bias_text(B06["f1"], "f1")),
-    u"Open markers, hours panel only: the display class at threshold offset 15, %s." % (
+    u"Open markers, hours panel only: the display runs at threshold offset 15, %s." % (
         u"; ".join(u"%s runs %s" % (t.upper(), bias_text([p for p in T06[t] if p["offset"] == 15],
                                                           t))
                    for t in TELS if OS15[t])),
@@ -828,7 +841,8 @@ save(fig, "re06_res_3p5e15_vs_bias_and_hours",
      conventions(colour="board (etroc_style.BOARD_COLOR): one step",
                  band=tables.BAND_FOOTER,
                  times="run start (tables/run_times.csv) minus RAD_STOP_UTC[3.5e15] (the "
-                       "earliest allowed stop), hours; the allowed range is RAD_STOP_BOUNDS_UTC"))
+                       "earliest allowed end of the irradiation), hours; the allowed range is "
+                       "RAD_STOP_BOUNDS_UTC"))
 
 # %% [markdown]
 # ## Figure re07: every bias scan, one figure per telescope
@@ -840,14 +854,13 @@ save(fig, "re06_res_3p5e15_vs_bias_and_hours",
 # 14 and 18. The figure overrides the merge rule to draw every display run as a single run
 # (the footer says so): no merge replaces a run here (the rule would draw H1 3+4 and 11+12, as
 # re08 does), and no run is left out where two runs sit at one bias on every board (F1 13 and
-# 14 at 3.5e15): such runs stack at one bias. `curves.one_per_condition` picks one run per
-# condition for a figure that wants that.
+# 14 at 3.5e15): such runs stack at one bias.
 #
-# The colour is the fluence step, with July 1.5e15 in the later-look colour (teal) beside the
-# March red; the marker is the chip. The legend names the bookkeeping fluence; H1 run 11 sits
-# under 128 pixels on four chips (small open markers, counts in the footer). The option `CHIP_FLUENCE07 = True` writes the fluence on the chips
-# (`CHIP_FLUENCE_FACTOR` times the bookkeeping fluence) in the legend instead; the figure is the
-# same otherwise.
+# The colour is the fluence step, with July 1.5e15 in teal, the colour of a later measurement at the
+# same fluence (March keeps red); the marker is the chip. The legend names the bookkeeping fluence;
+# H1 run 11 sits under 128 pixels on four chips (small open markers, counts in the footer). The
+# option `CHIP_FLUENCE07 = True` writes the fluence on the chips (`CHIP_FLUENCE_FACTOR` times the
+# bookkeeping fluence) in the legend instead; the figure is the same otherwise.
 #
 # The July points sit at higher bias than any March point of the same telescope, four months
 # later: the gap between March and July at 1.5e15 mixes the bias, the cooling down and the
@@ -898,8 +911,8 @@ save(fig, "re07_res_vs_bias_summary",
      payload(n07, footer07, july_drawn=DRAWN07, merge_override=OVER07,
              not_drawn_march={t: {str(r): w for r, w in DROP07M[t].items()} for t in TELS},
              chip_fluence_legend=CHIP_FLUENCE07, good_runs=GOOD07),
-     conventions(colour="fluence step (FLUENCE_COLOR), a later look at a step in the later-look "
-                        "hue (iv_plot.timing_color)",
+     conventions(colour="fluence step (FLUENCE_COLOR), a later measurement at a step in teal "
+                        "(iv_plot.timing_color)",
                  july_population="every display run of every step as a single run "
                                  "(curves.display_singles); the merge rule overridden "
                                  "(curves.merge_override)",
@@ -915,8 +928,8 @@ save(fig, "re07_res_vs_bias_summary",
 # each step at RFSel 2, threshold offset 20, replaced by its merge under the merge rule: H1 3+4
 # (1.5e15), 11+12 (2e15), 18 (3.5e15); F1 9, 12, 18.
 #
-# The x axis is the bookkeeping fluence, linear. Both looks at 1.5e15 are drawn: March, and July
-# after four months of cooling down, March 0.06e15 left of the step and July 0.06e15 right of
+# The x axis is the bookkeeping fluence, linear. Both measurements at 1.5e15 are drawn: March, and
+# July after four months of cooling down, March 0.06e15 left of the step and July 0.06e15 right of
 # it so the two do not cover each other. The colour is the board, the marker the chip; the line
 # style is the campaign (March solid, July dashed), and lines join a board's steps within one
 # campaign only. At 3.5e15 the points are bands.
@@ -935,7 +948,7 @@ PREF08 = tables.preferred_runs(campaign.DISPLAY_RUNS_JUL_CSV, rfsel=2, offset=20
 P08, PICKS08 = {}, {}
 for t in TELS:
     if [CLASS08[f][1][t] for f in sorted(CLASS08)] != PREF08[t]:
-        raise RuntimeError("%s: the preferred runs of the display classes %s differ from the "
+        raise RuntimeError("%s: the preferred runs of the settings classes %s differ from the "
                            "list's %s" % (t, [CLASS08[f][1][t] for f in sorted(CLASS08)],
                                           PREF08[t]))
     P08[t], PICKS08[t] = ladder.step_winners(BT, BM, RS, t, CLASS08, GOOD[("july", t)],
@@ -965,8 +978,8 @@ footer08 = u"\n".join([
     u"July: the preferred display run of each step at RFSel 2, offset 20, merges by the merge "
     u"rule (thick black edge); H1 %s;" % pick_text("h1", "july"),
     u"F1 %s." % pick_text("f1", "july"),
-    u"Both looks at 1.5e15: March %.2fe15 left of the step, July %.2fe15 right of it; lines join "
-    u"a board's steps within one campaign." % (ladder.DODGE, ladder.DODGE),
+    u"Both measurements at 1.5e15: March %.2fe15 left of the step, July %.2fe15 right of it; "
+    u"lines join a board's steps within one campaign." % (ladder.DODGE, ladder.DODGE),
     u"At 3.5e15 every point is a band: %s." % tables.BAND_FOOTER] + low_line(
     [p for t in TELS for p in P08[t]]) + [
     u"%s. %s" % (counts_text([p for t in TELS for p in P08[t]]), FLUENCE_TEXT)])
@@ -978,7 +991,7 @@ save(fig, "re08_best_res_vs_fluence",
      payload(n08, footer08, picks={t: PICKS08[t] for t in TELS}, good_runs=GOOD08),
      conventions(colour="board (etroc_style.BOARD_COLOR): one point per board and step",
                  line_style="campaign: March solid, July dashed (ladder.LOOK_LINESTYLE)",
-                 x="bookkeeping fluence in 1e15 p/cm2; the two looks at 1.5e15 dodged by "
+                 x="bookkeeping fluence in 1e15 p/cm2; the two measurements at 1.5e15 dodged by "
                    "+/- %g" % ladder.DODGE,
                  band=tables.BAND_FOOTER))
 
@@ -992,16 +1005,12 @@ save(fig, "re08_best_res_vs_fluence",
 # most-populated track per pixel), the same board and run with the central track per pixel
 # ("central"), and at 3.5e15 the band's ends and the reference combination's own value. At 3.5e15
 # both "top" and "central" are band centres, each of its own track choice, and the reference
-# value is given for both choices. The table shown in September put the central reference value
-# in its central column at 3.5e15; here that number is the column "central reference
-# combination value". The
-# column "preferred run" says, for July, whether the run is the step's preferred display run
-# or the merge holding it.
+# combination's value is given for both choices (the columns "reference combination value" and
+# "central reference combination value"). The column "preferred run" says, for July, whether the
+# run is the step's preferred display run or the merge holding it.
 #
-# The table shown in September had 48 of these 56 rows: the eight H1 cells of July 1.5e15 and
-# 2e15 were missing, because the merges were applied there before the display-run filter, which
-# then found neither the merge nor its single runs. Here those cells hold the merges 3+4 and
-# 11+12, as on re08.
+# The table has 56 rows: four boards on each telescope at seven points (four March steps, three
+# July steps). The H1 cells of July 1.5e15 and 2e15 hold the merges 3+4 and 11+12, as on re08.
 
 # %%
 ALL08 = [p for t in TELS for p in P08[t]]
@@ -1050,7 +1059,7 @@ save(fig, "re09_numbers_table",
 # run 18, drawn off the lines. A display run at the same bias as the ladder's run adds no
 # marker.
 #
-# The x axis is as on re08: bookkeeping fluence, both looks at 1.5e15 dodged.
+# The x axis is as on re08: bookkeeping fluence, both measurements at 1.5e15 dodged.
 
 # %%
 TC_JUL = campaign.TABLE_CAMPAIGN["july"]
@@ -1085,7 +1094,7 @@ footer10 = u"\n".join([
     u"Small open markers: %s at 3.5e15, display runs at a lower bias than the ladder's run, at "
     u"least %s events." % (u"; ".join(u"%s runs %s" % (t.upper(), bias_text(EXTRA10[t], t))
                                       for t in TELS if EXTRA10[t]), FLOOR),
-    u"Both looks at 1.5e15: March %.2fe15 left of the step, July %.2fe15 right of it. %s" % (
+    u"Both measurements at 1.5e15: March %.2fe15 left of the step, July %.2fe15 right of it. %s" % (
         ladder.DODGE, ladder.DODGE, FLUENCE_TEXT)])
 fig, n10 = ladder.pixel_yield_vs_fluence(
     P08, ANY10, EXTRA10, tel_titles=TEL_TITLES, ylim=(0.0, 280.0), tag=TAG,
@@ -1232,20 +1241,21 @@ save(fig, "re11_combo_split_3p5e15",
                             "class stands in for them"))
 
 # %% [markdown]
-# # Appendix: figures of the July talk drawn from the points above
+# # Appendix: further views of the points above
 #
 # Each appendix figure draws the points of the figure it derives from, by that figure's rules
-# (population, merge rule, colours, bands, the under-128 rule), and estimates nothing new.
+# (population, merge rule, colours, bands, the small marker below 128 pixels), and estimates
+# nothing new.
 
 # %% [markdown]
 # ## Figures re12, re13 and re14: re07 at fewer steps
 #
-# re07's points restricted to some of its looks, with re07's colours (July 1.5e15 in the
-# later-look colour, teal, as beside the March red on re07): re12 the July points at 1.5e15 and
-# 2e15, re13 the July points at 1.5e15, 2e15 and 3.5e15 (the 3.5e15 points bands), both on
-# re07's bias axes; re14 the March points at every step, on its own axes. re07's population rule
-# holds: every July display run at RFSel 2, offset 20 as a single run, runs at one bias stacked,
-# the merge rule overridden as re07's footer says (`curves.res_vs_bias_summary` with `keep`).
+# re07's points restricted to some of its steps, with re07's colours (July 1.5e15 in teal, the
+# colour of a later measurement at the same fluence; March keeps red): re12 the July points at
+# 1.5e15 and 2e15, re13 the July points at 1.5e15, 2e15 and 3.5e15 (the 3.5e15 points bands), both
+# on re07's bias axes; re14 the March points at every step, on its own axes. re07's population rule
+# holds: every July display run at RFSel 2, offset 20 as a single run, runs at one bias stacked, the
+# merge rule overridden as re07's footer says (`curves.res_vs_bias_summary` with `keep`).
 
 
 # %%
@@ -1306,14 +1316,14 @@ for stem, camp, steps, what, data, xlims in SUBSETS:
                  kept=dict(campaign=camp, steps=list(steps)),
                  axes="re07's x ranges" if xlims else "its own x ranges",
                  chip_fluence_legend=CHIP_FLUENCE07, good_runs=GOOD07),
-         conventions(colour="fluence step (FLUENCE_COLOR), a later look at a step in the "
-                            "later-look hue (iv_plot.timing_color), as on re07",
+         conventions(colour="fluence step (FLUENCE_COLOR), a later measurement at a step in "
+                            "teal (iv_plot.timing_color), as on re07",
                      population="re07's points (every March standard run, every July display "
                                 "run as a single run), kept by campaign and step",
                      band=tables.BAND_FOOTER))
 
 # %% [markdown]
-# ## Figure re15: 3.5e15 against the hours after the stop
+# ## Figure re15: 3.5e15 against the hours after the end of the irradiation
 #
 # re06's hours panel at the standard operating point alone: the July display runs at 3.5e15 at
 # RFSel 2, threshold offset 20 (H1 run 18, F1 runs 13, 14 and 18) against the hours after the
@@ -1357,7 +1367,7 @@ save(fig, "re15_res_vs_hours_after_3p5e15",
      conventions(colour="board (etroc_style.BOARD_COLOR): one step",
                  band=tables.BAND_FOOTER,
                  times="run start (tables/run_times.csv) minus RAD_STOP_UTC[3.5e15] (the "
-                       "earliest allowed stop), hours, as on re06"))
+                       "earliest allowed end of the irradiation), hours, as on re06"))
 
 # %% [markdown]
 # ## Figures re16, re17 and re18: the combination checks
@@ -1370,13 +1380,15 @@ save(fig, "re15_res_vs_hours_after_3p5e15",
 # * middle row, the combination without the board's HV partner (boards 0 and 1, and 2 and 3,
 #   are HV pairs): board 0 from boards 0-2-3, board 1 from 1-2-3, board 2 from 0-1-2, board 3
 #   from 0-1-3;
-# * bottom row, the pair-corrected midpoint w_mid^2 = (w_present^2 + w_absent^2)/2, w_present
+# * bottom row, the pair-corrected midpoint, a combined estimate from the combinations with and
+#   without the partner: w_mid^2 = (w_present^2 + w_absent^2)/2, w_present
 #   the RMS of the board's values in the two combinations holding both the board and its
 #   partner, w_absent the middle row; the bar by the same rule on the pixel spreads, the pixel
 #   count the fewest of the three combinations.
 #
-# A combination is named by its boards, not by the role words of the table, which change from
-# run to run. A run-board whose combination is not in the table gets no point on that row, and
+# A combination is named by its boards, not by the boards' roles in the run (trigger, reference
+# and so on), which change from run to run. A board in a run whose combination is not in the
+# table gets no point on that row, and
 # the footer lists it: on H1 runs 6 to 9 board 3 (IH13) took no data, so only boards 0-1-2 form
 # a combination there. No band on any row: these figures compare the combinations themselves.
 #
@@ -1394,10 +1406,10 @@ save(fig, "re15_res_vs_hours_after_3p5e15",
 # `july_inrun_currents.csv`, the samples from `timeline_60s.csv.gz`; recomputed here and checked
 # board by board against the HV/LV-cycle table, the cell stops on any difference); an LV cycle
 # or an irradiation step, from that table's `lv_event`; and, under the bottom row, the runs whose
-# chips all share the autocalibration scan of the run before. The talk read that scan id from a
-# per-run id list that is not published; the `scan_utc` column of `blnw_by_run.csv` identifies
-# the same scan (the start of the autocalibration each run used; every July row matches its
-# scan exactly or to within 3 pixels, the cell stops otherwise) and gives the same groups.
+# chips all share the autocalibration scan of the run before. The `scan_utc` column of
+# `blnw_by_run.csv` identifies the scan each run used (the start of that autocalibration). Every
+# July row of that table is joined to its scan exactly or to within 3 pixels (its `match`
+# column); the cell stops otherwise.
 
 # %%
 ROW_TITLES = {"reference": u"reference combination",
@@ -1509,7 +1521,8 @@ def rows_payload(n, footer, rows, missing, dropped, camp, **extra):
 
 
 ROWS_CONVENTIONS = dict(
-    colour="fluence step (FLUENCE_COLOR), a later look at a step in the later-look hue",
+    colour="fluence step (FLUENCE_COLOR), a later measurement at a step in teal "
+           "(iv_plot.timing_color)",
     rows="reference combination; the combination without the HV partner (PARTNERS); the "
          "pair-corrected midpoint (combo_check.midpoint)",
     band="none: the rows compare the combinations")

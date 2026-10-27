@@ -11,9 +11,9 @@ The points, one per (telescope, step, board), come from step_winners:
   July    the preferred run of each step in the display-run list at RFSel 2 and offset 20,
           replaced by its merge where curves.merge_rule takes one.
 
-Both looks at 1.5e15 stay: March, and July after four months of cooling down. Each point is the
-board's value in its reference combination; at a step of BAND_STEPS it is a band (tables.band),
-as on every resolution figure.
+Both measurements at 1.5e15 stay: March, and July after four months of cooling down. Each point
+is the board's value in its reference combination; at a step of BAND_STEPS it is a band
+(tables.band), as on every resolution figure.
 
 The x axis is the bookkeeping fluence, linear, in units of X_UNIT (1e15 p/cm2), ticked at the
 steps. Where two looks share a step they stand DODGE to either side of it (March left, July

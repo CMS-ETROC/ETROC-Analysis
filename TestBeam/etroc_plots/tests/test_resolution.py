@@ -446,7 +446,7 @@ def test_bias_summary_in_part_keeps_the_whole_figures_colours():
     _, whole = curves.res_vs_bias_summary(pts, **words)
     _, part = curves.res_vs_bias_summary(pts, keep=lambda p: p["camp"] == "july", **words)
     assert [q["camp"] for q in part["points"]] == ["july"] * 4
-    # July 1.5e15 is the later look at the step: the later-look hue, as beside March
+    # July 1.5e15 is the later measurement at the step: teal, as beside March
     assert {q["color"] for q in part["points"]} == {TIMING_COLORS[0]}
     assert [q["color"] for q in part["points"]] == [q["color"] for q in whole["points"]
                                                     if q["camp"] == "july"]

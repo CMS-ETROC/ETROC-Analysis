@@ -47,9 +47,11 @@ KEYS = ["campaign", "telescope", "run", "board_idx"]
 ROWS = ("reference", "partner_excluded", "midpoint")
 HV_CYCLE_FRAC = 0.20
 SCALE = curves.SCALE
-EVENT_STYLE = {"hv": dict(color="#ff7f0e", linestyle="--", dx=-0.56),
-               "lv": dict(color="#17becf", linestyle="-.", dx=-0.44),
-               "irradiation": dict(color="#7b3fb5", linestyle="-", dx=-0.44)}
+# greys: the points of re18 are coloured by fluence step, so no event line takes a fluence colour
+# (FLUENCE_COLOR) or the teal of a later measurement (iv_plot.TIMING_COLORS)
+EVENT_STYLE = {"hv": dict(color="#5f5f5c", linestyle="--", dx=-0.56),
+               "lv": dict(color="#8f8f8b", linestyle="-.", dx=-0.44),
+               "irradiation": dict(color="#2f2f2d", linestyle="-", dx=-0.44)}
 EVENT_TEXT = {"hv": u"HV cycle before the run", "lv": u"LV cycle before the run",
               "irradiation": u"irradiation step before the run"}
 BOARD_DX = {0: -0.30, 1: -0.10, 2: 0.10, 3: 0.30}     # a board's x offset in its run's slot

@@ -117,10 +117,11 @@ rest are for whoever writes the next figure.
   range and its x. A stability axis counts from the start of the first run at the step
   (`curves.hours_since_first`).
 - Colour (`curves.color_rule`): several looks (campaign, fluence step) on the axes give colour =
-  look, the fluence ladder with a later look at one step in the later-look hue (July 1.5e15 beside
-  March 1.5e15 is teal, never the March red); one look gives colour = board, one of the exceptions
-  under Colour and markers. `BOARD_COLOR[1]` (#eb6834) is close to the 3.5e15 orange (#ff7f0e), so
-  a one-step figure names its step in the header and never shows a fluence as a colour on its axes.
+  look: the fluence-ladder colours, and teal, the colour of a later measurement at the same fluence,
+  for the second look at a step (July 1.5e15 beside March 1.5e15 is teal; March keeps red); one look
+  gives colour = board, one of the exceptions under Colour and markers. `BOARD_COLOR[1]` (#eb6834)
+  is close to the 3.5e15 orange (#ff7f0e), so a one-step figure names its step in the header and
+  never shows a fluence as a colour on its axes.
 - No jitter: points at one x share it (the boards of a run on a time axis, repeats at one bias).
   The line of a series joins its mean at each x and breaks where a board's bias changes.
 - Under each run on a time axis: its number, bold for the display runs where the population is
@@ -168,26 +169,26 @@ rest are for whoever writes the next figure.
   figure: the resolution notebook's re12 to re14 are re07's points restricted to some steps or one
   campaign, on re07's colours, and re15 is re06's hours panel at offset 20 (its points, its clock,
   its under-128 rule).
-- The combination checks (`resolution/combo_check.py`: re16 and re17 against the bias, re18
-  against the run) draw each board in three rows, every value read from the single-run board
-  table's combination rows: top, the reference combination; middle, the combination without the
-  board's HV partner (partners 0-1 and 2-3: board 0 from boards 0-2-3, 1 from 1-2-3, 2 from 0-1-2,
-  3 from 0-1-3); bottom, the pair-corrected midpoint w_mid^2 = (w_present^2 + w_absent^2)/2,
-  w_present the RMS of the board's values in the two combinations holding the board and its
-  partner, w_absent the middle row's, the bar by the same rule on the pixel spreads, the pixel
-  count the fewest of the three. A combination is named by its boards, never by the role words. A
-  run-board whose combination is missing from the table has no point on that row and the footer
-  names it; nothing is filled in. Single runs, no band (the rows compare the combinations), colour
-  = look, marker = chip, the under-128 small marker. re16 and re17 draw every good run at the
-  standard operating point at each step. re18 draws every July run of the board table and
-  overrides the every-run-good rule (its footer says so): filled = good at RFSel 2, offset 20,
-  light = good at other settings, open = not good on the good-run list, and the small marker keeps
-  its kind's fill, as on the combination split. Between runs (in time) it marks an HV cycle (a
-  powered board's bias under 20 % of its set value in at least one 60 s sample after the end of
-  the run before), an LV cycle and an irradiation step (the HV/LV-cycle table), and under the
-  bottom row the runs whose chips all share one autocalibration scan (`scan_utc` of
-  `blnw_by_run`). A point above the axis range is an arrow at the top with its value; the footer
-  lists it.
+- The combination checks (`resolution/combo_check.py`: re16 and re17 against the bias, re18 against
+  the run) draw each board in three rows, every value read from the single-run board table's
+  combination rows: top, the reference combination; middle, the combination without the board's HV
+  partner (partners 0-1 and 2-3: board 0 from boards 0-2-3, 1 from 1-2-3, 2 from 0-1-2, 3 from
+  0-1-3); bottom, the pair-corrected midpoint w_mid^2 = (w_present^2 + w_absent^2)/2, w_present the
+  RMS of the board's values in the two combinations holding the board and its partner, w_absent the
+  middle row's, the bar by the same rule on the pixel spreads, the pixel count the fewest of the
+  three. A combination is named by its boards, never by the boards' roles in the run. A board in a
+  run whose combination is missing from the table has no point on that row and the footer names it;
+  nothing is filled in. Single runs, no band (the rows compare the combinations), colour = fluence
+  step (July 1.5e15 in teal, as above), marker = chip, the small marker below 128 pixels. re16 and
+  re17 draw every good run at the standard operating point at each step. re18 draws every July run
+  of the board table and overrides the every-run-good rule (its footer says so): filled = good at
+  RFSel 2, offset 20, light = good at other settings, open = not good on the good-run list, and the
+  small marker keeps its kind's fill, as on the combination split. Between runs (in time) it marks
+  an HV cycle (a powered board's bias under 20 % of its set value in at least one 60 s sample after
+  the end of the run before), an LV cycle and an irradiation step (the HV/LV-cycle table), each a
+  grey line (no fluence colour, `combo_check.EVENT_STYLE`), and under the bottom row the runs whose
+  chips all share one autocalibration scan (`scan_utc` of `blnw_by_run`). A point above the axis
+  range is an arrow at the top with its value; the footer lists it.
 
 ## Settings figures
 
