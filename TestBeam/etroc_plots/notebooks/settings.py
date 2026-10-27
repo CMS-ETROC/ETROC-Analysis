@@ -282,7 +282,7 @@ DATA_TEXT = u"July, bookkeeping fluence %s %s" % (campaign.FLUENCE_TEXT[STEP],
 TEL_TITLES = dict(campaign.TELESCOPE_TITLE)
 LEGEND_TITLE = "preamp feedback setting"
 # one footer line each: a footer line stays under about 180 characters to fit the figure width
-SELECTION = (u"Selection: %s, tracks with at least %s events, each chip from its anointed "
+SELECTION = (u"Selection: %s, tracks with at least %s events, each chip from its reference "
              u"combination (boards 0-1-2 for boards 0-2, boards 1-2-3 for board 3).\n"
              u"Widths = FWHM/2.355 of the TOA-difference core, as the result tables carry them."
              % (tables.VARIANT_TEXT[VARIANT], FLOOR))
@@ -363,7 +363,7 @@ def low_text(low):
 
 
 LOW_CONVENTION = ("a board whose resolution comes from fewer than %d pixels (board table n_pixels "
-                  "of the anointed combination; resolution.tables.LOW_PIXELS, half the chip) is "
+                  "of the reference combination; resolution.tables.LOW_PIXELS, half the chip) is "
                   "a small open marker" % tables.LOW_PIXELS)
 
 
@@ -463,7 +463,7 @@ save(fig, "st01_res_vs_offset_rfsel2", payload, dict(conventions(), low_pixels=L
 # groups), RFSel rising within a group; each telescope shows the classes it has. A class at
 # "8/10" or "6/8" holds runs whose boards sit at two offsets (the cell above). Under the merge:
 # both runs and the time of each. A board whose resolution comes from fewer than 128 pixels (half
-# the chip; the board table's count of the anointed combination) is a small open marker: at this
+# the chip; the board table's count of the reference combination) is a small open marker: at this
 # step seven boards of H1 runs 56 and 67, each named with its count in the footer.
 #
 # The classes differ in more than the setting on the axis. The RFSel 3 runs came last, 9.0 to

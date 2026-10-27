@@ -189,7 +189,7 @@ def merge_inputs(tmp_path, merge_good):
         return [dict(campaign=campaign.TABLE_CAMPAIGN["july"], telescope="h1", run=str(run),
                      combo=combo, board_idx=i, board_chip="PT_" + chip, variant="top",
                      floor="300", value_ps=40.0 + i + 5.0 * k, pixel_spread_ps=3.0,
-                     n_pixels=200, anointed=k == 0, **extra)
+                     n_pixels=200, **{tables.REFERENCE_COLUMN: k == 0}, **extra)
                 for i, chip in enumerate(campaign.TELESCOPE_CHIPS["h1"])
                 for k, combo in enumerate(("a", "b"))]
     bt = pd.DataFrame(rows(46) + rows(47))
@@ -231,7 +231,7 @@ def marked_points():
     """Two H1 boards of run 56 at RFSel 2: IH7 from 100 fitted pixels, marked (p["low"]), and IH11
     from 200."""
     band = dict(marker_ps=40.0, band_lo_ps=38.0, band_hi_ps=42.0, bar_spread_ps=5.0,
-                anointed_ps=40.0, n_combo_rows=2)
+                reference_ps=40.0, n_combo_rows=2)
     pts = []
     for i, (chip, n) in enumerate((("IH7", 100), ("IH11", 200))):
         p = dict(tel="h1", run=56, board_idx=i, chip=chip, rfsel=2, os="10", offset=10,

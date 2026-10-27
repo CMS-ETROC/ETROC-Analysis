@@ -119,7 +119,7 @@ def class_points(bt, rs, display, fluence, variant, floor, bt_merged=None):
 
 def low_pixels(p, threshold=tables.LOW_PIXELS):
     """True when the board's resolution comes from fewer than `threshold` fitted pixels
-    (p["band"]["n_pixels"], the anointed combination's count in the board table). A figure that
+    (p["band"]["n_pixels"], the reference combination's count in the board table). A figure that
     marks these sets p["low"] on its points; the drawing then makes the marker small and open."""
     return p["band"]["n_pixels"] < threshold
 

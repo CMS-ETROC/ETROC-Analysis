@@ -110,7 +110,7 @@ rest are for whoever writes the next figure.
   the percentiles, a scan the runs share once (`settings.pixel_x_over_nw`). The figures of one
   scan per run (st06) keep the runs and say so in the footer.
 - A board whose resolution comes from fewer than `tables.LOW_PIXELS` pixels (128, half the chip:
-  the board table's `n_pixels` of the anointed combination, `settings.low_pixels`) is a small
+  the board table's `n_pixels` of the reference combination, `settings.low_pixels`) is a small
   open marker on st01 to st05, where the notebook sets `p["low"]`; the footer gives the rule, how
   many boards and each one's count, and that the counts are those of the surviving readout
   sample. On st04 no band stands behind the marker, so its edge keeps the RFSel colour.
