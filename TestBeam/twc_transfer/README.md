@@ -10,13 +10,35 @@ pool only adds load:
     export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
            NUMEXPR_NUM_THREADS=1 ARROW_NUM_THREADS=1
 
-The library of the TWC transfer study: a time-walk correction (TWC) fitted on one sample, the
-source, applied to another, the target, and the time resolution that costs. The solve, the
-event cut and the width are the pipeline's own (`condor_at_lxplus/core/twc_solver.py` and
-`bootstrap.py`, imported unmodified); this package adds the bookkeeping around them: frozen
-evaluation folds, per-event leakage checks, a coefficient bank, the arms, the analytic Tier-0
-screen, the transfer cell, the statistics, the aggregation of cells, the round-1 chain to the
-table of the level cells and the axis tables. `SPEC.md` beside this file defines all of it.
+The TWC transfer study fits a time-walk correction (TWC) on one sample of tracks, the source,
+applies it to another, the target (another run, angle, board or pixel), and measures what that
+costs in time resolution against the target's own correction, fitted on one half of its events
+and scored on the other half. This package holds the study's library and commands. The solve,
+the event cut and the width are the pipeline's own (`condor_at_lxplus/core/twc_solver.py` and
+`bootstrap.py`, imported unmodified). The package adds the bookkeeping around them:
+
+- evaluation folds: the events of each target triple (one pixel on each of three boards) split
+  once into odd and even files, so the target's own correction can be fitted on one half and
+  scored on the other;
+- leakage checks: a check, event by event, that no event a source fit used is scored;
+- the coefficient bank: every fitted correction, stored once and reused by many comparisons;
+- the arms: the corrections scored on the same events of a target (none, the target's own, the
+  source's, and controls such as a fit on shuffled TOT);
+- the Tier-0 screen: a fast prediction of the change in resolution from the stored coefficients
+  alone, with no width fit; a screen, never a quoted result;
+- the transfer cell: one comparison (a source, its targets and how the source is chosen) and
+  its table of widths;
+- the statistics: the paired differences per target triple, how they combine across triples,
+  their errors and the equivalence test that gives each comparison its verdict;
+- the aggregation: the cell tables of one group of cells, combined per cell and arm, with a
+  calibration of the errors;
+- the round-1 chain: the steps that turned the first round of cells into the table of the level
+  cells, where a level is one kind of transfer (such as the same pixel in twin runs, angle,
+  pixel to board, board to board, across irradiation steps, across months);
+- the axis tables: one table per axis, the cells that change one condition between source and
+  target (such as bias, threshold offset or angle).
+
+`SPEC.md` beside this file defines each in full.
 
 ## Environment variables
 
@@ -319,12 +341,13 @@ track files and cell tables the tests write under pytest's temporary folder; the
 
 ## Parity with the study's toolkit
 
-The port was checked against the toolkit the study ran, on the largest track file of mar
-`h1_run1` `extra0-ref1-dut2` (6000 events), with `PYTHONHASHSEED=0`: naming, the triple's
-arrays and event keys, the leave-pair-out source events, 60 bank rows (`folds="both"`, full
-and leave-pair-out guards, placebo), the self maps (both `lpo_fallback` rules), a bank-backed
-transfer and every variant built from it, `evaluate_arm` on 16 arms, the leaky control,
-Tier-0 with and without residual moments, the overlap metrics and every statistic.
+This package was checked against the code the study ran, on the largest track file of mar
+`h1_run1` `extra0-ref1-dut2` (the triple of IH7, IH11 and IH12; 6000 events), with
+`PYTHONHASHSEED=0`: naming, the triple's arrays and event keys, the leave-pair-out source
+events, 60 bank rows (`folds="both"`, full and leave-pair-out guards, placebo), the self maps
+(both `lpo_fallback` rules), a bank-backed transfer and every variant built from it,
+`evaluate_arm` on 16 arms, the leaky control, Tier-0 with and without residual moments, the
+overlap metrics and every statistic.
 
 - With `ETROC_TWC_CORE` set to a core of the hashes in `campaigns.CELLS_CORE_SHA1`, all 2367
   compared items are bit for bit equal (bank frame compared with `check_exact=True`); the
@@ -361,7 +384,7 @@ study's `tables/agg_<tag>/`:
   123 files byte for byte the study's. The stage-2 tags of group `A_desy` equal the study's
   `agg_A_r2_desy_*`, whose aggregation has no recorded code version.
 - Round 1 is re-derived, not reproduced (Versions, below). On `agg_mar_f0p9524` the rows and
-  every shared column are equal; the port adds `placebo_minus_notwc1b_ps` to `agg_by_cell.csv`
+  every shared column are equal; this package adds `placebo_minus_notwc1b_ps` to `agg_by_cell.csv`
   and the seven protocol columns, empty, to `delta_by_triple.csv`, since the round-1 cell tables
   have 43 columns. On `agg_desy_f0p8153` the k_cal exclusions (215 same-pixel and 234
   self-transfer rows, absent in round 1) change `k_cal` in 30 of 302 groups, by up to 15 %, and
@@ -372,7 +395,7 @@ read root on lxplus:
 
 - `master`: `master_cells.csv` (43 cells, 105 columns) and the other thirteen CSV tables are
   byte for byte the study's. `recon.json` has the same entries less `prereg_coverage_cells`,
-  which the study took from its pre-registration notes rather than from a table. The
+  which the study filled in by hand from its written plan, not from a table. The
   self-check joins 2143 rows, with differences up to 4.3e-5 ps in mu and 5.9e-5 ps in se and 3
   TOST verdicts that differ, as in the study's own run.
 - `axes`: the eight tables of `results_r2/`, `axis_F_long.csv` and, with `--guardfix`, the
@@ -495,23 +518,24 @@ its rows carry the label the study gave them, `A_desy_*`, rather than the name o
 they are read from (`campaigns.AXIS_TAGS`). Neither `master` nor `axes` reads
 `calibration.csv`. The tags `agg_dt_*` and `agg_V2_*` were not compared.
 
-`axis_F.csv` is corrected. A cell whose source triple is one of its own targets has, under
-one key of the wide table (cell, kind, pair or board, family, tag, f), two rows of an arm: the
+`axis_F.csv` is corrected. A cell whose source triple is one of its own targets has, under one
+key of the wide table (cell, kind, pair or board, family, tag, f), two rows of an arm: the
 transfer row (`self_transfer` 0) and the self-transfer row (1: the target is its own source),
-which the aggregation keeps apart (SPEC 8). The study's wide table kept
-whichever came last; on 12 keys of `F_desy_f0p8153` (cells F2 and F3; the arms `xfer`,
-`xfer_lin`, `xfer_clip` and `xfer_rescale`, 48 entries) that was the self-transfer row: F3
-`trig-dut` extrapolating `xfer` reads n_pix 5, mu 0.000 ps, PASS where the transfer row is
-n_pix 69, mu 5.32 ps, FAIL. `axes` now shows the transfer row of an arm when the key has one,
-else its self-transfer row, and says which in `<arm>_self_transfer`. The study's table is
-`campaigns.AXIS_F_AS_PUBLISHED` (md5 `44c661a62fdbf95b05dd7d67cd86cb74`, as published: 12 keys
-carry the self-transfer row). `univ_axis_F_wide.csv` was composed from it until 2026-10-18
-(`campaigns.UNIV_AXIS_F_WIDE_AS_PUBLISHED`, md5 `911efb7d856178f24e60a87b5203a755`); that day
-it was published again, composed from the corrected table (md5
-`09418b9acd0a698f1c9f3717e25b6b35`), and differs from the earlier one on those 12 rows only.
-The universality inputs keep the study's table as `results_r3/superseded/axis_F_as_published.csv`
-under `universality/results/` and the earlier wide table as
-`universality/superseded/univ_axis_F_wide_2026-10-18_self_transfer_rows.csv`.
+which the aggregation keeps apart (SPEC 8). The study's wide table kept whichever came last; on
+12 keys of `F_desy_f0p8153` (cells F2 and F3; the arms `xfer`, `xfer_lin`, `xfer_clip` and
+`xfer_rescale`, 48 entries) that was the self-transfer row. One example: in cell F3, the `xfer`
+entry of the pair PT-IH3 and PT-IH2 (`trig-dut` in the table), for the targets whose TOT reaches
+outside the source's range (the extrapolating family), reads n_pix 5, mu 0.000 ps, PASS; the
+transfer row reads n_pix 69, mu 5.32 ps, FAIL. `axes` now shows the transfer row of an arm when
+the key has one, else its self-transfer row, and says which in `<arm>_self_transfer`. The
+study's table is `campaigns.AXIS_F_AS_PUBLISHED` (md5 `44c661a62fdbf95b05dd7d67cd86cb74`, as
+published: 12 keys carry the self-transfer row). `univ_axis_F_wide.csv` was composed from it
+until 2026-10-18 (`campaigns.UNIV_AXIS_F_WIDE_AS_PUBLISHED`, md5
+`911efb7d856178f24e60a87b5203a755`); that day it was published again, composed from the
+corrected table (md5 `09418b9acd0a698f1c9f3717e25b6b35`), and differs from the earlier one on
+those 12 rows only. The universality inputs keep the study's table as
+`results_r3/superseded/axis_F_as_published.csv` under `universality/results/` and the earlier
+wide table as `universality/superseded/univ_axis_F_wide_2026-10-18_self_transfer_rows.csv`.
 
 ## Acceptance evidence
 
@@ -554,4 +578,5 @@ What was run against what, on lxplus under LCG_104d with `PYTHONHASHSEED=0`:
 - The f_cal bootstrap is not part of this package: f is a campaign fact (`campaigns.F_CAL`).
 - The condor driver's DAG was compared with the study's by its files; no DAG written by this
   package has been submitted.
-- `etroc_plots.universality`, which the last line of the recipe runs, is not on this branch.
+- The last line of the recipe runs `etroc_plots.universality`, which is not part of this package:
+  run it from a checkout whose `etroc_plots` has the universality module.

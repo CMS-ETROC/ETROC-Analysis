@@ -345,11 +345,12 @@ cross-checked against the analytic `tr(M_T Cov(c_S))` from the bank.
 
 **Decision.** TOST at alpha = 0.05 (`stats.tost`) against the pre-registered margin
 `max(1.0 ps, 2 % of sigma_self_cf)` (`stats.margin_for`): PASS when the 90 % interval of D lies
-inside the margin. No claim is made below 0.45 ps or 1 %, the definition systematic of the FWHM of
-a mixture. Reported beside it: the fraction of triples over the margin and the 95th percentile
-of D. Holm's step-down (`stats.holm`) is applied to the non-equivalence claims only, with
-`stats.p_nonequiv` as their p-value; a set of equivalence claims that must all pass is an
-intersection-union test and needs no correction.
+inside the margin. Pre-registered means fixed in the study's written plan before its first cells
+ran; "the pre-registration" below is that plan. No claim is made below 0.45 ps or 1 %, the
+definition systematic of the FWHM of a mixture. Reported beside it: the fraction of triples over
+the margin and the 95th percentile of D. Holm's step-down (`stats.holm`) is applied to the
+non-equivalence claims only, with `stats.p_nonequiv` as their p-value; a set of equivalence
+claims that must all pass is an intersection-union test and needs no correction.
 
 ## 5. Controls (all mandatory)
 
