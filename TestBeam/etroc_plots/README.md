@@ -66,6 +66,10 @@ merged hits, the TOT and TOA difference from the track files) ends its footer wi
 Data quality." (`READOUT_FOOTER` in the campaign module). Figures fe01-fe02 do not carry it: they
 are drawn from the autocalibration scans, not from event readout.
 
+The maps figures (maps01-maps18) are drawn from the resolution tables, not from the hits directly.
+Their only count of readout data is a pixel count, so each of their footers ends with the shorter
+line "Pixel counts are the surviving readout sample." (`SURVIVING_TEXT` in the maps notebook).
+
 The per-loop census and the readout mechanism are documented with the DAQ work and will be
 published with it.
 

@@ -432,8 +432,9 @@ def hist_panel(b, *, subject, tag, data, caption, scale=0.55):
 
 
 # ---------------------------------------------------------------------------- ladder
-def ladder_geometry(groups, n_rows):
-    """Inches. `groups`: the number of columns in each campaign group, left to right."""
+def ladder_geometry(groups, n_rows, mb_extra=0.0):
+    """Inches. `groups`: the number of columns in each campaign group, left to right;
+    `mb_extra`: added to the bottom margin, for a footer longer than four lines."""
     cell = 2.20
     gap_x = 0.28
     camp_gap = 0.85
@@ -448,7 +449,7 @@ def ladder_geometry(groups, n_rows):
     col_label_h = 0.80
     gap_y = 0.50
     cb_gap, cb_h = 0.55, 0.24
-    MB = 1.55
+    MB = 1.55 + mb_extra
     W = ML + row_w + MR
     H = MT + col_label_h + n_rows * cell + (n_rows - 1) * gap_y + cb_gap + cb_h + MB
     return dict(W=W, H=H, ML=ML, MR=MR, MT=MT, cell=cell, gap_x=gap_x, camp_gap=camp_gap,
@@ -472,7 +473,8 @@ def ladder(groups, row_labels, *, name, tag, data, footer, header_scale=0.85):
     lines per row, drawn under the cell). Header (header()): `name` and `tag` on the subject
     line, `data` on the facility line."""
     style.apply_style(1.0)
-    geo = ladder_geometry([len(cols) for _, cols in groups], len(row_labels))
+    geo = ladder_geometry([len(cols) for _, cols in groups], len(row_labels),
+                          mb_extra=style.footer_extra_in(footer, 1.0, fits=4))
     W, H = geo["W"], geo["H"]
     fig = plt.figure(figsize=(W, H))
     add = _adder(fig, W, H)
