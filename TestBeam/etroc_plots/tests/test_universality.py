@@ -293,6 +293,19 @@ def test_beam_text_follows_the_august_3gev_runs():
         desy_2026.beam_gev("aug", 3)            # no beam energy recorded for that run
 
 
+def test_desy_chips_keep_their_full_names():
+    """The DESY chips are PT-IH5, PT-IH3, PT-IH2 (and PT-IH27, B1-P1-6, B1-P1-9): legends and pair
+    names print them as the yaml does, never cut to IH5, which reads like an IRRAD chip."""
+    assert [c["chip"] for c in transfer.run_conditions(None, "desy", "run26")] == [
+        "PT-IH27", "PT-IH5", "PT-IH3", "PT-IH2"]
+    assert [c["chip"] for c in transfer.run_conditions(None, "aug", "run19")] == [
+        "B1-P1-9", "PT-IH3", "PT-IH5", "B1-P1-6"]
+    bank = pd.DataFrame(dict(campaign="desy", run="run26", board_id=[0, 1, 2, 3],
+                             role=["extra", "ref", "trig", "dut"]))
+    assert transfer.pair_chips(None, bank, "desy", "run26", "ref-dut") == "PT-IH5 / PT-IH2"
+    assert transfer.pair_chips(None, bank, "desy", "run26", "trig") == "PT-IH3"
+
+
 def test_reduction_reads_its_study_files_from_the_inputs_by_default():
     if os.environ.get("ETROC_TWC_RESULTS_ROOT"):
         pytest.skip("ETROC_TWC_RESULTS_ROOT moves the study folder")

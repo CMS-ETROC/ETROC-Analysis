@@ -510,8 +510,8 @@ save(fig, "un01_twc_curves", un01,
 # 1.5e15. The comparison axes (A to K) follow single knobs: A a pixel's or a board's correction
 # for a whole board within one run, B time with the settings held, C an angle step, D a bias
 # step at one fluence, E the threshold offset and RFSel, I the sensor vendor, J the cooling down,
-# K the IH2 board sensor -20 to -10 C, 45 deg, bias +10 V; axis F re-scores eleven cells with the
-# linear term of the correction refitted on the target.
+# K the PT-IH2 board sensor -20 to -10 C, 45 deg, bias +10 V; axis F re-scores eleven cells with
+# the linear term of the correction refitted on the target.
 #
 # Every number drawn below is a pair penalty: the width of a pair of boards of a target triple
 # with the source's correction, minus its width with the target's own correction fitted on the
@@ -650,7 +650,7 @@ PENALTY_LABEL = r"Pair penalty $\Delta\sigma_{\mathrm{pair}}$ [ps]"
 MARGIN_WORD = "margin, max(1 ps, 2 % of the baseline width)"
 VERDICT_WORDS = {"PASS": "equivalent within the margin (TOST)",
                  "FAIL": "not shown equivalent",
-                 "NA-UNGUARDED": "no leave-pair-out guard"}
+                 "NA-UNGUARDED": "no leave-pair-out check"}
 SETTINGS_RULE = ("IRRAD: runs_summary.csv per board, the March RFSel from MARCH_RFSEL; DESY: the "
                  "board-config yaml through desy_2026.run_settings, the August RFSel from "
                  "DEFAULT_RFSEL where the yaml has none, no RFSel recorded in May")
@@ -681,7 +681,7 @@ AXIS_WORDS = {"A": "A: one run, pixel or board to a whole board",
               "D": "D: bias, at 9e14 and at 1.5e15",
               "E": "E: threshold offset and RFSel together",
               "I": "I: sensor vendor, HPK and FBK, before irradiation",
-              "K": "K: IH2 board sensor -20 to -10 C, 45 deg, bias +10 V"}
+              "K": "K: PT-IH2 board sensor -20 to -10 C, 45 deg, bias +10 V"}
 UN02_MARKERS = {"E": "X"}         # axis E changes the front end, not the sensor: drawn apart
 
 extrap_all, interp_all = levels.coverage_lever_rows(AXIS_R2)
@@ -716,18 +716,19 @@ print("un02 axes with IRRAD rows:", UN02_IRRAD_AXES)
 
 fig, axes, drawn, covered = levels.un02_coverage_lever(
     extrap, band, axis_words=AXIS_WORDS, axis_markers=UN02_MARKERS,
-    xlabels=("1 - coverage of the target TOT", "Lever beyond the source TOT range [ps]"),
+    xlabels=("1 - coverage of the target TOT",
+             "Correction change beyond the source TOT range [ps]"),
     ylabel=PENALTY_LABEL, legend_title="Comparison axis",
     band_label="interpolating rows, 16-84 %", median_label="interpolating median, %.2f ps",
     line1=facility_line(un02_runs),
-    subjects=["Against the TOT coverage", "Against the lever"],
+    subjects=["Against the TOT coverage", "Against the correction change"],
     footer=from_hits(
         ("Extrapolating pair rows of the comparison axes (target TOT beyond the source's): "
          "%d rows; marker area grows with the pixels pooled in the row. Grey band and dashed "
          "line: the %d interpolating rows, 16-84 %% range and median.\n"
          "Coverage: the share of the target's TOT inside the source's 0.5-99.5 %% TOT range. "
-         "Lever: the rms change of the correction when the target's TOT is clipped to that "
-         "range, over the target events outside it.\n"
+         "Correction change: the rms change of the correction when the target's TOT is "
+         "clipped to that range, over the target events outside it.\n"
          "No IRRAD run at %s is drawn: %d extrapolating and %d interpolating rows "
          "of axes E and J (July, 3.5e15) are left out; so are %d extrapolating rows of axis "
          "%s whose source triple is the target triple (self transfer).\n%s"
@@ -766,7 +767,7 @@ save(fig, "un02_coverage_lever",
 # its 90 % interval, the cell's verdict, and at the right edge the share of the cell's
 # differences that are interpolating. Right, all target triples, both families pooled
 # (descriptive). The verdicts are the study's: a cell without a leave-pair-out guard that is not
-# a FAIL reads "no leave-pair-out guard". The level cells hold no IRRAD run at 2e15 or 3.5e15
+# a FAIL reads "no leave-pair-out check". The level cells hold no IRRAD run at 2e15 or 3.5e15
 # (asserted).
 
 # %%
@@ -806,7 +807,7 @@ LABEL = {
     "h7_f1_19to7": "F1 Mar 350 V -> Jul 460 V (run 7)",
     "h8_f1_17to5": "F1 Mar 265 V -> Jul 460 V (run 5)",
 }
-LEVTITLE = {"a": "(a) floor", "b": "(b) angle", "bp": "(b') angle, offset holder",
+LEVTITLE = {"a": "(a) noise floor", "b": "(b) angle", "bp": "(b') angle, offset holder",
             "c": "(c) pixel to board", "d": "(d) board to board",
             "e": "(e) pooled board correction", "g": "(g) bookkeeping fluence",
             "h": "(h) March to July"}
@@ -819,7 +820,7 @@ UN03_IRRAD_LEVELS = list(MASTER[MASTER.cell.isin(irrad_cells(MASTER.cell))].leve
 print("un03 levels with IRRAD cells:", UN03_IRRAD_LEVELS)
 fig, axes, drawn, covered = levels.un03_penalty_per_cell(
     MASTER, labels=LABEL, level_titles=LEVTITLE,
-    subjects=["Interpolating family, the registered claim", "All target triples, descriptive"],
+    subjects=["Interpolating rows, the claim set in advance", "All target triples, descriptive"],
     xlabel=PENALTY_LABEL, verdict_words=VERDICT_WORDS, margin_word=MARGIN_WORD,
     no_rows_text="no interpolating triple", share_fmt="%.0f %% interp.",
     line1=facility_line(un03_runs),
@@ -827,8 +828,8 @@ fig, axes, drawn, covered = levels.un03_penalty_per_cell(
         ("Per cell the inverse-variance mean of its primary pair rows with its 90 %% interval "
          "(mu +- 1.645 se), marker and colour the cell's verdict; grey bar: the cell's own "
          "margin. Left: the interpolating rows (target TOT within the source's), with the "
-         "share of the cell's differences in that family; right: every target triple, both "
-         "families pooled. %d cells, of %d DESY and %d IRRAD runs.\n%s"
+         "share of the cell's differences that are interpolating; right: every target triple, "
+         "interpolating and extrapolating pooled. %d cells, of %d DESY and %d IRRAD runs.\n%s"
          % (len(MASTER), sum(1 for c, _ in un03_runs if not transfer.is_irrad(c)),
             len(un03_irrad), settings_footer(un03_runs))),
         "IRRAD cells (levels %s)" % " and ".join(UN03_IRRAD_LEVELS)))

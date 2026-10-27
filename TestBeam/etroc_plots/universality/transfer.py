@@ -272,10 +272,11 @@ def role_boards(bank, code, run):
     return {r: int(b) for b, r in zip(sub.board_id, sub.role)}
 
 
-def pair_chips(rs, bank, code, run, board_or_role, sep="-"):
-    """The chips of a row's role words in one run: 'ref-dut' of DESY May run 26 -> 'IH5-IH2'
-    (role_boards of that run, then board_conditions). A word that is not a role of the run is
-    kept as it is."""
+def pair_chips(rs, bank, code, run, board_or_role, sep=" / "):
+    """The chips of a row's role words in one run: 'ref-dut' of DESY May run 26 ->
+    'PT-IH5 / PT-IH2' (role_boards of that run, then board_conditions; the separator is not a
+    hyphen, which the DESY chip names carry). A word that is not a role of the run is kept as it
+    is."""
     roles = role_boards(bank, code, run)
     return sep.join(board_conditions(rs, code, run, roles[w])["chip"] if w in roles else w
                     for w in str(board_or_role).split("-"))
@@ -317,8 +318,10 @@ def board_conditions(rs, code, run, board_id):
     """One board of one run: dict(campaign (the module key: "march", "july", "may", "aug"), chip
     (as legends print it), hv, fluence (IRRAD bookkeeping, None for DESY), angle and temp (DESY,
     None for IRRAD), offset, rfsel, rfsel_source, power). IRRAD boards come from runs_summary
-    (`rs`), whose March rows carry no RFSel: those read MARCH_RFSEL. DESY boards come from
-    desy_2026.run_settings."""
+    (`rs`), whose March rows carry no RFSel: those read MARCH_RFSEL; their chip is
+    style.chip_short of its name (IH11, LF10). DESY boards come from desy_2026.run_settings, their
+    chip the yaml's short name as it is (PT-IH5, PT-IH3, PT-IH2, B1-P1-9): style.chip_short would
+    drop the PT- of the DESY chips and make them read like IRRAD ones."""
     board_id = int(board_id)
     if is_irrad(code):
         camp, tel, num = irrad_run(code, run)
@@ -339,8 +342,8 @@ def board_conditions(rs, code, run, board_id):
     if len(b) != 1:
         raise KeyError("the %s yaml has no board %d in %s" % (camp, board_id, run))
     b = b[0]
-    return dict(campaign=camp, chip=style.chip_short(b["chip"]), hv=b["hv"], fluence=None,
-                angle=b["angle"], temp=b["temp"], offset=b["offset"], rfsel=b["rfsel"],
+    return dict(campaign=camp, chip=b["chip"], hv=b["hv"], fluence=None, angle=b["angle"],
+                temp=b["temp"], offset=b["offset"], rfsel=b["rfsel"],
                 rfsel_source="desy_2026 (yaml RFSel key, else DEFAULT_RFSEL)",
                 power=desy_2026.PREAMP_POWER[camp])
 
