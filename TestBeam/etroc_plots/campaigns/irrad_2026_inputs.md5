@@ -42,4 +42,10 @@ afc445a0879d8fa0c8f2b139370d2528  tables/merged/per_pixel_cost_summary.csv
 e5257742f55811329508e838716abbf8  tables/merged/pixel_table_merged.csv
 eaeac639f3f2cc62730d9e0bf9d270be  tables/run_times.csv
 70c0c20a641fd647b61d98dc602733d2  tables/runs_summary.csv
+001872b9be344ec9d9aa252bf1b9a011  universality/twc_bank_best.csv
+51302099b643b24014141af7d860a059  universality/univ_axis_F_long.csv
+09418b9acd0a698f1c9f3717e25b6b35  universality/univ_axis_F_wide.csv
+15c688966ce406593454391e9d6120ff  universality/univ_axis_r2.csv
+2fcde80b93bff79a4d9eb54292546318  universality/univ_cells.csv
+62cfc93f96be1dcbab6cad770da772fa  universality/univ_master_cells.csv
 db95934d10de336961727755d2d6c3d5  vgl/vgl_points.csv
