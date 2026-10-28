@@ -117,7 +117,7 @@ def show(stem):
 # is one path of hit pixels through the combination's three boards, one pixel per board; its
 # events are the particles recorded along it. The figures here use one value per board:
 #
-# * the anointed combination: boards 0-1-2 for boards 0, 1 and 2, boards 1-2-3 for board 3 (the
+# * the reference combination: boards 0-1-2 for boards 0, 1 and 2, boards 1-2-3 for board 3 (the
 #   footers name each by its chips);
 # * the most-populated track through each pixel (`VARIANT = "top"`);
 # * tracks with at least 300 events (`FLOOR`).
@@ -129,8 +129,8 @@ def show(stem):
 # combination it is solved in, so every board value at that step, of a single run or of a merge,
 # is drawn as a band instead of a point: the shaded box spans the board's value over every
 # combination containing it, the chip's marker sits at the centre of the box, the bar is the
-# anointed combination's pixel spread. Single runs and merge are then compared on the same
-# footing. Pixel values are always the anointed combination's.
+# reference combination's pixel spread. Single runs and merge are then compared on the same
+# footing. Pixel values are always the reference combination's.
 #
 # Each merge's runs share one fluence, RFSel and threshold offset, and each board keeps its chip
 # and bias (`tables.common_settings` reads them from `runs_summary.csv` and stops if they differ);
@@ -186,7 +186,7 @@ px_merged = tables.read_pixel_table(campaign.PIXEL_TABLE_MERGED, _merge_names, V
 # side within a column in slot order. Bottom, one panel per chip: the 16 pixels with the most
 # events in the merge, in (row, col) order, merged value with its fit error, the single-run
 # values beside it, lighter, in run order from left to right. The footer gives the selection
-# and, per anointed combination, the share of the merge's tracks the quote drops as degenerate (a
+# and, per reference combination, the share of the merge's tracks the quote drops as degenerate (a
 # solved width below 0.35 or above 0.95 of the smallest pair width it came from;
 # `TestBeam/condor_at_lxplus/README.md`). The run-merging study judged each merge on this share:
 # a time step between the runs raises it above the single runs' shares, which these tables do
@@ -196,19 +196,19 @@ px_merged = tables.read_pixel_table(campaign.PIXEL_TABLE_MERGED, _merge_names, V
 def merge_data(tel, runs):
     """Everything figures 1-6 draw for one merge: the board points of each single run and of the
     merge, the lower-row pixels, the runs' common settings and the degenerate shares of the
-    merge's anointed combinations."""
+    merge's reference combinations."""
     group = tables.merge_name(tel, runs)
     settings = merge_settings(tel, runs)
     fluence = settings["fluence"]
     banded = style.fluence_key(fluence) in BAND_KEYS
     mrows = tables.board_rows(bt_merged, tel, group, VARIANT, FLOOR, TABLE_CAMPAIGN)
     if not len(mrows) or mrows.board_idx.duplicated().any():
-        raise ValueError("%s: %d anointed merged board rows, boards %s"
+        raise ValueError("%s: %d merged board rows in reference combos, boards %s"
                          % (group, len(mrows), list(mrows.board_idx)))
     for r in runs:
         sboards = tables.board_rows(bt_single, tel, r, VARIANT, FLOOR, TABLE_CAMPAIGN).board_idx
         if sorted(sboards) != sorted(mrows.board_idx):
-            raise ValueError("%s run %d has anointed boards %s, the merge %s"
+            raise ValueError("%s run %d has reference-combo boards %s, the merge %s"
                              % (tel, r, sorted(sboards), sorted(mrows.board_idx)))
 
     boards, combos = [], {}
@@ -223,7 +223,7 @@ def merge_data(tel, runs):
         for r in runs:
             srow = tables.board_rows(bt_single, tel, r, VARIANT, FLOOR, TABLE_CAMPAIGN, board_idx=b)
             if len(srow) != 1 or srow.iloc[0].board_chip != chip:
-                raise ValueError("%s run %d board %d: %d anointed rows, chip %s in the merge"
+                raise ValueError("%s run %d board %d: %d reference-combo rows, chip %s in the merge"
                                  % (tel, r, b, len(srow), chip))
             srow = srow.iloc[0]
             pt = dict(run=str(r), value_ps=float(srow.value_ps),
@@ -348,22 +348,22 @@ def runs_text(d):
 
 def merged_footer(d):
     runs = [str(r) for r in d["runs"]]
-    # each anointed combination by its chips, with the chips it stands for and its share
-    anointed = []
+    # each reference combination by its chips, with the chips it stands for and its share
+    reference = []
     for c, v in d["combos"].items():
         chips = [style.chip_short(b["chip"]) for b in d["boards"] if b["combo"] == c]
-        anointed.append("%s for %s (%.2f %%)" % (tables.combo_chips(c, d["telescope"]),
+        reference.append("%s for %s (%.2f %%)" % (tables.combo_chips(c, d["telescope"]),
                                                  ", ".join(chips), v * 100.0))
     n_short = min(len(pb["pixels"]) for pb in d["pixel_boards"])
-    lines = ["Selection: %s, tracks with at least %s events, each chip from its anointed "
+    lines = ["Selection: %s, tracks with at least %s events, each chip from its reference "
              "combination; runs %s and %s merged" % (tables.VARIANT_TEXT[VARIANT], FLOOR,
                                                      ", ".join(runs[:-1]), runs[-1]),
              "Top: board value, bar = pixel-to-pixel spread. Bottom: the %s%d pixels with the "
              "most events in the merge, merged value (black edge) and each run's (lighter, in "
              "run order left to right), bar = fit error"
              % ("" if n_short == N_PIX else "(at most) ", N_PIX),
-             "Anointed combinations, with the share of the merge's tracks dropped as degenerate: "
-             + "; ".join(anointed)]
+             "Reference combinations, with the share of the merge's tracks dropped as degenerate: "
+             + "; ".join(reference)]
     if d["banded"]:
         lines.append("Bands at %s: %s" % (style.fluence_label(d["fluence"]), tables.BAND_FOOTER))
     return "\n".join(lines)
@@ -448,7 +448,7 @@ def merged_vs_single(stem, tel, runs):
     conventions["pixel_error_bar"] = "lower row: the fit error of the pixel's width (err_ps)"
     if d["banded"]:
         conventions["band"] = ("a point with a band is drawn at band.marker_ps; its value_ps "
-                               "stays the anointed combination's")
+                               "stays the reference combination's")
     style.write_values(OUT, stem, merged_values(d, problems), conventions=conventions,
                        script=NOTEBOOK, inputs=INPUTS_RES)
     print("%s: audit %s" % (stem, problems or "clean"))

@@ -9,11 +9,12 @@ PIXEL_TABLE_MERGED for merged runs):
 
 board table   one row per campaign, telescope, run, combo, board (board_idx, board_chip), track
               variant and event floor: value_ps (the board value, a robust fit over the board's
-              pixel map), pixel_spread_ps (pixel-to-pixel sigma), n_pixels, and `anointed`, True
-              on the combo that stands for the board (boards 0-1-2 for boards 0, 1 and 2;
-              boards 1-2-3 for board 3). Merged tables add degenerate_share: the share of the
-              combo's tracks the quote drops as degenerate (a solved width below 0.35 or above
-              0.95 of the smallest pair width it came from; condor_at_lxplus/README.md).
+              pixel map), pixel_spread_ps (pixel-to-pixel sigma), n_pixels, and the flag
+              REFERENCE_COLUMN, True on the reference combo: the combo that stands for the board
+              (boards 0-1-2 for boards 0, 1 and 2; boards 1-2-3 for board 3). Merged tables add
+              degenerate_share: the share of the combo's tracks the quote drops as degenerate (a
+              solved width below 0.35 or above 0.95 of the smallest pair width it came from;
+              condor_at_lxplus/README.md).
 pixel table   one row per pixel (row, col) of each of those: value_ps, err_ps, nevt_sum (the
               events behind the pixel).
 
@@ -42,20 +43,21 @@ from .. import style
 VARIANT_TEXT = {"top": "most-populated track per pixel",
                 "central": "central track per pixel",
                 "average": "every track per pixel, inverse-variance mean"}
-ANOINTED_TEXT = "anointed combo (0-1-2 for boards 0-2, 1-2-3 for board 3)"
+REFERENCE_TEXT = "reference combo (0-1-2 for boards 0-2, 1-2-3 for board 3)"
+REFERENCE_COLUMN = "anointed"   # the reference-combo flag, under its name in the tables on disk
 
 BAND_FOOTER = ("shaded box = min to max of the board's value over every combination containing "
-               "it, marker at its centre, bar = pixel-to-pixel spread of the anointed combination")
+               "it, marker at its centre, bar = pixel-to-pixel spread of the reference combination")
 
 PIXEL_COLUMNS = ["campaign", "telescope", "run", "combo", "board_idx", "board_role", "board_chip",
                  "row", "col", "variant", "floor", "value_ps", "err_ps", "n_paths", "nevt_sum",
-                 "anointed"]
+                 REFERENCE_COLUMN]
 
 
 def conventions(variant, floor):
     """The conventions block of a resolution figure's values file."""
     return {"selection": "%s, %s, one track per pixel per board, event floor %s"
-                         % (VARIANT_TEXT[variant], ANOINTED_TEXT, floor),
+                         % (VARIANT_TEXT[variant], REFERENCE_TEXT, floor),
             "board_value": "robust Gaussian mean over the pixel map "
                            "(quote_resolution.board_summary)",
             "error_bar": "pixel-to-pixel sigma; stat = sigma/sqrt(n_pixels)",
@@ -79,17 +81,17 @@ def read_board_table(path):
     return pd.read_csv(path, dtype={"floor": str})
 
 
-def read_pixel_table(path, runs, variant, floor, campaign, anointed=True, chunksize=200_000):
+def read_pixel_table(path, runs, variant, floor, campaign, reference=True, chunksize=200_000):
     """The rows of a pixel table for `runs` ({telescope: run numbers or merge names}) at one
-    variant, floor and campaign, anointed combos only unless `anointed` is None. Read in chunks:
+    variant, floor and campaign, reference combos only unless `reference` is None. Read in chunks:
     the single-run table holds every pixel of every run."""
     keep = []
     for chunk in pd.read_csv(path, usecols=PIXEL_COLUMNS, chunksize=chunksize,
                              dtype={"floor": str}):
         sub = chunk[(chunk["campaign"] == campaign) & (chunk["variant"] == variant)
                     & (chunk["floor"] == str(floor))]
-        if anointed is not None:
-            sub = sub[sub["anointed"] == anointed]
+        if reference is not None:
+            sub = sub[sub[REFERENCE_COLUMN] == reference]
         mask = pd.Series(False, index=sub.index)
         for tel, rr in runs.items():
             mask |= (sub["telescope"] == tel) & sub["run"].astype(str).isin([str(r) for r in rr])
@@ -121,16 +123,29 @@ def preferred_runs(path, rfsel, offset):
     return out
 
 
+def display_runs(path, rfsel, offset):
+    """{telescope: {fluence: [run, ...]}} of a display-run list (as preferred_runs): every run
+    listed at RFSel `rfsel` and threshold offset `offset`, preferred or not, per fluence step."""
+    df = pd.read_csv(path, usecols=["telescope", "fluence", "rfsel", "os", "run"])
+    num = {c: pd.to_numeric(df[c], errors="coerce") for c in ("rfsel", "os")}
+    df = df[(num["rfsel"] == rfsel) & (num["os"] == offset)]
+    out = {}
+    for (tel, f), g in df.groupby([df["telescope"].str.strip().str.lower(),
+                                   df["fluence"].astype(float)]):
+        out.setdefault(tel, {})[f] = sorted({int(r) for r in g["run"]})
+    return out
+
+
 # ---------------------------------------------------------------------------- selections
-def board_rows(bt, telescope, run, variant, floor, campaign=None, board_idx=None, anointed=True):
-    """The board-table rows of one run (a run number or a merge name), sorted by board; anointed
-    combos only unless `anointed` is None."""
+def board_rows(bt, telescope, run, variant, floor, campaign=None, board_idx=None, reference=True):
+    """The board-table rows of one run (a run number or a merge name), sorted by board; reference
+    combos only unless `reference` is None."""
     sel = ((bt["telescope"] == telescope) & (bt["run"].astype(str) == str(run))
            & (bt["variant"] == variant) & (bt["floor"] == str(floor)))
     if campaign is not None:
         sel &= bt["campaign"] == campaign
-    if anointed is not None:
-        sel &= bt["anointed"] == anointed
+    if reference is not None:
+        sel &= bt[REFERENCE_COLUMN] == reference
     if board_idx is not None:
         sel &= bt["board_idx"] == board_idx
     return bt[sel].sort_values("board_idx")
@@ -139,19 +154,20 @@ def board_rows(bt, telescope, run, variant, floor, campaign=None, board_idx=None
 def band(bt, telescope, run, board_idx, variant, floor, campaign=None):
     """The combo band of one board in one run: band_lo_ps..band_hi_ps = min..max of the board
     value over every combo containing the board; marker_ps its centre; bar_spread_ps and n_pixels
-    from the anointed combo, whose own value is kept as anointed_ps."""
-    rows = board_rows(bt, telescope, run, variant, floor, campaign, board_idx, anointed=None)
+    from the reference combo, whose own value is kept as reference_ps."""
+    rows = board_rows(bt, telescope, run, variant, floor, campaign, board_idx, reference=None)
     if len(rows) < 2:
         raise ValueError("%s run %s board %d is in %d combo(s): a band needs two or more"
                          % (telescope, run, board_idx, len(rows)))
-    anointed = rows[rows["anointed"] == True]      # noqa: E712  (a pandas mask)
-    if not len(anointed):
-        raise ValueError("no anointed row for %s run %s board %d" % (telescope, run, board_idx))
-    a = anointed.iloc[0]
+    reference = rows[rows[REFERENCE_COLUMN] == True]      # noqa: E712  (a pandas mask)
+    if not len(reference):
+        raise ValueError("no reference-combo row for %s run %s board %d"
+                         % (telescope, run, board_idx))
+    a = reference.iloc[0]
     lo, hi = float(rows["value_ps"].min()), float(rows["value_ps"].max())
     return dict(marker_ps=(lo + hi) / 2.0, band_lo_ps=lo, band_hi_ps=hi,
                 bar_spread_ps=float(a["pixel_spread_ps"]), n_pixels=int(a["n_pixels"]),
-                anointed_ps=float(a["value_ps"]), n_combo_rows=len(rows))
+                reference_ps=float(a["value_ps"]), n_combo_rows=len(rows))
 
 
 def draw_band(ax, x, band, color, half_width=0.032, capsize=3.0, zorder=1, alpha=0.22,

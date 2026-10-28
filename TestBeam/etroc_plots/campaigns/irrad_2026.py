@@ -375,7 +375,7 @@ def _check_chip_fluence_text():
 
 _check_chip_fluence_text()
 
-# 24 GeV/c proton NIEL hardness factor, 0.62 +- 0.04 (ETL talk, 20 April 2026). With the
+# 24 GeV/c proton NIEL hardness factor, 0.62 +- 0.04 (ETL meeting, 20 April 2026). With the
 # on-chip factor, one bookkeeping proton is CONV_FULL n_eq on the chip, so the three March steps
 # correspond to 1.4, 4.2 and 7.0e14 n_eq.
 NIEL_24GEV = 0.62
@@ -558,8 +558,8 @@ BAND_STEPS = (3.5e15,)
 
 # ==================================================================== setup and timeline
 # campaigns.REQUIRED["overview"]: etroc_plots.overview and notebooks/overview.py read these.
-# The sensor under each chip, in board order (TELESCOPE_CHIPS): wafer and die. Source: the March
-# 2026 campaign slides.
+# The sensor under each chip, in board order (TELESCOPE_CHIPS): wafer and die. Source: the
+# campaign's own slides (March 2026).
 TELESCOPE_SENSORS = {"h1": ["W27 #20", "W14 #22", "W14 #23", "W15 #01"],
                      "f1": ["W5 4-7", "W5 5-7", "W5 3-7", "W5 5-8"]}
 
@@ -567,7 +567,7 @@ TELESCOPE_SENSORS = {"h1": ["W27 #20", "W14 #22", "W14 #23", "W15 #01"],
 # (centre in cm, share of the protons), which flatten the profile over the chip window of
 # +-BEAM_WINDOW_CM. BEAM_TABLE is the facility's table of the options it considered: (name,
 # exposures, mean and RMS deviation of the unit-area profile over the window). Source: the
-# March 2026 campaign slides, which give the width as "Width/sigma = 1.1 cm". Read as a FWHM
+# campaign's own slides (March 2026), which give the width as "Width/sigma = 1.1 cm". Read as a FWHM
 # (sigma = 1.1 / 2.355 cm), it reproduces every row of the table to within 0.002 in the mean and
 # 0.0003 in the RMS deviation; read as sigma, the centre row's mean would be 0.35, not 0.71. So
 # 1.1 cm is the FWHM. The table's own sampling of the window is not documented.
@@ -596,6 +596,111 @@ RUN_METADATA_DIRS = {
     ("july", "f1"): os.path.join(RUN_METADATA_ROOT, "ETROC_Irrad_2026Jul", "F1", "metadata"),
 }
 RUN_TIMES_CSV = os.path.join(INPUTS_TABLES, "run_times.csv")
+
+# ================================================================================ front end
+# campaigns.REQUIRED["frontend"]: etroc_plots.frontend and notebooks/frontend.py read these.
+# The two looks at 1.5e15 per telescope, (March run, July run): before cooling down, the March run
+# of the 1.5e15 step whose leakage current matches the July run's (its lowest bias: H1 400 V, F1
+# 265 V); after four months of cooling down, the July preferred display run at that step. Read by
+# the frontend notebook (BL/NW pair, TDC histograms, CAL maps), by frontend.rebuild (the default
+# runs of its TDC part) and by notebooks/maps.py (figures 17-18).
+COOLDOWN_PAIRS = {"h1": (17, 4), "f1": (17, 9)}
+# The RFSel comparisons of the TOT shape, per (campaign, telescope): pairs of runs that differ in
+# RFSel only (one threshold offset per pair, the same bias on the chip drawn). F1: run 47 (RFSel
+# 1) against 18 (RFSel 2) at offset 20, run 52 (RFSel 2) against 86 (RFSel 3) at offset 10.
+RFSEL_TOT_PAIRS = {("july", "f1"): [(47, 18), (52, 86)]}
+# The time control of the RFSel comparisons, per (campaign, telescope): runs at one threshold
+# offset on the chip of the RFSel pairs, the first two at the same RFSel and the third at the
+# next one, so the fixed-settings drift of the TOT over time (F1 run 32 -> 52, 5.2 d) stands
+# beside the RFSel step (52 -> 86). Drawn by fe16 of the frontend notebook on the chip of
+# RFSEL_TOT_PAIRS.
+TOT_TIME_CONTROL = {("july", "f1"): [(32, 52, 86)]}
+# Runs drawn beside the display runs of their step on the fluence ladders of the frontend
+# notebook (fe01, fe07) only, per (campaign, telescope) and fluence step. H1 July run 19 is the
+# repeat of run 18 (same settings, same autocalibration scan, 8 h later). Not display runs; in no
+# other figure.
+LADDER_EXTRA_RUNS = {("july", "h1"): {3.5e15: [19]}}
+# The runs whose hits the frontend tables are built from, per campaign and telescope: in March
+# the step runs of MARCH_DISPLAY_RUNS and the March run of COOLDOWN_PAIRS; in July the July run of
+# COOLDOWN_PAIRS, H1 run 47 (RFSel 1), the runs of LADDER_EXTRA_RUNS and the runs of the RFSel
+# comparisons and their time control (RFSEL_TOT_PAIRS, TOT_TIME_CONTROL): H1 4, 19 and 47; F1 9,
+# 18, 32, 47, 52 and 86 (F1 18 is a display run too). frontend.rebuild.frontend_runs() adds the
+# July display runs of DISPLAY_RUNS_JUL_CSV at FRONTEND_JULY_SETTINGS (they are in an input
+# table, not here) and takes the result as the run set of `--runs frontend`. The BL/NW part of
+# the rebuild covers every run of the run metadata whatever this says.
+FRONTEND_JULY_SETTINGS = dict(rfsel=2, offset=20)
+FRONTEND_RUNS = {
+    "march": {t: sorted(set(MARCH_DISPLAY_RUNS[t]) | {COOLDOWN_PAIRS[t][0]})
+              for t in COOLDOWN_PAIRS},
+    "july": {"h1": sorted({COOLDOWN_PAIRS["h1"][1], 47}
+                          | {r for rs in LADDER_EXTRA_RUNS[("july", "h1")].values() for r in rs}),
+             "f1": sorted({COOLDOWN_PAIRS["f1"][1]}
+                          | {r for pair in RFSEL_TOT_PAIRS[("july", "f1")] for r in pair}
+                          | {r for g in TOT_TIME_CONTROL[("july", "f1")] for r in g})},
+}
+# The IRRAD 2026 loops were recorded with the KCU105 readout saturated (the package README, "Data
+# quality"): the decoding drops every hit whose packet lost its header, so the merged hits and the
+# track files hold the hits that survived, selected by the state of the readout buffers. Every
+# figure drawn from those hits ends its footer with this line; the autocalibration scans are not
+# readout hits and their figures do not carry it.
+READOUT_FOOTER = (u"Hits and pixel counts are the surviving readout sample, selected by buffer "
+                  u"state; see README, Data quality.")
+# Jongho's merged hits, one folder of loop_<N>.feather files per run (columns evt, bcid,
+# l1a_counter, ea, row, col, toa, tot, cal, board). Read only by `python -m
+# etroc_plots.frontend.rebuild` (its TDC part), never by a notebook. Read-only.
+DECODED_ROOT = os.environ.get("ETROC_DECODED_ROOT") or "/eos/user/j/jongho"
+DECODED_DIRS = {   # format with TEL ("H1"), tel ("h1") and run
+    "march": os.path.join(DECODED_ROOT, "ETROC_Irrad_2026Mar", "{TEL}", "Run_{run}_feather"),
+    "july": os.path.join(DECODED_ROOT, "ETROC_Irrad_2026Jul", "{TEL}", "{tel}_Run_{run}_feather",
+                         "merged_hits"),
+}
+# The autocalibration scan histories of the telescope PCs (BaselineHistory sqlite): the only
+# record of each pixel's baseline and noise width. Read only by the rebuild's BL/NW part, which
+# joins each run's DAQ run_metadata.yaml (RUN_METADATA_DIRS) to the scan it used. Read-only.
+# The files sit on the LPC EOS and sqlite cannot open them in place there or from lxplus: copy
+# them, keeping the folders below BLNW_ROOT, and point ETROC_BLNW_ROOT at the copy.
+BLNW_ROOT = os.environ.get("ETROC_BLNW_ROOT") or "/eos/uscms/store/group/lpcmtdstudies"
+BLNW_SQLITES = {   # per (campaign, telescope), in time order: the July history was split in two
+    ("march", "h1"): [os.path.join(BLNW_ROOT, "IRRad_CERN_2026Mar", "H1_telescope",
+                                   "ETROC-History", "BaselineHistory.sqlite")],
+    ("march", "f1"): [os.path.join(BLNW_ROOT, "IRRad_CERN_2026Mar", "F1_telescope",
+                                   "ETROC-History", "BaselineHistory.sqlite")],
+    ("july", "h1"): [os.path.join(BLNW_ROOT, "IRRad_CERN_2026Jul", "H1_telescope",
+                                  "baseline_history", "BaselineHistory%s.sqlite" % v)
+                     for v in ("_v1", "")],
+    ("july", "f1"): [os.path.join(BLNW_ROOT, "IRRad_CERN_2026Jul", "F1_telescope",
+                                  "baseline_history", "BaselineHistory%s.sqlite" % v)
+                     for v in ("_v1", "")],
+}
+# Hours the scan clock runs ahead of UTC: the March PCs wrote local time (CET, UTC+1; summer time
+# began after the campaign), the July histories write UTC. With these offsets every scan whose
+# baseline map equals a run's DAC map minus its threshold offset lies before that run's start.
+BLNW_SQLITE_UTC_OFFSET_H = {"march": 1.0, "july": 0.0}
+# The analysis pipeline's track files: per run and combo of three boards, one parquet file per
+# pixel triple (frontend/tot_shapes.py describes them). Read only by `python -m
+# etroc_plots.frontend.rebuild` (its tracks part), never by a notebook. Read-only.
+ANALYSIS_ROOT = os.environ.get("ETROC_ANALYSIS_ROOT") or "/eos/user/m/musafdar"
+ANALYSIS_DIRS = {   # format with tel ("h1") and run; the combo folders sit below
+    "march": os.path.join(ANALYSIS_ROOT, "CERN_IRRAD_Mar2026", "analysis", "tracks_{tel}_run{run}"),
+    "july": os.path.join(ANALYSIS_ROOT, "CERN_IRRAD_Jul2026", "analysis", "tracks_{tel}_run{run}"),
+}
+# The frontend tables, in the frontend/ folder of INPUTS (made by frontend.rebuild;
+# irrad_2026_inputs.md describes their columns).
+INPUTS_FRONTEND = os.path.join(INPUTS, "frontend")
+BLNW_CSV = os.path.join(INPUTS_FRONTEND, "blnw_by_run.csv")
+# one row per pixel of every board with a scan in every run of BLNW_CSV (frontend/blnw.py); read by
+# blnw.read_blnw_pixels, by no notebook here
+BLNW_PIXELS_CSV = os.path.join(INPUTS_FRONTEND, "blnw_by_pixel.csv.gz")
+TDC_PIXEL_HISTS_CSV = os.path.join(INPUTS_FRONTEND, "tdc_pixel_hists.csv")
+TDC_CAL_MODES_CSV = os.path.join(INPUTS_FRONTEND, "tdc_cal_modes.csv")
+TRIPLES_CSV = os.path.join(INPUTS_FRONTEND, "triples.csv")
+TOT_PIXEL_MEDIANS_CSV = os.path.join(INPUTS_FRONTEND, "tot_pixel_medians.csv")
+TOT_POOLED_SUMMARY_CSV = os.path.join(INPUTS_FRONTEND, "tot_pooled_summary.csv")
+TOT_POOLED_HIST_CSV = os.path.join(INPUTS_FRONTEND, "tot_pooled_hist.csv")
+DTOA_TRIPLES_CSV = os.path.join(INPUTS_FRONTEND, "dtoa_triples.csv")
+DTOA_POOLED_HIST_CSV = os.path.join(INPUTS_FRONTEND, "dtoa_pooled_hist.csv")
+PIXEL_HISTS_CSV = os.path.join(INPUTS_FRONTEND, "pixel_hists.csv")
+RFSEL_PAIR_HIST_CSV = os.path.join(INPUTS_FRONTEND, "rfsel_pair_hist.csv")
 
 # ============================================================== raw inputs, read in place
 # iv_data.check_inputs checks each one exists and is readable (the IV notebook reads them).

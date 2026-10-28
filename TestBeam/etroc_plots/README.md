@@ -4,7 +4,7 @@
 
 Run that first, on lxplus, from the repository root. It sets up LCG_104d, the environment this
 code is tested in (Python 3.9.12, numpy 1.23.5, pandas 1.5.3, matplotlib 3.7.1, scipy 1.10.1,
-mplhep 0.3.12, Pillow 9.5.0, PyYAML 6.0, nbconvert 7.6.0).
+mplhep 0.3.12, Pillow 9.5.0, PyYAML 6.0, pyarrow 11.0.0, nbconvert 7.6.0).
 
 Plotting code for ETROC test-beam and irradiation campaigns: a small helper package and one
 Jupyter notebook per topic. The notebooks hold the choices made per figure, the package holds what
@@ -19,17 +19,59 @@ lists, chips, fluence steps, input locations). No data lives in the repository.
 | `notebooks/merged.ipynb` (and `merged.py`) | the July IRRAD 2026 run merges against their single runs, and the cost of merging, 7 figures |
 | `notebooks/maps.ipynb` (and `maps.py`) | per-pixel time-resolution maps of CERN IRRAD 2026, one run per fluence step, 18 figures |
 | `notebooks/overview.ipynb` (and `overview.py`) | the CERN IRRAD 2026 setup and method as schematics (telescope, beam profile, boards, track selection, the RFSel setting) and the timeline of both campaigns, 6 figures |
+| `notebooks/frontend.ipynb` (and `frontend.py`) | the CERN IRRAD 2026 front end: baseline and noise width of every board against fluence and before / after cooling down, the CAL, TOA and TOT codes and CAL-code maps at 1.5e15 before / after cooling down, and the TOT and the time-walk-corrected TOA difference of the tracks against fluence (boards and single pixels), and the TOT of one chip at two RFSel settings and at fixed settings over time, 16 figures; about 80 s on one lxplus core |
 | `campaigns/irrad_2026.py` | that campaign: header text, telescopes and chips, fluence ladder, scan catalogue, run settings, input locations |
 | `campaigns/irrad_2026_inputs.md` | every input table (contents, origin), where the inputs live, the environment variables that move them; checksums in `irrad_2026_inputs.md5` |
 | `style.py` | the house look: header, footer, legends, colours, saving figures and values files |
 | `etroc_style.py` | the mplhep CMS style underneath it, the overlap audit (texts, arrows and tagged marks), single-panel export |
 | `checks.py` | the house rules as code, run on every figure as it is drawn and on an output folder afterwards |
 | `iv/` | IV loaders and drawing helpers: March slow-control logs, July HV-monitor extracts, k-factor and V_gl |
-| `resolution/` | the test-beam result tables: readers, the anointed-combination selection, the combination band, run settings; the pixel-map layouts |
+| `resolution/` | the test-beam result tables: readers, the reference-combination selection, the combination band, run settings; the pixel-map layouts |
 | `overview/` | the setup and method schematics, and the campaign timeline with its run-time table builder |
+| `frontend/` | the 12 front-end tables, their rebuild and drawing. The tables: `blnw_by_run` (baseline and noise width per board and run) and `blnw_by_pixel` (per pixel), `tdc_pixel_hists` and `tdc_cal_modes` (TDC codes of one pixel per chip, CAL mode of every pixel), and from the track files `triples`, `tot_pixel_medians`, `tot_pooled_summary`, `tot_pooled_hist`, `dtoa_triples`, `dtoa_pooled_hist`, `pixel_hists` (the fixed pixels' TOT in ns and in TOT codes, and their TOA difference) and `rfsel_pair_hist` (the RFSel pairs and their time-control group) (columns in `campaigns/irrad_2026_inputs.md`). The rebuild: `python -m etroc_plots.frontend.rebuild --out DIR [--part blnw\|tdc\|tracks] [--runs ...] [--rank rows\|bytes]`, run from `TestBeam/` (the track part imports the pipeline's time-walk solver, `condor_at_lxplus/core/twc_solver.py`); on one lxplus core the TDC part took 5.5 min and the track part 87 min for 30 runs (about three minutes per run). `--rank rows` (the default) gives each pixel the triple with the most events, `--rank bytes` the largest file, the rule of the first presented figures. The BL/NW part reads the scan histories on the LPC EOS: `--part blnw` with `ETROC_BLNW_ROOT` pointing at copies of them (and `ETROC_RUN_METADATA_ROOT` at copies of the run folders where those are out of reach) rebuilds both BL/NW tables in seconds; the published ones (2026-10-18) agree with the earlier build of `blnw_by_run.csv` in every cell |
 | `inputs.py` | the input check every notebook runs first |
 | `lv_log.py` | the July LV power log: its file-spans table builder, the LV-off periods and the LV-on time before a run |
 | `CONVENTIONS.md` | the rules every figure follows |
+
+## Data quality: the IRRAD 2026 readout was saturated
+
+The IRRAD 2026 beam loops (H1 and F1 telescopes, March and July campaigns) were recorded with the
+KCU105 readout saturated. Measured on the raw loop files in October 2026: 47 to 81 % of the ETROC2
+packets reached disk without their header, the DAQ FIFO reported `global_full` on 14 to 23 % of
+the records, and 5 to 14 % of the packets that kept their header fail their CRC. The decoding step
+discards every headerless hit, so the hit tables behind every IRRAD figure drawn from readout hits
+hold roughly a quarter to a half of the hits the chips sent, selected by the state of the readout
+buffers at the time. Three loops are exceptions (H1 March run 21, clean; F1 July run 59 and H1
+July run 51, 8 and 17 % of the packets without their header); the DESY May and August 2026 data
+are clean.
+
+What this means for the figures here:
+
+- Time-resolution, time-walk, TOT, TOA and CAL figures are measurements on the surviving hits.
+  The TDC values of those hits are not corrupted: every complete packet of the clean files passes
+  its CRC (the decoding does not check it, so the IRRAD packets that fail it are kept). Whether
+  the selection by buffer state biases the resolution, the TOT or the time walk is open and needs
+  a dedicated comparison (resolution against the headerless share per loop); until it runs, read
+  these results as valid for the surviving hits with the selection bias unquantified.
+- Anything count-, rate- or efficiency-like on the IRRAD 2026 data (hit counts, occupancy, events
+  per pixel, the `n_pixels` of a board fit when it is limited by hits) measures DAQ loss, not the
+  sensor. No figure in this package quotes an efficiency; the pixel counts it prints are
+  populations of the surviving sample.
+- The baseline and noise width come from the autocalibration scans, not from readout hits, and
+  are unaffected; so are the IV scans, the bias currents and V_gl.
+
+Every frontend figure drawn from readout hits (fe03-fe16: the TDC codes and CAL maps from the
+merged hits, the TOT and TOA difference from the track files) ends its footer with the line
+"Hits and pixel counts are the surviving readout sample, selected by buffer state; see README,
+Data quality." (`READOUT_FOOTER` in the campaign module). Figures fe01-fe02 do not carry it: they
+are drawn from the autocalibration scans, not from event readout.
+
+The maps figures (maps01-maps18) are drawn from the resolution tables, not from the hits directly.
+Their only count of readout data is a pixel count, so each of their footers ends with the shorter
+line "Pixel counts are the surviving readout sample." (`SURVIVING_TEXT` in the maps notebook).
+
+The per-loop census and the readout mechanism are documented with the DAQ work and will be
+published with it.
 
 ## Running a notebook
 
@@ -39,9 +81,9 @@ lists, chips, fluence steps, input locations). No data lives in the repository.
         --ExecutePreprocessor.timeout=600
     cd ../.. && python3 -m etroc_plots.checks $ETROC_FIGURES/iv
 
-or open `iv.ipynb` in Jupyter and run all cells; the same for `merged.ipynb`, `maps.ipynb` and
-`overview.ipynb`, whose figures go to `$ETROC_FIGURES/merged`, `$ETROC_FIGURES/maps` and
-`$ETROC_FIGURES/overview`. Without `ETROC_FIGURES` the figures go to `figures/iv/` in the notebook's
+or open `iv.ipynb` in Jupyter and run all cells; the same for `merged.ipynb`, `maps.ipynb`,
+`overview.ipynb` and `frontend.ipynb`, whose figures go to `$ETROC_FIGURES/merged`,
+`$ETROC_FIGURES/maps`, `$ETROC_FIGURES/overview` and `$ETROC_FIGURES/frontend`. Without `ETROC_FIGURES` the figures go to `figures/iv/` in the notebook's
 folder; check them from `TestBeam/` with
 `python3 -m etroc_plots.checks etroc_plots/notebooks/figures/iv`. The inputs are on EOS, in an area
 that needs a share from its owner; `campaigns/irrad_2026_inputs.md` says where they are and how to
@@ -78,17 +120,20 @@ If `~/.local` holds packages that clash with LCG_104d (a second pandas, say), ru
    the tables folder), point `INPUTS_MANIFEST` at it, and describe the tables in
    `campaigns/<name>_inputs.md`.
 2. Start the campaign's notebook from a copy of `notebooks/iv.py` (or `merged.py`, `maps.py`,
-   `overview.py`) and set `CAMPAIGN = "<name>"` in its setup cell. The notebooks themselves are
+   `overview.py`, `frontend.py`) and set `CAMPAIGN = "<name>"` in its setup cell. The notebooks themselves are
    written for IRRAD 2026: their per-figure choices name that campaign's scans, chips and runs (in
    `merged.py`: the constants cell under "The tables and the merges", `TABLE_CAMPAIGN`, `DATA_TEXT`
    and `MERGES`; in `maps.py`: the constants cell under "The tables and the runs", `JULY_SETTINGS`
    (the settings of the display runs taken from the display-run list; `RUNS` is made from these and
-   the campaign's `MARCH_DISPLAY_RUNS`), `PAIR_FLUENCE`, `PAIR_RUNS`, `DEFAULT_RFSEL`,
+   the campaign's `MARCH_DISPLAY_RUNS`), `PAIR_FLUENCE`, `PAIR_RUNS` (made from the campaign's
+   `COOLDOWN_PAIRS`), `DEFAULT_RFSEL`,
    `CAMPAIGN_TEXT`, `RUNS_TEXT`, `PAIR_RUNS_TEXT` and `BLOCK_TITLE`; the maps' colour scale and fit
    threshold are `VMIN`, `VMAX` and `N_MIN_FIT` in `resolution/pixel_maps.py`, whose layouts draw
    four boards per telescope; in `overview.py`: the words and setup facts in each figure's cell and
    `TIMELINE_FOOTER`, while the sensors, beam, run folders, LV log folders and March display runs
-   are in the campaign module). An exported `ETROC_CAMPAIGN` must match `CAMPAIGN` (the notebook
+   are in the campaign module; in `frontend.py`: the words in each figure's cell and the CAL colour
+   scales, while the runs (`MARCH_DISPLAY_RUNS`, `COOLDOWN_PAIRS`, `FRONTEND_JULY_SETTINGS`) and the
+   sources of the front-end tables are in the campaign module). An exported `ETROC_CAMPAIGN` must match `CAMPAIGN` (the notebook
    stops otherwise); for the command-line modules, such as
    `python3 -m etroc_plots.iv.preirrad_current`, it alone chooses the campaign. The campaign is
    read once, on the first `etroc_plots` import.
