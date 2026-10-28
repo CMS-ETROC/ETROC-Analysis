@@ -134,3 +134,9 @@ as reproducible as this file: when a number shown on the figure is not in it, ad
   sample." (`SURVIVING_TEXT` in its notebook: the maps notebook).
 - A figure drawn from autocalibration scans, from IV or slow-control logs, or from DESY data
   only carries neither.
+
+## Time-walk transfer tables
+
+How the tables behind the time-walk transfer (universality) figures are made, from the study's
+cells to the files the reduction reads, and which of them reproduce the published ones byte for
+byte, is in `TestBeam/twc_transfer/README.md`.
