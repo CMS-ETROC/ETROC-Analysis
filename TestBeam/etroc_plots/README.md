@@ -21,6 +21,7 @@ lists, chips, fluence steps, input locations). No data lives in the repository.
 | `notebooks/overview.ipynb` (and `overview.py`) | the CERN IRRAD 2026 setup and method as schematics (telescope, beam profile, boards, track selection, the RFSel setting) and the timeline of both campaigns, 6 figures |
 | `notebooks/frontend.ipynb` (and `frontend.py`) | the CERN IRRAD 2026 front end: baseline and noise width of every board against fluence and before / after cooling down, the CAL, TOA and TOT codes and CAL-code maps at 1.5e15 before / after cooling down, and the TOT and the time-walk-corrected TOA difference of the tracks against fluence (boards and single pixels), and the TOT of one chip at two RFSel settings and at fixed settings over time, 16 figures; about 80 s on one lxplus core |
 | `notebooks/universality.ipynb` (and `universality.py`) | whether a time-walk correction fitted on one run, board or pixel carries over to another: one pixel's correction against TOT across angle (DESY May 2026), bias and fluence (CERN IRRAD March 2026) and from March to July; then the pair penalty of transferring: against how much of the target's TOT the source covers and how far it reaches beyond it, per main question of the study, before and after a linear refit, the August settings steps and three controls; 6 figures; about 50 s on one lxplus core |
+| `notebooks/settings.ipynb` (and `settings.py`) | the time resolution of every board at the last July step of CERN IRRAD 2026 (bookkeeping fluence 3.5e15) against the front-end settings its runs stepped: the threshold offset at RFSel 2, the settings class (RFSel, offset), and the step from RFSel 2 to 3; then the threshold over the noise of every board (offset over the median noise width of its pixels, with their 16-84 % range), the resolution against it, the baseline and noise width against RFSel, and what RFSel changes by design beside what one chip shows when it steps; 7 figures; about 45 s on one lxplus core |
 | `campaigns/irrad_2026.py` | that campaign: header text, telescopes and chips, fluence ladder, scan catalogue, run settings, input locations |
 | `campaigns/desy_2026.py` | facts of the DESY May and August 2026 runs that the universality figures draw beside IRRAD: beam, run settings from the run-config yamls, the offset-holder runs |
 | `campaigns/irrad_2026_inputs.md` | every input table (contents, origin), where the inputs live, the environment variables that move them; checksums in `irrad_2026_inputs.md5` |
@@ -28,13 +29,13 @@ lists, chips, fluence steps, input locations). No data lives in the repository.
 | `etroc_style.py` | the mplhep CMS style underneath it, the overlap audit (texts, arrows and tagged marks), single-panel export |
 | `checks.py` | the house rules as code, run on every figure as it is drawn and on an output folder afterwards |
 | `iv/` | IV loaders and drawing helpers: March slow-control logs, July HV-monitor extracts, k-factor and V_gl |
-| `resolution/` | the test-beam result tables: readers, the reference-combination selection, the combination band, run settings; the pixel-map layouts |
-| `overview/` | the setup and method schematics, and the campaign timeline with its run-time table builder |
+| `resolution/` | the test-beam result tables: readers, the reference-combination selection, the combination band, run settings, the settings classes of one fluence step; the pixel-map layouts; the settings figures (`settings.py`: the settings guard, the threshold over the noise and its figures, the slot layouts, the layout audit) |
+| `overview/` | the setup and method schematics (among them the RFSel block diagram, alone or beside a measured RFSel pair), and the campaign timeline with its run-time table builder |
 | `frontend/` | the 12 front-end tables, their rebuild and drawing. The tables: `blnw_by_run` (baseline and noise width per board and run) and `blnw_by_pixel` (per pixel), `tdc_pixel_hists` and `tdc_cal_modes` (TDC codes of one pixel per chip, CAL mode of every pixel), and from the track files `triples`, `tot_pixel_medians`, `tot_pooled_summary`, `tot_pooled_hist`, `dtoa_triples`, `dtoa_pooled_hist`, `pixel_hists` (the fixed pixels' TOT in ns and in TOT codes, and their TOA difference) and `rfsel_pair_hist` (the RFSel pairs and their time-control group) (columns in `campaigns/irrad_2026_inputs.md`). The rebuild: `python -m etroc_plots.frontend.rebuild --out DIR [--part blnw\|tdc\|tracks] [--runs ...] [--rank rows\|bytes]`, run from `TestBeam/` (the track part imports the pipeline's time-walk solver, `condor_at_lxplus/core/twc_solver.py`); on one lxplus core the TDC part took 5.5 min and the track part 87 min for 30 runs (about three minutes per run). `--rank rows` (the default) gives each pixel the triple with the most events, `--rank bytes` the largest file, the rule of the first presented figures. The BL/NW part reads the scan histories on the LPC EOS: `--part blnw` with `ETROC_BLNW_ROOT` pointing at copies of them (and `ETROC_RUN_METADATA_ROOT` at copies of the run folders where those are out of reach) rebuilds both BL/NW tables in seconds; the published ones (2026-10-18) agree with the earlier build of `blnw_by_run.csv` in every cell |
 | `universality/` | the TWC-transfer study's tables, their reduction and the TWC curves. The six tables (`univ_cells`, `univ_master_cells`, `univ_axis_r2`, `univ_axis_F_wide`, `univ_axis_F_long`, `twc_bank_best`; columns in `campaigns/irrad_2026_inputs.md`) are made by `python -m etroc_plots.universality.reduce --out DIR` (the study's files read by default from their copy in `universality/results/` of the inputs), run from `TestBeam/` on lxplus, in about 15 s on one core; `transfer.py` reads them (with the study's verdict override) and holds the curve arithmetic, `curves.py` draws the curves, `levels.py` the pair-penalty figures |
 | `inputs.py` | the input check every notebook runs first |
 | `lv_log.py` | the July LV power log: its file-spans table builder, the LV-off periods and the LV-on time before a run |
-| `tests/` | pytest tests (how to run them: under Running a notebook): `test_frontend.py` (14 tests) of the code that builds the frontend tables: the TOT code inversion and its bins, the RFSel group rows, the runs of the fluence ladder, the run set of the rebuild, the hits stated in the code boxes, the colour range of the CAL difference maps and the BL/NW tables built from synthetic scans; `test_universality.py` (19 tests) of the universality readers: the study's verdict override, the axis tables the reduction composes, the self-transfer flag and the rows left out by it, the axis-F rows, the DESY beam of a set of runs, the DESY chip names and the reduction's default study folder |
+| `tests/` | pytest tests (how to run them: under Running a notebook): `test_frontend.py` (14 tests) of the code that builds the frontend tables: the TOT code inversion and its bins, the RFSel group rows, the runs of the fluence ladder, the run set of the rebuild, the hits stated in the code boxes, the colour range of the CAL difference maps and the BL/NW tables built from synthetic scans; `test_universality.py` (19 tests) of the universality readers: the study's verdict override, the axis tables the reduction composes, the self-transfer flag and the rows left out by it, the axis-F rows, the DESY beam of a set of runs, the DESY chip names and the reduction's default study folder; `test_settings.py` (25 tests) of the settings helpers (the settings classes drawing a merge only when the good-run list marks it good, the settings guard, the threshold over the noise from the per-pixel noise widths (a merge's pooled scans too), the small open marker of a board under 128 pixels, the slot positions, the offset markers, the layout audit, the BL/NW point offsets, the RFSel pair readers) |
 | `CONVENTIONS.md` | the rules every figure follows |
 
 ## Data quality: the IRRAD 2026 readout was saturated
@@ -80,6 +81,11 @@ The maps figures (maps01-maps18) are drawn from the resolution tables, not from 
 Their only count of readout data is a pixel count, so each of their footers ends with the shorter
 line "Pixel counts are the surviving readout sample." (`SURVIVING_TEXT` in the maps notebook).
 
+The settings figures st01-st05 are drawn from the resolution tables too, and give the shorter
+line after the pixel counts of their small open markers. Figure st07 also draws the TOT of the
+track files, so its footer ends with the full line. Figure st06 is drawn from the
+autocalibration scans and carries neither.
+
 The per-loop census and the readout mechanism are documented with the DAQ work and will be
 published with it.
 
@@ -92,8 +98,9 @@ published with it.
     cd ../.. && python3 -m etroc_plots.checks $ETROC_FIGURES/iv
 
 or open `iv.ipynb` in Jupyter and run all cells; the same for `merged.ipynb`, `maps.ipynb`,
-`overview.ipynb`, `frontend.ipynb` and `universality.ipynb`, whose figures go to `$ETROC_FIGURES/merged`,
-`$ETROC_FIGURES/maps`, `$ETROC_FIGURES/overview`, `$ETROC_FIGURES/frontend` and `$ETROC_FIGURES/universality`. Without `ETROC_FIGURES` the figures go to `figures/iv/` in the notebook's
+`overview.ipynb`, `frontend.ipynb`, `universality.ipynb` and `settings.ipynb`, whose figures go to
+`$ETROC_FIGURES/merged`, `$ETROC_FIGURES/maps`, `$ETROC_FIGURES/overview`, `$ETROC_FIGURES/frontend`,
+`$ETROC_FIGURES/universality` and `$ETROC_FIGURES/settings`. Without `ETROC_FIGURES` the figures go to `figures/iv/` in the notebook's
 folder; check them from `TestBeam/` with
 `python3 -m etroc_plots.checks etroc_plots/notebooks/figures/iv`. The inputs are on EOS, in an area
 that needs a share from its owner; `campaigns/irrad_2026_inputs.md` says where they are and how to
