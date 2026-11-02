@@ -414,8 +414,9 @@ for the full flag list.
 
 | Script | Purpose |
 |---|---|
-| `get_my_job_list.sh` | Dumps your condor job history into a summary table. |
-| `get_job_completion_info.sh <cluster_id>` | Summarizes exit/termination info for a given condor cluster. |
+| `job_outcomes_from_logs.py [PATH ...] [--cluster ID ...]` | Per-cluster job outcomes (done/running/held/aborted, exit codes) read from the job event logs under `condor_logs/`; no schedd query. Use this first. |
+| `get_my_job_list.sh [condor_logs dir]` | Lists every cluster found in the job event logs with its `condor_q -userlog` totals line; local files only, no schedd query. |
+| `get_job_completion_info.sh <job event log> [...]` | Completed/running/held counts and exit-code tally for the jobs in a job event log, via `condor_history -userlog`; local files only. Never query the schedd for accounting: `condor_history` without `-limit`, or with a `-limit` larger than the number of matching jobs, scans every history file for hours (CERN HTCondor service notice, 2026-09-16). |
 | `print_file_size_table.py` | Prints row/event counts per dataframe in a directory. |
 | `find_cal_per_file.py` | Computes CAL-code mean/mode per input file, saved to sqlite. |
 | `extract_twc_coeffs.py` | Fits time-walk-correction (TWC) polynomial coefficients per board. |
