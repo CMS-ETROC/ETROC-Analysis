@@ -39,7 +39,7 @@ import numpy as np
 import pandas as pd
 
 from . import campaigns
-from .cell import CELL_COLUMNS
+from .cell import CELL_COLUMNS, ENSEMBLE_COLUMNS, ENSEMBLE_COLUMNS_V1
 from .naming import log
 from .stats import (holm, kcal_from_cells, margin_for, p_nonequiv, random_effects,
                     source_random_effect, tost)
@@ -80,7 +80,10 @@ def read_cells(files):
     """The cell tables in `files`, stacked; every column of CELL_COLUMNS present.
 
     A file without arm, kind, name and value is skipped with a line; a table with another
-    column set is aggregated on the shared columns, the missing ones NaN. The side-car
+    column set is aggregated on the shared columns, the missing ones NaN. The table of a cell
+    with a subsampled source (CELL_COLUMNS + ENSEMBLE_COLUMNS, SPEC.md 3c) is a cell table
+    like any other: its extra columns travel into delta_by_triple.csv, and its family is the
+    one its cov_C .. extrap carry (--src-range of the cell). The side-car
     <table without .csv>.lpo_shape.json of a cell run with --lpo-fallback own is merged in
     memory as the column lpo_shape (one JSON text per tgt_triple, NaN for a triple it does not
     name); it is not a cell-table column."""
@@ -91,7 +94,8 @@ def read_cells(files):
         if miss:
             log("agg: skipping %s (not a cell table: missing %s)" % (os.path.basename(f), miss))
             continue
-        if list(t.columns) != CELL_COLUMNS:
+        if list(t.columns) not in (CELL_COLUMNS, CELL_COLUMNS + ENSEMBLE_COLUMNS,
+                                   CELL_COLUMNS + ENSEMBLE_COLUMNS_V1):
             log("agg: %s has another cell schema (%d columns, not the %d of CELL_COLUMNS); "
                 "aggregating it on the shared columns only"
                 % (os.path.basename(f), len(t.columns), len(CELL_COLUMNS)))
@@ -557,6 +561,11 @@ def aggregate(df, baseline="self_cf", f_inflate=1.0, f_source="explicit", nmin_e
                      if "lever_X_all" in g_ else np.nan)
         if have_shape_col:
             row_d["lpo_shape"] = shape_map.get((cell, kind, name), "")
+        if "src_cap" in g_:
+            # a member of an ensemble (SPEC.md 3c): its cap, seed and source rank, constant
+            # over the cell, so that a table of members is read without parsing cell ids
+            for k_ in ("src_cap", "src_seed", "src_rank"):
+                row_d[k_] = g_[k_].iloc[0] if k_ in g_ else np.nan
         rows.append(row_d)
     if n_lpo_ctrl:
         log("agg: %d xfer_lpo pair row(s) marked non-primary: the pair without the transferred "
