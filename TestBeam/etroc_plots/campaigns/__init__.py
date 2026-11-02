@@ -10,7 +10,9 @@ The package README (etroc_plots/README.md, "A new campaign") gives the steps to 
 campaign. REQUIRED lists the names each part of the package reads: every figure needs the
 "style" names, the IV helpers and the IV notebook also the "iv" names, the resolution helpers and
 their notebooks the "resolution" names, the overview helpers and notebook the "overview" names,
-the frontend helpers and notebook the "frontend" names.
+the frontend helpers and notebook the "frontend" names, the universality helpers and notebook
+the "universality" names. desy_2026.py is not a campaign of this kind: it holds the DESY 2026
+facts the universality figures state, is imported by name, and ETROC_CAMPAIGN never selects it.
 Importing a part stops with the list of names the campaign module is missing.
 """
 import importlib
@@ -50,8 +52,8 @@ REQUIRED = {
     "resolution": (
         "BAND_STEPS", "BOARD_TABLE", "BOARD_TABLE_MERGED", "COOLDOWN_PAIRS",
         "DISPLAY_RUNS_JUL_CSV", "FLUENCE_CONVENTION", "INPUTS", "INPUTS_MANIFEST",
-        "MARCH_DISPLAY_RUNS", "MERGE_COST_CSV", "PIXEL_TABLE", "PIXEL_TABLE_MERGED",
-        "RUNS_SUMMARY_CSV", "TABLE_CAMPAIGN", "TABLE_TEL",
+        "MARCH_DISPLAY_RUNS", "MARCH_RFSEL", "MERGE_COST_CSV", "PIXEL_TABLE",
+        "PIXEL_TABLE_MERGED", "RUNS_SUMMARY_CSV", "TABLE_CAMPAIGN", "TABLE_TEL",
     ),
     # setup facts, run times and the campaign's time marks, read by etroc_plots.overview
     "overview": (
@@ -67,12 +69,24 @@ REQUIRED = {
         "ANALYSIS_DIRS", "BLNW_CSV", "BLNW_SQLITE_UTC_OFFSET_H", "BLNW_SQLITES", "COOLDOWN_PAIRS",
         "DECODED_DIRS", "DISPLAY_RUNS_JUL_CSV", "DTOA_POOLED_HIST_CSV", "DTOA_TRIPLES_CSV",
         "FLUENCE_CONVENTION", "FLUENCE_TEXT_PLAIN", "FRONTEND_JULY_SETTINGS", "FRONTEND_RUNS",
-        "INPUTS", "INPUTS_MANIFEST", "LADDER_EXTRA_RUNS", "MARCH_DISPLAY_RUNS", "PIXEL_HISTS_CSV",
-        "RAD_STOP_UTC", "RFSEL_PAIR_HIST_CSV", "RFSEL_TOT_PAIRS", "RUN_LIST_YAML",
+        "INPUTS", "INPUTS_MANIFEST", "LADDER_EXTRA_RUNS", "MARCH_DISPLAY_RUNS", "MARCH_RFSEL",
+        "PIXEL_HISTS_CSV", "RAD_STOP_UTC", "RFSEL_PAIR_HIST_CSV", "RFSEL_TOT_PAIRS",
+        "RUN_LIST_YAML",
         "RUN_METADATA_DIRS", "RUN_TIMES_CSV", "RUNS_SUMMARY_CSV", "TABLE_CAMPAIGN", "TABLE_TEL",
         "TDC_CAL_MODES_CSV", "TDC_PIXEL_HISTS_CSV", "TOT_POOLED_HIST_CSV",
         "TOT_POOLED_SUMMARY_CSV", "TOT_PIXEL_MEDIANS_CSV", "TOT_TIME_CONTROL", "TRIPLES_CSV",
         "READOUT_FOOTER",
+    ),
+    # TWC-transfer tables, the study outputs they are reduced from, and the IRRAD run facts the
+    # universality figures state, read by etroc_plots.universality and notebooks/universality.py
+    "universality": (
+        "ANGLE_TEXT", "BEAM_TEXT", "CAMPAIGN", "FLUENCE_CONVENTION", "GOOD_RUNS_CAMPAIGN",
+        "GOOD_RUNS_CAMPAIGN_MARCH", "GOOD_RUNS_CSV", "GOOD_RUNS_TEL", "INPUTS", "INPUTS_MANIFEST",
+        "INPUTS_UNIVERSALITY", "MARCH_DISPLAY_RUNS", "MARCH_RFSEL", "READOUT_FOOTER",
+        "RUNS_SUMMARY_CSV", "TABLE_CAMPAIGN", "TABLE_TEL", "TWC_BANK_BEST_CSV", "TWC_RESULTS_ROOT",
+        "TWC_TRANSFER_ROOT", "UNIV_AGG_DIRS", "UNIV_AXIS_F_LONG_CSV", "UNIV_AXIS_F_WIDE_CSV",
+        "UNIV_AXIS_R2_CSV", "UNIV_AXIS_SOURCES", "UNIV_CELLS_CSV", "UNIV_EXCLUDED_STEPS",
+        "UNIV_MASTER_CSV",
     ),
 }
 

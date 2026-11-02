@@ -20,7 +20,9 @@ lists, chips, fluence steps, input locations). No data lives in the repository.
 | `notebooks/maps.ipynb` (and `maps.py`) | per-pixel time-resolution maps of CERN IRRAD 2026, one run per fluence step, 18 figures |
 | `notebooks/overview.ipynb` (and `overview.py`) | the CERN IRRAD 2026 setup and method as schematics (telescope, beam profile, boards, track selection, the RFSel setting) and the timeline of both campaigns, 6 figures |
 | `notebooks/frontend.ipynb` (and `frontend.py`) | the CERN IRRAD 2026 front end: baseline and noise width of every board against fluence and before / after cooling down, the CAL, TOA and TOT codes and CAL-code maps at 1.5e15 before / after cooling down, and the TOT and the time-walk-corrected TOA difference of the tracks against fluence (boards and single pixels), and the TOT of one chip at two RFSel settings and at fixed settings over time, 16 figures; about 80 s on one lxplus core |
+| `notebooks/universality.ipynb` (and `universality.py`) | whether a time-walk correction fitted on one run, board or pixel carries over to another: one pixel's correction against TOT across angle (DESY May 2026), bias and fluence (CERN IRRAD March 2026) and from March to July; then the pair penalty of transferring: against how much of the target's TOT the source covers and how far it reaches beyond it, per main question of the study, before and after a linear refit, the August settings steps and three controls; 6 figures; about 50 s on one lxplus core |
 | `campaigns/irrad_2026.py` | that campaign: header text, telescopes and chips, fluence ladder, scan catalogue, run settings, input locations |
+| `campaigns/desy_2026.py` | facts of the DESY May and August 2026 runs that the universality figures draw beside IRRAD: beam, run settings from the run-config yamls, the offset-holder runs |
 | `campaigns/irrad_2026_inputs.md` | every input table (contents, origin), where the inputs live, the environment variables that move them; checksums in `irrad_2026_inputs.md5` |
 | `style.py` | the house look: header, footer, legends, colours, saving figures and values files |
 | `etroc_style.py` | the mplhep CMS style underneath it, the overlap audit (texts, arrows and tagged marks), single-panel export |
@@ -29,8 +31,10 @@ lists, chips, fluence steps, input locations). No data lives in the repository.
 | `resolution/` | the test-beam result tables: readers, the reference-combination selection, the combination band, run settings; the pixel-map layouts |
 | `overview/` | the setup and method schematics, and the campaign timeline with its run-time table builder |
 | `frontend/` | the 12 front-end tables, their rebuild and drawing. The tables: `blnw_by_run` (baseline and noise width per board and run) and `blnw_by_pixel` (per pixel), `tdc_pixel_hists` and `tdc_cal_modes` (TDC codes of one pixel per chip, CAL mode of every pixel), and from the track files `triples`, `tot_pixel_medians`, `tot_pooled_summary`, `tot_pooled_hist`, `dtoa_triples`, `dtoa_pooled_hist`, `pixel_hists` (the fixed pixels' TOT in ns and in TOT codes, and their TOA difference) and `rfsel_pair_hist` (the RFSel pairs and their time-control group) (columns in `campaigns/irrad_2026_inputs.md`). The rebuild: `python -m etroc_plots.frontend.rebuild --out DIR [--part blnw\|tdc\|tracks] [--runs ...] [--rank rows\|bytes]`, run from `TestBeam/` (the track part imports the pipeline's time-walk solver, `condor_at_lxplus/core/twc_solver.py`); on one lxplus core the TDC part took 5.5 min and the track part 87 min for 30 runs (about three minutes per run). `--rank rows` (the default) gives each pixel the triple with the most events, `--rank bytes` the largest file, the rule of the first presented figures. The BL/NW part reads the scan histories on the LPC EOS: `--part blnw` with `ETROC_BLNW_ROOT` pointing at copies of them (and `ETROC_RUN_METADATA_ROOT` at copies of the run folders where those are out of reach) rebuilds both BL/NW tables in seconds; the published ones (2026-10-18) agree with the earlier build of `blnw_by_run.csv` in every cell |
+| `universality/` | the TWC-transfer study's tables, their reduction and the TWC curves. The six tables (`univ_cells`, `univ_master_cells`, `univ_axis_r2`, `univ_axis_F_wide`, `univ_axis_F_long`, `twc_bank_best`; columns in `campaigns/irrad_2026_inputs.md`) are made by `python -m etroc_plots.universality.reduce --out DIR` (the study's files read by default from their copy in `universality/results/` of the inputs), run from `TestBeam/` on lxplus, in about 15 s on one core; `transfer.py` reads them (with the study's verdict override) and holds the curve arithmetic, `curves.py` draws the curves, `levels.py` the pair-penalty figures |
 | `inputs.py` | the input check every notebook runs first |
 | `lv_log.py` | the July LV power log: its file-spans table builder, the LV-off periods and the LV-on time before a run |
+| `tests/` | pytest tests (how to run them: under Running a notebook): `test_frontend.py` (14 tests) of the code that builds the frontend tables: the TOT code inversion and its bins, the RFSel group rows, the runs of the fluence ladder, the run set of the rebuild, the hits stated in the code boxes, the colour range of the CAL difference maps and the BL/NW tables built from synthetic scans; `test_universality.py` (19 tests) of the universality readers: the study's verdict override, the axis tables the reduction composes, the self-transfer flag and the rows left out by it, the axis-F rows, the DESY beam of a set of runs, the DESY chip names and the reduction's default study folder |
 | `CONVENTIONS.md` | the rules every figure follows |
 
 ## Data quality: the IRRAD 2026 readout was saturated
@@ -66,6 +70,12 @@ merged hits, the TOT and TOA difference from the track files) ends its footer wi
 Data quality." (`READOUT_FOOTER` in the campaign module). Figures fe01-fe02 do not carry it: they
 are drawn from the autocalibration scans, not from event readout.
 
+The universality figures with IRRAD runs end their footer with the same line, after the part it
+applies to: un01 (its bias, fluence and March-to-July panels), un02 (the rows of axes D and I),
+un03 (the cells of levels g and h), un04 (the rows of cells F8 to F11, re-scored fluence and
+March-to-July cells) and un06 (its March-to-July panel). Figure un05 draws DESY runs only and does
+not carry it; the DESY 2026 data are clean.
+
 The maps figures (maps01-maps18) are drawn from the resolution tables, not from the hits directly.
 Their only count of readout data is a pixel count, so each of their footers ends with the shorter
 line "Pixel counts are the surviving readout sample." (`SURVIVING_TEXT` in the maps notebook).
@@ -82,8 +92,8 @@ published with it.
     cd ../.. && python3 -m etroc_plots.checks $ETROC_FIGURES/iv
 
 or open `iv.ipynb` in Jupyter and run all cells; the same for `merged.ipynb`, `maps.ipynb`,
-`overview.ipynb` and `frontend.ipynb`, whose figures go to `$ETROC_FIGURES/merged`,
-`$ETROC_FIGURES/maps`, `$ETROC_FIGURES/overview` and `$ETROC_FIGURES/frontend`. Without `ETROC_FIGURES` the figures go to `figures/iv/` in the notebook's
+`overview.ipynb`, `frontend.ipynb` and `universality.ipynb`, whose figures go to `$ETROC_FIGURES/merged`,
+`$ETROC_FIGURES/maps`, `$ETROC_FIGURES/overview`, `$ETROC_FIGURES/frontend` and `$ETROC_FIGURES/universality`. Without `ETROC_FIGURES` the figures go to `figures/iv/` in the notebook's
 folder; check them from `TestBeam/` with
 `python3 -m etroc_plots.checks etroc_plots/notebooks/figures/iv`. The inputs are on EOS, in an area
 that needs a share from its owner; `campaigns/irrad_2026_inputs.md` says where they are and how to
@@ -95,6 +105,10 @@ drawn, the input files read, the commit of the code (with `-dirty` when it had u
 and what the layout audits found. The last command above reads those files back and measures every
 PNG; it exits with status 1 when a figure breaks a rule of `CONVENTIONS.md`, and when the folder
 holds no figures at all.
+
+The tests run from `TestBeam/` in LCG_104d: `python -m pytest -p no:cacheprovider etroc_plots/tests`
+(the tests that read the published tables, axis F and the corrected rows of axes E, J and K, are
+skipped where the universality tables cannot be read).
 
 ## Editing a notebook
 
