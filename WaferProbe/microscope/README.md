@@ -36,6 +36,9 @@ xrdcp -s root://eosuser.cern.ch//eos/user/m/musafdar/HighResImagesDSF/_UBM_${W}_
 export UBM_ROOT=/tmp/$USER/ubm
 ```
 
+The tools need numpy, scipy, Pillow, scikit-image (`census.py`, `sites.py`, `register.py`, `padrow.py`) and
+matplotlib (`census_report.py`). The LCG_104d view has all five.
+
 Copy the image to node-local disk before running a whole-wafer step. Random tile reads through the EOS mount run at
 about 3.5 MB/s, against about 70 MB/s for sequential reads, and the copy takes about 3 minutes.
 - `/tmp` belongs to one node, so run every step on the node that holds the copy, and delete the copy when you are
@@ -66,7 +69,7 @@ Run the pipeline from a work directory outside the repository, calling the scrip
 - **Inputs shipped with the code** are found next to the scripts: `grids_L4.json`, `templates.npz` and
   `../wafer_map.csv`.
 - **The die grades** come from the per-die table `lot_dies.csv`, written by `WaferProbe/plot_lots.py` (in its output
-  folder, `lot_summary/` by default). That script comes with the wafer-probe plotting code of PR #5; its columns
+  folder, `lot_summary/` by default). That script is part of `WaferProbe/`; its columns
   `wafer`, `die`, `grade_pre`, `grade_post` and `detail_post` are what `anomaly.py` reads.
 - **Outputs** go to `./out/<wafer>_peri/`. `grid.py` is the exception: it updates `grids_L4.json` in the repository.
 - **Reference die:** die 64 on every wafer so far.
@@ -201,4 +204,4 @@ cd WaferProbe/microscope && python -m unittest
 - `test_ets.py` writes small synthetic `.ets` files and reads them back. It needs only numpy.
 - `test_gelpack.py` runs the analysis of both gel-pack steps on synthetic images (not the file reading and writing):
   an empty site, a chip without solder bumps, a single chip, a chip cut by the edge of the scan, the chip order, a
-  discoloured bump top and a site with no bump. It needs numpy, scipy and Pillow, as the tools do.
+  discoloured bump top and a site with no bump. It needs numpy, scipy and Pillow.
