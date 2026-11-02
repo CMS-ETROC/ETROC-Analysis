@@ -15,10 +15,11 @@ tested (lot_compare.lot_names), and lots.png puts the lots in the order
 they were tested.
 
 It reads both stages of every wafer as plot_wafer.py does (the newest run
-of each die; there is no --before here), grades each die in both stages with the test both of its
-runs made (lot_compare.like_with_like: pixels, QInj, eFuse and high-power
-check), and writes into --out (default <path>/lot_summary/): lot_dies.csv,
-one row per die of every wafer of the lots given, the figures of each lot,
+of each die; there is no --before here). It grades each die in both stages
+with the test both of its runs made (lot_compare.like_with_like: pixels,
+QInj, eFuse and high-power check). It writes into --out (default
+<path>/lot_summary/): lot_dies.csv, one row per die of every wafer of the
+lots given, the figures of each lot,
 <label>_yield.png, <label>_transitions.png, <label>_edges.png,
 <label>_currents.png and <label>_shorts.png (lot_compare_plots.py), and,
 with two lots or more, lots.png comparing them. Like plot_wafer.py it only

@@ -6,12 +6,12 @@
 with the --path of the wafer run. It reads the die folders of one stage of
 the wafer folder the station wrote,
 <path>/BatchID_<id>_Name_<batch>/WaferID_<id>_Name_<wafer>/<stage>/
-(X for an ID the wafer does not have; the stage pre_ubm or post_ubm), found
-by the name, the ID or both at each level (a folder with X only by its
-name), and writes into the stage folder's plots/
-the tables dies.csv, pixels.csv and qinj.csv (wafer_tables.py) and the
-figures (wafer_plots.py), named by the two folder names, the wafer's labels.
-When the wafer folder holds the other stage as well, it reads that one too
+(X for an ID the wafer does not have; the stage pre_ubm or post_ubm). It
+finds that folder by the name, the ID or both at each level (a folder with X
+only by its name). It writes into the stage folder's plots/ the tables
+dies.csv, pixels.csv and qinj.csv (wafer_tables.py) and the figures
+(wafer_plots.py). The figures are named by the two folder names, the
+wafer's labels. When the wafer folder holds the other stage as well, it reads that one too
 (the newest run of each die) and writes what changed between them into
 <wafer folder>/pre_vs_post/: changes.csv (stage_compare.py) and its
 figures (stage_compare_plots.py); --no-compare skips it. It only reads

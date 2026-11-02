@@ -10,6 +10,20 @@ writes the results and grades the dies. `station.py` carries a copy of its
 grading (`src/grading.py`) and of two small readers, so this folder runs on
 its own; when the station's grading changes, `station.py` follows it.
 
+## Words used here
+
+- **QInj**: charge injection. The test injects a charge into chosen pixels
+  and reads the hits back.
+- **Quick test** and **full scan**: the station's two pixel calibrations. The
+  quick test calibrates 9 pixels (`station.QUICK_PIXELS`), the full scan
+  (`--doFullScan`) all 256. Either can also run QInj and burn or verify the
+  eFuse.
+- **BL/NW**: baseline and noise width, from the pixel calibration.
+- **Finding**: a grade given before the QInj stage (I2C_PIXELS, EFUSE_FAIL,
+  BL_NW_ZERO). The station's map shows only the first finding of a die.
+- **Valid die**: a die the wafer map does not mark invalid (see "Running
+  it": dies 57 and 58 are invalid).
+
 ## Getting the results
 
 The station laptop writes results under
@@ -69,38 +83,49 @@ python plot_wafer.py --path <results dir> --waferStage pre_ubm --batchName N62M2
 python plot_wafer.py --path <results dir> --waferStage pre_ubm --batchID 0 --waferID 3
 ```
 
-It finds the wafer folder by the name, the ID or both of each level
-(`--batchName`, `--batchID`; `--waferName`, `--waferID`): given both, both
-must match, and an ID never finds a folder with `X`, so a wafer without IDs
-is found by its names. It refuses to guess when there is not exactly one
-match, and lists the folders that match (or, when none does, every wafer
-folder under `--path`). It reads the runs of the `--waferStage` folder
-only (`pre_ubm` or `post_ubm`, always given): it stops when the wafer has no
-such folder, naming the stages it does have, and when a run in the folder
-recorded another stage; it warns about runs that recorded no stage and
-about die folders lying directly in the wafer folder, which it does not
+**Finding the wafer.** It finds the wafer folder by the name, the ID or
+both of each level (`--batchName`, `--batchID`; `--waferName`, `--waferID`).
+Given both, both must match. An ID never finds a folder with `X`, so a wafer
+without IDs is found by its names. When there is not exactly one match, it
+stops and lists the folders that match (or, when none does, every wafer
+folder under `--path`).
+
+**Reading one stage.** It reads the runs of the `--waferStage` folder only
+(`pre_ubm` or `post_ubm`, always given). It stops when the wafer has no such
+folder, and names the stages it does have. It also stops when a run in the
+folder recorded another stage. It warns about runs that recorded no stage,
+and about die folders lying directly in the wafer folder, which it does not
 read. It then prints the grade counts and writes into the stage folder's
-`plots/` (`--out` for another folder). A die is represented by its newest run folder
-that holds a `summary.json`, passing over runs aborted with Ctrl+C: the run
-whose grade the station map shows. Two exceptions: a run made by hand with
-`master_run_script.py` counts here but never reaches the map, and a pass
-stopped with Ctrl+C during a die's retry leaves the first attempt standing
-here but no grade on the map. That run stands for the die whatever it
-tested: a newest run without the full scan or charge injection leaves the
-die out of the full-scan maps and blank on the QInj maps, even when an
-older run has them. The station therefore keeps a wafer's full-protocol
-runs under one `--path` and lighter runs (a 9-pixel test, an eFuse verify,
-a data-phase scan) under another; give that other `--path` here to plot
-them apart.
-`--before "2026-09-22 15:30"` (DAQ computer clock) takes the newest run that
-started before that time instead, to see the wafer as it stood then. A die of
-the wafer map without a run grades `NOT_TESTED`; a die the station would not
-step to grades `CONTACT_FAILURE`, from a run folder that holds only the
-`summary.json` `wafer_run.py` wrote for it (no test ran), which stands for
-the die like any other run; neither counts among the dies tested. `--tables-only` skips the
-figures (and warns when `--out` already holds some, which it leaves as they
-are), `--no-qinj` skips reading the QInj data. `--waferMap` overrides the
-die-position map, otherwise the bundled `wafer_map.csv` is used.
+`plots/` (`--out` for another folder).
+
+**The run that stands for a die.** A die is represented by its newest run
+folder that holds a `summary.json`, passing over runs aborted with Ctrl+C.
+That is the run whose grade the station map shows, with two exceptions:
+
+- a run made by hand with `master_run_script.py` counts here but never
+  reaches the map;
+- a pass stopped with Ctrl+C during a die's retry leaves the first attempt
+  standing here, but no grade on the map.
+
+That run stands for the die whatever it tested. A newest run without the
+full scan or QInj leaves the die out of the full-scan maps and blank on the
+QInj maps, even when an older run has them. The station therefore keeps a
+wafer's full-protocol runs under one `--path`, and lighter runs (a 9-pixel
+test, an eFuse verify, a data-phase scan) under another. Give that other
+`--path` here to plot them apart. `--before "2026-09-22 15:30"` (DAQ
+computer clock) takes the newest run that started before that time instead,
+to see the wafer as it stood then.
+
+**Dies without a test.** A die of the wafer map without a run grades
+`NOT_TESTED`. A die the station would not step to grades `CONTACT_FAILURE`.
+Its run folder holds only the `summary.json` that `wafer_run.py` wrote for
+it (no test ran), and that run stands for the die like any other. Neither
+grade counts among the dies tested.
+
+**Other options.** `--tables-only` skips the figures. It warns when `--out`
+already holds some, and leaves them as they are. `--no-qinj` skips reading
+the QInj data. `--waferMap` overrides the die-position map; otherwise the
+bundled `wafer_map.csv` is used.
 
 The bundled map is the station's `configs/wafer_map.csv` with one more
 column, `invalid`: 1 marks a die never to be used. Dies 57 and 58, the two
@@ -115,41 +140,49 @@ them grey with INVALID written across them.
 
 The tables, as csv:
 
-- `dies.csv`, one row per die: grade and map text; for a die graded by a
-  finding before QInj (I2C_PIXELS, EFUSE_FAIL, BL_NW_ZERO) whose QInj stage
-  failed as well, the grade that failure alone gives (`qinj_also_failed`:
-  `NO_LINK_OR_DATA (no data)` when no complete event came,
-  `NO_LINK_OR_DATA (off pattern)` when the events came off the injected
-  pattern, or EFUSE_TRAILER_FAIL on the trailer chip ID alone; the station's
-  map and bin show only the first finding); whether the wafer map
-  marks it invalid (`invalid`), run folder, the wafer stage the run recorded
-  (`wafer_stage`), status and error, whether the run was imported from
-  earlier data by the station's `import_runs.py` (`imported`) and, for the
-  February 2026 import, whether its log shows the switch to high power
-  (`reached_high_power`); the median current and voltage of every
-  rail at power-on, at high power and during QInj (`<rail>_I_on`,
-  `<rail>_I_high`, `<rail>_I_qinj` and `_V_`; the first sweep of each phase is
-  dropped, it can still catch the rails switching: the power-on current at
-  high power, vref ramping at power-on; a run without a power log gets its
-  power-on rail-check reading as `_on`); the rail-check thresholds the run
-  used; the I2C verdicts and failure lists; baseline and noise-width mean and
-  std over the pixels that did not read zero, with the zero readings listed
-  apart; the QInj verdict of the station's check (`qinj_check_*`; over the
-  files after the first, or the last file alone in runs without
-  `qinj_seconds`), the events of all the files read (`qinj_events`; the files
-  are read as one stream, and the records before its first event header and
-  a last event the run's stop cut before its end are left out), the
-  trailers with a nonzero chip status (`qinj_flagged_trailers`), the
-  EA-flagged hit words and the lowest efficiency over the injected pixels; the
-  chuck position at contact minus the station's map position (`dx_um`,
-  `dy_um`); a note on a baseline or noise width that stands out (`bl_nw_note`,
-  see "Baseline and noise-width notes"); and a note on a PASSED die whose
-  analog or digital current, at power-on or at high power, is more than 1.5
-  times the median of the PASSED dies (`current_note`, checked when at least
-  20 dies PASSED; a mark, the grade stays: N62H30 02C7 die 73 passed at
-  571 mA analog at power-on and 687 mA at high power). Power-on logs only two sweeps, so
-  `vref_V_on` is a single reading and can still be settling (1.01-1.11 V on 25
-  dies of N60R91, against 1.00 V at high power).
+- `dies.csv`, one row per die, with:
+  - the grade and the map text;
+  - `qinj_also_failed`, for a die graded by a finding whose QInj stage
+    failed as well: the grade that failure alone gives.
+    `NO_LINK_OR_DATA (no data)` means no complete event came,
+    `NO_LINK_OR_DATA (off pattern)` that the events came off the injected
+    pattern, and EFUSE_TRAILER_FAIL a failure on the trailer chip ID alone.
+    The station's map and bin show only the first finding;
+  - whether the wafer map marks the die invalid (`invalid`), the run
+    folder, the wafer stage the run recorded (`wafer_stage`), status and
+    error;
+  - `imported`: whether the station's `import_runs.py` imported the run from
+    earlier data. For the February 2026 import, `reached_high_power` says
+    whether its log shows the switch to high power;
+  - the median current and voltage of every rail at power-on, at high power
+    and during QInj (`<rail>_I_on`, `<rail>_I_high`, `<rail>_I_qinj` and
+    `_V_`). The first sweep of each phase is dropped, because it can still
+    catch the rails switching (the power-on current at high power, vref
+    ramping at power-on). A run without a power log gets its power-on
+    rail-check reading as `_on`. Power-on logs only two sweeps, so
+    `vref_V_on` is a single reading and can still be settling (1.01-1.11 V
+    on 25 dies of N60R91 03G5, against 1.00 V at high power);
+  - the rail-check thresholds the run used;
+  - the I2C verdicts and failure lists;
+  - baseline and noise-width mean and std over the pixels that did not read
+    zero, with the zero readings listed apart;
+  - the QInj results: the verdict of the station's check (`qinj_check_*`,
+    over the files after the first, or over the last file alone in runs
+    without `qinj_seconds`), the events of all the files read
+    (`qinj_events`), the trailers with a nonzero chip status
+    (`qinj_flagged_trailers`), the EA-flagged hit words and the lowest
+    efficiency over the injected pixels. The files are read as one stream.
+    The records before its first event header are left out, and so is a
+    last event that the run's stop cut before its end;
+  - `dx_um`, `dy_um`: the chuck position at contact minus the station's map
+    position;
+  - `bl_nw_note`: a note on a baseline or noise width that stands out (see
+    "Baseline and noise-width notes");
+  - `current_note`: a note on a PASSED die whose analog or digital current,
+    at power-on or at high power, is more than 1.5 times the median of the
+    PASSED dies. It is checked when at least 20 dies PASSED. It is a mark
+    only and the grade stays: N62H30 02C7 die 73 passed at 571 mA analog at
+    power-on and 687 mA at high power.
 - `pixels.csv`, one row per calibrated pixel: baseline and noise width.
 - `qinj.csv`, one row per pixel with hits in the QInj data (the files of
   `qinj/` after the first, which can hold malformed events from the start of
@@ -165,7 +198,7 @@ The tables, as csv:
   least half of the events of at least half of the QInj dies, used only when
   the run's check expected that many hits per event. A die whose readout
   broke can add rows for pixels it was never injected at (junk words at
-  (0,0) with EA 0: 6 hits, CAL 0, on die 16 of N60R91); the figures show the
+  (0,0) with EA 0: 6 hits, CAL 0, on die 16 of N60R91 03G5); the figures show the
   injected pixels only.
 
 The figures, as png. A figure whose data the runs did not take (no full scan,
@@ -301,15 +334,19 @@ the order they were tested (after UBM, then before).
 
 Each die tested in both stages is graded in both with the test both of its
 runs made (`lot_compare.like_with_like`). The quick test calibrates 9 pixels
-(`station.QUICK_PIXELS`; their first 8 before 2026-09-22 and in the February
-2026 import, which has no baselines at all on some wafers), the full scan
-all 256, and either may run QInj and burn or verify the eFuse. A run loses
-its zero pixels outside the pixels the other run calibrated (or carried
-over from another test: the February import's `bl_nw_zero` findings), its QInj stage
-where the other had none (a run that failed or got stuck there counts as
-completed), and its eFuse record where the other neither burned nor
-verified. The high-power short check came in on 2026-09-26: a run without
-it, where the other made it, is checked on its own high-power currents
+(`station.QUICK_PIXELS`), the full scan all 256. Runs before 2026-09-22
+calibrated only the first 8 of the 9, and so did the February 2026 import,
+which has no baselines at all on some wafers. To compare like with like, a
+run loses:
+
+- its zero pixels outside the pixels the other run calibrated (or carried
+  over from another test: the February import's `bl_nw_zero` findings);
+- its QInj stage where the other run had none (a run that failed or got
+  stuck there counts as completed);
+- its eFuse record where the other run neither burned nor verified.
+
+The station's high-power short check came in on 2026-09-26. A run without
+it, where the other run made it, is checked on its own high-power currents
 against the other run's limits. So a full scan after UBM against a quick
 test before is graded as a quick test. I2C findings compare as recorded,
 and the February import's I2C record is its campaign report's findings
@@ -320,16 +357,16 @@ What happened to each die is one of: passed both, recovered, new analog
 short (the short names the analog rail), new digital short, new short on
 another or an unknown rail, new I2C NACK, new I2C pixel or register failure
 (I2C_PIXELS), new BL/NW = 0 (on the pixels both runs read), new other
-failure (the legends name its grades), failed both, untested in a stage;
-the legends show the classes some die fell into. The dies at risk are the valid dies PASSED
-before UBM and tested after it; fractions of them carry 68 % Wilson
-intervals.
+failure (the legends name its grades), failed both, untested in a stage.
+The legends show only the classes some die fell into. The dies at risk are
+the valid dies PASSED before UBM and tested after it. Fractions of them
+carry 68 % Wilson intervals.
 
 It writes into `--out` (default `<path>/lot_summary/`):
 
 | file | what |
 |---|---|
-| `lot_dies.csv` | one row per die of every wafer of the lots given: the `changes.csv` columns, the lot, the grade detail, run, scan type and rail voltages of each stage, the measured grade of a regraded die, what happened to it, and whether it sits on the wafer map's edge ring |
+| `lot_dies.csv` | one row per die of every wafer of the lots given: the `changes.csv` columns, the lot, the grade detail, run, scan type and rail voltages of each stage, the measured grade of a regraded die, what happened to it, and whether it sits on the wafer map's edge ring (a die with at least one of its four neighbouring places off the map) |
 | `<label>_yield` | per wafer, the dies that did not pass both stages, stacked by what happened to them, with PASSED before -> after |
 | `<label>_transitions` | one wafer map per wafer, each die coloured by what happened to it |
 | `<label>_edges` | per die position, on how many wafers it became a new analog short, or failed newly in any way; the new-failure fraction per map row and per map column; the title compares the edge ring with the interior |

@@ -8,14 +8,15 @@ with the --path of the wafer runs, as for plot_wafer.py. Each --lot names
 the wafers as plot_lots.py does, LABEL=BATCH:WAFER,WAFER,... (all wafers of
 the batch when none are listed). Of each wafer it reads the --stage folder
 (the newest run of each die, as plot_wafer.py; there is no --before
-here), and compares the dies at
-each place across the wafers that have full scans or QInj data there
-(position_compare.py): the die-level baseline, noise width, CAL, TOA and TOT
-by place and the pairwise r of every two wafers, and the pixel maps of
-the dies at the same place against those at different places, with the
-same die measured in the other stage as the reference where both stages
-have its full scan, and the tilt across each die at each place. A wafer
-without such data is named and left out; a lot needs two wafers.
+here). It compares the dies at each place across the wafers that have
+full scans or QInj data there (position_compare.py):
+- the die-level baseline, noise width, CAL, TOA and TOT by place, and the
+  pairwise r of every two wafers;
+- the pixel maps of the dies at the same place against those at different
+  places, with the same die measured in the other stage as the reference
+  where both stages have its full scan;
+- the tilt across each die at each place.
+A wafer without such data is named and left out; a lot needs two wafers.
 
 Wafers tested at different times or setups can go in one lot: every
 measure takes each wafer's own offset out. The figures name the months
