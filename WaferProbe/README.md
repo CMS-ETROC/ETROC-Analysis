@@ -283,11 +283,13 @@ graded I2C_PIXELS after UBM may have been one before.
 
 ```
 python plot_lots.py --path <path> --lot N62C72 --lot N62H30 --lot N62M23
-python plot_lots.py --path <path> --lot "N62C72 earlier UBM=N62C72:02G4,03F5"
+python plot_lots.py --path <path> --lot "N62C72 earlier UBM=N62C72:02G4,03F7"
 ```
 
 puts together the wafers of each lot that have both stage folders, reading
-them as `plot_wafer.py` does (the newest run of each die). A lot is a set of
+them as `plot_wafer.py` does (the newest run of each die). There is no
+`--before` here: a run that should not count has to be moved out of its die
+folder first. A lot is a set of
 wafers that went through UBM and bumping together: `--lot BATCH` takes every
 wafer of the batch, `--lot LABEL=BATCH:WAFER,WAFER` the ones listed, under
 that label. Wafers of one batch sent for UBM at different times are separate
@@ -344,7 +346,8 @@ python plot_positions.py --path <path> --stage pre_ubm --no-qinj --lot "N62C72=N
 
 asks whether the dies at one place on the wafer behave alike on every wafer
 of a lot, in one stage (`--lot` as for `plot_lots.py`). It reads the stage
-folder of each wafer as `plot_wafer.py` does and keeps the wafers with full
+folder of each wafer as `plot_wafer.py` does (the newest run of each die,
+with no `--before`, as in `plot_lots.py`) and keeps the wafers with full
 scans or QInj data there; a lot needs two. Per die it takes the mean
 baseline and noise width of the full scan (pixels reading 0 left out) and
 the mean CAL, TOA and TOT of the pixels every wafer of the lot injected

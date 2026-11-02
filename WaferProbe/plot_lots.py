@@ -1,7 +1,7 @@
 """plot_lots.py -- what UBM and bumping did to the wafers of each lot.
 
     python plot_lots.py --path <path> --lot N62C72 --lot N62H30 --lot N62M23
-    python plot_lots.py --path <path> --lot "N62C72 earlier UBM=N62C72:02G4,03F5"
+    python plot_lots.py --path <path> --lot "N62C72 earlier UBM=N62C72:02G4,03F7"
 
 with the --path of the wafer runs, as for plot_wafer.py. Each --lot names a
 lot as LABEL=BATCH:WAFER,WAFER,...: the wafers of the batch (lot number)
@@ -15,7 +15,7 @@ tested (lot_compare.lot_names), and lots.png puts the lots in the order
 they were tested.
 
 It reads both stages of every wafer as plot_wafer.py does (the newest run
-of each die), grades each die in both stages with the test both of its
+of each die; there is no --before here), grades each die in both stages with the test both of its
 runs made (lot_compare.like_with_like: pixels, QInj, eFuse and high-power
 check), and writes into --out (default <path>/lot_summary/): lot_dies.csv,
 one row per die of every wafer of the lots given, the figures of each lot,
