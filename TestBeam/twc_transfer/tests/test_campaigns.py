@@ -150,6 +150,13 @@ def test_versions_shas_per_wave_and_tables():
         assert any(pub in w[8] for w in C.WAVES), pub
 
 
-def test_readme_carries_the_version_tables():
+def test_readme_carries_the_version_tables_once():
+    """The README holds the two version tables exactly as versions_markdown renders them, and
+    no second copy of either, current or stale."""
     readme = os.path.join(os.path.dirname(C.__file__), "README.md")
-    assert C.versions_markdown() in open(readme).read()
+    text = open(readme).read()
+    tables = C.versions_markdown()
+    assert text.count(tables) == 1
+    for header in (line for line in tables.splitlines() if line.startswith("| wave |")
+                   or line.startswith("| table |")):
+        assert text.count(header) == 1, header

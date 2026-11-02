@@ -8,10 +8,11 @@ run from TestBeam/ where the study's outputs can be read (lxplus: EOS and AFS), 
 them). The study asked whether a time-walk correction (TWC) fitted on one source (a run, a board,
 a pixel) can be applied to another target without losing time resolution; each comparison it ran
 is a "cell". S is the study's folder (default TWC_RESULTS_ROOT: the copy of these files in
-universality/results/ of the inputs, or ETROC_TWC_RESULTS_ROOT), which must hold condor/ (the
-seven job lists below), the axis tables campaign.UNIV_AXIS_SOURCES names
-(results_r2/axis_{A,B,C,D,E,I,J,K}.csv and results_r3/guardfix/axis_{E,J,K}_gf.csv) and
-results_r3/ (axis_F.csv, axis_F_long.csv, summary_F.md). R (default TWC_TRANSFER_ROOT) holds the
+universality/results/ of the inputs, or ETROC_TWC_RESULTS_ROOT), which must hold the axis
+tables campaign.UNIV_AXIS_SOURCES names (results_r2/axis_{A,B,C,D,E,I,J,K}.csv and
+results_r3/guardfix/axis_{E,J,K}_gf.csv) and results_r3/ (axis_F.csv, axis_F_long.csv,
+summary_F.md); the seven job lists below are the twc_transfer package's,
+TestBeam/twc_transfer/jobs/ (JOBS_DIR). R (default TWC_TRANSFER_ROOT) holds the
 coefficient bank, bank/coeffs_<campaign>_<run>.parquet, the first summary table of the level cells,
 figs/transfer_2026-09-04/inputs/master_cells.csv, and the aggregation tables the axis tables were
 built from, tables/agg_<agg_tag>/agg_by_cell.csv (campaign.UNIV_AGG_DIRS names the folders that
@@ -65,9 +66,12 @@ import time
 
 import pandas as pd
 
+from .._paths import REPO_TESTBEAM
 from ..campaigns import active as campaign
 
-# the job lists, in the order they ran: a later list that names a cell again redefines it
+# the job lists, in the order they ran: a later list that names a cell again redefines it; read
+# from the twc_transfer package, which carries them as the study ran them, without their comments
+JOBS_DIR = os.path.join(REPO_TESTBEAM, "twc_transfer", "jobs")
 TSVS = ("cells.tsv", "cells_stage1.tsv", "cells_stage2.tsv", "cells_stage2_held.tsv",
         "cells_stage3.tsv", "cells_rerun.tsv", "cells_guardfix_rerun.tsv")
 TSV_FIELDS = ("job_id", "cell_id", "level", "group", "est_min", "mem_mb", "command")
@@ -99,8 +103,9 @@ def _log(text):
 
 
 def _results_paths(root):
-    """The files of the results folder the reduction reads; stops naming every one missing."""
-    paths = {"tsv:" + n: os.path.join(root, "condor", n) for n in TSVS}
+    """The files the reduction reads, the job lists of JOBS_DIR and the tables of the results
+    folder; stops naming every one missing."""
+    paths = {"tsv:" + n: os.path.join(JOBS_DIR, n) for n in TSVS}
     paths.update({"F_wide": os.path.join(root, "results_r3", "axis_F.csv"),
                   "F_long": os.path.join(root, "results_r3", "axis_F_long.csv"),
                   "summary_F": os.path.join(root, "results_r3", "summary_F.md")})
@@ -111,9 +116,10 @@ def _results_paths(root):
     missing = [p for p in files if not os.path.isfile(p)]
     if missing:
         raise SystemExit("--results-root %s lacks %d of the files the reduction reads (it must "
-                         "hold condor/ with the seven job lists, the axis tables of "
-                         "UNIV_AXIS_SOURCES, results_r3/ with axis_F.csv, axis_F_long.csv and "
-                         "summary_F.md):\n  %s" % (root, len(missing), "\n  ".join(missing)))
+                         "hold the axis tables of UNIV_AXIS_SOURCES and results_r3/ with "
+                         "axis_F.csv, axis_F_long.csv and summary_F.md; the job lists are "
+                         "read from %s):\n  %s" % (root, len(missing), JOBS_DIR,
+                                                  "\n  ".join(missing)))
     return paths
 
 
@@ -526,7 +532,7 @@ def main(argv=None):
                                  description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", required=True, help="folder the tables are written to")
     ap.add_argument("--results-root", default=campaign.TWC_RESULTS_ROOT,
-                    help="the study's folder (condor/, results_r2/, results_r3/); default "
+                    help="the study's folder (results_r2/, results_r3/); default "
                          "TWC_RESULTS_ROOT, universality/results/ of the inputs")
     ap.add_argument("--twc-root", default=campaign.TWC_TRANSFER_ROOT,
                     help="the folder of bank/, figs/ and tables/ (default TWC_TRANSFER_ROOT)")
@@ -538,9 +544,8 @@ def main(argv=None):
     if {"cells", "axes"} & set(parts):
         if not a.results_root:
             ap.error("--results-root (or ETROC_TWC_RESULTS_ROOT) is required: the study's folder, "
-                     "holding condor/ with the seven job lists, the axis tables of "
-                     "UNIV_AXIS_SOURCES and results_r3/ with axis_F.csv, axis_F_long.csv and "
-                     "summary_F.md")
+                     "holding the axis tables of UNIV_AXIS_SOURCES and results_r3/ with "
+                     "axis_F.csv, axis_F_long.csv and summary_F.md")
         paths = _results_paths(a.results_root)
     os.makedirs(a.out, exist_ok=True)
     for part in parts:

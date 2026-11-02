@@ -22,6 +22,15 @@
 #   next to the single-run values (bottom).
 # * Figure 7: the cost of merging, per chip and merge.
 #
+# Data quality. The IRRAD 2026 loops behind these merges were recorded with the readout saturated:
+# 47 to 81 % of the ETROC2 packets lost their header and were dropped at decoding. Every board
+# value and pixel value here is a measurement on the surviving hits, selected by the state of the
+# readout buffers, with the selection bias open. The lower row shows the 16 pixels with the most
+# events in that surviving sample (fewer where a chip has fewer); that count is not a sensor
+# efficiency. Figures 1-6 say so in the last line of their footer. Figure 7 prints no pixel count
+# and carries no such line. Details, and what it means per figure type: the "Data quality"
+# section of `../README.md`.
+#
 # Every figure is saved as PNG (200 dpi) and PDF, with `<name>_values.json` beside it: every
 # number drawn, the input files read and the commit of the code.
 #
@@ -145,6 +154,7 @@ def show(stem):
 VARIANT = "top"        # the most-populated track through each pixel
 FLOOR = "300"          # at least 300 events per track
 N_PIX = 16             # pixels per chip in the lower row: the 16 with the most events in the merge
+SURVIVING_TEXT = u"Pixel counts are the surviving readout sample."   # the last footer line
 TABLE_CAMPAIGN = campaign.TABLE_CAMPAIGN["july"]
 DATA_TEXT = "July 2026"   # the data, as the figure headers name it
 BAND_KEYS = {style.fluence_key(f) for f in campaign.BAND_STEPS}   # snapped to the ladder
@@ -366,7 +376,7 @@ def merged_footer(d):
              + "; ".join(reference)]
     if d["banded"]:
         lines.append("Bands at %s: %s" % (style.fluence_label(d["fluence"]), tables.BAND_FOOTER))
-    return "\n".join(lines)
+    return "\n".join(lines + [SURVIVING_TEXT])
 
 
 def merged_compound(d):
