@@ -164,7 +164,8 @@ print("RUNS (campaign, telescope): runs, lowest fluence first:", RUNS)
 PAIR_FLUENCE = 1.5e15  # figures 17-18: one run per campaign at this fluence
 PAIR_RUNS = {         # telescope -> {campaign: run}, figures 17-18 (March: July's leakage current)
     t: {"march": m, "july": j} for t, (m, j) in campaign.COOLDOWN_PAIRS.items()}
-DEFAULT_RFSEL = {"march": 2}   # campaign -> the RFSel of every run, where runs_summary has none
+# campaign -> the RFSel of every run, where runs_summary has none (the campaign module's MARCH_RFSEL)
+DEFAULT_RFSEL = {"march": campaign.MARCH_RFSEL}
 CAMPAIGN_TEXT = {"march": "March 2026", "july": "July 2026"}   # the campaigns, in drawing order
 RUNS_TEXT = (u"Runs: March, the highest-bias run at threshold offset 20 of each fluence step; "
              u"July, the preferred display run")
