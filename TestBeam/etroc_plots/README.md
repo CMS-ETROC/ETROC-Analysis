@@ -94,6 +94,11 @@ on the figure and in its .md file (the .csv stays a plain table). Figures re11 a
 print a pixel count only in their small-marker line: when they draw no small marker, they print
 no pixel count and carry no line.
 
+The merged-runs figures merged01-merged06 are drawn from the resolution tables too. Each prints
+the pixel count of its lower row (the 16 pixels with the most events in the merge, or fewer),
+so each footer ends with the shorter line. Figure merged07, the cost of merging, prints no pixel
+count and carries no line.
+
 The per-loop census and the readout mechanism are documented with the DAQ work and will be
 published with it.
 

@@ -322,8 +322,10 @@ as reproducible as this file: when a number shown on the figure is not in it, ad
   resolution figures). Every figure that prints a pixel count carries the line, after the pixel
   counts of its small open markers where it draws any (`curves.low_line`). The numbers table re09
   carries it under the table: on the figure, and as the last line of its .md (the .csv stays a
-  plain table). The figures without it print no pixel count: re11 and re16-re18 when they draw
-  no small markers (their small-marker line is their only pixel count). A figure that also
+  plain table). The merged-runs figures merged01-merged06, whose footer gives the pixel count
+  of the lower row (the 16 pixels with the most events in the merge), end their footer with
+  it. The figures without it print no pixel count: re11 and re16-re18 when they draw no small
+  markers (their small-marker line is their only pixel count), and merged07. A figure that also
   draws readout hits ends with `READOUT_FOOTER` instead (st07).
 - A figure drawn from autocalibration scans (fe01-fe02, st06), from IV or slow-control logs, or
   from DESY data only carries neither.
