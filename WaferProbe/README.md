@@ -161,7 +161,7 @@ The tables, as csv:
     ramping at power-on). A run without a power log gets its power-on
     rail-check reading as `_on`. Power-on logs only two sweeps, so
     `vref_V_on` is a single reading and can still be settling (1.01-1.11 V
-    on 25 dies of N60R91 03G5, against 1.00 V at high power);
+    on 39 of the 116 dies of N60R91 03G5, against 1.00 V at high power);
   - the rail-check thresholds the run used;
   - the I2C verdicts and failure lists;
   - baseline and noise-width mean and std over the pixels that did not read
