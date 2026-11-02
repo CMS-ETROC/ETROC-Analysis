@@ -16,11 +16,19 @@
 # The time resolution of every pixel of every chip, as 16 x 16 maps, for one run per telescope
 # and fluence step:
 #
-# * Figures 1-14, one per run: the four chips' maps in a row, and below each map the histogram
-#   of its pixel values with a Gaussian fit.
-# * Figures 15-16, one per telescope: every chip (rows) at every fluence step (columns).
-# * Figures 17-18, one per telescope: each chip at 1.5e15 p/cm$^2$ in March and again in July,
-#   after four months of cooling down.
+# * Figures maps01-maps14, one per run: the four chips' maps in a row, and below each map the
+#   histogram of its pixel values with a Gaussian fit.
+# * Figures maps15-maps16, one per telescope: every chip (rows) at every fluence step (columns).
+# * Figures maps17-maps18, one per telescope: each chip at 1.5e15 p/cm$^2$ in March and again in
+#   July, after four months of cooling down.
+#
+# Data quality. The IRRAD 2026 loops behind these maps were recorded with the readout saturated:
+# 47 to 81 % of the ETROC2 packets lost their header and were dropped at decoding. Every pixel
+# value and board value here is a measurement on the surviving hits, selected by the state of the
+# readout buffers, with the selection bias open. The pixel counts (px) count the pixels with a
+# value in that surviving sample; they are not a sensor efficiency. Each figure says so in the
+# last line of its footer. Details, and what it means per figure type: the "Data quality" section
+# of `../README.md`.
 #
 # Every figure is saved as PNG (200 dpi) and PDF, with `<name>_values.json` beside it: every
 # number drawn, the pixel maps included, the input files read and the commit of the code.
@@ -42,8 +50,8 @@
 # Figures go to `$ETROC_FIGURES/maps/`, by default `figures/maps/` next to this notebook.
 # Setting `PANELS = True` in the setup cell below also writes each panel of a figure as a file of
 # its own next to the compound figure, named `<stem>_01_ih7_map.png`, `<stem>_02_ih7_hist.png`
-# and so on. A panel gets the text-overlap audit of its figure, printed in the notebook's
-# output; it has no values file of its own.
+# and so on. Each panel file is checked for overlapping text, like its figure, and the result is
+# printed in the notebook's output; a panel has no values file of its own.
 #
 # The campaign's table paths live in `../campaigns/irrad_2026.py`, the table readers in
 # `../resolution/tables.py` and the map drawing in `../resolution/pixel_maps.py`. This notebook
@@ -114,17 +122,18 @@ def show(stem):
 # resolution for every board of every 3-board combination of a run, per pixel and per board. The
 # maps use, for each board:
 #
-# * the anointed combination: boards 0-1-2 for boards 0, 1 and 2, boards 1-2-3 for board 3;
+# * the reference combination: boards 0-1-2 for boards 0, 1 and 2, boards 1-2-3 for board 3;
 # * the most-populated track through each pixel (`VARIANT = "top"`);
 # * tracks with at least 300 events (`FLOOR`); a pixel without such a track has no value.
 #
 # A pixel's value is the time resolution the table quotes for it, its error the fit error of
 # that quote. The board value is the table's robust Gaussian mean over the board's pixel map
 # (2.5-sigma clip). At 3.5e15 p/cm$^2$ (`BAND_STEPS` in the campaign module) the board value
-# depends on the combination, so the figures give the centre of the board's values over every
-# combination containing it, with their range; the pixels stay the anointed combination's. The
-# histogram boxes are the exception: they give the anointed combination's value, the one their
-# histogram draws, then the range and centre.
+# depends on the combination, so a board has two numbers there. The maps and histograms always
+# show the reference combination. The board value under a map and on the ladder is the centre of
+# the board's values over every combination containing it, with their range. The histogram box
+# gives the reference combination's value, the one its histogram draws, then that range and
+# centre.
 #
 # `RUNS` names one run per fluence step, lowest fluence first:
 #
@@ -134,9 +143,9 @@ def show(stem):
 #   (`july/display_runs_jul.csv` in the inputs folder) at RFSel 2 and threshold offset 20
 #   (`JULY_SETTINGS`), read by `tables.preferred_runs`.
 #
-# Figures 17-18 take their runs from `PAIR_RUNS` instead: in March the run of the 1.5e15 step
-# whose leakage current matches the July run's, its lowest-bias run (run 17: H1 400 V, F1 265 V);
-# in July the display run of `RUNS` at that step.
+# Figures maps17-maps18 take their runs from `PAIR_RUNS` (the campaign's `COOLDOWN_PAIRS`)
+# instead: in March the run of the 1.5e15 step whose leakage current matches the July run's, its
+# lowest-bias run (run 17: H1 400 V, F1 265 V); in July the display run of `RUNS` at that step.
 #
 # Each run's bookkeeping fluence, threshold offset and RFSel are read from runs_summary, and
 # every board of a run has to share them. runs_summary does not record the RFSel of the March
@@ -153,10 +162,8 @@ RUNS = {(c, t): (campaign.MARCH_DISPLAY_RUNS[t] if c == "march" else _july[t])
         for c in ("march", "july") for t in campaign.TELESCOPE_CHIPS}
 print("RUNS (campaign, telescope): runs, lowest fluence first:", RUNS)
 PAIR_FLUENCE = 1.5e15  # figures 17-18: one run per campaign at this fluence
-PAIR_RUNS = {          # telescope -> {campaign: run}, figures 17-18 (March: July's leakage current)
-    "h1": {"march": 17, "july": 4},
-    "f1": {"march": 17, "july": 9},
-}
+PAIR_RUNS = {         # telescope -> {campaign: run}, figures 17-18 (March: July's leakage current)
+    t: {"march": m, "july": j} for t, (m, j) in campaign.COOLDOWN_PAIRS.items()}
 DEFAULT_RFSEL = {"march": 2}   # campaign -> the RFSel of every run, where runs_summary has none
 CAMPAIGN_TEXT = {"march": "March 2026", "july": "July 2026"}   # the campaigns, in drawing order
 RUNS_TEXT = (u"Runs: March, the highest-bias run at threshold offset 20 of each fluence step; "
@@ -233,12 +240,16 @@ def steps_in_order(camp, tel):
 
 # %% [markdown]
 # ## The words on the figures
+#
+# The text of the footers and captions every figure below shares: the selection, the map frame,
+# the runs, the combination band and the data-quality line.
 
 # %%
-FRAME_TEXT = u"chip frame, pixel (0, 0) at the bottom right"
+FRAME_TEXT = pixel_maps.FRAME_TEXT
 MAPS_TEXT = (u"Maps: %s; one colour scale, %d-%d ps, for every map; grey = no value"
              % (FRAME_TEXT, pixel_maps.VMIN, pixel_maps.VMAX))
 SAT_TEXT = u"sat = pixels outside the colour scale"
+SURVIVING_TEXT = u"Pixel counts are the surviving readout sample."   # the last footer line
 CELLS_TEXT = u"in each cell the pixel's time resolution and its fit error"
 HIST_TEXT = (u"Histograms: pixel values in 1 ps bins over the board value %s 6 pixel spreads, "
              u"Poisson errors, binned Gaussian fit (fit %s, %s) from %d pixels up; board value = "
@@ -247,15 +258,15 @@ HIST_TEXT = (u"Histograms: pixel values in 1 ps bins over the board value %s 6 p
                 pixel_maps.SIGMA))
 BAND_STEPS_TEXT = u" and ".join(style.fluence_label(f) for f in campaign.BAND_STEPS)
 BAND_TEXT = (u"At %s: board value = centre of the chip's values over every combination containing "
-             u"it (range given); pixels from the anointed combination" % BAND_STEPS_TEXT)
-HIST_BAND_TEXT = (u"At %s: maps and histograms from the anointed combination, its board value in "
+             u"it (range given); pixels from the reference combination" % BAND_STEPS_TEXT)
+HIST_BAND_TEXT = (u"At %s: maps and histograms from the reference combination, its board value in "
                   u"the box; combinations = range and centre of the chip's values over every "
                   u"combination containing it" % BAND_STEPS_TEXT)
 LADDER_CAPTION_TEXT = u"under each map: bias, board value, pixels with a value, sat"
 PANEL_TEXT = (u"%s; colour scale %d-%d ps; grey = no value"
               % (FRAME_TEXT, pixel_maps.VMIN, pixel_maps.VMAX))
 PANEL_BAND_TEXT = (u"board value = centre of the chip's values over every combination containing "
-                   u"it; pixels from the anointed combination")
+                   u"it; pixels from the reference combination")
 
 
 def fluence_text(fluence):
@@ -275,15 +286,15 @@ def subject(b):
     return u"%s, %d V" % (b["chip"], int(round(b["hv"])))
 
 
-def value_lines(b, prefix=u"board value ", anointed=True):
+def value_lines(b, prefix=u"board value ", reference=True):
     """The board value as drawn: at BAND_STEPS the band centre, then the band's range and, with
-    `anointed`, the value of the combination the pixels come from."""
+    `reference`, the value of the combination the pixels come from."""
     band = b.get("band")
     if band is None:
         return [u"%s%.1f ps" % (prefix, b["value_ps"])]
     rng = u"combinations %.1f-%.1f ps" % (band["band_lo_ps"], band["band_hi_ps"])
-    if anointed:
-        rng += u", this one %.1f" % band["anointed_ps"]
+    if reference:
+        rng += u", this one %.1f" % band["reference_ps"]
     return [u"%s%.1f ps" % (prefix, band["marker_ps"]), rng]
 
 
@@ -298,7 +309,7 @@ def hist_caption(b):
     if band is None:
         return u"\n".join([pixels_text(b)] + value_lines(b))
     return u"\n".join([pixels_text(b),
-                       u"board value %.1f ps (this combination)" % band["anointed_ps"],
+                       u"board value %.1f ps (this combination)" % band["reference_ps"],
                        u"combinations %.1f-%.1f ps, centre %.1f"
                        % (band["band_lo_ps"], band["band_hi_ps"], band["marker_ps"])])
 
@@ -308,22 +319,25 @@ def panel_caption(b):
     lines = [u"; ".join([pixels_text(b)] + value_lines(b)), PANEL_TEXT, SAT_TEXT]
     if "band" in b:
         lines.append(PANEL_BAND_TEXT)
-    return u"\n".join(lines)
+    return u"\n".join(lines + [SURVIVING_TEXT])
 
 
 def selection_text(boards):
-    """The selection, each anointed combination named by its chips with the chips it stands
+    """The selection, each reference combination named by its chips with the chips it stands
     for."""
     combos = {}
     for b in boards:
         combos.setdefault(b["combo_chips"], []).append(b["chip"])
-    return (u"Selection: %s, tracks with at least %s events, each chip from its anointed "
+    return (u"Selection: %s, tracks with at least %s events, each chip from its reference "
             u"combination: %s" % (tables.VARIANT_TEXT[VARIANT], FLOOR, u"; ".join(
                 u"%s for %s" % (c, u", ".join(chips)) for c, chips in combos.items())))
 
 
 def footer(boards, *lines, banded=False, band_text=BAND_TEXT):
-    return u"\n".join([selection_text(boards)] + list(lines) + ([band_text] if banded else []))
+    """The footer of a figure: the selection, `lines`, the band rule when `banded`, and last the
+    data-quality line (SURVIVING_TEXT)."""
+    return u"\n".join([selection_text(boards)] + list(lines) + ([band_text] if banded else [])
+                      + [SURVIVING_TEXT])
 
 
 def conventions():
@@ -335,8 +349,8 @@ def conventions():
     c["error_bar"] = "none drawn; error_map_ps holds each pixel's fit error, written in its cell"
     c["band"] = ("at the campaign's BAND_STEPS: band_lo_ps / band_hi_ps = min / max of the "
                  "board's value over every combination containing it, marker_ps = their centre "
-                 "(the board value of the map captions and the ladder), anointed_ps = the "
-                 "anointed combination's value (the board value of the histogram boxes)")
+                 "(the board value of the map captions and the ladder), reference_ps = the "
+                 "reference combination's value (the board value of the histogram boxes)")
     c["histogram"] = ("fit: hist_counts in hist_bin_ps bins from hist_lo_ps (board value +/- 6 "
                       "pixel spreads), n_outside pixels beyond that range; Gaussian area fixed "
                       "to n_in_hist")
@@ -364,7 +378,7 @@ def save_panels(stem, figs):
 
 
 # %% [markdown]
-# ## Figures 1-14: one run, four chips
+# ## Figures maps01-maps14: one run, four chips
 #
 # Top: each chip's map in the chip frame (pixel row 0, column 0 at the bottom right), every
 # pixel's value and fit error written in its cell, on one colour scale, 0-120 ps, for every map;
@@ -373,7 +387,7 @@ def save_panels(stem, figs):
 # errors (the box counts any pixel outside that range), a binned Gaussian fit when the histogram
 # holds at least 30 pixels, and the pulls of the fit. The fit shows the shape of the
 # distribution; the board value, in the box, is the table's robust mean (at 3.5e15, the
-# anointed combination's, then the range and centre over every combination).
+# reference combination's, then the range and centre over every combination).
 
 # %%
 def run_compound(stem, camp, tel, run):
@@ -408,7 +422,7 @@ for _camp, _tel in RUNS:
 
 
 # %% [markdown]
-# ## Figures 15-16: every chip at every fluence step
+# ## Figures maps15-maps16: every chip at every fluence step
 #
 # One map per chip (rows) and run of `RUNS` (columns), March then July, without the values in
 # the cells; the caption under each map gives the chip's bias, board value, number of pixels
@@ -416,7 +430,7 @@ for _camp, _tel in RUNS:
 
 # %%
 def ladder_caption(b):
-    lines = value_lines(b, prefix=u"", anointed=False)
+    lines = value_lines(b, prefix=u"", reference=False)
     lines[0] = u"%d V, %s, %d px, sat %d" % (int(round(b["hv"])), lines[0], b["n_pixels"],
                                             b["saturated_count"])
     return lines
@@ -452,7 +466,7 @@ run_ladder("maps16_f1_ladder", "f1")
 
 
 # %% [markdown]
-# ## Figures 17-18: March and July at 1.5e15
+# ## Figures maps17-maps18: March and July at 1.5e15
 #
 # Each chip at 1.5e15 p/cm$^2$ (`PAIR_FLUENCE`) in the runs of `PAIR_RUNS`: in March, right after
 # irradiation, and in July, after four months of cooling down.
@@ -478,7 +492,7 @@ def run_pair(stem, tel):
              boards=[pixel_maps.board_values(b) for b in boards])
         for (camp, run, boards), (title, _, _) in zip(halves, blocks)]))
     if PANELS:
-        block_footer = PANEL_TEXT + u";\n" + CELLS_TEXT
+        block_footer = PANEL_TEXT + u";\n" + CELLS_TEXT + u"\n" + SURVIVING_TEXT
         figs = [("%s_block" % camp, pixel_maps.block_panel(*blk, footer=block_footer, **head))
                 for (camp, _, _), blk in zip(halves, blocks)]
         for (camp, run, boards), s in zip(halves, settings):

@@ -1,7 +1,7 @@
 """Per-pixel time-resolution maps: one 16 x 16 map per board, read from the pixel table.
 
 A board's map holds, for every pixel with a quote, the pixel's time resolution (value_ps) and
-its fit error (err_ps) from the pixel table, anointed combination, one track variant and event
+its fit error (err_ps) from the pixel table, reference combination, one track variant and event
 floor (resolution/tables.py). The board value and pixel spread come from the board table. The
 maps are drawn in the chip frame (both axes inverted: pixel row 0, column 0 at the bottom
 right), on one fixed colour scale, VMIN to VMAX, for every map of every figure; a pixel outside
@@ -44,6 +44,7 @@ HIST_LABEL_PT = 9.4               # both axis labels of a histogram
 MU = u"\N{GREEK SMALL LETTER MU}"
 SIGMA = u"\N{GREEK SMALL LETTER SIGMA}"
 PM = u"\N{PLUS-MINUS SIGN}"
+FRAME_TEXT = u"chip frame, pixel (0, 0) at the bottom right"   # the frame of draw_map, in words
 
 
 # ---------------------------------------------------------------------------- data
@@ -62,21 +63,23 @@ def pixel_grids(px):
     return grids
 
 
-def saturated_cells(grid):
+def saturated_cells(grid, vmin=VMIN, vmax=VMAX):
+    """[(row, col), ...] of the pixels with a value outside the colour scale vmin-vmax (default
+    the resolution maps' VMIN-VMAX)."""
     return [(r, c) for r in range(NPIX) for c in range(NPIX)
-            if np.isfinite(grid[r, c]) and not (VMIN <= grid[r, c] <= VMAX)]
+            if np.isfinite(grid[r, c]) and not (vmin <= grid[r, c] <= vmax)]
 
 
 def run_boards(bt, grids, rs, campaign, telescope, run, variant, floor, band=False):
     """The boards of one run, in slot order, as dictionaries: chip, board_idx, bias (hv, from
-    runs_summary), combo and combo_chips (the anointed combination), value_ps, pixel_spread_ps,
+    runs_summary), combo and combo_chips (the reference combination), value_ps, pixel_spread_ps,
     stat_ps, n_pixels (board table), grid and err_grid (pixel_grids), saturated_count. With
     `band`, also "band": tables.band, the board's value over every combination containing it.
     Raises ValueError when a board is missing or its map does not hold n_pixels quotes."""
     rows = tables.board_rows(bt, telescope, run, variant, floor, campaign)
     chips = _campaign.TELESCOPE_CHIPS[telescope]
     if list(rows["board_idx"]) != list(range(len(chips))):
-        raise ValueError("%s %s run %s: anointed boards %s, expected one row per board 0-%d"
+        raise ValueError("%s %s run %s: reference-combo boards %s, expected one row per board 0-%d"
                          % (campaign, telescope, run, list(rows["board_idx"]), len(chips) - 1))
     settings = {b["board_idx"]: b for b in
                 tables.run_settings(rs, campaign, _campaign.TABLE_TEL[telescope], run)}
@@ -429,8 +432,9 @@ def hist_panel(b, *, subject, tag, data, caption, scale=0.55):
 
 
 # ---------------------------------------------------------------------------- ladder
-def ladder_geometry(groups, n_rows):
-    """Inches. `groups`: the number of columns in each campaign group, left to right."""
+def ladder_geometry(groups, n_rows, mb_extra=0.0):
+    """Inches. `groups`: the number of columns in each campaign group, left to right;
+    `mb_extra`: added to the bottom margin, for a footer longer than four lines."""
     cell = 2.20
     gap_x = 0.28
     camp_gap = 0.85
@@ -445,7 +449,7 @@ def ladder_geometry(groups, n_rows):
     col_label_h = 0.80
     gap_y = 0.50
     cb_gap, cb_h = 0.55, 0.24
-    MB = 1.55
+    MB = 1.55 + mb_extra
     W = ML + row_w + MR
     H = MT + col_label_h + n_rows * cell + (n_rows - 1) * gap_y + cb_gap + cb_h + MB
     return dict(W=W, H=H, ML=ML, MR=MR, MT=MT, cell=cell, gap_x=gap_x, camp_gap=camp_gap,
@@ -469,7 +473,8 @@ def ladder(groups, row_labels, *, name, tag, data, footer, header_scale=0.85):
     lines per row, drawn under the cell). Header (header()): `name` and `tag` on the subject
     line, `data` on the facility line."""
     style.apply_style(1.0)
-    geo = ladder_geometry([len(cols) for _, cols in groups], len(row_labels))
+    geo = ladder_geometry([len(cols) for _, cols in groups], len(row_labels),
+                          mb_extra=style.footer_extra_in(footer, 1.0, fits=4))
     W, H = geo["W"], geo["H"]
     fig = plt.figure(figsize=(W, H))
     add = _adder(fig, W, H)

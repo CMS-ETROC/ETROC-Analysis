@@ -247,7 +247,7 @@ COMBO_COLOR = "#7a3e9d"
 
 
 def _track_combos(ax):
-    """(a) the anointed combination of each board: 0-1-2 for boards 0-2, 1-2-3 for board 3."""
+    """(a) the reference combination of each board: 0-1-2 for boards 0-2, 1-2-3 for board 3."""
     _clean(ax)
     ax.set_xlim(-0.6, 3.6)
     ax.set_ylim(-1.5, 1.95)
@@ -360,7 +360,7 @@ def _track_one_number(ax):
             color=INK_MUTED)
 
 
-TRACK_PANELS = [("anointed_combo", "Anointed combo per board", _track_combos, 4.0, (8.0, 4.6)),
+TRACK_PANELS = [("reference_combo", "Reference combo per board", _track_combos, 4.0, (8.0, 4.6)),
                 ("most_populated_track", "The most-populated track", _track_most_populated, 5.6,
                  (8.0, 4.8)),
                 ("one_number", "From 256 pixels to one number", _track_one_number, 4.6,
@@ -368,7 +368,7 @@ TRACK_PANELS = [("anointed_combo", "Anointed combo per board", _track_combos, 4.
 
 
 def track_selection(name, tag, line1, line2, footer_text, panels=False):
-    """Three panels: the anointed combos, the most-populated track through a pixel, the funnel
+    """Three panels: the reference combos, the most-populated track through a pixel, the funnel
     from a board's pixel values to one number. Returns (fig, [(name, panel figure)]), the
     list empty unless `panels`."""
     style.apply_style(1.0)

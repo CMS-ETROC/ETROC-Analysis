@@ -44,7 +44,7 @@
 #
 # Figures go to `$ETROC_FIGURES/overview/`, by default `figures/overview/` next to this
 # notebook. Setting `PANELS = True` in the setup cell below also writes each panel of figures 4
-# and 5 as a file of its own next to the figure, named `<stem>_01_anointed_combo.png` and so
+# and 5 as a file of its own next to the figure, named `<stem>_01_reference_combo.png` and so
 # on. A panel gets the text-overlap audit of its figure, printed in the notebook's output; it
 # has no values file of its own.
 #
@@ -217,7 +217,7 @@ save(fig, "overview03_board_summary",
 # ## Figure 4: one track per pixel, one number per board
 #
 # (a) A board's time resolution is solved from three boards together: boards 0, 1 and 2 from
-# the combination 0-1-2, board 3 from 1-2-3 (the anointed combinations). (b) Several tracks, one
+# the combination 0-1-2, board 3 from 1-2-3 (the reference combinations). (b) Several tracks, one
 # pixel on each board of the combination, pass through a pixel; the one with the most events
 # gives the pixel its value, if it has at least 300. The event counts drawn are illustrative.
 # (c) The board's number is the mean of a robust Gaussian fit (2.5 sigma clip) over its pixel
@@ -228,11 +228,11 @@ fig, figs = cartoons.track_selection(
     name="Track selection", tag="one track per pixel per board", line1="Analysis method",
     line2="cartoon, no data",
     footer_text=("The selection behind every pixel map and board value; the event counts in (b) "
-                 "are illustrative. A board's value comes from its anointed combo: the board "
+                 "are illustrative. A board's value comes from its reference combo: the board "
                  "and two partner boards."),
     panels=PANELS)
 save(fig, "overview04_track_selection",
-     dict(anointed_combos={"0-1-2": [0, 1, 2], "1-2-3": [3]},
+     dict(reference_combos={"0-1-2": [0, 1, 2], "1-2-3": [3]},
           pixels_per_board=cartoons.TRACK_PIXELS_PER_SIDE ** 2,
           event_floor=cartoons.TRACK_EVENT_FLOOR, robust_fit_clip_sigma=cartoons.TRACK_CLIP_SIGMA,
           illustrative_event_counts=[n for _, n, _ in cartoons.TRACK_EXAMPLE]), CARTOON)
