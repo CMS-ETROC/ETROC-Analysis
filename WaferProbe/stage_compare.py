@@ -42,11 +42,11 @@ QINJ_QUANTITIES = ("toa", "tot", "cal")
 
 # Same-chip check: within a die the pixel-to-pixel baseline pattern is the
 # chip's own. Over the 8 February pixels, read from the imported runs'
-# BaselineHistory.sqlite by hand (pixels.csv does not hold them, so this
-# package cannot repeat it), the post-UBM dies of N62H30 01D4 and 02C7
-# (2026-09-26) correlated with their own pre-UBM baselines at median r 0.98
-# and 0.97, and with the other wafer's at 0.45, so a die below SAME_CHIP_R
-# is flagged. MIN_R_PIXELS common pixels are needed for an r.
+# BaselineHistory.sqlite by hand (the import writes them into the runs since
+# ETROC-WaferProbe 5a7da50, and changes.csv gives median r 0.975 and 0.965),
+# the post-UBM dies of N62H30 01D4 and 02C7 (2026-09-26) correlated with
+# their own pre-UBM baselines at median r 0.98 and 0.97, and with the other
+# wafer's at 0.45, so a die below SAME_CHIP_R is flagged. MIN_R_PIXELS common pixels are needed for an r.
 SAME_CHIP_R = 0.7
 MIN_R_PIXELS = 6
 

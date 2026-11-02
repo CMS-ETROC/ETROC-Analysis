@@ -292,9 +292,11 @@ QInj gives no `qinj_changes`. The same-chip r correlates each pixel's
 baseline minus its die's mean, before against after, over at least 6
 common pixels. The 0.7 threshold comes from the February 8-pixel
 baselines of N62H30 01D4 and 02C7, read by hand from the imported runs'
-`BaselineHistory.sqlite` (the import does not put them in `pixels.csv`, so
-these wafers get no same-chip r today): their dies matched their own
-before-UBM baselines at median r 0.98 and 0.97 and the other wafer's at 0.45.
+`BaselineHistory.sqlite`. Their dies matched their own before-UBM baselines
+at median r 0.98 and 0.97, and the other wafer's at 0.45. The station's
+`import_runs.py` writes these baselines into the runs (ETROC-WaferProbe
+5a7da50), so `changes.csv` gives the same: median same-chip r 0.975 over the
+104 dies of 01D4 that have one, 0.965 over the 97 of 02C7.
 
 Currents compare only where both stages have the power phases. The
 station logs them; the February 2026 before_bump import takes them from
