@@ -38,22 +38,27 @@ rest are for whoever writes the next figure.
 ## Colour and markers
 
 - Colour = fluence, one ladder per campaign (`FLUENCE_COLOR` in the campaign module). Within one
-  fluence step, later measurements of the same chips (after cooling down, for instance) take hues
-  of their own from `iv_plot.TIMING_COLORS`, never a lighter or darker shade of the step's
-  colour. Six exceptions: the V_gl fit figures (`iv/vgl_plot.py`: fluence is their x axis, one
-  fit per board), the baseline / noise-width figures (`frontend/blnw.py`: the fluence step, the
-  measurement before and after cooling down or the RFSel category is their x axis) and the board
-  TOT figures (`tot_shapes.board_vs_fluence` in `frontend/tot_shapes.py`: the fluence step is
-  their x axis) colour by board (`etroc_style.BOARD_COLOR`), and the bias-current timelines drawn
-  one line per chip (`iv/preirrad_current.py`, `iv/current_vs_run.py` and the current-limit-hold
-  figures of the IV notebook) colour by chip; there the fluence is a shaded band or a label,
-  never a line colour.
+  fluence step, later measurements of the same chips (after cooling down, for instance) take hues of
+  their own from `iv_plot.TIMING_COLORS`, never a lighter or darker shade of the step's colour. Nine
+  exceptions: the V_gl fit figures (`iv/vgl_plot.py`: fluence is their x axis, one fit per board),
+  the baseline / noise-width figures (`frontend/blnw.py`: the fluence step, the measurement before
+  and after cooling down or the RFSel category is their x axis), the board TOT figures
+  (`tot_shapes.board_vs_fluence` in `frontend/tot_shapes.py`: the fluence step is their x axis), the
+  one-step resolution figures (`resolution/curves.py`: one fluence step of one campaign, a series
+  per chip, the step named in the header; see Resolution figures) and the fluence ladder
+  (`resolution/ladder.py`: the fluence step is its x axis) colour by board
+  (`etroc_style.BOARD_COLOR`), and the bias-current timelines drawn one line per chip
+  (`iv/preirrad_current.py`, `iv/current_vs_run.py` and the current-limit-hold figures of the IV
+  notebook) colour by chip; there the fluence is a shaded band or a label, never a line colour.
   The RFSel comparison (`tot_shapes.rfsel_pairs`: runs of one fluence step that differ in RFSel)
   colours by RFSel (`etroc_style.RFSEL_COLOR`, no orange, which is a fluence colour), and so do the
-  settings figures (below). The schematic pulses of the RFSel explainer use a grey ramp of their
+  settings figures (below). The combination split (`resolution/combo_split.py`) colours by
+  combination (`combo_split.COMBO_COLOR`, by its three boards): its steps are on the axis. The schematic pulses of the RFSel explainer use a grey ramp of their
   own (`cartoons.RF_GREY`): they are not measured series.
 - Marker and line style = chip, by its slot in the telescope. Legends name chips only; the vendor
-  goes in the panel title.
+  goes in the panel title. The fluence ladder is the exception for line style: marker = chip, line
+  style = look on the ladder (March solid, July dashed) and = event floor on its pixel-yield figure
+  (see Resolution figures).
 
 ## Resolution and TDC figures
 
@@ -83,6 +88,107 @@ rest are for whoever writes the next figure.
   (`tot_shapes.FLOOR`). Nothing is pooled across the triples of a pixel. The TOT depends on which
   triple is read (the partner pixels fix where the track crosses the pixel), so a figure of TOT
   says which triple it took.
+
+## Resolution figures
+
+- The resolution figures (`resolution/curves.py`, the resolution notebook) draw the time resolution
+  of every board against its bias or against time, at the standard operating point: threshold
+  offset 20 and RFSel 2, or no RFSel recorded (`curves.standard`).
+- Population: July points come from the display-run list, the class of the step's RFSel and offset
+  (`curves.display_class`). A merge replaces its single runs only when it passes the one merge
+  verdict of the settings and resolution figures (`tables.good_merges`: the merged runs' board
+  table accepts it and the good-run list marks it good) and every run of the merge is in that
+  class (`curves.merge_rule`); the notebook prints which merges it took and why it refused the
+  others. Every run drawn is good on the good-run list, or the notebook stops. A run off the
+  display-run list is drawn only where the notebook says why, and the footer names it.
+- An open marker means what its figure's legend or footer says, stated per figure: on the
+  resolution notebook's re03 a July run off the display-run list, on re04 the F1 runs at 480 V
+  (runs 3 and 4; the others at 460 V), on re06 the display class at threshold offset 15; the
+  combination figures state theirs below. The small open marker is the under-128-pixel rule.
+- A figure may override the merge rule where its footer says so: it draws single runs, and the
+  footer names the merges the rule would have drawn in their place (`curves.merge_override`).
+  The resolution notebook's re03 and re07 do.
+- A time axis draws single runs: a merge spans the times of its runs and has no one x. The footer
+  says so.
+- One clock per time axis, with its bounds. Hours after the end of a step's irradiation count from
+  the earliest end the records allow (`RAD_STOP_UTC`); the allowed range (`RAD_STOP_BOUNDS_UTC`,
+  latest minus earliest) is shaded at the origin when it spans 15 min or more (`curves.stop_band`)
+  and stated in the footer, and a run's time after the true end lies between its x minus that
+  range and its x. A stability axis counts from the start of the first run at the step
+  (`curves.hours_since_first`).
+- Colour (`curves.color_rule`): several looks (campaign, fluence step) on the axes give colour =
+  look: the fluence-ladder colours, and teal, the colour of a later measurement at the same fluence,
+  for the second look at a step (July 1.5e15 beside March 1.5e15 is teal; March keeps red); one look
+  gives colour = board, one of the exceptions under Colour and markers. `BOARD_COLOR[1]` (#eb6834)
+  is close to the 3.5e15 orange (#ff7f0e), so a one-step figure names its step in the header and
+  never shows a fluence as a colour on its axes.
+- No jitter: points at one x share it (the boards of a run on a time axis, repeats at one bias).
+  The line of a series joins its mean at each x and breaks where a board's bias changes.
+- Under each run on a time axis: its number, bold for the display runs where the population is
+  wider than the list; where a figure quotes them, each chip's in-run bias current (`JULY_REF_CSV`:
+  the median over the run's HV plateau).
+- A bias summary over several July steps (`curves.res_vs_bias_summary`) draws every display run of
+  every step as a single run (`curves.display_singles`), overriding the merge rule (the footer says
+  so and names the merges left out); runs at one bias stack at one x. `curves.one_per_condition`
+  (one run per bias pattern of a class: the preferred run, else the later run) is there for a
+  figure that wants one run per condition.
+- A point built from fewer than `curves.LOW_PIXELS` pixels (128, half the chip) is a small open
+  marker on every resolution figure with a pixel count per point; the legend says "under 128
+  pixels" and the footer gives the counts. On the combination split the small marker keeps the
+  fill rule of that figure (filled = the reference combination). The pixel-yield figure, whose
+  axis is the pixel count, keeps its own markers.
+- The fluence ladder (`resolution/ladder.py`) draws one run per campaign and step
+  (`ladder.step_winners`): March, the highest-bias run at the standard operating point of each step
+  (`MARCH_DISPLAY_RUNS`, checked against the tables; a disagreement stops the notebook); July, the
+  step's preferred display run, replaced by its merge under the merge rule. The two looks at 1.5e15
+  sit 0.06e15 either side of the step (March left, July right): the one x offset on these figures,
+  a dodge between campaigns, not jitter, and the footer says so. Lines join a board's steps within
+  one campaign. Colour = board, marker = chip, line style = look; merges carry the thick black edge.
+- The numbers table (`resolution/numbers_table.py`) has one row per point of the ladder, columns
+  `numbers_table.COLUMNS`: telescope, campaign, bookkeeping fluence, board, chip, run (a merge as
+  "3+4"), merged, bias, threshold offset, RFSel, pixels; the top value and pixel spread (what the
+  ladder draws) and the same with the central track per pixel; at 3.5e15 the band's ends and the
+  reference combination's value, with the most-populated and with the central track per pixel;
+  and, for July, whether the run is the step's preferred run. At 3.5e15 the top and central
+  values are band centres; the reference combination's values have columns of their own. It is
+  written as .csv (every digit) and .md (0.1 ps) beside its figure.
+- The pixel-yield figure counts, per board and point of the ladder, the pixels with a resolution
+  at the ladder's event floor (300 events: solid lines with markers) and with tracks of any events
+  (floor "none": dashed, no markers). A floor-"none" row missing from the table is a gap in the
+  dashed line, never 0 (`ladder.floor_none_pixels`). Display runs at a lower bias than the ladder's
+  run at a step are small open markers, named in the footer.
+- The combination split (`resolution/combo_split.py`) draws each board's value in every 3-board
+  combination containing it, run by run: the references (the preferred display runs at RFSel 2,
+  offset 20 of the earlier steps), then every display run of the step, a merge that passes the one
+  verdict and whose runs are all in one settings class in place of those runs (as on the settings
+  figures), grouped by settings class under the axis with the class and the step written below
+  the run numbers.
+  Colour = combination, filled = the reference combination, open = the others, marker = chip, bar =
+  the pixel spread in that combination; no band.
+- An appendix figure follows the rules of the figure it derives from and its footer names that
+  figure: the resolution notebook's re12 to re14 are re07's points restricted to some steps or one
+  campaign, on re07's colours, and re15 is re06's hours panel at offset 20 (its points, its clock,
+  its under-128 rule).
+- The combination checks (`resolution/combo_check.py`: re16 and re17 against the bias, re18 against
+  the run) draw each board in three rows, every value read from the single-run board table's
+  combination rows: top, the reference combination; middle, the combination without the board's HV
+  partner (partners 0-1 and 2-3: board 0 from boards 0-2-3, 1 from 1-2-3, 2 from 0-1-2, 3 from
+  0-1-3); bottom, the pair-corrected midpoint w_mid^2 = (w_present^2 + w_absent^2)/2, w_present the
+  RMS of the board's values in the two combinations holding the board and its partner, w_absent the
+  middle row's, the bar by the same rule on the pixel spreads, the pixel count the fewest of the
+  three. A combination is named by its boards, never by the boards' roles in the run. A board in a
+  run whose combination is missing from the table has no point on that row and the footer names it;
+  nothing is filled in. Single runs, no band (the rows compare the combinations), colour = fluence
+  step (July 1.5e15 in teal, as above), marker = chip, the small marker below 128 pixels. re16 and
+  re17 draw every good run at the standard operating point at each step. re18 draws every July run
+  of the board table and overrides the every-run-good rule (its footer says so): filled = good at
+  RFSel 2, offset 20, light = good at other settings, open = not good on the good-run list, and the
+  small marker keeps its kind's fill, as on the combination split. Between runs (in time) it marks
+  an HV cycle (a powered board's bias under 20 % of its set value in at least one 60 s sample after
+  the end of the run before), an LV cycle and an irradiation step (the HV/LV-cycle table), each a
+  grey line (no fluence colour, `combo_check.EVENT_STYLE`), and under the bottom row the runs whose
+  chips all share one autocalibration scan (`scan_utc` of `blnw_by_run`). A point above the axis
+  range is an arrow at the top with its value; the footer lists it.
 
 ## Settings figures
 
@@ -211,9 +317,13 @@ as reproducible as this file: when a number shown on the figure is not in it, ad
   the campaign's `READOUT_FOOTER`, which sends the reader to the README's "Data quality"
   section.
 - A figure drawn from the IRRAD 2026 resolution tables, whose only count of readout data is a
-  pixel count, carries the one line "Pixel counts are the surviving readout sample."
-  (`SURVIVING_TEXT` in its notebook): the maps figures end their footer with it, and the
-  settings figures st01 to st05 give it after the pixel counts of their small open markers.
-  A figure that also draws readout hits ends with `READOUT_FOOTER` instead (st07).
-- A figure drawn from autocalibration scans, from IV or slow-control logs, or from DESY data
-  only carries neither.
+  pixel count, says that the count is of the surviving sample with the one line "Pixel counts
+  are the surviving readout sample." (`SURVIVING_TEXT`; `curves.SURVIVING_TEXT` for the
+  resolution figures). Every figure that prints a pixel count carries the line, after the pixel
+  counts of its small open markers where it draws any (`curves.low_line`). The numbers table re09
+  carries it under the table: on the figure, and as the last line of its .md (the .csv stays a
+  plain table). The figures without it print no pixel count: re11 and re16-re18 when they draw
+  no small markers (their small-marker line is their only pixel count). A figure that also
+  draws readout hits ends with `READOUT_FOOTER` instead (st07).
+- A figure drawn from autocalibration scans (fe01-fe02, st06), from IV or slow-control logs, or
+  from DESY data only carries neither.
