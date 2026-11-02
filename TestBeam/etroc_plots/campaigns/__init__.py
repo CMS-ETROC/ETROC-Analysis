@@ -49,12 +49,17 @@ REQUIRED = {
         "VGL_DROP_ABOVE", "VGL_F1", "VGL_H1", "VGL_REF_ALTERNATES", "VGL_VENDOR",
         "VGL_XGRID_MAX", "VGL_XGRID_N",
     ),
-    # result tables, read by etroc_plots.resolution and the resolution notebooks
+    # result tables, read by etroc_plots.resolution and the resolution notebooks; with the
+    # good-run list, the run times, the stop clocks and the in-run currents of
+    # resolution/curves.py
     "resolution": (
-        "BAND_STEPS", "BOARD_TABLE", "BOARD_TABLE_MERGED", "COOLDOWN_PAIRS",
-        "DISPLAY_RUNS_JUL_CSV", "FLUENCE_CONVENTION", "INPUTS", "INPUTS_MANIFEST",
-        "MARCH_DISPLAY_RUNS", "MARCH_RFSEL", "MERGE_COST_CSV", "PIXEL_TABLE",
-        "PIXEL_TABLE_MERGED", "RUNS_SUMMARY_CSV", "TABLE_CAMPAIGN", "TABLE_TEL",
+        "BAND_STEPS", "BOARD_TABLE", "BOARD_TABLE_MERGED", "CHIP_FLUENCE_FACTOR",
+        "CHIP_FLUENCE_TEXT", "COOLDOWN_PAIRS", "DISPLAY_RUNS_JUL_CSV", "FLUENCE_COLOR",
+        "FLUENCE_CONVENTION", "GOOD_RUNS_CAMPAIGN", "GOOD_RUNS_CAMPAIGN_MARCH", "GOOD_RUNS_CSV",
+        "GOOD_RUNS_TEL", "INPUTS", "INPUTS_MANIFEST", "JULY_REF_CSV", "MARCH_DISPLAY_RUNS",
+        "MARCH_RFSEL", "MERGE_COST_CSV", "PIXEL_TABLE", "PIXEL_TABLE_MERGED",
+        "RAD_STOP_BOUNDS_UTC", "RAD_STOP_UTC", "RUN_TIMES_CSV", "RUNS_SUMMARY_CSV",
+        "TABLE_CAMPAIGN", "TABLE_TEL",
     ),
     # setup facts, run times and the campaign's time marks, read by etroc_plots.overview
     "overview": (
