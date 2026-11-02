@@ -11,6 +11,22 @@ They were written in September 2026 to look for a visible cause of the new post-
 N62H30_02C7, N62C72_24C5 and N62C72_22D7. At about 4.2 µm per pixel they found no visible defect (bumps, pads, probe
 marks) that sets the failing dies apart.
 
+## Words used here
+
+- **UBM**: under-bump metallisation, the metal layer put on the pads before bumping.
+- **Level**: one resolution of the `.ets` image pyramid (see "The images"). Level 0 is full resolution.
+- **Dome**: one UBM site as the image shows it. The tools look at the octagons of the 124 main pads along the pad
+  row, the periphery dome row, and the 256 pixel bumps.
+- **DoG**: difference of Gaussians: the image smoothed with a Gaussian of 1 px minus the same with 6 px. It keeps
+  features of bump size and drops slow changes in brightness.
+- **ncc**: the normalised cross-correlation of a template match, 1 for a perfect match.
+- **Robust sigma**: 1.4826 x the median absolute deviation. It equals the standard deviation for a Gaussian spread,
+  and a few outliers barely move it.
+- **z-map**: for every image pixel of a die, its difference from the per-pixel median of the dies that passed probing
+  before and after UBM, divided by their robust sigma plus a small floor (`anomaly.py`).
+- **Blob**: a connected group of at least 6 image pixels with |z| above 8 (`blobs.csv`).
+- **AOI**: the automated optical inspection that sorted the diced chips into the accepted and rejected gel packs.
+
 ## The images
 
 Each image is a small `.vsi` file plus a folder `_<name>_/stack10000/frame_t_0.ets` that holds the pixels. Only the
@@ -82,7 +98,7 @@ Run the pipeline from a work directory outside the repository, calling the scrip
 1. **`python $M/anomaly.py <wafer> peri 64 <lot_summary>/lot_dies.csv`**: registers every die onto the reference die
    and builds the per-pixel median and spread of the dies that passed before and after UBM. It writes:
    - `dies.csv`: per-die corners, grades and anomaly counts;
-   - `blobs.csv`;
+   - `blobs.csv`, one row per blob;
    - `median.npy` and `sigma.npy`;
    - a z-map PNG per die.
 
