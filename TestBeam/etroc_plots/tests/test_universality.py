@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.normpath(os.path.join(os.path.dirname(os.path.abspath
 if not os.environ.get("ETROC_CAMPAIGN"):
     os.environ["ETROC_CAMPAIGN"] = "irrad_2026"
 
+from etroc_plots._paths import REPO_TESTBEAM                    # noqa: E402
 from etroc_plots.campaigns import active as campaign            # noqa: E402
 from etroc_plots.campaigns import desy_2026                    # noqa: E402
 from etroc_plots.universality import levels, reduce, transfer  # noqa: E402
@@ -67,8 +68,6 @@ def write_text(path, text):
 def synthetic_results(root):
     """A study folder with one axis, X: its round-2 table, of cells X1, X2 and X3, and a rerun of
     X2 with two more columns (one quoted, holding a comma) and one more row."""
-    for name in reduce.TSVS:
-        write_text(os.path.join(root, "condor", name), "")
     for name in ("axis_F.csv", "axis_F_long.csv", "summary_F.md"):
         write_text(os.path.join(root, "results_r3", name), "")
     write_text(os.path.join(root, "results_r2", "axis_X.csv"),
@@ -77,6 +76,21 @@ def synthetic_results(root):
     write_text(os.path.join(root, "results_r3", "guardfix", "axis_X_gf.csv"),
                'axis,cell,arm,mu_ps,lpo_shape,lpo_pairs\nX,X2,xfer,2.25,"a,b",4\n'
                "X,X2,notwc,2.75,,0\nX,X2,xfer_lpo,2.5,a,4\n")
+
+
+def test_job_lists_come_from_the_twc_transfer_package(tmp_path, monkeypatch):
+    """The seven job lists are the twc_transfer package's (TestBeam/twc_transfer/jobs/), not the
+    study folder's: a study folder without condor/ still gives every list, and together they
+    name the 131 cells of univ_cells.csv."""
+    synthetic_results(str(tmp_path))
+    monkeypatch.setattr(reduce.campaign, "UNIV_AXIS_SOURCES", {"X": ("results_r2/axis_X.csv",)})
+    paths = reduce._results_paths(str(tmp_path))
+    jobs = os.path.join(REPO_TESTBEAM, "twc_transfer", "jobs")
+    assert [paths["tsv:" + n] for n in reduce.TSVS] == [os.path.join(jobs, n) for n in reduce.TSVS]
+    cells = {}
+    for name in reduce.TSVS:
+        cells.update(reduce.read_tsv(paths["tsv:" + name]))
+    assert len(cells) == 131
 
 
 def test_axis_sources_rerun_replaces_the_rows_of_its_cells(tmp_path, monkeypatch):

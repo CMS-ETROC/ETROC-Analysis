@@ -115,7 +115,6 @@ output of the line before it; "Chaining on your own outputs" below says how to c
     python -m twc_transfer master
     python -m twc_transfer axes
     python -m twc_transfer axes --guardfix
-    mkdir -p $ETROC_TWC_OUT/condor && cp twc_transfer/jobs/*.tsv $ETROC_TWC_OUT/condor/
     python -m etroc_plots.universality.reduce --out $ETROC_TWC_OUT/univ \
         --results-root $ETROC_TWC_OUT --part axes --part cells
 
@@ -152,12 +151,11 @@ tables, read as they are, and its cell tables, into `$ETROC_TWC_OUT/master/`:
 files (about 10 s). `axes` writes the axis tables of stages 1 to 3 from the aggregation tables
 behind them, `results_r2/axis_<X>.csv` and `results_r3/axis_F.csv`, `axis_F_long.csv`,
 `summary_F.md`; `axes --guardfix` the guardfix tables of axes E, J and K,
-`results_r3/guardfix/axis_<X>_gf.csv` (seconds each). The last two commands need
-`etroc_plots.universality`, the universality notebook's package, which this tree does not
-hold yet: its reduction composes these tables into the ones the notebook reads, and it takes
-the job lists from `<results root>/condor/`, hence the copy. `SPEC.md` sections 3 and 6 to 10
-list every mode, every option, every rule of the aggregation and the chain, and every output
-column.
+`results_r3/guardfix/axis_<X>_gf.csv` (seconds each). The last command runs
+`etroc_plots.universality`, the universality notebook's package: its reduction composes these
+tables into the ones the notebook reads, and takes the job lists from this package's `jobs/`.
+`SPEC.md` sections 3 and 6 to 10 list every mode, every option, every rule of the aggregation
+and the chain, and every output column.
 
 What refuses to run, and why:
 
@@ -224,8 +222,8 @@ recipe) composes this package's tables into the ones the notebook reads:
 
 - `--results-root` is the write root, `$ETROC_TWC_OUT`: `results_r2/axis_<A..K>.csv`,
   `results_r3/axis_F.csv`, `axis_F_long.csv`, `summary_F.md`,
-  `results_r3/guardfix/axis_<E,J,K>_gf.csv`, and the seven job lists in `condor/`, which are
-  byte for byte `twc_transfer/jobs/*.tsv` (hence the copy in the recipe);
+  `results_r3/guardfix/axis_<E,J,K>_gf.csv`; the seven job lists are this package's
+  `jobs/*.tsv`, which the reduction reads in place;
 - `--twc-root` (default the read root) still supplies `tables/agg_<tag>/agg_by_cell.csv`, for
   the self_transfer flag of the axis rows, and `bank/`;
 - the round-1 table of the level cells: `master` writes it to

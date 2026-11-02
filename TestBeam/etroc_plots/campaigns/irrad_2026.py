@@ -745,9 +745,10 @@ UNIV_EXCLUDED_STEPS = (2e15, 3.5e15)
 # aggregation tables the axis tables were built from (tables/agg_<agg_tag>/agg_by_cell.csv).
 TWC_TRANSFER_ROOT = (os.environ.get("ETROC_TWC_TRANSFER_ROOT")
                      or "/eos/user/m/musafdar/DESY_May2026/analysis/twc_transfer")
-# TWC_RESULTS_ROOT is the study's own folder: results_r2/ (the axis tables), results_r3/ (axis F
-# and its summary; guardfix/, the rerun's axis tables) and condor/ (the job lists that name every
-# cell's runs). By default the copy of the files the reduction reads, universality/results/ of
+# TWC_RESULTS_ROOT is the study's own folder: results_r2/ (the axis tables) and results_r3/ (axis
+# F and its summary; guardfix/, the rerun's axis tables). The job lists that name every cell's runs
+# are the twc_transfer package's (TestBeam/twc_transfer/jobs/), not this folder's condor/. By
+# default the copy of the files the reduction reads, universality/results/ of
 # INPUTS (irrad_2026_inputs.md lists it; it holds the TWC_TRANSFER_ROOT files too, so either root
 # can point at it); ETROC_TWC_RESULTS_ROOT or --results-root moves it.
 TWC_RESULTS_ROOT = (os.environ.get("ETROC_TWC_RESULTS_ROOT")

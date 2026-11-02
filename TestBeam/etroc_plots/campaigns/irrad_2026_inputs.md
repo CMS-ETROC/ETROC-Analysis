@@ -394,12 +394,14 @@ and update the checksum lines to use them). R is `TWC_TRANSFER_ROOT` (default
 `bank/coeffs_<campaign>_<run>.parquet`, the inputs of the study's first summary table,
 `figs/transfer_2026-09-04/inputs/master_cells.csv`, and the aggregation tables the axis tables
 were built from, `tables/agg_<agg_tag>/agg_by_cell.csv`. S is the study's own folder
-(`TWC_RESULTS_ROOT`, by default the copy in `universality/results/`, below): `condor/` (the seven
-job lists),
-the axis tables `UNIV_AXIS_SOURCES` names (`results_r2/axis_{A,B,C,D,E,I,J,K}.csv` and
+(`TWC_RESULTS_ROOT`, by default the copy in `universality/results/`, below): the axis tables
+`UNIV_AXIS_SOURCES` names (`results_r2/axis_{A,B,C,D,E,I,J,K}.csv` and
 `results_r3/guardfix/axis_{E,J,K}_gf.csv`) and `results_r3/` (`axis_F.csv`, `axis_F_long.csv`,
-`summary_F.md`). On one lxplus core the cells, master and axes parts take 3 s together and the
-bank part 12 s. Published 2026-10-02 (cells, master, bank) and 2026-10-18 (the three axis tables,
+`summary_F.md`). The seven job lists are read from the repository,
+`TestBeam/twc_transfer/jobs/`, where the twc_transfer package carries them without their comment
+lines; the `condor/` copy in `universality/results/` is not read. On one lxplus core the cells,
+master and axes parts take 3 s together and the bank part 12 s. Published 2026-10-02 (cells,
+master, bank) and 2026-10-18 (the three axis tables,
 with the guard-fix rows of axes E, J and K and the `self_transfer` flag; their 2026-10-02 versions
 are kept as `universality/superseded/<file>_2026-10-02.csv`). `univ_axis_F_wide.csv` was made again
 on 2026-10-18 from the corrected `results_r3/axis_F.csv` (below); the version before it, with the
@@ -609,5 +611,5 @@ Every variable the package and the notebooks read. Set them before the notebook'
 | `ETROC_DECODED_ROOT` | `/eos/user/j/jongho` | the merged hits (`DECODED_DIRS`), read only by the TDC part of `frontend.rebuild` |
 | `ETROC_ANALYSIS_ROOT` | `/eos/user/m/musafdar` | the reconstructed tracks (`ANALYSIS_DIRS`), read only by the tracks part of `frontend.rebuild` |
 | `ETROC_TWC_TRANSFER_ROOT` | `/eos/user/m/musafdar/DESY_May2026/analysis/twc_transfer` | the TWC-transfer study's coefficient bank and the inputs of its first summary table (`TWC_TRANSFER_ROOT`), read only by `universality.reduce` (its bank and master parts, and the cells part's check against the master table) |
-| `ETROC_TWC_RESULTS_ROOT` | `$ETROC_INPUTS/universality/results` | the TWC-transfer study's own folder (`TWC_RESULTS_ROOT`: its job lists and axis tables; by default the copy of the files the reduction reads), read only by the cells and axes parts of `universality.reduce` (or `--results-root`) |
+| `ETROC_TWC_RESULTS_ROOT` | `$ETROC_INPUTS/universality/results` | the TWC-transfer study's own folder (`TWC_RESULTS_ROOT`: its axis tables; by default the copy of the files the reduction reads), read only by the cells and axes parts of `universality.reduce` (or `--results-root`) |
 | `ETROC_FIGURES` | `figures` (next to the notebook) | where the notebooks write; figures go to `$ETROC_FIGURES/<notebook>/`, such as `$ETROC_FIGURES/iv/` |
